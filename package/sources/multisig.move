@@ -40,6 +40,9 @@ module sui_multisig::multisig {
     // key for the inner action struct of a proposal
     public struct ProposalKey has copy, drop, store {}
 
+    // to facilitate discovery on frontends
+    public struct CapKey<phantom N> has copy, drop, store {}
+
     // hot potato guaranteeing borrowed caps are always returned
     public struct Request {}
 
@@ -168,43 +171,51 @@ module sui_multisig::multisig {
         inner
     }
 
-    // add a Cap to the Multisig for access control
-    // attached cap can't be removed, only borrowed
-    // only members can attach caps
-    public fun attach_cap<C: key + store, N: copy + drop + store>(
+    // === Package functions ===
+
+    // only members can attach objects
+    public(package) fun attach_object<O: key + store, K: copy + drop + store>(
         multisig: &mut Multisig, 
-        name: N, 
-        cap: C,
-        ctx: &mut TxContext
+        key: K,
+        object: O,
+        ctx: &TxContext
     ) {
         assert_is_member(multisig, ctx);
-        dof::add(&mut multisig.id, name, cap);
+        dof::add(&mut multisig.id, key, object);
+    }
+
+    // remove an object from the multisig
+    public(package) fun detach_object<O: key + store, K: copy + drop + store>(
+        multisig: &mut Multisig, 
+        key: K,
+        ctx: &TxContext
+    ): O {
+        assert_is_member(multisig, ctx);
+        dof::remove(&mut multisig.id, key)
     }
 
     // issue a hot potato to make sure the cap is returned
-    public(package) fun borrow_cap<C: key + store, N: copy + drop + store>(
+    public(package) fun borrow_object<O: key + store, K: copy + drop + store>(
         multisig: &mut Multisig, 
-        name: N,
+        key: K,
         ctx: &TxContext
-    ): (C, Request) {
+    ): (O, Request) {
         assert_is_member(multisig, ctx); // redundant
-        (dof::remove(&mut multisig.id, name), Request {})
+        (dof::remove(&mut multisig.id, key), Request {})
     }
 
     // re-attach the cap and destroy the hot potato
-    public fun return_cap<C: key + store, N: copy + drop + store>(
+    public(package) fun return_object<O: key + store, K: copy + drop + store>(
         multisig: &mut Multisig, 
-        name: N,
-        cap: C, 
+        key: K,
+        object: O, 
         request: Request,
-        ctx: &mut TxContext
+        ctx: &TxContext
     ) {
         assert_is_member(multisig, ctx); // redundant
-        dof::add(&mut multisig.id, name, cap);
+        dof::add(&mut multisig.id, key, object);
         let Request {} = request;
     }
-
-    // === Package functions ===
 
     // callable only in management.move, if the proposal has been accepted
     public(package) fun set_threshold(multisig: &mut Multisig, threshold: u64) {

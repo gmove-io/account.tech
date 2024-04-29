@@ -3,6 +3,7 @@ module sui_multisig::move_call {
     use sui::bag::{Self, Bag};
 
     use sui_multisig::multisig::{Multisig, Request};
+    use sui_multisig::owned;
 
     // === Structs ===
 
@@ -29,11 +30,10 @@ module sui_multisig::move_call {
     // the cap will prevent anyone from calling multisig guarded functions
     public fun attach_package_cap<PC: key + store>(
         multisig: &mut Multisig, 
-        name: String, 
         cap: PC,
         ctx: &mut TxContext
     ) {
-        multisig.attach_cap(name, cap, ctx);
+        owned::attach_cap(multisig, cap, ctx);
     }
 
     // step 1: create a Bag to store the Args
@@ -84,7 +84,7 @@ module sui_multisig::move_call {
         let action = multisig.execute_proposal(name, ctx);
         let MoveCall { function, arguments } = action;
 
-        let (cap, request) = multisig.borrow_cap(PackageCapKey {}, ctx);
+        let (cap, request) = owned::borrow_cap(multisig, ctx);
 
         (function, arguments, cap, request)
     }    
