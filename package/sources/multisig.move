@@ -12,20 +12,8 @@ module sui_multisig::multisig {
 
     // === Structs ===
 
-    public struct ProposalKey has copy, drop, store {}
-
-    public struct Proposal has key, store {
-        id: UID,
-        // proposals can be deleted from this epoch
-        expiration: u64,
-        // what this proposal aims to do, for informational purpose
-        description: String,
-        // who has approved the proposal
-        approved: VecSet<address>,
-    }
-
     // shared object accessible within the module where it has been instatiated
-    public struct Multisig<phantom W> has key {
+    public struct Multisig has key {
         id: UID,
         // proposals can be executed is len(approved) >= threshold
         // has to be always <= length(members)
@@ -37,15 +25,28 @@ module sui_multisig::multisig {
         proposals: VecMap<String, Proposal>,
     }
 
+    // proposal owning a single action requested to be executed
+    public struct Proposal has key, store {
+        id: UID,
+        // proposals can be deleted from this epoch
+        expiration: u64,
+        // what this proposal aims to do, for informational purpose
+        description: String,
+        // who has approved the proposal
+        approved: VecSet<address>,
+    }
+
+    public struct ProposalKey has copy, drop, store {}
+
     // === Public functions ===
 
     // init a new Multisig shared object
-    public fun new<W: drop>(_: W, ctx: &mut TxContext) {
+    public fun new(ctx: &mut TxContext) {
         let mut members = vec_set::empty();
         vec_set::insert(&mut members, tx_context::sender(ctx));
 
         transfer::share_object(
-            Multisig<W> { 
+            Multisig { 
                 id: object::new(ctx),
                 threshold: 1,
                 members,
@@ -54,7 +55,7 @@ module sui_multisig::multisig {
         );
     }
 
-    public fun clean_proposals<W: drop>(multisig: &mut Multisig<W>, ctx: &mut TxContext) {
+    public fun clean_proposals(multisig: &mut Multisig, ctx: &mut TxContext) {
         let mut i = vec_map::size(&multisig.proposals);
         while (i > 0) {
             let (name, proposal) = vec_map::get_entry_by_idx(&multisig.proposals, i - 1);
@@ -71,8 +72,8 @@ module sui_multisig::multisig {
 
     // create a new proposal using an inner proposal type
     // that must be constructed from a friend module
-    public fun create_proposal<W: drop, T: store>(
-        multisig: &mut Multisig<W>, 
+    public fun create_proposal<T: store>(
+        multisig: &mut Multisig, 
         inner: T,
         name: String, 
         expiration: u64,
@@ -95,8 +96,8 @@ module sui_multisig::multisig {
 
     // remove a proposal that hasn't been approved yet
     // to prevent malicious members to delete proposals that are still open
-    public fun delete_proposal<W: drop>(
-        multisig: &mut Multisig<W>, 
+    public fun delete_proposal(
+        multisig: &mut Multisig, 
         name: String, 
         ctx: &mut TxContext
     ) {
@@ -110,8 +111,8 @@ module sui_multisig::multisig {
     }
 
     // the signer agrees to the proposal
-    public fun approve_proposal<W: drop>(
-        multisig: &mut Multisig<W>, 
+    public fun approve_proposal(
+        multisig: &mut Multisig, 
         name: String, 
         ctx: &mut TxContext
     ) {
@@ -122,8 +123,8 @@ module sui_multisig::multisig {
     }
 
     // the signer removes his agreement
-    public fun remove_approval<W: drop>(
-        multisig: &mut Multisig<W>, 
+    public fun remove_approval(
+        multisig: &mut Multisig, 
         name: String, 
         ctx: &mut TxContext
     ) {
@@ -134,8 +135,8 @@ module sui_multisig::multisig {
     }
 
     // return the inner proposal if the number of signers is >= threshold
-    public fun execute_proposal<W: drop, T: store>(
-        multisig: &mut Multisig<W>, 
+    public fun execute_proposal<T: store>(
+        multisig: &mut Multisig, 
         name: String, 
         ctx: &mut TxContext
     ): T {
@@ -153,7 +154,7 @@ module sui_multisig::multisig {
 
     // === Private functions ===
 
-    fun assert_is_member<W: drop>(multisig: &Multisig<W>, ctx: &TxContext) {
+    fun assert_is_member(multisig: &Multisig, ctx: &TxContext) {
         assert!(
             vec_set::contains(&multisig.members, &tx_context::sender(ctx)), 
             ECallerIsNotMember
