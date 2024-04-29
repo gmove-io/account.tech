@@ -3,6 +3,7 @@ module sui_multisig::multisig {
     use sui::vec_set::{Self, VecSet};
     use sui::vec_map::{Self, VecMap};
     use sui::dynamic_field as df;
+    use sui::dynamic_object_field as dof;
 
     // === Errors ===
 
@@ -36,7 +37,11 @@ module sui_multisig::multisig {
         approved: VecSet<address>,
     }
 
+    // key for the inner action struct of a proposal
     public struct ProposalKey has copy, drop, store {}
+
+    // hot potato guaranteeing borrowed caps are always returned
+    public struct Request {}
 
     // === Public functions ===
 
@@ -55,6 +60,7 @@ module sui_multisig::multisig {
         );
     }
 
+    // anyone can clean expired proposals
     public fun clean_proposals(multisig: &mut Multisig, ctx: &mut TxContext) {
         let mut i = vec_map::size(&multisig.proposals);
         while (i > 0) {
@@ -66,6 +72,23 @@ module sui_multisig::multisig {
             };
             i = i - 1;
         } 
+    }
+
+    // add a Cap to the Multisig for access control
+    // attached cap can't be removed, only borrowed
+    public fun attach_cap<C: key + store>(multisig: &mut Multisig, name: String, cap: C) {
+        dof::add(&mut multisig.id, name, cap);
+    }
+
+    // issue a hot potato to make sure the cap is returned
+    public(package) fun borrow_cap<C: key + store>(multisig: &mut Multisig, name: String): (C, Request) {
+        (dof::remove(&mut multisig.id, name), Request {})
+    }
+
+    // re-attach the cap and destroy the hot potato
+    public fun return_cap<C: key + store>(multisig: &mut Multisig, name: String, cap: C, request: Request) {
+        dof::add(&mut multisig.id, name, cap);
+        let Request {} = request;
     }
 
     // === Multisig-only functions ===
