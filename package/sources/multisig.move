@@ -74,23 +74,6 @@ module sui_multisig::multisig {
         } 
     }
 
-    // add a Cap to the Multisig for access control
-    // attached cap can't be removed, only borrowed
-    public fun attach_cap<C: key + store>(multisig: &mut Multisig, name: String, cap: C) {
-        dof::add(&mut multisig.id, name, cap);
-    }
-
-    // issue a hot potato to make sure the cap is returned
-    public(package) fun borrow_cap<C: key + store>(multisig: &mut Multisig, name: String): (C, Request) {
-        (dof::remove(&mut multisig.id, name), Request {})
-    }
-
-    // re-attach the cap and destroy the hot potato
-    public fun return_cap<C: key + store>(multisig: &mut Multisig, name: String, cap: C, request: Request) {
-        dof::add(&mut multisig.id, name, cap);
-        let Request {} = request;
-    }
-
     // === Public views ===
 
     public fun members(multisig: &Multisig): vector<address> {
@@ -183,6 +166,42 @@ module sui_multisig::multisig {
         id.delete();
 
         inner
+    }
+
+    // add a Cap to the Multisig for access control
+    // attached cap can't be removed, only borrowed
+    // only members can attach caps
+    public fun attach_cap<C: key + store, N: copy + drop + store>(
+        multisig: &mut Multisig, 
+        name: N, 
+        cap: C,
+        ctx: &mut TxContext
+    ) {
+        assert_is_member(multisig, ctx);
+        dof::add(&mut multisig.id, name, cap);
+    }
+
+    // issue a hot potato to make sure the cap is returned
+    public(package) fun borrow_cap<C: key + store, N: copy + drop + store>(
+        multisig: &mut Multisig, 
+        name: N,
+        ctx: &TxContext
+    ): (C, Request) {
+        assert_is_member(multisig, ctx); // redundant
+        (dof::remove(&mut multisig.id, name), Request {})
+    }
+
+    // re-attach the cap and destroy the hot potato
+    public fun return_cap<C: key + store, N: copy + drop + store>(
+        multisig: &mut Multisig, 
+        name: N,
+        cap: C, 
+        request: Request,
+        ctx: &mut TxContext
+    ) {
+        assert_is_member(multisig, ctx); // redundant
+        dof::add(&mut multisig.id, name, cap);
+        let Request {} = request;
     }
 
     // === Package functions ===

@@ -22,12 +22,12 @@ module sui_multisig::management {
     // step 1: propose to modify multisig params
     public fun propose(
         multisig: &mut Multisig, 
-        is_add: bool, // is it to add or remove members
-        threshold: u64,
-        addresses: vector<address>, // addresses to add or remove
         name: String,
         expiration: u64,
         description: String,
+        is_add: bool, // is it to add or remove members
+        threshold: u64,
+        addresses: vector<address>, // addresses to add or remove
         ctx: &mut TxContext
     ) {
         assert!(threshold > 0, EThresholdNull);
@@ -55,7 +55,7 @@ module sui_multisig::management {
         multisig.create_proposal(action, name, expiration, description, ctx);
     }
 
-    // step 2: multiple members have to approve the proposal
+    // step 2: multiple members have to approve the proposal (multisig::approve_proposal)
     
     // step 3: execute the action and modify Multisig object
     public fun execute(multisig: &mut Multisig, name: String, ctx: &mut TxContext) {
