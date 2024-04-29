@@ -43,11 +43,6 @@ module sui_multisig::multisig {
     // key for the inner action struct of a proposal
     public struct ProposalKey has copy, drop, store {}
 
-    // to facilitate discovery on frontends
-    public struct CapKey<phantom N> has copy, drop, store {}
-
-    public struct RequestKey<phantom N> has copy, drop, store {}
-
     // === Public mutative functions ===
 
     // init a new Multisig shared object
@@ -115,36 +110,6 @@ module sui_multisig::multisig {
         multisig.proposals.insert(name, proposal);
     }
 
-    // requests are struct that can be attached to proposals
-    // to gain access to an object owned by the Multisig 
-    public fun attach_request<R: store>(
-        multisig: &mut Multisig, 
-        name: String, 
-        request: R, 
-        ctx: &mut TxContext
-    ) {
-        assert_is_member(multisig, ctx);
-
-        let proposal = multisig.proposals.get_mut(&name);
-        assert!(proposal.approved.size() == 0, EProposalNotEmpty);
-        
-        df::add(&mut proposal.id, RequestKey<R> {}, request);
-    }
-
-    // return the request attached to a proposal only if threshold is reached
-    public fun detach_request<R: store>(
-        multisig: &mut Multisig, 
-        name: String, 
-        ctx: &mut TxContext
-    ): R {
-        assert_is_member(multisig, ctx);
-
-        let proposal = multisig.proposals.get_mut(&name);
-        assert!(proposal.approved.size() >= multisig.threshold, EThresholdNotReached);
-
-        df::remove(&mut proposal.id, RequestKey<R> {})
-    }
-
     // remove a proposal that hasn't been approved yet
     // prevents malicious members to delete proposals that are still open
     public fun delete_proposal(
@@ -194,7 +159,7 @@ module sui_multisig::multisig {
         assert_is_member(multisig, ctx);
 
         let (_, proposal) = multisig.proposals.remove(&name);
-        assert!(proposal.approved.size() >= multisig.threshold, EThresholdNotReached);
+        assert_threshold_reached(multisig, &proposal);
 
         let Proposal { mut id, expiration: _, description:_, approved: _ } = proposal;
         let action = df::remove(&mut id, ProposalKey {});
@@ -275,4 +240,9 @@ module sui_multisig::multisig {
     fun assert_is_member(multisig: &Multisig, ctx: &TxContext) {
         assert!(multisig.members.contains(&ctx.sender()), ECallerIsNotMember);
     }
+
+    fun assert_threshold_reached(multisig: &Multisig, proposal: &Proposal) {
+        assert!(proposal.approved.size() >= multisig.threshold, EThresholdNotReached);
+    }
 }
+
