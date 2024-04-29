@@ -43,12 +43,12 @@ module sui_multisig::multisig {
     // hot potato guaranteeing borrowed caps are always returned
     public struct Request {}
 
-    // === Public functions ===
+    // === Public mutative functions ===
 
     // init a new Multisig shared object
     public fun new(ctx: &mut TxContext) {
         let mut members = vec_set::empty();
-        vec_set::insert(&mut members, tx_context::sender(ctx));
+        members.insert(tx_context::sender(ctx));
 
         transfer::share_object(
             Multisig { 
@@ -62,13 +62,13 @@ module sui_multisig::multisig {
 
     // anyone can clean expired proposals
     public fun clean_proposals(multisig: &mut Multisig, ctx: &mut TxContext) {
-        let mut i = vec_map::size(&multisig.proposals);
+        let mut i = multisig.proposals.size();
         while (i > 0) {
-            let (name, proposal) = vec_map::get_entry_by_idx(&multisig.proposals, i - 1);
-            if (tx_context::epoch(ctx) >= proposal.expiration) {
-                let (_, proposal) = vec_map::remove(&mut multisig.proposals, &*name);
+            let (name, proposal) = multisig.proposals.get_entry_by_idx(i - 1);
+            if (ctx.epoch() >= proposal.expiration) {
+                let (_, proposal) = multisig.proposals.remove(name);
                 let Proposal { id, expiration: _, description: _, approved: _ } = proposal;
-                object::delete(id);
+                id.delete();
             };
             i = i - 1;
         } 
@@ -89,6 +89,12 @@ module sui_multisig::multisig {
     public fun return_cap<C: key + store>(multisig: &mut Multisig, name: String, cap: C, request: Request) {
         dof::add(&mut multisig.id, name, cap);
         let Request {} = request;
+    }
+
+    // === Public views ===
+
+    public fun member_exists(multisig: &Multisig, address: &address): bool {
+        multisig.members.contains(address)
     }
 
     // === Multisig-only functions ===
@@ -114,7 +120,7 @@ module sui_multisig::multisig {
 
         df::add(&mut proposal.id, ProposalKey {}, inner);
 
-        vec_map::insert(&mut multisig.proposals, name, proposal);
+        multisig.proposals.insert(name, proposal);
     }
 
     // remove a proposal that hasn't been approved yet
@@ -126,11 +132,11 @@ module sui_multisig::multisig {
     ) {
         assert_is_member(multisig, ctx);
 
-        let (_, proposal) = vec_map::remove(&mut multisig.proposals, &name);
-        assert!(vec_set::size(&proposal.approved) == 0, EProposalNotEmpty);
+        let (_, proposal) = multisig.proposals.remove(&name);
+        assert!(proposal.approved.size() == 0, EProposalNotEmpty);
         
         let Proposal { id, expiration: _, description: _, approved: _ } = proposal;
-        object::delete(id);
+        id.delete();
     }
 
     // the signer agrees to the proposal
@@ -141,8 +147,8 @@ module sui_multisig::multisig {
     ) {
         assert_is_member(multisig, ctx);
 
-        let proposal = vec_map::get_mut(&mut multisig.proposals, &name);
-        vec_set::insert(&mut proposal.approved, tx_context::sender(ctx));
+        let proposal = multisig.proposals.get_mut(&name);
+        proposal.approved.insert(ctx.sender());
     }
 
     // the signer removes his agreement
@@ -153,8 +159,8 @@ module sui_multisig::multisig {
     ) {
         assert_is_member(multisig, ctx);
 
-        let proposal = vec_map::get_mut(&mut multisig.proposals, &name);
-        vec_set::remove(&mut proposal.approved, &tx_context::sender(ctx));
+        let proposal = multisig.proposals.get_mut(&name);
+        proposal.approved.remove(&ctx.sender());
     }
 
     // return the inner proposal if the number of signers is >= threshold
@@ -165,12 +171,12 @@ module sui_multisig::multisig {
     ): T {
         assert_is_member(multisig, ctx);
 
-        let (_, proposal) = vec_map::remove(&mut multisig.proposals, &name);
-        assert!(vec_set::size(&proposal.approved) >= multisig.threshold, EThresholdNotReached);
+        let (_, proposal) = multisig.proposals.remove(&name);
+        assert!(proposal.approved.size() >= multisig.threshold, EThresholdNotReached);
 
         let Proposal { mut id, expiration: _, description:_, approved: _ } = proposal;
         let inner = df::remove(&mut id, ProposalKey {});
-        object::delete(id);
+        id.delete();
 
         inner
     }
@@ -178,9 +184,6 @@ module sui_multisig::multisig {
     // === Private functions ===
 
     fun assert_is_member(multisig: &Multisig, ctx: &TxContext) {
-        assert!(
-            vec_set::contains(&multisig.members, &tx_context::sender(ctx)), 
-            ECallerIsNotMember
-        );
+        assert!(multisig.members.contains(&ctx.sender()), ECallerIsNotMember);
     }
 }
