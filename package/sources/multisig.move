@@ -37,14 +37,16 @@ module sui_multisig::multisig {
         approved: VecSet<address>,
     }
 
+    // hot potato guaranteeing borrowed caps are always returned
+    public struct Promise {}
+
     // key for the inner action struct of a proposal
     public struct ProposalKey has copy, drop, store {}
 
     // to facilitate discovery on frontends
     public struct CapKey<phantom N> has copy, drop, store {}
 
-    // hot potato guaranteeing borrowed caps are always returned
-    public struct Request {}
+    public struct RequestKey<phantom N> has copy, drop, store {}
 
     // === Public mutative functions ===
 
@@ -89,11 +91,11 @@ module sui_multisig::multisig {
 
     // === Multisig-only functions ===
 
-    // create a new proposal using an inner proposal type
+    // create a new proposal using an action
     // that must be constructed from a friend module
     public fun create_proposal<T: store>(
         multisig: &mut Multisig, 
-        inner: T,
+        action: T,
         name: String, 
         expiration: u64,
         description: String,
@@ -108,13 +110,43 @@ module sui_multisig::multisig {
             approved: vec_set::empty(), 
         };
 
-        df::add(&mut proposal.id, ProposalKey {}, inner);
+        df::add(&mut proposal.id, ProposalKey {}, action);
 
         multisig.proposals.insert(name, proposal);
     }
 
+    // requests are struct that can be attached to proposals
+    // to gain access to an object owned by the Multisig 
+    public fun attach_request<R: store>(
+        multisig: &mut Multisig, 
+        name: String, 
+        request: R, 
+        ctx: &mut TxContext
+    ) {
+        assert_is_member(multisig, ctx);
+
+        let proposal = multisig.proposals.get_mut(&name);
+        assert!(proposal.approved.size() == 0, EProposalNotEmpty);
+        
+        df::add(&mut proposal.id, RequestKey<R> {}, request);
+    }
+
+    // return the request attached to a proposal only if threshold is reached
+    public fun detach_request<R: store>(
+        multisig: &mut Multisig, 
+        name: String, 
+        ctx: &mut TxContext
+    ): R {
+        assert_is_member(multisig, ctx);
+
+        let proposal = multisig.proposals.get_mut(&name);
+        assert!(proposal.approved.size() >= multisig.threshold, EThresholdNotReached);
+
+        df::remove(&mut proposal.id, RequestKey<R> {})
+    }
+
     // remove a proposal that hasn't been approved yet
-    // to prevent malicious members to delete proposals that are still open
+    // prevents malicious members to delete proposals that are still open
     public fun delete_proposal(
         multisig: &mut Multisig, 
         name: String, 
@@ -153,7 +185,7 @@ module sui_multisig::multisig {
         proposal.approved.remove(&ctx.sender());
     }
 
-    // return the inner proposal if the number of signers is >= threshold
+    // return the action if the number of signers is >= threshold
     public fun execute_proposal<T: store>(
         multisig: &mut Multisig, 
         name: String, 
@@ -165,10 +197,10 @@ module sui_multisig::multisig {
         assert!(proposal.approved.size() >= multisig.threshold, EThresholdNotReached);
 
         let Proposal { mut id, expiration: _, description:_, approved: _ } = proposal;
-        let inner = df::remove(&mut id, ProposalKey {});
+        let action = df::remove(&mut id, ProposalKey {});
         id.delete();
 
-        inner
+        action
     }
 
     // === Package functions ===
@@ -199,9 +231,9 @@ module sui_multisig::multisig {
         multisig: &mut Multisig, 
         key: K,
         ctx: &TxContext
-    ): (O, Request) {
+    ): (O, Promise) {
         assert_is_member(multisig, ctx); // redundant
-        (dof::remove(&mut multisig.id, key), Request {})
+        (dof::remove(&mut multisig.id, key), Promise {})
     }
 
     // re-attach the cap and destroy the hot potato
@@ -209,12 +241,12 @@ module sui_multisig::multisig {
         multisig: &mut Multisig, 
         key: K,
         object: O, 
-        request: Request,
+        request: Promise,
         ctx: &TxContext
     ) {
         assert_is_member(multisig, ctx); // redundant
         dof::add(&mut multisig.id, key, object);
-        let Request {} = request;
+        let Promise {} = request;
     }
 
     // callable only in management.move, if the proposal has been accepted

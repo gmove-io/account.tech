@@ -2,7 +2,7 @@ module sui_multisig::move_call {
     use std::string::String;
     use sui::bag::{Self, Bag};
 
-    use sui_multisig::multisig::{Multisig, Request};
+    use sui_multisig::multisig::{Multisig, Promise};
     use sui_multisig::owned;
 
     // === Structs ===
@@ -54,7 +54,7 @@ module sui_multisig::move_call {
     }
 
     // step 4: propose a MoveCall for an owned package
-    public fun propose(
+    public fun propose<PC: key + store>(
         multisig: &mut Multisig, 
         name: String,
         expiration: u64,
@@ -71,6 +71,8 @@ module sui_multisig::move_call {
             description,
             ctx
         );
+        let request = owned::request_cap<PC>();
+        multisig.attach_request(name, request, ctx);
     }
 
     // step 5: multiple members have to approve the proposal (multisig::approve_proposal)
@@ -80,11 +82,12 @@ module sui_multisig::move_call {
         multisig: &mut Multisig, 
         name: String, 
         ctx: &mut TxContext
-    ): (String, Bag, PC, Request) {
+    ): (String, Bag, PC, Promise) {
+        let request = multisig.detach_request(name, ctx);
         let action = multisig.execute_proposal(name, ctx);
         let MoveCall { function, arguments } = action;
 
-        let (cap, request) = owned::borrow_cap(multisig, ctx);
+        let (cap, request) = owned::borrow_cap(request, multisig, ctx);
 
         (function, arguments, cap, request)
     }    
