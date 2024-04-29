@@ -16,8 +16,8 @@ module sui_multisig::multisig {
 
     public struct Proposal has key, store {
         id: UID,
-        // proposals can be deleted after 7d
-        epoch: u64,
+        // proposals can be deleted from this epoch
+        expiration: u64,
         // what this proposal aims to do, for informational purpose
         description: String,
         // who has approved the proposal
@@ -27,11 +27,10 @@ module sui_multisig::multisig {
     // shared object accessible within the module where it has been instatiated
     public struct Multisig<phantom W> has key {
         id: UID,
-        // after how many epochs proposals expire
-        expiration: u64,
         // proposals can be executed is len(approved) >= threshold
         // has to be always <= length(members)
         threshold: u64,
+        // multisig cap to authorize actions for a package
         // members of the multisig
         members: VecSet<address>,
         // open proposals, key should be a unique descriptive name
@@ -41,14 +40,13 @@ module sui_multisig::multisig {
     // === Public functions ===
 
     // init a new Multisig shared object
-    public fun new<W: drop>(_: W, expiration: u64, ctx: &mut TxContext) {
+    public fun new<W: drop>(_: W, ctx: &mut TxContext) {
         let mut members = vec_set::empty();
         vec_set::insert(&mut members, tx_context::sender(ctx));
 
         transfer::share_object(
             Multisig<W> { 
                 id: object::new(ctx),
-                expiration,
                 threshold: 1,
                 members,
                 proposals: vec_map::empty(),
@@ -60,9 +58,9 @@ module sui_multisig::multisig {
         let mut i = vec_map::size(&multisig.proposals);
         while (i > 0) {
             let (name, proposal) = vec_map::get_entry_by_idx(&multisig.proposals, i - 1);
-            if (tx_context::epoch(ctx) - proposal.epoch >= multisig.expiration) {
-                let (_, proposal_obj) = vec_map::remove(&mut multisig.proposals, &*name);
-                let Proposal { id, epoch: _, description: _, approved: _ } = proposal_obj;
+            if (tx_context::epoch(ctx) >= proposal.expiration) {
+                let (_, proposal) = vec_map::remove(&mut multisig.proposals, &*name);
+                let Proposal { id, expiration: _, description: _, approved: _ } = proposal;
                 object::delete(id);
             };
             i = i - 1;
@@ -77,6 +75,7 @@ module sui_multisig::multisig {
         multisig: &mut Multisig<W>, 
         inner: T,
         name: String, 
+        expiration: u64,
         description: String,
         ctx: &mut TxContext
     ) {
@@ -84,7 +83,7 @@ module sui_multisig::multisig {
 
         let mut proposal = Proposal { 
             id: object::new(ctx),
-            epoch: tx_context::epoch(ctx), 
+            expiration,
             description,
             approved: vec_set::empty(), 
         };
@@ -106,7 +105,7 @@ module sui_multisig::multisig {
         let (_, proposal) = vec_map::remove(&mut multisig.proposals, &name);
         assert!(vec_set::size(&proposal.approved) == 0, EProposalNotEmpty);
         
-        let Proposal { id, epoch: _, description: _, approved: _ } = proposal;
+        let Proposal { id, expiration: _, description: _, approved: _ } = proposal;
         object::delete(id);
     }
 
@@ -145,7 +144,7 @@ module sui_multisig::multisig {
         let (_, proposal) = vec_map::remove(&mut multisig.proposals, &name);
         assert!(vec_set::size(&proposal.approved) >= multisig.threshold, EThresholdNotReached);
 
-        let Proposal { mut id, epoch: _, description:_, approved: _ } = proposal;
+        let Proposal { mut id, expiration: _, description:_, approved: _ } = proposal;
         let inner = df::remove(&mut id, ProposalKey {});
         object::delete(id);
 
