@@ -66,7 +66,7 @@ module sui_multisig::multisig {
         while (i > 0) {
             let (name, proposal) = multisig.proposals.get_entry_by_idx(i - 1);
             if (ctx.epoch() >= proposal.expiration) {
-                let (_, proposal) = multisig.proposals.remove(name);
+                let (_, proposal) = multisig.proposals.remove(&*name);
                 let Proposal { id, expiration: _, description: _, approved: _ } = proposal;
                 id.delete();
             };
@@ -92,6 +92,10 @@ module sui_multisig::multisig {
     }
 
     // === Public views ===
+
+    public fun members(multisig: &Multisig): vector<address> {
+        multisig.members.into_keys()
+    }
 
     public fun member_exists(multisig: &Multisig, address: &address): bool {
         multisig.members.contains(address)
@@ -179,6 +183,29 @@ module sui_multisig::multisig {
         id.delete();
 
         inner
+    }
+
+    // === Package functions ===
+
+    // callable only in management.move, if the proposal has been accepted
+    public(package) fun set_threshold(multisig: &mut Multisig, threshold: u64) {
+        multisig.threshold = threshold;
+    }
+
+    // callable only in management.move, if the proposal has been accepted
+    public(package) fun add_members(multisig: &mut Multisig, mut addresses: vector<address>) {
+        while (addresses.length() > 0) {
+            let addr = vector::pop_back(&mut addresses);
+            vec_set::insert(&mut multisig.members, addr);
+        }
+    }
+
+    // callable only in management.move, if the proposal has been accepted
+    public(package) fun remove_members(multisig: &mut Multisig, mut addresses: vector<address>) {
+        while (addresses.length() > 0) {
+            let addr = vector::pop_back(&mut addresses);
+            vec_set::remove(&mut multisig.members, &addr);
+        }
     }
 
     // === Private functions ===
