@@ -2,16 +2,13 @@ module sui_multisig::move_call {
     use std::string::String;
     use sui::bag::{Self, Bag};
     use sui_multisig::multisig::Multisig;
+    use sui_multisig::owned::Owned;
 
     // === Errors ===
 
     const ERetrieveAllObjectsBefore: u64 = 0;
 
     // === Structs ===
-
-    // dev should define a PackageCap in the package where the Multisig will be used
-    // this cap will be used to guard functions preventing anyone to call them
-    public struct PackageCapKey has copy, drop, store {}
 
     // Arg is a struct that can hold a Move type or an object id
     // if it is a Move type, it is directly use in the function
@@ -23,22 +20,13 @@ module sui_multisig::move_call {
         value: T,
     }
 
-    // Obj is a struct that holds the id of the object we want to retrieve/receive
-    // and whether it is borrowed or withdrawn to know whether we issue a Promise
-    public struct Obj has store {
-        // is the object borrowed or withdrawn
-        is_borrowed: bool,
-        // the id of the owned object we want to retrieve/receive
-        id: ID,
-    }
-
     public struct MoveCall has store {
         // which function we want to call
         function: String,
         // arguments for the function, using dynamic fields
         arguments: Bag, 
         // owned objects we want to retrieve/receive to use in the call
-        objects: vector<Obj>,
+        objects: vector<Owned>,
     }
 
     // === Public mutative functions ===
@@ -52,12 +40,8 @@ module sui_multisig::move_call {
         Arg { is_obj, value }
     }
 
-    public fun new_obj(is_borrowed: bool, id: ID): Obj {
-        Obj { is_borrowed, id }
-    }
-
     // step 3: add Arg to Bag
-    // & add Obj to vector
+    // & add Owned to vector (owned::new)
 
     // retrieve the Arg value and return whether it's supposed to be an object
     public fun get_arg<T: store>(args: &mut Bag, key: String): (bool, T) {
@@ -74,7 +58,7 @@ module sui_multisig::move_call {
         description: String,
         function: String,
         arguments: Bag,
-        objects: vector<Obj>,
+        objects: vector<Owned>,
         ctx: &mut TxContext
     ) {
         let action = MoveCall { function, arguments, objects };
@@ -92,7 +76,7 @@ module sui_multisig::move_call {
     // step 6: execute the proposal and return the action (multisig::execute_proposal)
     
     // step 7: get the Objs and retrieve/receive them in multisig::owned
-    public fun pop_obj(action: &mut MoveCall): Obj {
+    public fun pop_obj(action: &mut MoveCall): Owned {
         action.objects.pop_back()
     }
 

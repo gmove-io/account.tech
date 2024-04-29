@@ -170,6 +170,10 @@ module sui_multisig::multisig {
 
     // === Package functions ===
 
+    public(package) fun uid_mut(multisig: &mut Multisig): &mut UID {
+        &mut multisig.id
+    }
+
     // only members can attach objects
     public(package) fun attach_object<O: key + store, K: copy + drop + store>(
         multisig: &mut Multisig, 
