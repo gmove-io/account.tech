@@ -1,4 +1,4 @@
-module sui_multisig::proposal {
+module sui_multisig::multisig {
     use std::string::String;
     use sui::vec_set::{Self, VecSet};
     use sui::vec_map::{Self, VecMap};
@@ -24,20 +24,31 @@ module sui_multisig::proposal {
         approved: VecSet<address>,
     }
 
-    public struct Multisig has key {
+    // shared object accessible within the module where it has been instatiated
+    public struct Multisig<phantom W> has key {
         id: UID,
-        threshold: u64, // has to be <= members number
+        // after how many epochs proposals expire
+        expiration: u64,
+        // proposals can be executed is len(approved) >= threshold
+        // has to be always <= length(members)
+        threshold: u64,
+        // members of the multisig
         members: VecSet<address>,
-        proposals: VecMap<String, Proposal>, // key: String, value: Request
+        // open proposals, key should be a unique descriptive name
+        proposals: VecMap<String, Proposal>,
     }
 
-    fun init(ctx: &mut TxContext) {
+    // === Public functions ===
+
+    // init a new Multisig shared object
+    public fun new<W: drop>(_: W, expiration: u64, ctx: &mut TxContext) {
         let mut members = vec_set::empty();
         vec_set::insert(&mut members, tx_context::sender(ctx));
 
         transfer::share_object(
-            Multisig { 
+            Multisig<W> { 
                 id: object::new(ctx),
+                expiration,
                 threshold: 1,
                 members,
                 proposals: vec_map::empty(),
@@ -45,13 +56,11 @@ module sui_multisig::proposal {
         );
     }
 
-    // === Public functions ===
-
-    public fun clean_all(multisig: &mut Multisig, ctx: &mut TxContext) {
+    public fun clean_proposals<W: drop>(multisig: &mut Multisig<W>, ctx: &mut TxContext) {
         let mut i = vec_map::size(&multisig.proposals);
         while (i > 0) {
             let (name, proposal) = vec_map::get_entry_by_idx(&multisig.proposals, i - 1);
-            if (tx_context::epoch(ctx) - proposal.epoch >= 7) {
+            if (tx_context::epoch(ctx) - proposal.epoch >= multisig.expiration) {
                 let (_, proposal_obj) = vec_map::remove(&mut multisig.proposals, &*name);
                 let Proposal { id, epoch: _, description: _, approved: _ } = proposal_obj;
                 object::delete(id);
@@ -62,8 +71,10 @@ module sui_multisig::proposal {
 
     // === Multisig-only functions ===
 
-    public fun create<T: store>(
-        multisig: &mut Multisig, 
+    // create a new proposal using an inner proposal type
+    // that must be constructed from a friend module
+    public fun create_proposal<W: drop, T: store>(
+        multisig: &mut Multisig<W>, 
         inner: T,
         name: String, 
         description: String,
@@ -83,22 +94,25 @@ module sui_multisig::proposal {
         vec_map::insert(&mut multisig.proposals, name, proposal);
     }
 
-    public fun delete(
-        multisig: &mut Multisig, 
+    // remove a proposal that hasn't been approved yet
+    // to prevent malicious members to delete proposals that are still open
+    public fun delete_proposal<W: drop>(
+        multisig: &mut Multisig<W>, 
         name: String, 
         ctx: &mut TxContext
     ) {
         assert_is_member(multisig, ctx);
 
-        let (_, proposal_obj) = vec_map::remove(&mut multisig.proposals, &name);
-        assert!(vec_set::size(&proposal_obj.approved) == 0, EProposalNotEmpty);
+        let (_, proposal) = vec_map::remove(&mut multisig.proposals, &name);
+        assert!(vec_set::size(&proposal.approved) == 0, EProposalNotEmpty);
         
-        let Proposal { id, epoch: _, description: _, approved: _ } = proposal_obj;
+        let Proposal { id, epoch: _, description: _, approved: _ } = proposal;
         object::delete(id);
     }
 
-    public fun approve(
-        multisig: &mut Multisig, 
+    // the signer agrees to the proposal
+    public fun approve_proposal<W: drop>(
+        multisig: &mut Multisig<W>, 
         name: String, 
         ctx: &mut TxContext
     ) {
@@ -108,8 +122,9 @@ module sui_multisig::proposal {
         vec_set::insert(&mut proposal.approved, tx_context::sender(ctx));
     }
 
-    public fun remove_approval(
-        multisig: &mut Multisig, 
+    // the signer removes his agreement
+    public fun remove_approval<W: drop>(
+        multisig: &mut Multisig<W>, 
         name: String, 
         ctx: &mut TxContext
     ) {
@@ -119,8 +134,9 @@ module sui_multisig::proposal {
         vec_set::remove(&mut proposal.approved, &tx_context::sender(ctx));
     }
 
-    public fun execute<T: store>(
-        multisig: &mut Multisig, 
+    // return the inner proposal if the number of signers is >= threshold
+    public fun execute_proposal<W: drop, T: store>(
+        multisig: &mut Multisig<W>, 
         name: String, 
         ctx: &mut TxContext
     ): T {
@@ -138,16 +154,10 @@ module sui_multisig::proposal {
 
     // === Private functions ===
 
-    fun assert_is_member(multisig: &Multisig, ctx: &TxContext) {
+    fun assert_is_member<W: drop>(multisig: &Multisig<W>, ctx: &TxContext) {
         assert!(
             vec_set::contains(&multisig.members, &tx_context::sender(ctx)), 
             ECallerIsNotMember
         );
     }
-
-    // === Test functions ===
-
-    #[test_only]
-    public fun init_for_testing(ctx: &mut TxContext) {
-        init(ctx);
-    }
+}
