@@ -86,7 +86,7 @@ module sui_multisig::multisig {
     // === Multisig-only functions ===
 
     // create a new proposal using an action
-    // that must be constructed from a friend module
+    // that must be constructed from another module
     public fun create_proposal<T: store>(
         multisig: &mut Multisig, 
         action: T,

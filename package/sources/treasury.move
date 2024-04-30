@@ -47,6 +47,20 @@ module sui_multisig::treasury {
     /// Dynamic field key representing a balance of a particular object type.
     public struct NonFungible<phantom T> has copy, drop, store { }
 
+    // === Public functions ===
+
+    // destroy empty Fungible balance dof
+    public fun clean_balance<C: drop>(multisig: &mut Multisig) {
+        let balance: Balance<C> = df::remove(multisig.uid_mut(), Fungible<C>{});
+        balance.destroy_zero();
+    }
+
+    // destroy empty NonFungible table dof
+    public fun clean_table<O: key + store>(multisig: &mut Multisig) {
+        let table: ObjectTable<String, O> = df::remove(multisig.uid_mut(), NonFungible<O>{});
+        table.destroy_empty();
+    }
+
     // === Multisig functions ===
 
     // step 1: propose to retrieve objects and store them in the multisig via dof
