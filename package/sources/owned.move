@@ -1,4 +1,5 @@
 module sui_multisig::owned {
+    use std::string::String;
     use sui::transfer::Receiving;
     use sui_multisig::multisig::Multisig;
 
@@ -7,6 +8,9 @@ module sui_multisig::owned {
     const EWrongObject: u64 = 0;
     const EShouldBeWithdrawn: u64 = 1;
     const EShouldBeBorrowed: u64 = 2;
+    const ERetrieveAllObjectsBefore: u64 = 3;
+
+    // === Structs ===
 
     // Owned is a struct that holds the id of the object we want to retrieve/receive
     // and whether it is borrowed or withdrawn to know whether we issue a Promise
@@ -19,14 +23,58 @@ module sui_multisig::owned {
 
     // hot potato ensuring the owned object is transferred back
     public struct Promise {
-        object_id: ID,
+        // the address to return the object to (Multisig)
         return_to: address,
+        // the object being borrowed
+        object_id: ID,
     }
 
-    public fun new(is_borrowed: bool, id: ID): Owned {
-        Owned { is_borrowed, id }
+    // action to be held in a Proposal
+    public struct Access has store {
+        // the owned objects we want to access
+        objects: vector<Owned>,
     }
 
+    // === Multisig functions ===
+
+    // step 1: propose to Access owned objects
+    public fun propose(
+        multisig: &mut Multisig, 
+        name: String,
+        expiration: u64,
+        description: String,
+        objects_to_borrow: vector<ID>,
+        objects_to_withdraw: vector<ID>,
+        ctx: &mut TxContext
+    ) {
+        let action = new_access(objects_to_borrow, objects_to_withdraw);
+        multisig.create_proposal(
+            action,
+            name,
+            expiration,
+            description,
+            ctx
+        );
+    }
+
+    // step 5: multiple members have to approve the proposal (multisig::approve_proposal)
+    // step 6: execute the proposal and return the action (multisig::execute_proposal)
+    
+    // step 7: get the Objs and borrow or withdraw them
+    public fun pop_obj(action: &mut Access): Owned {
+        action.objects.pop_back()
+    }
+
+    // step 8: destroy the action once all objects are retrieved/received
+    public fun destroy_empty_access(action: Access) {
+        let Access { objects } = action;
+        assert!(objects.is_empty(), ERetrieveAllObjectsBefore);
+        objects.destroy_empty();
+    }
+
+    // === Core functions ===
+
+    // withdraw the owned object once we unwrapped Owned    
     public fun withdraw<T: key + store>(
         multisig: &mut Multisig, 
         owned: Owned,
@@ -42,6 +90,7 @@ module sui_multisig::owned {
         received
     }
 
+    // borrow the owned object once we unwrapped Owned    
     public fun borrow<T: key + store>(
         multisig: &mut Multisig, 
         owned: Owned,
@@ -55,17 +104,41 @@ module sui_multisig::owned {
         assert!(received_id == id, EWrongObject);
 
         let promise = Promise {
-            object_id: received_id,
             return_to: multisig.uid_mut().uid_to_inner().id_to_address(),
+            object_id: received_id,
         };
 
         (received, promise)
     }
     
+    // return the object to the multisig to destroy the hot potato
     public fun put_back<T: key + store>(returned: T, promise: Promise) {
-        let Promise { object_id, return_to } = promise;
+        let Promise { return_to, object_id } = promise;
         assert!(object::id(&returned) == object_id, EWrongObject);
         transfer::public_transfer(returned, return_to);
+    }
+
+    // === Package functions ===
+
+    // should be created only via proposals
+    public(package) fun new(is_borrowed: bool, id: ID): Owned {
+        Owned { is_borrowed, id }
+    }
+
+    // Access can be wrapped into another action
+    public(package) fun new_access(
+        mut to_borrow: vector<ID>,
+        mut to_withdraw: vector<ID>
+    ): Access {
+        let mut objects = vector[];
+        while (!to_borrow.is_empty()) {
+            objects.push_back(new(true, to_borrow.pop_back()));
+        };
+        while (!to_withdraw.is_empty()) {
+            objects.push_back(new(false, to_withdraw.pop_back()));
+        };
+        
+        Access { objects }
     }
 }
 

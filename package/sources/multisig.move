@@ -41,7 +41,7 @@ module sui_multisig::multisig {
     public struct Promise {}
 
     // key for the inner action struct of a proposal
-    public struct ProposalKey has copy, drop, store {}
+    public struct ActionKey has copy, drop, store {}
 
     // === Public mutative functions ===
 
@@ -105,7 +105,7 @@ module sui_multisig::multisig {
             approved: vec_set::empty(), 
         };
 
-        df::add(&mut proposal.id, ProposalKey {}, action);
+        df::add(&mut proposal.id, ActionKey {}, action);
 
         multisig.proposals.insert(name, proposal);
     }
@@ -162,7 +162,7 @@ module sui_multisig::multisig {
         assert_threshold_reached(multisig, &proposal);
 
         let Proposal { mut id, expiration: _, description:_, approved: _ } = proposal;
-        let action = df::remove(&mut id, ProposalKey {});
+        let action = df::remove(&mut id, ActionKey {});
         id.delete();
 
         action

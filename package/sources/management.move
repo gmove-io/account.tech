@@ -11,9 +11,13 @@ module sui_multisig::management {
 
     // === Structs ===
 
-    public struct Management has store { 
-        is_add: bool, // if true, add members, if false, remove members
+    // action to be held in a Proposal
+    public struct Manage has store { 
+        // if true, add members, if false, remove members
+        is_add: bool, 
+        // new threshold, has to be <= to new total addresses
         threshold: u64,
+        // addresses to add or remove
         addresses: vector<address>
     }
 
@@ -51,7 +55,7 @@ module sui_multisig::management {
         };
         assert!(new_addr_len >= threshold, EThresholdTooHigh);
 
-        let action = Management { is_add, threshold, addresses };
+        let action = Manage { is_add, threshold, addresses };
         multisig.create_proposal(action, name, expiration, description, ctx);
     }
 
@@ -60,7 +64,7 @@ module sui_multisig::management {
     // step 3: execute the action and modify Multisig object
     public fun execute(multisig: &mut Multisig, name: String, ctx: &mut TxContext) {
         let action = multisig.execute_proposal(name, ctx);
-        let Management { is_add, threshold, addresses } = action;
+        let Manage { is_add, threshold, addresses } = action;
 
         multisig.set_threshold(threshold);
 

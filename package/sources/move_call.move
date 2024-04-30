@@ -2,11 +2,7 @@ module sui_multisig::move_call {
     use std::string::String;
     use sui::bag::{Self, Bag};
     use sui_multisig::multisig::Multisig;
-    use sui_multisig::owned::Owned;
-
-    // === Errors ===
-
-    const ERetrieveAllObjectsBefore: u64 = 0;
+    use sui_multisig::owned::{Self, Access};
 
     // === Structs ===
 
@@ -20,19 +16,19 @@ module sui_multisig::move_call {
         value: T,
     }
 
+    // action to be held in a Proposal
     public struct MoveCall has store {
         // which function we want to call
         function: String,
         // arguments for the function, using dynamic fields
         arguments: Bag, 
-        // owned objects we want to retrieve/receive to use in the call
-        objects: vector<Owned>,
+        // sub action requesting to access owned objects
+        owned_action: Access,
     }
 
     // === Public mutative functions ===
 
     // step 1: create a Bag to store the Args (can be empty)
-    // & create a vector for the objects we want to retrieve (can be empty)
 
     // step 2: construct Args and insert them into a Bag
     // construct a new Arg
@@ -41,7 +37,6 @@ module sui_multisig::move_call {
     }
 
     // step 3: add Arg to Bag
-    // & add Owned to vector (owned::new)
 
     // retrieve the Arg value and return whether it's supposed to be an object
     public fun get_arg<T: store>(args: &mut Bag, key: String): (bool, T) {
@@ -58,10 +53,13 @@ module sui_multisig::move_call {
         description: String,
         function: String,
         arguments: Bag,
-        objects: vector<Owned>,
+        objects_to_borrow: vector<ID>,
+        objects_to_withdraw: vector<ID>,
         ctx: &mut TxContext
     ) {
-        let action = MoveCall { function, arguments, objects };
+        let owned_action = owned::new_access(objects_to_borrow, objects_to_withdraw);
+        let action = MoveCall { function, arguments, owned_action };
+        
         multisig.create_proposal(
             action,
             name,
@@ -72,20 +70,19 @@ module sui_multisig::move_call {
     }
 
     // step 5: multiple members have to approve the proposal (multisig::approve_proposal)
-    
     // step 6: execute the proposal and return the action (multisig::execute_proposal)
     
     // step 7: get the Objs and retrieve/receive them in multisig::owned
-    public fun pop_obj(action: &mut MoveCall): Owned {
-        action.objects.pop_back()
+    // only callable once the proposal is approved and executed
+    public fun owned_action(action: &mut MoveCall): &mut Access {
+        &mut action.owned_action
     }
 
     // step 8: unwrap the MoveCall and return function name and args
     public fun execute(action: MoveCall): (String, Bag) {
-        let MoveCall { function, arguments, objects } = action;
+        let MoveCall { function, arguments, owned_action } = action;
 
-        assert!(objects.is_empty(), ERetrieveAllObjectsBefore);
-        objects.destroy_empty();
+        owned_action.destroy_empty_access();
 
         (function, arguments)
     }    
