@@ -1,5 +1,5 @@
 module sui_multisig::move_call {
-    use std::string::String;
+    use std::ascii::String;
     use sui_multisig::multisig::Multisig;
     use sui_multisig::access_owned::{Self, Access};
 

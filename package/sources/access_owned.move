@@ -1,5 +1,5 @@
 module sui_multisig::access_owned {
-    use std::string::String;
+    use std::ascii::String;
     use sui::transfer::Receiving;
     use sui_multisig::multisig::Multisig;
 

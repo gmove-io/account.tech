@@ -1,5 +1,5 @@
 module sui_multisig::management {
-    use std::string::String;
+    use std::ascii::String;
     use sui_multisig::multisig::Multisig;
 
     // === Errors ===
