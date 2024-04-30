@@ -66,7 +66,7 @@ module sui_multisig::access_owned {
     }
 
     // step 5: destroy the action once all objects are retrieved/received
-    public fun complete_action(action: Access) {
+    public fun complete(action: Access) {
         let Access { objects } = action;
         assert!(objects.is_empty(), ERetrieveAllObjectsBefore);
         objects.destroy_empty();

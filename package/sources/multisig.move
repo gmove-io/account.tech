@@ -3,7 +3,6 @@ module sui_multisig::multisig {
     use sui::vec_set::{Self, VecSet};
     use sui::vec_map::{Self, VecMap};
     use sui::dynamic_field as df;
-    use sui::dynamic_object_field as dof;
 
     // === Errors ===
 
@@ -172,50 +171,6 @@ module sui_multisig::multisig {
 
     public(package) fun uid_mut(multisig: &mut Multisig): &mut UID {
         &mut multisig.id
-    }
-
-    // only members can attach objects
-    public(package) fun attach_object<O: key + store, K: copy + drop + store>(
-        multisig: &mut Multisig, 
-        key: K,
-        object: O,
-        ctx: &TxContext
-    ) {
-        assert_is_member(multisig, ctx);
-        dof::add(&mut multisig.id, key, object);
-    }
-
-    // remove an object from the multisig
-    public(package) fun detach_object<O: key + store, K: copy + drop + store>(
-        multisig: &mut Multisig, 
-        key: K,
-        ctx: &TxContext
-    ): O {
-        assert_is_member(multisig, ctx);
-        dof::remove(&mut multisig.id, key)
-    }
-
-    // issue a hot potato to make sure the cap is returned
-    public(package) fun borrow_object<O: key + store, K: copy + drop + store>(
-        multisig: &mut Multisig, 
-        key: K,
-        ctx: &TxContext
-    ): (O, Promise) {
-        assert_is_member(multisig, ctx); // redundant
-        (dof::remove(&mut multisig.id, key), Promise {})
-    }
-
-    // re-attach the cap and destroy the hot potato
-    public(package) fun return_object<O: key + store, K: copy + drop + store>(
-        multisig: &mut Multisig, 
-        key: K,
-        object: O, 
-        request: Promise,
-        ctx: &TxContext
-    ) {
-        assert_is_member(multisig, ctx); // redundant
-        dof::add(&mut multisig.id, key, object);
-        let Promise {} = request;
     }
 
     // callable only in management.move, if the proposal has been accepted
