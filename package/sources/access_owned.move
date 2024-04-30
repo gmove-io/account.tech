@@ -1,4 +1,4 @@
-module sui_multisig::owned {
+module sui_multisig::access_owned {
     use std::string::String;
     use sui::transfer::Receiving;
     use sui_multisig::multisig::Multisig;
@@ -11,6 +11,12 @@ module sui_multisig::owned {
     const ERetrieveAllObjectsBefore: u64 = 3;
 
     // === Structs ===
+
+    // action to be held in a Proposal
+    public struct Access has store {
+        // the owned objects we want to access
+        objects: vector<Owned>,
+    }
 
     // Owned is a struct that holds the id of the object we want to retrieve/receive
     // and whether it is borrowed or withdrawn to know whether we issue a Promise
@@ -27,12 +33,6 @@ module sui_multisig::owned {
         return_to: address,
         // the object being borrowed
         object_id: ID,
-    }
-
-    // action to be held in a Proposal
-    public struct Access has store {
-        // the owned objects we want to access
-        objects: vector<Owned>,
     }
 
     // === Multisig functions ===
@@ -57,16 +57,16 @@ module sui_multisig::owned {
         );
     }
 
-    // step 5: multiple members have to approve the proposal (multisig::approve_proposal)
-    // step 6: execute the proposal and return the action (multisig::execute_proposal)
+    // step 2: multiple members have to approve the proposal (multisig::approve_proposal)
+    // step 3: execute the proposal and return the action (multisig::execute_proposal)
     
-    // step 7: get the Objs and borrow or withdraw them
-    public fun pop_obj(action: &mut Access): Owned {
+    // step 4: get the Objs and borrow or withdraw them
+    public fun pop_owned(action: &mut Access): Owned {
         action.objects.pop_back()
     }
 
-    // step 8: destroy the action once all objects are retrieved/received
-    public fun destroy_empty_access(action: Access) {
+    // step 5: destroy the action once all objects are retrieved/received
+    public fun complete_action(action: Access) {
         let Access { objects } = action;
         assert!(objects.is_empty(), ERetrieveAllObjectsBefore);
         objects.destroy_empty();
@@ -121,7 +121,7 @@ module sui_multisig::owned {
     // === Package functions ===
 
     // should be created only via proposals
-    public(package) fun new(is_borrowed: bool, id: ID): Owned {
+    public(package) fun new_owned(is_borrowed: bool, id: ID): Owned {
         Owned { is_borrowed, id }
     }
 
@@ -132,10 +132,10 @@ module sui_multisig::owned {
     ): Access {
         let mut objects = vector[];
         while (!to_borrow.is_empty()) {
-            objects.push_back(new(true, to_borrow.pop_back()));
+            objects.push_back(new_owned(true, to_borrow.pop_back()));
         };
         while (!to_withdraw.is_empty()) {
-            objects.push_back(new(false, to_withdraw.pop_back()));
+            objects.push_back(new_owned(false, to_withdraw.pop_back()));
         };
         
         Access { objects }

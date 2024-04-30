@@ -1,65 +1,38 @@
 module sui_multisig::move_call {
     use std::string::String;
-    use sui::bag::{Self, Bag};
     use sui_multisig::multisig::Multisig;
-    use sui_multisig::owned::{Self, Access};
+    use sui_multisig::access_owned::{Self, Access};
+
+    // === Error ===
+
+    const EDigestDoesntMatch: u64 = 0;
 
     // === Structs ===
 
-    // Arg is a struct that can hold a Move type or an object id
-    // if it is a Move type, it is directly use in the function
-    // if it is an object, the object is passed to the function and its id is checked
-    public struct Arg<T: store> has copy, drop, store {
-        // is it a Move type or an object
-        is_obj: bool,
-        // the id of the shared object we want to pass or the Move type
-        value: T,
-    }
-
     // action to be held in a Proposal
     public struct MoveCall has store {
-        // which function we want to call
-        function: String,
-        // arguments for the function, using dynamic fields
-        arguments: Bag, 
+        // digest of the tx we want to execute
+        digest: vector<u8>,
         // sub action requesting to access owned objects
-        owned_action: Access,
+        access_owned: Access,
     }
 
     // === Public mutative functions ===
 
-    // step 1: create a Bag to store the Args (can be empty)
-
-    // step 2: construct Args and insert them into a Bag
-    // construct a new Arg
-    public fun new_arg<T: store>(is_obj: bool, value: T): Arg<T> {
-        Arg { is_obj, value }
-    }
-
-    // step 3: add Arg to Bag
-
-    // retrieve the Arg value and return whether it's supposed to be an object
-    public fun get_arg<T: store>(args: &mut Bag, key: String): (bool, T) {
-        let arg = bag::remove(args, key);
-        let Arg { is_obj, value } = arg;
-        (is_obj, value)
-    }
-
-    // step 4: propose a MoveCall for an owned package
+    // step 1: propose a MoveCall by passing the digest of the tx
     public fun propose(
         multisig: &mut Multisig, 
         name: String,
         expiration: u64,
         description: String,
-        function: String,
-        arguments: Bag,
+        digest: vector<u8>,
         objects_to_borrow: vector<ID>,
         objects_to_withdraw: vector<ID>,
         ctx: &mut TxContext
     ) {
-        let owned_action = owned::new_access(objects_to_borrow, objects_to_withdraw);
-        let action = MoveCall { function, arguments, owned_action };
-        
+        let access_owned = access_owned::new_access(objects_to_borrow, objects_to_withdraw);
+        let action = MoveCall { digest, access_owned };
+
         multisig.create_proposal(
             action,
             name,
@@ -69,25 +42,21 @@ module sui_multisig::move_call {
         );
     }
 
-    // step 5: multiple members have to approve the proposal (multisig::approve_proposal)
-    // step 6: execute the proposal and return the action (multisig::execute_proposal)
+    // step 2: multiple members have to approve the proposal (multisig::approve_proposal)
+    // step 3: execute the proposal and return the action (multisig::execute_proposal)
     
-    // step 7: get the Objs and retrieve/receive them in multisig::owned
-    // only callable once the proposal is approved and executed
-    public fun owned_action(action: &mut MoveCall): &mut Access {
-        &mut action.owned_action
+    // step 4: get Owned vector and retrieve/receive them in multisig::access_owned
+    public fun access_owned(action: &mut MoveCall, ctx: &TxContext): &mut Access {
+        assert!(action.digest == ctx.digest(), EDigestDoesntMatch);
+        &mut action.access_owned
     }
 
-    // step 8: unwrap the MoveCall and return function name and args
-    public fun execute(action: MoveCall): (String, Bag) {
-        let MoveCall { function, arguments, owned_action } = action;
+    // step 5: borrow or withdraw the objects from access_owned 
 
-        owned_action.destroy_empty_access();
-
-        (function, arguments)
+    // step 6: destroy Access if empty and the MoveCall
+    public fun complete_action(action: MoveCall) {
+        let MoveCall { digest: _, access_owned } = action;
+        access_owned.complete_action();
     }    
-
-    // step 9: in the package, function name, 
-    // then use args and received objects (assert id) in the function
 }
 
