@@ -44,19 +44,16 @@ module sui_multisig::move_call {
 
     // step 2: multiple members have to approve the proposal (multisig::approve_proposal)
     // step 3: execute the proposal and return the action (multisig::execute_proposal)
-    
-    // step 4: get Owned vector and retrieve/receive them in multisig::access_owned
-    public fun access_owned(action: &mut MoveCall, ctx: &TxContext): &mut Access {
-        assert!(action.digest == ctx.digest(), EDigestDoesntMatch);
-        &mut action.access_owned
-    }
+
+    // step 4: destroy MoveCall if digest match and return Access
+    public fun execute(action: MoveCall, ctx: &TxContext): Access {
+        let MoveCall { digest, access_owned } = action;
+        assert!(digest == ctx.digest(), EDigestDoesntMatch);
+        
+        access_owned
+    }    
 
     // step 5: borrow or withdraw the objects from access_owned 
-
-    // step 6: destroy Access if empty and the MoveCall
-    public fun complete_action(action: MoveCall) {
-        let MoveCall { digest: _, access_owned } = action;
-        access_owned.complete_action();
-    }    
+    // step 6: destroy Access in access_owned
 }
 
