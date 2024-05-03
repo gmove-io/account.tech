@@ -21,11 +21,9 @@ module sui_multisig::manage_tests{
 
     fun start_world(): World {
         let mut scenario = ts::begin(OWNER);
-        let scen = &mut scenario;
-
         // initialize multisig
-        multisig::new(scen.ctx());
-        scen.next_tx(OWNER);
+        multisig::new(scenario.ctx());
+        scenario.next_tx(OWNER);
 
         let multisig = scenario.take_shared<Multisig>();
         World { scenario, multisig }
