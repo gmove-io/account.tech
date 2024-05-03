@@ -1,4 +1,7 @@
-module sui_multisig::management {
+/// This module allows to manage a Multisig's settings.
+/// The action can be to add or remove members, and to change the threshold.
+
+module sui_multisig::manage {
     use std::ascii::String;
     use sui_multisig::multisig::Multisig;
 
@@ -11,7 +14,7 @@ module sui_multisig::management {
 
     // === Structs ===
 
-    // action to be held in a Proposal
+    // action to be stored in a Proposal
     public struct Manage has store { 
         // if true, add members, if false, remove members
         is_add: bool, 
@@ -30,23 +33,12 @@ module sui_multisig::management {
         expiration: u64,
         description: String,
         is_add: bool, // is it to add or remove members
-        threshold: u64,
-        addresses: vector<address>, // addresses to add or remove
+        threshold: u64, // new threshold
+        mut addresses: vector<address>, // addresses to add or remove
         ctx: &mut TxContext
     ) {
+        // if threshold null, anyone can propose
         assert!(threshold > 0, EThresholdNull);
-        // verify proposed addresses match current list
-        let len = addresses.length();
-        let mut i = 0;
-        while (i < len) {
-            let addr = addresses.borrow(i);
-            if (is_add) {
-                assert!(!multisig.member_exists(addr), EAlreadyMember);
-            } else {
-                assert!(multisig.member_exists(addr), ENotMember);
-            };
-            i = i + 1;
-        };
         // verify threshold is reachable with new members 
         let new_addr_len = if (is_add) {
             addresses.length() + multisig.members().length()
@@ -54,6 +46,15 @@ module sui_multisig::management {
             multisig.members().length() - addresses.length()
         };
         assert!(new_addr_len >= threshold, EThresholdTooHigh);
+        // verify proposed addresses match current list
+        while (addresses.length() > 0) {
+            let addr = addresses.pop_back();
+            if (is_add) {
+                assert!(!multisig.member_exists(&addr), EAlreadyMember);
+            } else {
+                assert!(multisig.member_exists(&addr), ENotMember);
+            };
+        };
 
         let action = Manage { is_add, threshold, addresses };
         multisig.create_proposal(action, name, expiration, description, ctx);

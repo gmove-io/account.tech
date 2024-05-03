@@ -1,3 +1,7 @@
+/// This is the core module managing Multisig and Proposals.
+/// Various actions to be executed by the Multisig can be attached to a Proposal.
+/// The proposals have to be approved by at least the threshold number of members.
+
 module sui_multisig::multisig {
     use std::ascii::String;
     use sui::vec_set::{Self, VecSet};
@@ -12,13 +16,11 @@ module sui_multisig::multisig {
 
     // === Structs ===
 
-    // shared object accessible within the module where it has been instatiated
+    // shared object 
     public struct Multisig has key {
         id: UID,
-        // proposals can be executed is len(approved) >= threshold
         // has to be always <= length(members)
         threshold: u64,
-        // multisig cap to authorize actions for a package
         // members of the multisig
         members: VecSet<address>,
         // open proposals, key should be a unique descriptive name
@@ -26,6 +28,7 @@ module sui_multisig::multisig {
     }
 
     // proposal owning a single action requested to be executed
+    // can be executed if length(approved) >= multisig.threshold
     public struct Proposal has key, store {
         id: UID,
         // proposals can be deleted from this epoch
@@ -36,15 +39,12 @@ module sui_multisig::multisig {
         approved: VecSet<address>,
     }
 
-    // hot potato guaranteeing borrowed caps are always returned
-    public struct Promise {}
-
     // key for the inner action struct of a proposal
     public struct ActionKey has copy, drop, store {}
 
     // === Public mutative functions ===
 
-    // init a new Multisig shared object
+    // init and share a new Multisig object
     public fun new(ctx: &mut TxContext) {
         let mut members = vec_set::empty();
         members.insert(tx_context::sender(ctx));
@@ -85,8 +85,8 @@ module sui_multisig::multisig {
 
     // === Multisig-only functions ===
 
-    // create a new proposal using an action
-    // that must be constructed from another module
+    // create a new proposal for an action
+    // that must be constructed in another module
     public fun create_proposal<T: store>(
         multisig: &mut Multisig, 
         action: T,
@@ -125,7 +125,7 @@ module sui_multisig::multisig {
         id.delete();
     }
 
-    // the signer agrees to the proposal
+    // the signer agrees with the proposal
     public fun approve_proposal(
         multisig: &mut Multisig, 
         name: String, 
@@ -134,7 +134,7 @@ module sui_multisig::multisig {
         assert_is_member(multisig, ctx);
 
         let proposal = multisig.proposals.get_mut(&name);
-        proposal.approved.insert(ctx.sender());
+        proposal.approved.insert(ctx.sender()); // throws if already approved
     }
 
     // the signer removes his agreement
