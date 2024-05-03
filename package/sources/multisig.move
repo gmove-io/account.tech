@@ -203,5 +203,19 @@ module sui_multisig::multisig {
     fun assert_threshold_reached(multisig: &Multisig, proposal: &Proposal) {
         assert!(proposal.approved.size() >= multisig.threshold, EThresholdNotReached);
     }
+
+    // === Test functions ===
+
+    #[test_only]
+    public fun assert_multisig_data_numbers(
+        multisig: &Multisig,
+        threshold: u64,
+        members: u64,
+        proposals: u64
+    ) {
+        assert!(multisig.threshold == threshold, 100);
+        assert!(multisig.members.size() == members, 100);
+        assert!(multisig.proposals.size() == proposals, 100);
+    }
 }
 

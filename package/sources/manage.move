@@ -2,6 +2,7 @@
 /// The action can be to add or remove members, and to change the threshold.
 
 module sui_multisig::manage {
+    use std::debug::print;
     use std::ascii::String;
     use sui_multisig::multisig::Multisig;
 
@@ -34,7 +35,7 @@ module sui_multisig::manage {
         description: String,
         is_add: bool, // is it to add or remove members
         threshold: u64, // new threshold
-        mut addresses: vector<address>, // addresses to add or remove
+        addresses: vector<address>, // addresses to add or remove
         ctx: &mut TxContext
     ) {
         // if threshold null, anyone can propose
@@ -47,13 +48,15 @@ module sui_multisig::manage {
         };
         assert!(new_addr_len >= threshold, EThresholdTooHigh);
         // verify proposed addresses match current list
-        while (addresses.length() > 0) {
-            let addr = addresses.pop_back();
+        let mut i = 0;
+        while (i < addresses.length()) {
+            let addr = addresses[i];
             if (is_add) {
                 assert!(!multisig.member_exists(&addr), EAlreadyMember);
             } else {
                 assert!(multisig.member_exists(&addr), ENotMember);
             };
+            i = i + 1;
         };
 
         let action = Manage { is_add, threshold, addresses };
