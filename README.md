@@ -2,11 +2,11 @@
 
 ## Overview
 
-This project implements a multisig-like system on the Sui blockchain. A multisig is a mechanism that requires multiple parties to agree on transactions before they can be executed. This adds an additional layer of security and is useful for managing shared funds.
+This project implements a multisig-like system on the Sui blockchain. A multisig is a mechanism that requires multiple parties to agree on actions before they can be executed. This adds an additional layer of security and is useful for managing shared funds and packages.
 
 ## Goals
 
-This package aims to provide a versatile implementation of a multisig mechanism tailored for both teams and individuals on the Sui blockchain. The primary goal is to enable a broad spectrum of on-chain interactions, surpassing the limitations of existing solutions. This project will eventually include both an SDK and a CLI to streamline operations. For those interested in developing a frontend, please feel free to reach out via DM on Twitter: [BL0CKRUNNER](https://twitter.com/BL0CKRUNNER).
+This package aims to provide a versatile implementation of a multisig mechanism tailored for both teams and individuals on the Sui blockchain. The primary goal is to enable a broad spectrum of on-chain interactions, surpassing the limitations of existing solutions. It is also easily integrable with packages to create and execute custom proposals. This project will eventually include both an SDK and a CLI to streamline operations. For those interested in developing a frontend, please feel free to reach out via DM on Twitter: [BL0CKRUNNER](https://twitter.com/BL0CKRUNNER).
 
 ## Modules
 
@@ -27,6 +27,7 @@ The project consists of several modules, each handling different aspects of the 
 
 - **Access Control**: Securely manage access to functions in a package via a Cap owned by the Multisig.
 - **Asset Management**: Sort coins and any other object types. Deposit non-spam assets only and safely transfer or withdraw objects held in the treasury.
+- **Custom Proposals**: Define any actions in your module and easily manage them via the Multisig. Check out the [examples](TODO:).
 
 ## Contributing
 
