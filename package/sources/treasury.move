@@ -4,7 +4,8 @@
 /// These assets can be withdrawn (and returned in PTB) or transferred to another address.
 
 module sui_multisig::treasury {
-    use std::ascii::String;
+    use std::debug::print;
+    use std::ascii::{Self, String};
     use std::type_name;
     use sui::transfer::Receiving;
     use sui::coin::{Self, Coin};
@@ -16,20 +17,19 @@ module sui_multisig::treasury {
 
     // === Constants ===
 
-    const COIN_TYPE: vector<u8> = b"0x0000000000000000000000000000000000000000000000000000000000000002::coin::Coin";
+    const COIN_TYPE: vector<u8> = b"0000000000000000000000000000000000000000000000000000000000000002::coin::Coin";
 
     // === Errors ===
 
     const EFungible: u64 = 0;
-    const ENonFungible: u64 = 1;
-    const EDifferentLength: u64 = 2;
-    const EWrongFungibleType: u64 = 3;
-    const EFungibleDoesntExist: u64 = 4;
-    const EWrongNonFungibleType: u64 = 5;
-    const ENonFungibleDoesntExist: u64 = 6;
-    const EWithdrawAllAssetsBefore: u64 = 7;
-    const EMustBeTransferred: u64 = 8;
-    const EMustBeWithdrawn: u64 = 9;
+    const EDifferentLength: u64 = 1;
+    const EWrongFungibleType: u64 = 2;
+    const EFungibleDoesntExist: u64 = 3;
+    const EWrongNonFungibleType: u64 = 4;
+    const ENonFungibleDoesntExist: u64 = 5;
+    const EWithdrawAllAssetsBefore: u64 = 6;
+    const EMustBeTransferred: u64 = 7;
+    const EMustBeWithdrawn: u64 = 8;
 
     // action to be held in a Proposal
     public struct Deposit has store {
@@ -107,7 +107,6 @@ module sui_multisig::treasury {
         action: &mut Deposit, 
         received: Receiving<Coin<C>>
     ) {
-        assert_is_fungible<C>();
         let owned = action.access_owned.pop_owned();
         let coin = access_owned::take(multisig, owned, received);
         let balance = coin.into_balance();
@@ -286,19 +285,7 @@ module sui_multisig::treasury {
             };
             i = i + 1;
         };
-        assert!(count == ref.length(), EFungible);
-    }
-
-    fun assert_is_fungible<C: drop>() {
-        let type_name = type_name::get<C>();
-        let name = type_name.into_string().into_bytes();
-        let ref = COIN_TYPE;
-
-        let mut i = 0;
-        while (i < ref.length()) {
-            assert!(name[i] == ref[i], ENonFungible);
-            i = i + 1;
-        };
+        assert!(count != ref.length(), EFungible);
     }
 }
 
