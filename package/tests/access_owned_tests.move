@@ -88,7 +88,7 @@ module sui_multisig::access_owned_tests{
         let id = world.ids[0];
         let mut action = receive_owned(
             &mut world, 
-            b"add_members_increase_threshold", 
+            b"withdraw", 
             vector[],
             vector[id]
         );
@@ -97,6 +97,24 @@ module sui_multisig::access_owned_tests{
         let obj = access_owned::withdraw(&mut world.multisig, owned, ticket);
         access_owned::complete(action);
         transfer::public_transfer(obj, OWNER);
+        end_world(world);
+    }
+
+    #[test]
+    fun borrow_and_return_object() {
+        let mut world = start_world();
+        let id = world.ids[0];
+        let mut action = receive_owned(
+            &mut world, 
+            b"borrow", 
+            vector[id],
+            vector[]
+        );
+        let ticket = ts::receiving_ticket_by_id<Obj>(id);
+        let owned = access_owned::pop_owned(&mut action);
+        let (obj, promise) = access_owned::borrow(&mut world.multisig, owned, ticket);
+        access_owned::put_back(obj, promise);
+        access_owned::complete(action);
         end_world(world);
     }
 
