@@ -109,7 +109,7 @@ module sui_multisig::treasury {
     ) {
         assert_is_fungible<C>();
         let owned = action.access_owned.pop_owned();
-        let coin = access_owned::withdraw(multisig, owned, received);
+        let coin = access_owned::take(multisig, owned, received);
         let balance = coin.into_balance();
 
         if (df::exists_(multisig.uid_mut(), Fungible<C>{})) {
@@ -130,7 +130,7 @@ module sui_multisig::treasury {
     ) {
         assert_is_non_fungible<O>();
         let owned = action.access_owned.pop_owned();
-        let object = access_owned::withdraw(multisig, owned, received);
+        let object = access_owned::take(multisig, owned, received);
 
         if (df::exists_(multisig.uid_mut(), NonFungible<O>{})) {
             let table: &mut ObjectTable<String, O> = 

@@ -94,7 +94,7 @@ module sui_multisig::access_owned_tests{
         );
         let ticket = ts::receiving_ticket_by_id<Obj>(id);
         let owned = access_owned::pop_owned(&mut action);
-        let obj = access_owned::withdraw(&mut world.multisig, owned, ticket);
+        let obj = access_owned::take(&mut world.multisig, owned, ticket);
         access_owned::complete(action);
         transfer::public_transfer(obj, OWNER);
         end_world(world);

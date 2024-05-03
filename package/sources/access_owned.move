@@ -1,5 +1,5 @@
 /// This module allows multisig members to access objects owned by the multisig in a secure way.
-/// The objects can be withdrawn or borrowed, and only via an Access Proposal
+/// The objects can be taken or borrowed, and only via an Access Proposal
 
 module sui_multisig::access_owned {
     use std::ascii::String;
@@ -67,8 +67,8 @@ module sui_multisig::access_owned {
         action.objects.pop_back()
     }
 
-    // step 5: receive and withdraw the owned object using Owned    
-    public fun withdraw<T: key + store>(
+    // step 5: receive and take the owned object using Owned    
+    public fun take<T: key + store>(
         multisig: &mut Multisig, 
         owned: Owned,
         received: Receiving<T>
