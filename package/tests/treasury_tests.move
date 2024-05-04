@@ -88,7 +88,6 @@ module sui_multisig::treasury_tests{
         asset_types: vector<String>,
         amounts: vector<u64>,
         keys: vector<String>,
-        transfer_to: vector<address>,
     ): Withdraw {
         treasury::propose_withdraw(
             &mut world.multisig,
@@ -98,7 +97,6 @@ module sui_multisig::treasury_tests{
             asset_types,
             amounts,
             keys,
-            transfer_to,
             world.scenario.ctx()
         );
         multisig::approve_proposal(
@@ -175,44 +173,10 @@ module sui_multisig::treasury_tests{
             vector[ascii::string(b"0000000000000000000000000000000000000000000000000000000000000000::treasury_tests::Obj")],
             vector[1],
             vector[ascii::string(b"1")],
-            vector[@0x0]
         );
         let obj = treasury::withdraw_non_fungible<Obj>(&mut world.multisig, &mut action);
         treasury::complete_withdraw(action);
         transfer::public_transfer(obj, OWNER);
-        end_world(world);
-    }
-
-    #[test]
-    fun deposit_and_transfer_non_fungible() {
-        let mut world = start_world();
-        let obj_id = world.ids[0];
-        // deposit Obj 
-        let mut action = deposit(
-            &mut world, 
-            b"deposit", 
-            vector[obj_id]
-        );
-        let obj_ticket = ts::receiving_ticket_by_id<Obj>(obj_id);
-        treasury::deposit_non_fungible(
-            &mut world.multisig, 
-            &mut action, 
-            obj_ticket,
-            ascii::string(b"1"),
-            world.scenario.ctx() 
-        );
-        treasury::complete_deposit(action);
-        // withdraw Obj
-        let mut action = withdraw(
-            &mut world,
-            b"withdraw",
-            vector[ascii::string(b"0000000000000000000000000000000000000000000000000000000000000000::treasury_tests::Obj")],
-            vector[1],
-            vector[ascii::string(b"1")],
-            vector[OWNER]
-        );
-        treasury::transfer_non_fungible<Obj>(&mut world.multisig, &mut action);
-        treasury::complete_withdraw(action);
         end_world(world);
     }
 
@@ -240,42 +204,10 @@ module sui_multisig::treasury_tests{
             vector[ascii::string(b"0000000000000000000000000000000000000000000000000000000000000000::treasury_tests::COIN")],
             vector[1000],
             vector[ascii::string(b"")],
-            vector[@0x0]
         );
         let obj = treasury::withdraw_fungible<COIN>(&mut world.multisig, &mut action, world.scenario.ctx());
         treasury::complete_withdraw(action);
         transfer::public_transfer(obj, OWNER);
-        end_world(world);
-    }
-
-    #[test]
-    fun deposit_and_transfer_fungible() {
-        let mut world = start_world();
-        let coin_id = world.ids[1];
-        // deposit Coin
-        let mut action = deposit(
-            &mut world, 
-            b"deposit", 
-            vector[coin_id]
-        );
-        let coin_ticket = ts::receiving_ticket_by_id<Coin<COIN>>(coin_id);
-        treasury::deposit_fungible(
-            &mut world.multisig, 
-            &mut action, 
-            coin_ticket,
-        );
-        treasury::complete_deposit(action);
-        // withdraw Coin
-        let mut action = withdraw(
-            &mut world,
-            b"withdraw",
-            vector[ascii::string(b"0000000000000000000000000000000000000000000000000000000000000000::treasury_tests::COIN")],
-            vector[1000],
-            vector[ascii::string(b"")],
-            vector[OWNER]
-        );
-        treasury::transfer_fungible<COIN>(&mut world.multisig, &mut action, world.scenario.ctx());
-        treasury::complete_withdraw(action);
         end_world(world);
     }
 }
