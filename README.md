@@ -18,9 +18,11 @@ The project consists of several modules, each handling different aspects of the 
 
 3. **Access Owned**: Manages access to objects owned by the multisig, allowing them to be withdrawn or borrowed through proposals.
 
-4. **Treasury**: Leverages the `access_owned` API to manage deposits and withdrawals of assets from the multisig treasury.
+4. **Store Assets**: Leverages the `access_owned` API to manage and store assets in the multisig treasury.
 
-5. **Move Call**: Facilitates the enforcement of calling the appropriate functions to borrow or return the requested objects (such as a Cap). Taken objects can be used in the following commands of the PTB.
+5. **Transfer**: Allows the transfer of assets owned and stored in the multisig treasury.
+
+6. **Move Call**: Facilitates the enforcement of calling the appropriate functions to borrow or return the requested objects (such as a Cap). Taken objects can be used in the following commands of the PTB.
 
 
 ## Features
@@ -28,6 +30,8 @@ The project consists of several modules, each handling different aspects of the 
 - **Access Control**: Securely manage access to functions in a package via a Cap owned by the Multisig.
 - **Asset Management**: Sort coins and any other object types. Deposit non-spam assets only and safely transfer or withdraw objects held in the treasury.
 - **Custom Proposals**: Define any actions in your module and easily manage them via the Multisig. Check out the [examples](TODO:).
+- **Package Upgrade**: Follow built-in upgrade policies such as TimeLock to manage your on-chain packages. (TODO)
+- **Interact with dApps**: Easily interact with dApps on Sui that are integrated to the Multisig. Stake, Swap, Lend your assets, and more. (TODO)
 
 ## Contributing
 
