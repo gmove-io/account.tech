@@ -1,13 +1,12 @@
 #[test_only]
-module sui_multisig::treasury_tests{
+module sui_multisig::store_asset_tests{
     use std::debug::print;
     use std::ascii::{Self, String};
     use sui::coin::{Self, Coin};
     use sui::test_scenario::{Self as ts, Scenario};
 
     use sui_multisig::multisig::{Self, Multisig};
-    use sui_multisig::treasury::{Self, Deposit, Withdraw};
-    use sui_multisig::access_owned;
+    use sui_multisig::store_asset::{Self, Deposit, Withdraw};
 
     const OWNER: address = @0xBABE;
     const ALICE: address = @0xA11CE;
@@ -62,7 +61,7 @@ module sui_multisig::treasury_tests{
         name: vector<u8>,
         objects: vector<ID>,
     ): Deposit {
-        treasury::propose_deposit(
+        store_asset::propose_deposit(
             &mut world.multisig,
             ascii::string(name),
             0,
@@ -89,7 +88,7 @@ module sui_multisig::treasury_tests{
         amounts: vector<u64>,
         keys: vector<String>,
     ): Withdraw {
-        treasury::propose_withdraw(
+        store_asset::propose_withdraw(
             &mut world.multisig,
             ascii::string(name),
             0,
@@ -131,19 +130,19 @@ module sui_multisig::treasury_tests{
         );
         let obj_ticket = ts::receiving_ticket_by_id<Obj>(obj_id);
         let coin_ticket = ts::receiving_ticket_by_id<Coin<COIN>>(coin_id);
-        treasury::deposit_non_fungible(
+        store_asset::deposit_non_fungible(
             &mut world.multisig, 
             &mut action, 
             obj_ticket,
             ascii::string(b"1"),
             world.scenario.ctx() 
         );
-        treasury::deposit_fungible(
+        store_asset::deposit_fungible(
             &mut world.multisig, 
             &mut action, 
             coin_ticket,
         );
-        treasury::complete_deposit(action);
+        store_asset::complete_deposit(action);
         end_world(world);
     }
 
@@ -158,14 +157,14 @@ module sui_multisig::treasury_tests{
             vector[obj_id]
         );
         let obj_ticket = ts::receiving_ticket_by_id<Obj>(obj_id);
-        treasury::deposit_non_fungible(
+        store_asset::deposit_non_fungible(
             &mut world.multisig, 
             &mut action, 
             obj_ticket,
             ascii::string(b"1"),
             world.scenario.ctx() 
         );
-        treasury::complete_deposit(action);
+        store_asset::complete_deposit(action);
         // withdraw Obj
         let mut action = withdraw(
             &mut world,
@@ -174,8 +173,8 @@ module sui_multisig::treasury_tests{
             vector[1],
             vector[ascii::string(b"1")],
         );
-        let obj = treasury::withdraw_non_fungible<Obj>(&mut world.multisig, &mut action);
-        treasury::complete_withdraw(action);
+        let obj = store_asset::withdraw_non_fungible<Obj>(&mut world.multisig, &mut action);
+        store_asset::complete_withdraw(action);
         transfer::public_transfer(obj, OWNER);
         end_world(world);
     }
@@ -191,12 +190,12 @@ module sui_multisig::treasury_tests{
             vector[coin_id]
         );
         let coin_ticket = ts::receiving_ticket_by_id<Coin<COIN>>(coin_id);
-        treasury::deposit_fungible(
+        store_asset::deposit_fungible(
             &mut world.multisig, 
             &mut action, 
             coin_ticket,
         );
-        treasury::complete_deposit(action);
+        store_asset::complete_deposit(action);
         // withdraw Coin
         let mut action = withdraw(
             &mut world,
@@ -205,8 +204,8 @@ module sui_multisig::treasury_tests{
             vector[1000],
             vector[ascii::string(b"")],
         );
-        let obj = treasury::withdraw_fungible<COIN>(&mut world.multisig, &mut action, world.scenario.ctx());
-        treasury::complete_withdraw(action);
+        let obj = store_asset::withdraw_fungible<COIN>(&mut world.multisig, &mut action, world.scenario.ctx());
+        store_asset::complete_withdraw(action);
         transfer::public_transfer(obj, OWNER);
         end_world(world);
     }

@@ -3,7 +3,7 @@
 /// The assets are stored in the Multisig's as Balances (for Coin) or ObjectTables (for other Objects).
 /// These assets can be withdrawn (and returned in PTB) or transferred to another address.
 
-module sui_multisig::treasury {
+module sui_multisig::store_asset {
     use std::debug::print;
     use std::ascii::{Self, String};
     use std::type_name;
@@ -38,11 +38,11 @@ module sui_multisig::treasury {
     // action to be held in a Proposal
     public struct Withdraw has store {
         // assets to withdraw
-        assets: vector<Asset>,
+        assets: vector<Stored>,
     }
 
     // struct representing an asset to withdraw from the treasury
-    public struct Asset has copy, drop, store {
+    public struct Stored has copy, drop, store {
         // TypeName of the object in String
         asset_type: String,
         // amount of the coin to withdraw, can be anything if not Coin
@@ -175,7 +175,7 @@ module sui_multisig::treasury {
         action: &mut Withdraw, 
         ctx: &mut TxContext
     ): Coin<C> {
-        let Asset { asset_type, amount, key: _ } = action.assets.pop_back();
+        let Stored { asset_type, amount, key: _ } = action.assets.pop_back();
         assert!(asset_type == type_name::get<C>().into_string(), EWrongFungibleType);
         assert!((df::exists_(multisig.uid_mut(), Fungible<C>{})), EFungibleDoesntExist);
         
@@ -188,7 +188,7 @@ module sui_multisig::treasury {
         multisig: &mut Multisig, 
         action: &mut Withdraw, 
     ): O {
-        let Asset { asset_type, amount: _, key } = action.assets.pop_back();
+        let Stored { asset_type, amount: _, key } = action.assets.pop_back();
         assert!(asset_type == type_name::get<O>().into_string(), EWrongNonFungibleType);
         assert!((df::exists_(multisig.uid_mut(), NonFungible<O>{})), ENonFungibleDoesntExist);
         
@@ -196,7 +196,7 @@ module sui_multisig::treasury {
         table.remove(key)
     }
 
-    // step 5: destroy the action if vector of Asset has been emptied
+    // step 5: destroy the action if vector of Stored has been emptied
     public fun complete_withdraw(action: Withdraw) {
         let Withdraw { assets } = action;
         assert!(assets.is_empty(), EWithdrawAllAssetsBefore);
@@ -220,7 +220,7 @@ module sui_multisig::treasury {
             let asset_type = asset_types.pop_back();
             let amount = amounts.pop_back();
             let key = keys.pop_back();
-            assets.push_back(Asset { asset_type, amount, key });
+            assets.push_back(Stored { asset_type, amount, key });
         };
 
         Withdraw { assets }
