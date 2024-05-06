@@ -155,7 +155,7 @@ module sui_multisig::store_asset {
         mut keys: vector<String>, // key if non-fungible (to find in the Table)
         ctx: &mut TxContext
     ) {
-        let action = create_withdraw(asset_types, amounts, keys);
+        let action = new_withdraw(asset_types, amounts, keys);
         multisig.create_proposal(
             action,
             name,
@@ -204,7 +204,7 @@ module sui_multisig::store_asset {
 
     // === Package functions ===
 
-    public(package) fun create_withdraw(
+    public(package) fun new_withdraw(
         mut asset_types: vector<String>, // TypeName of the object
         mut amounts: vector<u64>, // amount if fungible
         mut keys: vector<String>, // key if non-fungible (to find in the Table)

@@ -8,6 +8,7 @@ module sui_multisig::move_call {
     use std::ascii::String;
     use sui_multisig::multisig::Multisig;
     use sui_multisig::access_owned::{Self, Access};
+    use sui_multisig::store_asset::{Self, Withdraw};
 
     // === Error ===
 
@@ -20,7 +21,9 @@ module sui_multisig::move_call {
         // digest of the tx we want to execute
         digest: vector<u8>,
         // sub action requesting to access owned objects (such as a Cap)
-        access_owned: Access,
+        owned: Access,
+        // sub action requesting access to assets stored in the Multisig (such as Coins)
+        stored: Withdraw,
     }
 
     // === Public mutative functions ===
@@ -32,12 +35,16 @@ module sui_multisig::move_call {
         expiration: u64,
         description: String,
         digest: vector<u8>,
-        objects_to_borrow: vector<ID>,
-        objects_to_withdraw: vector<ID>,
+        owned_to_borrow: vector<ID>,
+        owned_to_withdraw: vector<ID>,
+        asset_types: vector<String>,
+        amounts: vector<u64>,
+        keys: vector<String>,
         ctx: &mut TxContext
     ) {
-        let access_owned = access_owned::new_access(objects_to_borrow, objects_to_withdraw);
-        let action = MoveCall { digest, access_owned };
+        let owned = access_owned::new_access(owned_to_borrow, owned_to_withdraw);
+        let stored = store_asset::new_withdraw(asset_types, amounts, keys);
+        let action = MoveCall { digest, owned, stored };
 
         multisig.create_proposal(
             action,
@@ -52,11 +59,11 @@ module sui_multisig::move_call {
     // step 3: execute the proposal and return the action (multisig::execute_proposal)
 
     // step 4: destroy MoveCall if digest match and return Access
-    public fun execute(action: MoveCall, ctx: &TxContext): Access {
-        let MoveCall { digest, access_owned } = action;
+    public fun execute(action: MoveCall, ctx: &TxContext): (Access, Withdraw) {
+        let MoveCall { digest, owned, stored } = action;
         assert!(digest == ctx.digest(), EDigestDoesntMatch);
         
-        access_owned
+        (owned, stored)
     }    
 
     // step 5: borrow or withdraw the objects from access_owned (get a Cap to call another function)

@@ -45,7 +45,7 @@ module sui_multisig::transfer {
     ) {
         assert!(asset_types.length() == recipients.length(), EDifferentLength);
 
-        let withdraw = store_asset::create_withdraw(asset_types, amounts, keys);
+        let withdraw = store_asset::new_withdraw(asset_types, amounts, keys);
         let action = TransferStored { withdraw, recipients: recipients };
 
         multisig.create_proposal(
