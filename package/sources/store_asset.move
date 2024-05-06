@@ -31,8 +31,8 @@ module sui_multisig::store_asset {
 
     // action to be held in a Proposal
     public struct Deposit has store {
-        // sub action
-        access_owned: Access,
+        // sub action - owned objects to access
+        request_access: Access,
     }
 
     // action to be held in a Proposal
@@ -82,8 +82,8 @@ module sui_multisig::store_asset {
         ctx: &mut TxContext
     ) {
         // create a new access with the objects to withdraw (none to borrow)
-        let access_owned = access_owned::new_access(vector[], object_ids);
-        let action = Deposit { access_owned };
+        let request_access = access_owned::new_access(vector[], object_ids);
+        let action = Deposit { request_access };
         multisig.create_proposal(
             action,
             name,
@@ -103,7 +103,7 @@ module sui_multisig::store_asset {
         action: &mut Deposit, 
         received: Receiving<Coin<C>>
     ) {
-        let owned = action.access_owned.pop_owned();
+        let owned = action.request_access.pop_owned();
         let coin = access_owned::take(multisig, owned, received);
         let balance = coin.into_balance();
 
@@ -124,7 +124,7 @@ module sui_multisig::store_asset {
         ctx: &mut TxContext
     ) {
         assert_is_non_fungible<O>();
-        let owned = action.access_owned.pop_owned();
+        let owned = action.request_access.pop_owned();
         let object = access_owned::take(multisig, owned, received);
 
         if (df::exists_(multisig.uid_mut(), NonFungible<O>{})) {
@@ -140,8 +140,8 @@ module sui_multisig::store_asset {
 
     // step 5: destroy the action
     public fun complete_deposit(action: Deposit) {
-        let Deposit { access_owned } = action;
-        access_owned::complete(access_owned);
+        let Deposit { request_access } = action;
+        request_access.complete();
     }
 
     // step 1: propose to withdraw objects and coins from the multisig
@@ -150,9 +150,9 @@ module sui_multisig::store_asset {
         name: String,
         expiration: u64,
         description: String,
-        mut asset_types: vector<String>, // TypeName of the object
-        mut amounts: vector<u64>, // amount if fungible
-        mut keys: vector<String>, // key if non-fungible (to find in the Table)
+        asset_types: vector<String>, // TypeName of the object
+        amounts: vector<u64>, // amount if fungible
+        keys: vector<String>, // key if non-fungible (to find in the Table)
         ctx: &mut TxContext
     ) {
         let action = new_withdraw(asset_types, amounts, keys);

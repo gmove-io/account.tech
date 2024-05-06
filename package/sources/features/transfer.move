@@ -19,14 +19,14 @@ module sui_multisig::transfer {
     // action to be held in a Proposal
     public struct TransferStored has store {
         // sub action - assets to withdraw
-        withdraw: Withdraw,
+        request_withdraw: Withdraw,
         // addresses to transfer to
         recipients: vector<address>
     }
 
     public struct TransferOwned has store {
-        // sub action
-        access_owned: Access,
+        // sub action - owned objects to access
+        request_access: Access,
         // addresses to transfer to
         recipients: vector<address>
     }
@@ -45,8 +45,8 @@ module sui_multisig::transfer {
     ) {
         assert!(asset_types.length() == recipients.length(), EDifferentLength);
 
-        let withdraw = store_asset::new_withdraw(asset_types, amounts, keys);
-        let action = TransferStored { withdraw, recipients: recipients };
+        let request_withdraw = store_asset::new_withdraw(asset_types, amounts, keys);
+        let action = TransferStored { request_withdraw, recipients: recipients };
 
         multisig.create_proposal(
             action,
@@ -67,7 +67,8 @@ module sui_multisig::transfer {
         action: &mut TransferStored, 
         ctx: &mut TxContext
     ) {
-        let coin: Coin<C> = store_asset::withdraw_fungible(multisig, &mut action.withdraw, ctx);
+        let coin: Coin<C> = 
+            store_asset::withdraw_fungible(multisig, &mut action.request_withdraw, ctx);
         transfer::public_transfer(coin, action.recipients.pop_back());
     }
 
@@ -76,14 +77,15 @@ module sui_multisig::transfer {
         multisig: &mut Multisig, 
         action: &mut TransferStored, 
     ) {
-        let object: O = store_asset::withdraw_non_fungible(multisig, &mut action.withdraw);
+        let object: O = 
+            store_asset::withdraw_non_fungible(multisig, &mut action.request_withdraw);
         transfer::public_transfer(object, action.recipients.pop_back());
     }
 
     // step 5: destroy the action if all vectors have been emptied
     public fun complete_stored_transfer(action: TransferStored) {
-        let TransferStored { withdraw, recipients } = action;
-        store_asset::complete_withdraw(withdraw);
+        let TransferStored { request_withdraw, recipients } = action;
+        store_asset::complete_withdraw(request_withdraw);
         assert!(recipients.is_empty(), ETransferAllAssetsBefore);
     }
 
@@ -99,8 +101,8 @@ module sui_multisig::transfer {
         ctx: &mut TxContext
     ) {
         // create a new access with the objects to withdraw (none to borrow)
-        let access_owned = access_owned::new_access(vector[], object_ids);
-        let action = TransferOwned { access_owned, recipients };
+        let request_access = access_owned::new_access(vector[], object_ids);
+        let action = TransferOwned { request_access, recipients };
         multisig.create_proposal(
             action,
             name,
@@ -120,16 +122,16 @@ module sui_multisig::transfer {
         action: &mut TransferOwned, 
         received: Receiving<T>
     ) {
-        let owned = action.access_owned.pop_owned();
+        let owned = action.request_access.pop_owned();
         let coin = access_owned::take(multisig, owned, received);
         transfer::public_transfer(coin, action.recipients.pop_back());
     }
 
     // step 5: destroy the action
     public fun complete_transfer_owned(action: TransferOwned) {
-        let TransferOwned { access_owned, recipients } = action;
+        let TransferOwned { request_access, recipients } = action;
         assert!(recipients.is_empty(), ETransferAllAssetsBefore);
-        access_owned::complete(access_owned);
+        request_access.complete();
     }
 }
 
