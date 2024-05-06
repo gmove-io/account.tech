@@ -169,7 +169,7 @@ module sui_multisig::store_asset_tests{
         let mut action = withdraw(
             &mut world,
             b"withdraw",
-            vector[ascii::string(b"0000000000000000000000000000000000000000000000000000000000000000::treasury_tests::Obj")],
+            vector[ascii::string(b"0000000000000000000000000000000000000000000000000000000000000000::store_asset_tests::Obj")],
             vector[1],
             vector[ascii::string(b"1")],
         );
@@ -200,7 +200,7 @@ module sui_multisig::store_asset_tests{
         let mut action = withdraw(
             &mut world,
             b"withdraw",
-            vector[ascii::string(b"0000000000000000000000000000000000000000000000000000000000000000::treasury_tests::COIN")],
+            vector[ascii::string(b"0000000000000000000000000000000000000000000000000000000000000000::store_asset_tests::COIN")],
             vector[1000],
             vector[ascii::string(b"")],
         );
