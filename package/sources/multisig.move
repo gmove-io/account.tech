@@ -73,14 +73,14 @@ module sui_multisig::multisig {
         } 
     }
 
-    // === Public views ===
+    // === Public functions ===
 
-    public fun members(multisig: &Multisig): vector<address> {
-        multisig.members.into_keys()
-    }
-
-    public fun member_exists(multisig: &Multisig, address: &address): bool {
-        multisig.members.contains(address)
+    // helper for transferring objects to the multisig
+    public fun keep<T: key + store>(multisig: &Multisig, object: T) {
+        transfer::public_transfer(
+            object,
+            multisig.id.uid_to_inner().id_to_address()
+        )
     }
 
     // === Multisig-only functions ===
@@ -194,13 +194,19 @@ module sui_multisig::multisig {
         }
     }
 
-    // === Private functions ===
+    public(package) fun members(multisig: &Multisig): vector<address> {
+        multisig.members.into_keys()
+    }
 
-    fun assert_is_member(multisig: &Multisig, ctx: &TxContext) {
+    public(package) fun member_exists(multisig: &Multisig, address: &address): bool {
+        multisig.members.contains(address)
+    }
+
+    public(package) fun assert_is_member(multisig: &Multisig, ctx: &TxContext) {
         assert!(multisig.members.contains(&ctx.sender()), ECallerIsNotMember);
     }
 
-    fun assert_threshold_reached(multisig: &Multisig, proposal: &Proposal) {
+    public(package) fun assert_threshold_reached(multisig: &Multisig, proposal: &Proposal) {
         assert!(proposal.approved.size() >= multisig.threshold, EThresholdNotReached);
     }
 

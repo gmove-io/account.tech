@@ -1,5 +1,6 @@
 /// This module allows multisig members to access objects owned by the multisig in a secure way.
 /// The objects can be taken or borrowed, and only via an Access Proposal
+/// Caution: borrowed Coins can be emptied, only withdraw the amount you need
 
 module sui_multisig::access_owned {
     use std::string::String;
@@ -71,12 +72,12 @@ module sui_multisig::access_owned {
     public fun take<T: key + store>(
         multisig: &mut Multisig, 
         owned: Owned,
-        received: Receiving<T>
+        receiving: Receiving<T>
     ): T {
         let Owned { to_borrow, id } = owned;
         assert!(!to_borrow, EShouldBeBorrowed);
 
-        let received = transfer::public_receive(multisig.uid_mut(), received);
+        let received = transfer::public_receive(multisig.uid_mut(), receiving);
         let received_id = object::id(&received);
         assert!(received_id == id, EWrongObject);
 
@@ -87,12 +88,12 @@ module sui_multisig::access_owned {
     public fun borrow<T: key + store>(
         multisig: &mut Multisig, 
         owned: Owned,
-        received: Receiving<T>
+        receiving: Receiving<T>
     ): (T, Promise) {
         let Owned { to_borrow, id } = owned;
         assert!(to_borrow, EShouldBeWithdrawn);
 
-        let received = transfer::public_receive(multisig.uid_mut(), received);
+        let received = transfer::public_receive(multisig.uid_mut(), receiving);
         let received_id = object::id(&received);
         assert!(received_id == id, EWrongObject);
 
