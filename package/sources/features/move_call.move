@@ -8,7 +8,6 @@ module sui_multisig::move_call {
     use std::string::String;
     use sui_multisig::multisig::Multisig;
     use sui_multisig::access_owned::{Self, Access};
-    use sui_multisig::store_asset::{Self, Withdraw};
 
     // === Error ===
 
@@ -22,8 +21,6 @@ module sui_multisig::move_call {
         digest: vector<u8>,
         // sub action requesting to access owned objects (such as a Cap)
         request_access: Access,
-        // sub action requesting access to assets stored in the Multisig (such as Coins)
-        request_withdraw: Withdraw,
     }
 
     // === Public mutative functions ===
@@ -37,14 +34,10 @@ module sui_multisig::move_call {
         digest: vector<u8>,
         owned_to_borrow: vector<ID>,
         owned_to_withdraw: vector<ID>,
-        asset_types: vector<String>,
-        amounts: vector<u64>,
-        keys: vector<String>,
         ctx: &mut TxContext
     ) {
         let request_access = access_owned::new_access(owned_to_borrow, owned_to_withdraw);
-        let request_withdraw = store_asset::new_withdraw(asset_types, amounts, keys);
-        let action = MoveCall { digest, request_access, request_withdraw };
+        let action = MoveCall { digest, request_access };
 
         multisig.create_proposal(
             action,
@@ -59,11 +52,11 @@ module sui_multisig::move_call {
     // step 3: execute the proposal and return the action (multisig::execute_proposal)
 
     // step 4: destroy MoveCall if digest match and return Access
-    public fun execute(action: MoveCall, ctx: &TxContext): (Access, Withdraw) {
-        let MoveCall { digest, request_access, request_withdraw } = action;
+    public fun execute(action: MoveCall, ctx: &TxContext): Access {
+        let MoveCall { digest, request_access } = action;
         assert!(digest == ctx.digest(), EDigestDoesntMatch);
         
-        (request_access, request_withdraw)
+        request_access
     }    
 
     // step 5: borrow or withdraw the objects from access_owned (get a Cap to call another function)
