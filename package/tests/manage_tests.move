@@ -1,7 +1,7 @@
 #[test_only]
 module sui_multisig::manage_tests{
     use std::debug::print;
-    use std::ascii::{Self, String};
+    use std::string::{Self, String};
     use sui::test_scenario::{Self as ts, Scenario};
 
     use sui_multisig::multisig::{Self, Multisig};
@@ -46,9 +46,9 @@ module sui_multisig::manage_tests{
         let users = vector[OWNER, ALICE, BOB];
         manage::propose(
             &mut world.multisig,
-            ascii::string(name),
+            string::utf8(name),
             0,
-            ascii::string(b""),
+            string::utf8(b""),
             id_add,
             threshold,
             addresses,
@@ -58,7 +58,7 @@ module sui_multisig::manage_tests{
         while (approvals > 0) {
             multisig::approve_proposal(
                 &mut world.multisig,
-                ascii::string(name),
+                string::utf8(name),
                 world.scenario.ctx()
             );
             approvals = approvals - 1;
@@ -66,7 +66,7 @@ module sui_multisig::manage_tests{
         };
         manage::execute(
             &mut world.multisig,
-            ascii::string(name),
+            string::utf8(name),
             world.scenario.ctx()
         );
     }

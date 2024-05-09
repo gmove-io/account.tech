@@ -4,10 +4,11 @@
 
 module sui_multisig::transfer {
     use std::debug::print;
-    use std::ascii::{Self, String};
+    use std::string::{Self, String};
     use sui::transfer::Receiving;
     use sui::coin::Coin;
     use sui_multisig::store_asset::{Self, Withdraw};
+    use sui_multisig::store_coin;
     use sui_multisig::access_owned::{Self, Access};
     use sui_multisig::multisig::Multisig;
 
@@ -68,7 +69,7 @@ module sui_multisig::transfer {
         ctx: &mut TxContext
     ) {
         let coin: Coin<C> = 
-            store_asset::withdraw_fungible(multisig, &mut action.request_withdraw, ctx);
+            store_coin::withdraw(multisig, &mut action.request_withdraw, ctx);
         transfer::public_transfer(coin, action.recipients.pop_back());
     }
 
@@ -77,9 +78,10 @@ module sui_multisig::transfer {
         multisig: &mut Multisig, 
         action: &mut TransferStored, 
     ) {
-        let object: O = 
-            store_asset::withdraw_non_fungible(multisig, &mut action.request_withdraw);
-        transfer::public_transfer(object, action.recipients.pop_back());
+        // TODO
+        // let object: O = 
+        //     store_asset::withdraw_non_fungible(multisig, &mut action.request_withdraw);
+        // transfer::public_transfer(object, action.recipients.pop_back());
     }
 
     // step 5: destroy the action if all vectors have been emptied

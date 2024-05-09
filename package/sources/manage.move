@@ -3,7 +3,7 @@
 
 module sui_multisig::manage {
     use std::debug::print;
-    use std::ascii::String;
+    use std::string::String;
     use sui_multisig::multisig::Multisig;
 
     // === Errors ===

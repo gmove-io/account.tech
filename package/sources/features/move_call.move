@@ -5,7 +5,7 @@
 /// allowing to get a Cap to call the proposed function.
 
 module sui_multisig::move_call {
-    use std::ascii::String;
+    use std::string::String;
     use sui_multisig::multisig::Multisig;
     use sui_multisig::access_owned::{Self, Access};
     use sui_multisig::store_asset::{Self, Withdraw};

@@ -1,7 +1,7 @@
 #[test_only]
 module sui_multisig::access_owned_tests{
     use std::debug::print;
-    use std::ascii::{Self, String};
+    use std::string::{Self, String};
     use sui::test_scenario::{Self as ts, Scenario};
 
     use sui_multisig::multisig::{Self, Multisig};
@@ -55,21 +55,21 @@ module sui_multisig::access_owned_tests{
     ): Access {
         access_owned::propose(
             &mut world.multisig,
-            ascii::string(name),
+            string::utf8(name),
             0,
-            ascii::string(b""),
+            string::utf8(b""),
             to_borrow,
             to_withdraw,
             world.scenario.ctx()
         );
         multisig::approve_proposal(
             &mut world.multisig,
-            ascii::string(name),
+            string::utf8(name),
             world.scenario.ctx()
         );
         multisig::execute_proposal(
             &mut world.multisig,
-            ascii::string(name),
+            string::utf8(name),
             world.scenario.ctx()
         )
     }

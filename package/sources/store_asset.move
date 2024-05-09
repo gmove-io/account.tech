@@ -5,34 +5,28 @@
 
 module sui_multisig::store_asset {
     use std::debug::print;
-    use std::ascii::{Self, String};
+    use std::string::{Self, String};
     use std::type_name;
     use sui::transfer::Receiving;
-    use sui::coin::{Self, Coin};
-    use sui::balance::{Self, Balance};
     use sui::dynamic_field as df;
-    use sui::object_table::{Self, ObjectTable};
     use sui_multisig::access_owned::{Self, Access};
     use sui_multisig::multisig::Multisig;
 
-    // === Constants ===
-
-    const COIN_TYPE: vector<u8> = b"0000000000000000000000000000000000000000000000000000000000000002::coin::Coin";
-
     // === Errors ===
 
-    const EFungible: u64 = 0;
     const EDifferentLength: u64 = 1;
-    const EWrongFungibleType: u64 = 2;
-    const EFungibleDoesntExist: u64 = 3;
-    const EWrongNonFungibleType: u64 = 4;
-    const ENonFungibleDoesntExist: u64 = 5;
-    const EWithdrawAllAssetsBefore: u64 = 6;
+    const EWithdrawAllAssetsBefore: u64 = 2;
+    const EVaultAlreadyExists: u64 = 3;
+    const EDepositAllAssetsBefore: u64 = 4;
 
     // action to be held in a Proposal
     public struct Deposit has store {
         // sub action - owned objects to access
         request_access: Access,
+        // names for deposited assets
+        names: vector<String>,
+        // descriptions for deposited assets
+        descriptions: vector<String>,
     }
 
     // action to be held in a Proposal
@@ -42,7 +36,7 @@ module sui_multisig::store_asset {
     }
 
     // struct representing an asset to withdraw from the treasury
-    public struct Stored has copy, drop, store {
+    public struct Stored has store {
         // TypeName of the object in String
         asset_type: String,
         // amount of the coin to withdraw, can be anything if not Coin
@@ -51,23 +45,14 @@ module sui_multisig::store_asset {
         key: String,
     }
 
-    // Dynamic field key representing a balance of a particular coin type.
-    public struct Fungible<phantom C> has copy, drop, store { }
-    // Dynamic field key representing a table of a particular object type.
-    public struct NonFungible<phantom O> has copy, drop, store { }
-
-    // === Public functions ===
-
-    // destroy empty Fungible balance dof
-    public fun clean_balance<C: drop>(multisig: &mut Multisig) {
-        let balance: Balance<C> = df::remove(multisig.uid_mut(), Fungible<C>{});
-        balance.destroy_zero(); // throws if non-null
-    }
-
-    // destroy empty NonFungible table dof
-    public fun clean_table<O: key + store>(multisig: &mut Multisig) {
-        let table: ObjectTable<String, O> = df::remove(multisig.uid_mut(), NonFungible<O>{});
-        table.destroy_empty(); // throws if non-empty
+    // generic struct used to wrap assets with additional metadata for frontends
+    public struct Vault<C: store> has store {
+        // what is this asset. e.g. staking upgrade cap
+        name: String,
+        // what is it used for. e.g. upgrade staking with timelock
+        description: String,
+        // a container for the asset (Balance for coins, Tables for NFTs, Option for cap)
+        container: C,
     }
 
     // === Multisig functions ===
@@ -79,11 +64,22 @@ module sui_multisig::store_asset {
         expiration: u64,
         description: String,
         object_ids: vector<ID>,
+        object_names: vector<String>,
+        object_descriptions: vector<String>,
         ctx: &mut TxContext
     ) {
+        assert!(
+            object_ids.length() == object_names.length() &&
+            object_ids.length() == object_descriptions.length(),
+            EDifferentLength
+        );
         // create a new access with the objects to withdraw (none to borrow)
         let request_access = access_owned::new_access(vector[], object_ids);
-        let action = Deposit { request_access };
+        let action = Deposit { 
+            request_access, 
+            names: object_names, 
+            descriptions: object_descriptions 
+        };
         multisig.create_proposal(
             action,
             name,
@@ -96,52 +92,13 @@ module sui_multisig::store_asset {
     // step 2: multiple members have to approve the proposal (multisig::approve_proposal)
     // step 3: execute the proposal and return the action (multisig::execute_proposal)
 
-    // step 4: in the PTB loop over deposit functions and pop back Owned in Deposit
-    // attach Balances as multisig dof (merge if type already exists)
-    public fun deposit_fungible<C: drop>(
-        multisig: &mut Multisig, 
-        action: &mut Deposit, 
-        received: Receiving<Coin<C>>
-    ) {
-        let owned = action.request_access.pop_owned();
-        let coin = access_owned::take(multisig, owned, received);
-        let balance = coin.into_balance();
-
-        if (df::exists_(multisig.uid_mut(), Fungible<C>{})) {
-            let fungible = df::borrow_mut(multisig.uid_mut(), Fungible<C>{});
-            balance::join(fungible, balance);
-        } else {
-            df::add(multisig.uid_mut(), Fungible<C>{}, balance);
-        };
-    }
-
-    // attach ObjectTables as multisig dof (add to if type already exists)
-    public fun deposit_non_fungible<O: key + store>(
-        multisig: &mut Multisig, 
-        action: &mut Deposit, 
-        received: Receiving<O>, 
-        key: String,
-        ctx: &mut TxContext
-    ) {
-        assert_is_non_fungible<O>();
-        let owned = action.request_access.pop_owned();
-        let object = access_owned::take(multisig, owned, received);
-
-        if (df::exists_(multisig.uid_mut(), NonFungible<O>{})) {
-            let table: &mut ObjectTable<String, O> = 
-                df::borrow_mut(multisig.uid_mut(), NonFungible<O>{});
-            table.add(key, object);
-        } else {
-            let mut table = object_table::new(ctx);
-            table.add(key, object);
-            df::add(multisig.uid_mut(), NonFungible<O>{}, table);
-        }
-    }
+    // step 4: in the PTB loop over deposit functions in the different assets module according to asset PREFIX
 
     // step 5: destroy the action
     public fun complete_deposit(action: Deposit) {
-        let Deposit { request_access } = action;
+        let Deposit { request_access, names, descriptions } = action;
         request_access.complete();
+        assert!(names.is_empty() && descriptions.is_empty(), EDepositAllAssetsBefore);
     }
 
     // step 1: propose to withdraw objects and coins from the multisig
@@ -164,42 +121,12 @@ module sui_multisig::store_asset {
             ctx
         );
     }
-
-    // step 2: multiple members have to approve the proposal (multisig::approve_proposal)
-    // step 3: execute the proposal and return the action (multisig::execute_proposal)
-
-    // step 4: in the PTB loop over withdraw and transfer functions and pop or transfer requested coins in Withdraw
-    // withdraw and return a Coin
-    public fun withdraw_fungible<C: drop>(
-        multisig: &mut Multisig, 
-        action: &mut Withdraw, 
-        ctx: &mut TxContext
-    ): Coin<C> {
-        let Stored { asset_type, amount, key: _ } = action.assets.pop_back();
-        assert!(asset_type == type_name::get<C>().into_string(), EWrongFungibleType);
-        assert!((df::exists_(multisig.uid_mut(), Fungible<C>{})), EFungibleDoesntExist);
-        
-        let balance: &mut Balance<C> = df::borrow_mut(multisig.uid_mut(), Fungible<C>{});
-        coin::from_balance(balance.split(amount), ctx)
-    }
-
-    // withdraw and return an object
-    public fun withdraw_non_fungible<O: key + store>(
-        multisig: &mut Multisig, 
-        action: &mut Withdraw, 
-    ): O {
-        let Stored { asset_type, amount: _, key } = action.assets.pop_back();
-        assert!(asset_type == type_name::get<O>().into_string(), EWrongNonFungibleType);
-        assert!((df::exists_(multisig.uid_mut(), NonFungible<O>{})), ENonFungibleDoesntExist);
-        
-        let table: &mut ObjectTable<String, O> = df::borrow_mut(multisig.uid_mut(), NonFungible<O>{});
-        table.remove(key)
-    }
-
+    
     // step 5: destroy the action if vector of Stored has been emptied
     public fun complete_withdraw(action: Withdraw) {
         let Withdraw { assets } = action;
         assert!(assets.is_empty(), EWithdrawAllAssetsBefore);
+        assets.destroy_empty();
     }
 
     // === Package functions ===
@@ -226,22 +153,52 @@ module sui_multisig::store_asset {
         Withdraw { assets }
     }
 
-    // === Private functions ===
+    public(package) fun pop_from_deposit<A: key + store>(
+        action: &mut Deposit, 
+        multisig: &mut Multisig, 
+        received: Receiving<A>
+    ): (String, String, A) {
+        let name = action.names.pop_back();
+        let description = action.descriptions.pop_back();
+        let owned = action.request_access.pop_owned();
+        let asset = access_owned::take(multisig, owned, received);
 
-    fun assert_is_non_fungible<O: key + store>() {
-        let type_name = type_name::get<O>();
-        let name = type_name.into_string().into_bytes();
-        let ref = COIN_TYPE;
+        (name, description, asset)
+    }
 
-        let mut i = 0;
-        let mut count = 0;
-        while (i < ref.length()) {
-            if (name[i] == ref[i]) {
-                count = count + 1;
-            };
-            i = i + 1;
-        };
-        assert!(count != ref.length(), EFungible);
+    public(package) fun pop_from_withdraw(
+        action: &mut Withdraw,
+    ): (String, u64, String) {
+        let Stored { asset_type, amount, key } = action.assets.pop_back();
+
+        (asset_type, amount, key)
+    }
+
+    public(package) fun create_vault<A, C: store>(
+        multisig: &mut Multisig, 
+        name: String,
+        description: String,
+        container: C
+    ) {
+
+        let vault = Vault<C> { name, description, container };
+
+        assert!(!df::exists_(multisig.uid_mut(), type_name::get<A>()), EVaultAlreadyExists);
+        df::add(multisig.uid_mut(), type_name::get<A>(), vault);
+    }
+
+    public(package) fun borrow_container_mut<A, C: store>(
+        multisig: &mut Multisig,
+    ): &mut C {
+        let vault: &mut Vault<C> = df::borrow_mut(multisig.uid_mut(), type_name::get<A>());
+        &mut vault.container
+    }
+
+    public(package) fun vault_key<T>(prefix: vector<u8>): String {
+        let mut key = string::utf8(prefix);
+        key.append(string::from_ascii(type_name::get<T>().into_string()));
+
+        key
     }
 }
 

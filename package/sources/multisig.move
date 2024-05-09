@@ -3,7 +3,7 @@
 /// The proposals have to be approved by at least the threshold number of members.
 
 module sui_multisig::multisig {
-    use std::ascii::String;
+    use std::string::String;
     use sui::vec_set::{Self, VecSet};
     use sui::vec_map::{Self, VecMap};
     use sui::dynamic_field as df;

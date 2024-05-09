@@ -2,7 +2,7 @@
 /// The objects can be taken or borrowed, and only via an Access Proposal
 
 module sui_multisig::access_owned {
-    use std::ascii::String;
+    use std::string::String;
     use sui::transfer::Receiving;
     use sui_multisig::multisig::Multisig;
 
