@@ -1,12 +1,12 @@
 #[test_only]
-module sui_multisig::access_owned_tests{
+module sui_multisig::owned_tests{
     use std::debug::print;
     use std::string::{Self, String};
     use sui::clock::{Self, Clock};
     use sui::test_scenario::{Self as ts, Scenario};
 
     use sui_multisig::multisig::{Self, Multisig};
-    use sui_multisig::access_owned::{Self, Access};
+    use sui_multisig::owned::{Self, Access};
 
     const OWNER: address = @0xBABE;
     const ALICE: address = @0xA11CE;
@@ -59,7 +59,7 @@ module sui_multisig::access_owned_tests{
         to_borrow: vector<ID>,
         to_withdraw: vector<ID>,
     ): Access {
-        access_owned::propose(
+        owned::propose(
             &mut world.multisig,
             string::utf8(name),
             0,
@@ -101,9 +101,9 @@ module sui_multisig::access_owned_tests{
             vector[id]
         );
         let ticket = ts::receiving_ticket_by_id<Obj>(id);
-        let owned = access_owned::pop_owned(&mut action);
-        let obj = access_owned::take(&mut world.multisig, owned, ticket);
-        access_owned::complete(action);
+        let owned = owned::pop_owned(&mut action);
+        let obj = owned::take(&mut world.multisig, owned, ticket);
+        owned::complete(action);
         transfer::public_transfer(obj, OWNER);
         end_world(world);
     }
@@ -119,10 +119,10 @@ module sui_multisig::access_owned_tests{
             vector[]
         );
         let ticket = ts::receiving_ticket_by_id<Obj>(id);
-        let owned = access_owned::pop_owned(&mut action);
-        let (obj, promise) = access_owned::borrow(&mut world.multisig, owned, ticket);
-        access_owned::put_back(obj, promise);
-        access_owned::complete(action);
+        let owned = owned::pop_owned(&mut action);
+        let (obj, promise) = owned::borrow(&mut world.multisig, owned, ticket);
+        owned::put_back(obj, promise);
+        owned::complete(action);
         end_world(world);
     }
 

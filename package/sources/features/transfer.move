@@ -1,10 +1,10 @@
-/// This module uses the access_owned apis to transfer assets owned by the multisig.
+/// This module uses the owned apis to transfer assets owned by the multisig.
 
 module sui_multisig::transfer {
     use std::debug::print;
     use std::string::String;
     use sui::transfer::Receiving;
-    use sui_multisig::access_owned::{Self, Access};
+    use sui_multisig::owned::{Self, Access};
     use sui_multisig::multisig::Multisig;
 
     // === Errors ===
@@ -35,7 +35,7 @@ module sui_multisig::transfer {
         ctx: &mut TxContext
     ) {
         // create a new access with the objects to withdraw (none to borrow)
-        let request_access = access_owned::new_access(vector[], object_ids);
+        let request_access = owned::new_access(vector[], object_ids);
         let action = Transfer { request_access, recipients };
         multisig.create_proposal(
             action,
@@ -58,7 +58,7 @@ module sui_multisig::transfer {
         received: Receiving<T>
     ) {
         let owned = action.request_access.pop_owned();
-        let coin = access_owned::take(multisig, owned, received);
+        let coin = owned::take(multisig, owned, received);
         transfer::public_transfer(coin, action.recipients.pop_back());
     }
 

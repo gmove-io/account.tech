@@ -6,7 +6,7 @@ module sui_multisig::manage_tests{
     use sui::test_scenario::{Self as ts, Scenario};
 
     use sui_multisig::multisig::{Self, Multisig};
-    use sui_multisig::manage::{Self, Manage};
+    use sui_multisig::config::{Self, Manage};
 
     const OWNER: address = @0xBABE;
     const ALICE: address = @0xA11CE;
@@ -50,7 +50,7 @@ module sui_multisig::manage_tests{
         addresses: vector<address>,
     ) {
         let users = vector[OWNER, ALICE, BOB];
-        manage::propose(
+        config::propose(
             &mut world.multisig,
             string::utf8(name),
             0,
@@ -71,7 +71,7 @@ module sui_multisig::manage_tests{
             approvals = approvals - 1;
             world.scenario.next_tx(users[approvals]);
         };
-        manage::execute(
+        config::execute(
             &mut world.multisig,
             string::utf8(name),
             &world.clock,

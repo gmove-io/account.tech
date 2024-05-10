@@ -2,7 +2,7 @@
 /// Any member can merge and split without approvals.
 /// Used to prepare a Proposal with coins having the exact amount needed.
 
-module sui_multisig::handle_coins {
+module sui_multisig::coin_operations {
     use sui::coin::Coin;
     use sui::transfer::Receiving;
     use sui_multisig::multisig::Multisig;

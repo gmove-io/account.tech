@@ -7,7 +7,7 @@
 module sui_multisig::move_call {
     use std::string::String;
     use sui_multisig::multisig::Multisig;
-    use sui_multisig::access_owned::{Self, Access};
+    use sui_multisig::owned::{Self, Access};
 
     // === Error ===
 
@@ -37,7 +37,7 @@ module sui_multisig::move_call {
         to_withdraw: vector<ID>,
         ctx: &mut TxContext
     ) {
-        let request_access = access_owned::new_access(to_borrow, to_withdraw);
+        let request_access = owned::new_access(to_borrow, to_withdraw);
         let action = MoveCall { digest, request_access };
 
         multisig.create_proposal(
@@ -61,7 +61,7 @@ module sui_multisig::move_call {
         request_access
     }    
 
-    // step 5: borrow or withdraw the objects from access_owned (get a Cap to call another function)
-    // step 6: destroy Access in access_owned
+    // step 5: borrow or withdraw the objects from owned (get a Cap to call another function)
+    // step 6: destroy Access in owned
 }
 
