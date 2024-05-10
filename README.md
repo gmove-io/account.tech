@@ -18,13 +18,13 @@ The project consists of several modules, each handling different aspects of the 
 
 1. **Multisig**: Core module managing the multisig and proposals. It handles the creation of multisig wallets, adding and removing members, and managing proposals for executing actions.
 
-2. **Manage**: Enables the modification of multisig settings such as member addition or removal and threshold changes.
+2. **Config**: Enables the modification of multisig settings such as member addition or removal and threshold changes.
 
-3. **Access Owned**: Manages access to objects owned by the multisig, allowing them to be withdrawn or borrowed through proposals.
+3. **Owned**: Manages access to objects owned by the multisig, allowing them to be withdrawn or borrowed through proposals.
 
 5. **Transfer**: Allows the transfer of assets owned in the multisig treasury.
 
-6. **Handle Coins**: Handles the merging and splitting of coins in the multisig. Can be used to prepare a Proposal with coins with the exact amount needed.
+6. **Coin Operations**: Handles the merging and splitting of coins in the multisig. Can be used to prepare a Proposal with coins with the exact amount needed.
 
 7. **Move Call**: Facilitates the enforcement of calling the appropriate functions. The action can also include to borrow or withdraw objects (such as a Cap).
 
@@ -35,7 +35,7 @@ The project consists of several modules, each handling different aspects of the 
 - **Access Control**: Securely manage access to functions in your package via a Cap owned by the Multisig.
 - **Asset Management**: Manage and send your coins or any other object types just like with classic accounts. Easily hide spam objects owned by a Multisig.
 - **Custom Proposals**: Define any actions in your module and easily manage them via the Multisig. Check out the [examples](TODO:).
-- **Package Upgrade**: Follow built-in upgrade policies such as TimeLock to manage your on-chain packages. (TODO)
+- **Package Upgrades**: Lock your UpgradeCaps in your Multisig to enforce agreement on the code to be published. Optionally follow a time-lock built-in policy to protect your users. 
 - **Interact with dApps**: Easily interact with dApps on Sui that are integrated to the Multisig. Stake, Swap, Lend your assets, and more. (TODO)
 
 ## Contributing
@@ -44,4 +44,4 @@ Contributions are welcome! If you have suggestions for improvements or new featu
 
 ## License
 
-This project is licensed under the MIT License - see the LICENSE file for details.
+This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
