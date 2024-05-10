@@ -2,6 +2,7 @@
 module sui_multisig::manage_tests{
     use std::debug::print;
     use std::string::{Self, String};
+    use sui::clock::{Self, Clock};
     use sui::test_scenario::{Self as ts, Scenario};
 
     use sui_multisig::multisig::{Self, Multisig};
@@ -14,6 +15,7 @@ module sui_multisig::manage_tests{
     // hot potato holding the state
     public struct World {
         scenario: Scenario,
+        clock: Clock,
         multisig: Multisig,
     }
 
@@ -21,17 +23,21 @@ module sui_multisig::manage_tests{
 
     fun start_world(): World {
         let mut scenario = ts::begin(OWNER);
-        // initialize multisig
+        // initialize multisig and clock
         multisig::new(scenario.ctx());
+        let clock = clock::create_for_testing(scenario.ctx());
+        clock.share_for_testing();
         scenario.next_tx(OWNER);
 
         let multisig = scenario.take_shared<Multisig>();
-        World { scenario, multisig }
+        let clock = scenario.take_shared<Clock>();
+        World { scenario, clock, multisig }
     }
 
     fun end_world(world: World) {
-        let World { scenario, multisig } = world;
+        let World { scenario, clock, multisig } = world;
         ts::return_shared(multisig);
+        ts::return_shared(clock);
         scenario.end();
     }
 
@@ -47,6 +53,7 @@ module sui_multisig::manage_tests{
         manage::propose(
             &mut world.multisig,
             string::utf8(name),
+            0,
             0,
             string::utf8(b""),
             id_add,
@@ -67,6 +74,7 @@ module sui_multisig::manage_tests{
         manage::execute(
             &mut world.multisig,
             string::utf8(name),
+            &world.clock,
             world.scenario.ctx()
         );
     }

@@ -29,20 +29,22 @@ module sui_multisig::move_call {
     public fun propose(
         multisig: &mut Multisig, 
         name: String,
-        expiration: u64,
+        execution_time: u64,
+        expiration_epoch: u64,
         description: String,
         digest: vector<u8>,
-        owned_to_borrow: vector<ID>,
-        owned_to_withdraw: vector<ID>,
+        to_borrow: vector<ID>,
+        to_withdraw: vector<ID>,
         ctx: &mut TxContext
     ) {
-        let request_access = access_owned::new_access(owned_to_borrow, owned_to_withdraw);
+        let request_access = access_owned::new_access(to_borrow, to_withdraw);
         let action = MoveCall { digest, request_access };
 
         multisig.create_proposal(
             action,
             name,
-            expiration,
+            execution_time,
+            expiration_epoch,
             description,
             ctx
         );

@@ -27,7 +27,8 @@ module sui_multisig::transfer {
     public fun propose(
         multisig: &mut Multisig, 
         name: String,
-        expiration: u64,
+        execution_time: u64,
+        expiration_epoch: u64,
         description: String,
         object_ids: vector<ID>,
         recipients: vector<address>,
@@ -39,7 +40,8 @@ module sui_multisig::transfer {
         multisig.create_proposal(
             action,
             name,
-            expiration,
+            execution_time,
+            expiration_epoch,
             description,
             ctx
         );

@@ -4,6 +4,7 @@
 module sui_multisig::manage {
     use std::debug::print;
     use std::string::String;
+    use sui::clock::Clock;
     use sui_multisig::multisig::Multisig;
 
     // === Errors ===
@@ -31,7 +32,8 @@ module sui_multisig::manage {
     public fun propose(
         multisig: &mut Multisig, 
         name: String,
-        expiration: u64,
+        execution_time: u64,
+        expiration_epoch: u64,
         description: String,
         is_add: bool, // is it to add or remove members
         threshold: u64, // new threshold
@@ -60,14 +62,26 @@ module sui_multisig::manage {
         };
 
         let action = Manage { is_add, threshold, addresses };
-        multisig.create_proposal(action, name, expiration, description, ctx);
+        multisig.create_proposal(
+            action,
+            name,
+            execution_time,
+            expiration_epoch,
+            description,
+            ctx
+        );
     }
 
     // step 2: multiple members have to approve the proposal (multisig::approve_proposal)
     
     // step 3: execute the action and modify Multisig object
-    public fun execute(multisig: &mut Multisig, name: String, ctx: &mut TxContext) {
-        let action = multisig.execute_proposal(name, ctx);
+    public fun execute(
+        multisig: &mut Multisig, 
+        name: String, 
+        clock: &Clock,
+        ctx: &mut TxContext
+    ) {
+        let action = multisig.execute_proposal(name, clock, ctx);
         let Manage { is_add, threshold, addresses } = action;
 
         multisig.set_threshold(threshold);

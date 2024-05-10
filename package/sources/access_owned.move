@@ -44,7 +44,8 @@ module sui_multisig::access_owned {
     public fun propose(
         multisig: &mut Multisig, 
         name: String,
-        expiration: u64,
+        execution_time: u64,
+        expiration_epoch: u64,
         description: String,
         objects_to_borrow: vector<ID>,
         objects_to_withdraw: vector<ID>,
@@ -54,7 +55,8 @@ module sui_multisig::access_owned {
         multisig.create_proposal(
             action,
             name,
-            expiration,
+            execution_time,
+            expiration_epoch,
             description,
             ctx
         );

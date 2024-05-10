@@ -2,6 +2,7 @@
 module sui_multisig::access_owned_tests{
     use std::debug::print;
     use std::string::{Self, String};
+    use sui::clock::{Self, Clock};
     use sui::test_scenario::{Self as ts, Scenario};
 
     use sui_multisig::multisig::{Self, Multisig};
@@ -14,6 +15,7 @@ module sui_multisig::access_owned_tests{
     // hot potato holding the state
     public struct World {
         scenario: Scenario,
+        clock: Clock,
         multisig: Multisig,
         ids: vector<ID>,
     }
@@ -24,10 +26,13 @@ module sui_multisig::access_owned_tests{
 
     fun start_world(): World {
         let mut scenario = ts::begin(OWNER);
-        // initialize multisig
+        // initialize multisig and clock
         multisig::new(scenario.ctx());
+        let clock = clock::create_for_testing(scenario.ctx());
+        clock.share_for_testing();
         scenario.next_tx(OWNER);
 
+        let clock = scenario.take_shared<Clock>();
         let mut multisig = scenario.take_shared<Multisig>();
         let ms_addr = multisig.uid_mut().uid_to_inner().id_to_address();
         let id = object::new(scenario.ctx());
@@ -38,11 +43,12 @@ module sui_multisig::access_owned_tests{
         );
         scenario.next_tx(OWNER);
 
-        World { scenario, multisig, ids: vector[inner_id] }
+        World { scenario, clock, multisig, ids: vector[inner_id] }
     }
 
     fun end_world(world: World) {
-        let World { scenario, multisig, ids: _ } = world;
+        let World { scenario, clock, multisig, ids: _ } = world;
+        ts::return_shared(clock);
         ts::return_shared(multisig);
         scenario.end();
     }
@@ -57,6 +63,7 @@ module sui_multisig::access_owned_tests{
             &mut world.multisig,
             string::utf8(name),
             0,
+            0,
             string::utf8(b""),
             to_borrow,
             to_withdraw,
@@ -70,6 +77,7 @@ module sui_multisig::access_owned_tests{
         multisig::execute_proposal(
             &mut world.multisig,
             string::utf8(name),
+            &world.clock,
             world.scenario.ctx()
         )
     }

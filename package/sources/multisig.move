@@ -7,12 +7,14 @@ module sui_multisig::multisig {
     use sui::vec_set::{Self, VecSet};
     use sui::vec_map::{Self, VecMap};
     use sui::dynamic_field as df;
+    use sui::clock::{Self, Clock};
 
     // === Errors ===
 
     const ECallerIsNotMember: u64 = 0;
     const EThresholdNotReached: u64 = 1;
     const EProposalNotEmpty: u64 = 2;
+    const ECantBeExecutedYet: u64 = 3;
 
     // === Structs ===
 
@@ -31,8 +33,11 @@ module sui_multisig::multisig {
     // can be executed if length(approved) >= multisig.threshold
     public struct Proposal has key, store {
         id: UID,
-        // proposals can be deleted from this epoch
-        expiration: u64,
+        // proposer can add a timestamp_ms before which the proposal can't be executed
+        // can be used to schedule actions via a backend
+        execution_time: u64,
+        // the proposal can be deleted from this epoch
+        expiration_epoch: u64,
         // what this proposal aims to do, for informational purpose
         description: String,
         // who has approved the proposal
@@ -64,9 +69,15 @@ module sui_multisig::multisig {
         let mut i = multisig.proposals.size();
         while (i > 0) {
             let (name, proposal) = multisig.proposals.get_entry_by_idx(i - 1);
-            if (ctx.epoch() >= proposal.expiration) {
+            if (ctx.epoch() >= proposal.expiration_epoch) {
                 let (_, proposal) = multisig.proposals.remove(&*name);
-                let Proposal { id, expiration: _, description: _, approved: _ } = proposal;
+                let Proposal { 
+                    id, 
+                    expiration_epoch: _, 
+                    execution_time: _, 
+                    description: _, 
+                    approved: _ 
+                } = proposal;
                 id.delete();
             };
             i = i - 1;
@@ -91,7 +102,8 @@ module sui_multisig::multisig {
         multisig: &mut Multisig, 
         action: T,
         name: String, 
-        expiration: u64,
+        execution_time: u64, // timestamp in ms
+        expiration_epoch: u64,
         description: String,
         ctx: &mut TxContext
     ) {
@@ -99,7 +111,8 @@ module sui_multisig::multisig {
 
         let mut proposal = Proposal { 
             id: object::new(ctx),
-            expiration,
+            execution_time,
+            expiration_epoch,
             description,
             approved: vec_set::empty(), 
         };
@@ -121,7 +134,13 @@ module sui_multisig::multisig {
         let (_, proposal) = multisig.proposals.remove(&name);
         assert!(proposal.approved.size() == 0, EProposalNotEmpty);
         
-        let Proposal { id, expiration: _, description: _, approved: _ } = proposal;
+        let Proposal { 
+            id, 
+            expiration_epoch: _, 
+            execution_time: _, 
+            description: _, 
+            approved: _ 
+        } = proposal;
         id.delete();
     }
 
@@ -153,14 +172,22 @@ module sui_multisig::multisig {
     public fun execute_proposal<T: store>(
         multisig: &mut Multisig, 
         name: String, 
+        clock: &Clock,
         ctx: &mut TxContext
     ): T {
         assert_is_member(multisig, ctx);
 
         let (_, proposal) = multisig.proposals.remove(&name);
-        assert_threshold_reached(multisig, &proposal);
+        let Proposal { 
+            mut id, 
+            expiration_epoch: _, 
+            execution_time, 
+            description: _, 
+            approved, 
+        } = proposal;
+        assert!(approved.size() >= multisig.threshold, EThresholdNotReached);
+        assert!(clock.timestamp_ms() >= execution_time, ECantBeExecutedYet);
 
-        let Proposal { mut id, expiration: _, description:_, approved: _ } = proposal;
         let action = df::remove(&mut id, ActionKey {});
         id.delete();
 
@@ -204,10 +231,6 @@ module sui_multisig::multisig {
 
     public(package) fun assert_is_member(multisig: &Multisig, ctx: &TxContext) {
         assert!(multisig.members.contains(&ctx.sender()), ECallerIsNotMember);
-    }
-
-    public(package) fun assert_threshold_reached(multisig: &Multisig, proposal: &Proposal) {
-        assert!(proposal.approved.size() >= multisig.threshold, EThresholdNotReached);
     }
 
     // === Test functions ===
