@@ -34,12 +34,11 @@ module sui_multisig::owned_tests{
 
         let clock = scenario.take_shared<Clock>();
         let mut multisig = scenario.take_shared<Multisig>();
-        let ms_addr = multisig.uid_mut().uid_to_inner().id_to_address();
         let id = object::new(scenario.ctx());
         let inner_id = id.uid_to_inner();
         transfer::public_transfer(
             Obj { id },
-            ms_addr
+            multisig.addr()
         );
         scenario.next_tx(OWNER);
 

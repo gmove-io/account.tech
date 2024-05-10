@@ -100,7 +100,7 @@ module sui_multisig::owned {
         assert!(received_id == id, EWrongObject);
 
         let promise = Promise {
-            return_to: multisig.uid_mut().uid_to_inner().id_to_address(),
+            return_to: multisig.addr(),
             object_id: received_id,
         };
 

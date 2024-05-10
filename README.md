@@ -35,7 +35,7 @@ The project consists of several modules, each handling different aspects of the 
 - **Access Control**: Securely manage access to functions in your package via a Cap owned by the Multisig.
 - **Asset Management**: Manage and send your coins or any other object types just like with classic accounts. Easily hide spam objects owned by a Multisig.
 - **Custom Proposals**: Define any actions in your module and easily manage them via the Multisig. Check out the [examples](TODO:).
-- **Package Upgrades**: Lock your UpgradeCaps in your Multisig to enforce agreement on the code to be published. Optionally follow a time-lock built-in policy to protect your users. 
+- **Package Upgrades**: Lock your UpgradeCaps in your Multisig to enforce agreement on the code to be published. Optionally follow a time-lock built-in policy to protect your users. Helpers will be provided to display upcoming upgrades on your dapp
 - **Interact with dApps**: Easily interact with dApps on Sui that are integrated to the Multisig. Stake, Swap, Lend your assets, and more. (TODO)
 
 ## Contributing

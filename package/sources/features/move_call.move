@@ -23,7 +23,7 @@ module sui_multisig::move_call {
         request_access: Access,
     }
 
-    // === Public mutative functions ===
+    // === Multisig functions ===
 
     // step 1: propose a MoveCall by passing the digest of the tx
     public fun propose(

@@ -84,16 +84,6 @@ module sui_multisig::multisig {
         } 
     }
 
-    // === Public functions ===
-
-    // helper for transferring objects to the multisig
-    public fun keep<T: key + store>(multisig: &Multisig, object: T) {
-        transfer::public_transfer(
-            object,
-            multisig.id.uid_to_inner().id_to_address()
-        )
-    }
-
     // === Multisig-only functions ===
 
     // create a new proposal for an action
@@ -195,6 +185,10 @@ module sui_multisig::multisig {
     }
 
     // === Package functions ===
+
+    public(package) fun addr(multisig: &Multisig): address {
+        multisig.id.uid_to_inner().id_to_address()
+    }
 
     public(package) fun uid_mut(multisig: &mut Multisig): &mut UID {
         &mut multisig.id

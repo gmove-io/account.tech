@@ -32,7 +32,7 @@ module sui_multisig::coin_operations {
         };
         coins.destroy_empty();
 
-        multisig.keep(merged);
+        transfer::public_transfer(merged, multisig.addr());
     }
 
     // members can split coins, no need for approvals
@@ -53,11 +53,10 @@ module sui_multisig::coin_operations {
         while (!amounts.is_empty()) {
             let split = coin.split(amounts.pop_back(), ctx);
             ids.push_back(object::id(&split));
-            multisig.keep(split);
+            transfer::public_transfer(split, multisig.addr());
         };
-        multisig.keep(coin);
+        transfer::public_transfer(coin, multisig.addr());
 
         ids
     }
 }
-
