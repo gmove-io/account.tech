@@ -22,16 +22,18 @@ The project consists of several modules, each handling different aspects of the 
 
 3. **Owned**: Manages access to objects owned by the multisig, allowing them to be withdrawn or borrowed through proposals.
 
+4. **Coin Operations**: Handles the merging and splitting of coins in the multisig. Can be used to prepare a Proposal with coins with the exact amount needed.
+
 5. **Transfer**: Allows the transfer of assets owned in the multisig treasury.
 
-6. **Coin Operations**: Handles the merging and splitting of coins in the multisig. Can be used to prepare a Proposal with coins with the exact amount needed.
+6. **Move Call**: Facilitates the enforcement of calling the appropriate functions. The action can also include to borrow or withdraw objects (such as a Cap).
 
-7. **Move Call**: Facilitates the enforcement of calling the appropriate functions. The action can also include to borrow or withdraw objects (such as a Cap).
+7. **Upgrade**: Secure UpgradeCaps by locking them into the Multisig and defining an optional time-lock policy.
 
 
 ## Features
 
-- **Configuration**: Set up members, threshold, proposal expiration and scheduled execution.
+- **Configuration**: Set up the Multisig's name, members, threshold, proposal expiration and scheduled execution.
 - **Access Control**: Securely manage access to functions in your package via a Cap owned by the Multisig.
 - **Asset Management**: Manage and send your coins or any other object types just like with classic accounts. Easily hide spam objects owned by a Multisig.
 - **Custom Proposals**: Define any actions in your module and easily manage them via the Multisig. Check out the [examples](TODO:).
