@@ -1,12 +1,12 @@
 #[test_only]
-module sui_multisig::manage_tests{
+module kraken::manage_tests{
     use std::debug::print;
     use std::string::{Self, String};
     use sui::clock::{Self, Clock};
     use sui::test_scenario::{Self as ts, Scenario};
 
-    use sui_multisig::multisig::{Self, Multisig};
-    use sui_multisig::config::{Self, Configure};
+    use kraken::multisig::{Self, Multisig};
+    use kraken::config::{Self, Configure};
 
     const OWNER: address = @0xBABE;
     const ALICE: address = @0xA11CE;

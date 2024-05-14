@@ -1,5 +1,5 @@
 [package]
-name = "SuiMultisig"
+name = "Kraken"
 edition = "2024.beta"
 license = "MIT" 
 authors = ["Thouny (thouny@tuta.io)"]
@@ -8,5 +8,5 @@ authors = ["Thouny (thouny@tuta.io)"]
 Sui = { git = "https://github.com/MystenLabs/sui.git", subdir = "crates/sui-framework/packages/sui-framework", rev = "framework/testnet" }
 
 [addresses]
-sui_multisig = "0x0"
+kraken = "0x0"
 

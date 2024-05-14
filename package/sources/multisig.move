@@ -2,7 +2,7 @@
 /// Various actions to be executed by the Multisig can be attached to a Proposal.
 /// The proposals have to be approved by at least the threshold number of members.
 
-module sui_multisig::multisig {
+module kraken::multisig {
     use std::debug::print;
     use std::string::String;
     use sui::vec_set::{Self, VecSet};

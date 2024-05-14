@@ -1,11 +1,11 @@
 /// This module allows to manage a Multisig's settings.
 /// The action can be to add or remove members, and to change the threshold.
 
-module sui_multisig::config {
+module kraken::config {
     use std::debug::print;
     use std::string::String;
     use sui::clock::Clock;
-    use sui_multisig::multisig::Multisig;
+    use kraken::multisig::Multisig;
 
     // === Errors ===
 

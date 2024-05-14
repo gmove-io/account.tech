@@ -4,10 +4,10 @@
 /// the proposal can request to borrow or withdraw some objects from the Multisig's account in the PTB
 /// allowing to get a Cap to call the proposed function.
 
-module sui_multisig::move_call {
+module kraken::move_call {
     use std::string::String;
-    use sui_multisig::multisig::Multisig;
-    use sui_multisig::owned::{Self, Access};
+    use kraken::multisig::Multisig;
+    use kraken::owned::{Self, Access};
 
     // === Error ===
 

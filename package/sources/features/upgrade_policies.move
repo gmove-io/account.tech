@@ -3,12 +3,12 @@
 /// the minimum delay between an upgrade proposal and its execution.
 /// The multisig can decide to make the policy more restrictive or destroy the Cap.
 
-module sui_multisig::upgrade_policies {
+module kraken::upgrade_policies {
     use std::string::String;
     use sui::package::{Self, UpgradeCap, UpgradeTicket, UpgradeReceipt};
     use sui::transfer::Receiving;
     use sui::clock::Clock;
-    use sui_multisig::multisig::Multisig;
+    use kraken::multisig::Multisig;
 
     // === Error ===
 

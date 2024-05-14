@@ -1,11 +1,11 @@
 /// This module uses the owned apis to transfer assets owned by the multisig.
 
-module sui_multisig::transfer {
+module kraken::transfer {
     use std::debug::print;
     use std::string::String;
     use sui::transfer::Receiving;
-    use sui_multisig::owned::{Self, Access};
-    use sui_multisig::multisig::Multisig;
+    use kraken::owned::{Self, Access};
+    use kraken::multisig::Multisig;
 
     // === Errors ===
 

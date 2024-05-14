@@ -1,8 +1,8 @@
-# Sui Multisig
+# Kraken - a Sui Multisig
 
 ## Overview
 
-This project implements a multisig-like system on the Sui blockchain. A multisig is a mechanism that requires multiple parties to agree on actions before they can be executed. This adds an additional layer of security and is useful for managing shared funds and packages.
+This project implements a multisig-like smart contract based system on the Sui blockchain. A multisig is a mechanism that requires multiple parties to agree on actions before they can be executed. This adds an additional layer of security and is useful for managing shared funds and packages.
 
 A fully featured Account Abstraction solution for individuals will be built on top using zkLogin, transfer to object and any other features replicating the behavior of a classic account. The product for teams will be expanded with every feature needed to manage multiple projects and funds.
 
@@ -18,7 +18,7 @@ The project consists of several modules, each handling different aspects of the 
 
 1. **Multisig**: Core module managing the multisig and proposals. It handles the creation of multisig wallets, adding and removing members, and managing proposals for executing actions.
 
-2. **Config**: Enables the modification of multisig settings such as member addition or removal and threshold changes.
+2. **Config**: Enables the modification of multisig settings such as member addition or removal, threshold changes and name update.
 
 3. **Owned**: Manages access to objects owned by the multisig, allowing them to be withdrawn or borrowed through proposals.
 

@@ -2,10 +2,10 @@
 /// Any member can merge and split without approvals.
 /// Used to prepare a Proposal with coins having the exact amount needed.
 
-module sui_multisig::coin_operations {
+module kraken::coin_operations {
     use sui::coin::Coin;
     use sui::transfer::Receiving;
-    use sui_multisig::multisig::Multisig;
+    use kraken::multisig::Multisig;
 
     // members can merge coins, no need for approvals
     public fun merge_coins<T: drop>(

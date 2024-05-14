@@ -2,10 +2,10 @@
 /// The objects can be taken or borrowed, and only via an Access Proposal
 /// Caution: borrowed Coins can be emptied, only withdraw the amount you need
 
-module sui_multisig::owned {
+module kraken::owned {
     use std::string::String;
     use sui::transfer::Receiving;
-    use sui_multisig::multisig::Multisig;
+    use kraken::multisig::Multisig;
 
     // === Errors ===
 
