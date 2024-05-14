@@ -43,7 +43,7 @@ module sui_multisig::owned {
     // step 1: propose to Access owned objects
     public fun propose(
         multisig: &mut Multisig, 
-        name: String,
+        key: String,
         execution_time: u64,
         expiration_epoch: u64,
         description: String,
@@ -54,7 +54,7 @@ module sui_multisig::owned {
         let action = new_access(objects_to_borrow, objects_to_withdraw);
         multisig.create_proposal(
             action,
-            name,
+            key,
             execution_time,
             expiration_epoch,
             description,

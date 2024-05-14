@@ -28,7 +28,7 @@ module sui_multisig::move_call {
     // step 1: propose a MoveCall by passing the digest of the tx
     public fun propose(
         multisig: &mut Multisig, 
-        name: String,
+        key: String,
         execution_time: u64,
         expiration_epoch: u64,
         description: String,
@@ -42,7 +42,7 @@ module sui_multisig::move_call {
 
         multisig.create_proposal(
             action,
-            name,
+            key,
             execution_time,
             expiration_epoch,
             description,

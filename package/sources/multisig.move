@@ -36,13 +36,13 @@ module sui_multisig::multisig {
     // can be executed if length(approved) >= multisig.threshold
     public struct Proposal has key, store {
         id: UID,
+        // what this proposal aims to do, for informational purpose
+        description: String,
+        // the proposal can be deleted from this epoch
+        expiration_epoch: u64,
         // proposer can add a timestamp_ms before which the proposal can't be executed
         // can be used to schedule actions via a backend
         execution_time: u64,
-        // the proposal can be deleted from this epoch
-        expiration_epoch: u64,
-        // what this proposal aims to do, for informational purpose
-        description: String,
         // who has approved the proposal
         approved: VecSet<address>,
     }
@@ -72,14 +72,14 @@ module sui_multisig::multisig {
     public fun clean_proposals(multisig: &mut Multisig, ctx: &mut TxContext) {
         let mut i = multisig.proposals.size();
         while (i > 0) {
-            let (name, proposal) = multisig.proposals.get_entry_by_idx(i - 1);
+            let (key, proposal) = multisig.proposals.get_entry_by_idx(i - 1);
             if (ctx.epoch() >= proposal.expiration_epoch) {
-                let (_, proposal) = multisig.proposals.remove(&*name);
+                let (_, proposal) = multisig.proposals.remove(&*key);
                 let Proposal { 
                     id, 
+                    description: _, 
                     expiration_epoch: _, 
                     execution_time: _, 
-                    description: _, 
                     approved: _ 
                 } = proposal;
                 id.delete();
@@ -95,7 +95,7 @@ module sui_multisig::multisig {
     public fun create_proposal<T: store>(
         multisig: &mut Multisig, 
         action: T,
-        name: String, 
+        key: String, 
         execution_time: u64, // timestamp in ms
         expiration_epoch: u64,
         description: String,
@@ -105,27 +105,27 @@ module sui_multisig::multisig {
 
         let mut proposal = Proposal { 
             id: object::new(ctx),
+            description,
             execution_time,
             expiration_epoch,
-            description,
             approved: vec_set::empty(), 
         };
 
         df::add(&mut proposal.id, ActionKey {}, action);
 
-        multisig.proposals.insert(name, proposal);
+        multisig.proposals.insert(key, proposal);
     }
 
     // remove a proposal that hasn't been approved yet
     // prevents malicious members to delete proposals that are still open
     public fun delete_proposal(
         multisig: &mut Multisig, 
-        name: String, 
+        key: String, 
         ctx: &mut TxContext
     ) {
         assert_is_member(multisig, ctx);
 
-        let (_, proposal) = multisig.proposals.remove(&name);
+        let (_, proposal) = multisig.proposals.remove(&key);
         assert!(proposal.approved.size() == 0, EProposalNotEmpty);
         
         let Proposal { 
@@ -141,37 +141,37 @@ module sui_multisig::multisig {
     // the signer agrees with the proposal
     public fun approve_proposal(
         multisig: &mut Multisig, 
-        name: String, 
+        key: String, 
         ctx: &mut TxContext
     ) {
         assert_is_member(multisig, ctx);
 
-        let proposal = multisig.proposals.get_mut(&name);
+        let proposal = multisig.proposals.get_mut(&key);
         proposal.approved.insert(ctx.sender()); // throws if already approved
     }
 
     // the signer removes his agreement
     public fun remove_approval(
         multisig: &mut Multisig, 
-        name: String, 
+        key: String, 
         ctx: &mut TxContext
     ) {
         assert_is_member(multisig, ctx);
 
-        let proposal = multisig.proposals.get_mut(&name);
+        let proposal = multisig.proposals.get_mut(&key);
         proposal.approved.remove(&ctx.sender());
     }
 
     // return the action if the number of signers is >= threshold
     public fun execute_proposal<T: store>(
         multisig: &mut Multisig, 
-        name: String, 
+        key: String, 
         clock: &Clock,
         ctx: &mut TxContext
     ): T {
         assert_is_member(multisig, ctx);
 
-        let (_, proposal) = multisig.proposals.remove(&name);
+        let (_, proposal) = multisig.proposals.remove(&key);
         let Proposal { 
             mut id, 
             expiration_epoch: _, 

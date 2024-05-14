@@ -33,7 +33,7 @@ module sui_multisig::owned_tests{
         scenario.next_tx(OWNER);
 
         let clock = scenario.take_shared<Clock>();
-        let mut multisig = scenario.take_shared<Multisig>();
+        let multisig = scenario.take_shared<Multisig>();
         let id = object::new(scenario.ctx());
         let inner_id = id.uid_to_inner();
         transfer::public_transfer(
@@ -54,13 +54,13 @@ module sui_multisig::owned_tests{
 
     fun receive_owned(
         world: &mut World,
-        name: vector<u8>,
+        key: vector<u8>,
         to_borrow: vector<ID>,
         to_withdraw: vector<ID>,
     ): Access {
         owned::propose(
             &mut world.multisig,
-            string::utf8(name),
+            string::utf8(key),
             0,
             0,
             string::utf8(b""),
@@ -70,12 +70,12 @@ module sui_multisig::owned_tests{
         );
         multisig::approve_proposal(
             &mut world.multisig,
-            string::utf8(name),
+            string::utf8(key),
             world.scenario.ctx()
         );
         multisig::execute_proposal(
             &mut world.multisig,
-            string::utf8(name),
+            string::utf8(key),
             &world.clock,
             world.scenario.ctx()
         )

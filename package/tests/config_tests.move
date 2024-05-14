@@ -44,7 +44,7 @@ module sui_multisig::manage_tests{
     fun manage_multisig(
         world: &mut World,
         mut approvals: u64,
-        label: vector<u8>,
+        key: vector<u8>,
         name: Option<String>,
         threshold: Option<u64>,
         to_add: vector<address>,
@@ -53,7 +53,7 @@ module sui_multisig::manage_tests{
         let users = vector[OWNER, ALICE, BOB];
         config::propose(
             &mut world.multisig,
-            string::utf8(label),
+            string::utf8(key),
             0,
             0,
             string::utf8(b""),
@@ -67,7 +67,7 @@ module sui_multisig::manage_tests{
         while (approvals > 0) {
             multisig::approve_proposal(
                 &mut world.multisig,
-                string::utf8(label),
+                string::utf8(key),
                 world.scenario.ctx()
             );
             approvals = approvals - 1;
@@ -75,7 +75,7 @@ module sui_multisig::manage_tests{
         };
         config::execute(
             &mut world.multisig,
-            string::utf8(label),
+            string::utf8(key),
             &world.clock,
             world.scenario.ctx()
         );

@@ -69,7 +69,7 @@ module sui_multisig::upgrade_policies {
     // execution_time is automatically set to now + timelock
     public fun propose_upgrade(
         multisig: &mut Multisig, 
-        name: String,
+        key: String,
         expiration_epoch: u64,
         description: String,
         digest: vector<u8>,
@@ -82,7 +82,7 @@ module sui_multisig::upgrade_policies {
 
         multisig.create_proposal(
             action,
-            name,
+            key,
             clock.timestamp_ms() + received.time_lock,
             expiration_epoch,
             description,
@@ -130,7 +130,7 @@ module sui_multisig::upgrade_policies {
     // execution_time is automatically set to now + timelock
     public fun propose_policy(
         multisig: &mut Multisig, 
-        name: String,
+        key: String,
         execution_time: u64,
         expiration_epoch: u64,
         description: String,
@@ -152,7 +152,7 @@ module sui_multisig::upgrade_policies {
 
         multisig.create_proposal(
             action,
-            name,
+            key,
             execution_time,
             expiration_epoch,
             description,

@@ -33,7 +33,7 @@ module sui_multisig::config {
     // step 1: propose to modify multisig params
     public fun propose(
         multisig: &mut Multisig, 
-        label: String,
+        key: String,
         execution_time: u64,
         expiration_epoch: u64,
         description: String,
@@ -71,7 +71,7 @@ module sui_multisig::config {
         let action = Configure { name, threshold, to_add, to_remove };
         multisig.create_proposal(
             action,
-            label,
+            key,
             execution_time,
             expiration_epoch,
             description,

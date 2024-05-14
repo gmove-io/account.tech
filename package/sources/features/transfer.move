@@ -26,7 +26,7 @@ module sui_multisig::transfer {
     // step 1: propose to retrieve owned objects and store them in the multisig via dof
     public fun propose(
         multisig: &mut Multisig, 
-        name: String,
+        key: String,
         execution_time: u64,
         expiration_epoch: u64,
         description: String,
@@ -39,7 +39,7 @@ module sui_multisig::transfer {
         let action = Transfer { request_access, recipients };
         multisig.create_proposal(
             action,
-            name,
+            key,
             execution_time,
             expiration_epoch,
             description,
