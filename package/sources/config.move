@@ -64,8 +64,6 @@ module kraken::config {
         };
         // verify threshold is reachable with new members 
         let new_len = multisig.members().length() + to_add.length() - to_remove.length();
-        print(&new_len);
-        print(&new_threshold);
         assert!(new_len >= new_threshold, EThresholdTooHigh);
 
         let action = Configure { name, threshold, to_add, to_remove };

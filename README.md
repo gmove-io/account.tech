@@ -18,17 +18,19 @@ The project consists of several modules, each handling different aspects of the 
 
 1. **Multisig**: Core module managing the multisig and proposals. It handles the creation of multisig wallets, adding and removing members, and managing proposals for executing actions.
 
-2. **Config**: Enables the modification of multisig settings such as member addition or removal, threshold changes and name update.
+2. **Account**: Handles the creation of a non-transferable account for each user to track their Multisigs.
 
-3. **Owned**: Manages access to objects owned by the multisig, allowing them to be withdrawn or borrowed through proposals.
+3. **Config**: Enables the modification of multisig settings such as member addition or removal, threshold changes and name update.
 
-4. **Coin Operations**: Handles the merging and splitting of coins in the multisig. Can be used to prepare a Proposal with coins with the exact amount needed.
+4. **Owned**: Manages access to objects owned by the multisig, allowing them to be withdrawn or borrowed through proposals.
 
-5. **Transfer**: Allows the transfer of assets owned in the multisig treasury.
+5. **Coin Operations**: Handles the merging and splitting of coins in the multisig. Can be used to prepare a Proposal with coins with the exact amount needed.
 
-6. **Move Call**: Facilitates the enforcement of calling the appropriate functions. The action can also include to borrow or withdraw objects (such as a Cap).
+6. **Transfer**: Allows the transfer of assets owned in the multisig treasury.
 
-7. **Upgrade**: Secure UpgradeCaps by locking them into the Multisig and defining an optional time-lock policy.
+7. **Move Call**: Facilitates the enforcement of calling the appropriate functions. The action can also include to borrow or withdraw objects (such as a Cap).
+
+8. **Upgrade**: Secure UpgradeCaps by locking them into the Multisig and defining an optional time-lock policy.
 
 
 ## Features
