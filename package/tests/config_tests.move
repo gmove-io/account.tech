@@ -6,7 +6,7 @@ module sui_multisig::manage_tests{
     use sui::test_scenario::{Self as ts, Scenario};
 
     use sui_multisig::multisig::{Self, Multisig};
-    use sui_multisig::config::{Self, Manage};
+    use sui_multisig::config::{Self, Configure};
 
     const OWNER: address = @0xBABE;
     const ALICE: address = @0xA11CE;
@@ -24,7 +24,7 @@ module sui_multisig::manage_tests{
     fun start_world(): World {
         let mut scenario = ts::begin(OWNER);
         // initialize multisig and clock
-        multisig::new(scenario.ctx());
+        multisig::new(string::utf8(b"kraken"), scenario.ctx());
         let clock = clock::create_for_testing(scenario.ctx());
         clock.share_for_testing();
         scenario.next_tx(OWNER);
@@ -44,28 +44,30 @@ module sui_multisig::manage_tests{
     fun manage_multisig(
         world: &mut World,
         mut approvals: u64,
-        name: vector<u8>,
-        id_add: bool,
-        threshold: u64,
-        addresses: vector<address>,
+        label: vector<u8>,
+        name: Option<String>,
+        threshold: Option<u64>,
+        to_add: vector<address>,
+        to_remove: vector<address>,
     ) {
         let users = vector[OWNER, ALICE, BOB];
         config::propose(
             &mut world.multisig,
-            string::utf8(name),
+            string::utf8(label),
             0,
             0,
             string::utf8(b""),
-            id_add,
+            name,
             threshold,
-            addresses,
+            to_add,
+            to_remove,
             world.scenario.ctx()
         );
         // approves as many times as necessary
         while (approvals > 0) {
             multisig::approve_proposal(
                 &mut world.multisig,
-                string::utf8(name),
+                string::utf8(label),
                 world.scenario.ctx()
             );
             approvals = approvals - 1;
@@ -73,7 +75,7 @@ module sui_multisig::manage_tests{
         };
         config::execute(
             &mut world.multisig,
-            string::utf8(name),
+            string::utf8(label),
             &world.clock,
             world.scenario.ctx()
         );
@@ -94,9 +96,10 @@ module sui_multisig::manage_tests{
             &mut world,
             1,
             b"add_members_increase_threshold",
-            true,
-            2,
+            option::none(),
+            option::some(2),
             vector[ALICE, BOB],
+            vector[],
         );
         multisig::assert_multisig_data_numbers(&world.multisig, 2, 3, 0);
         end_world(world);
@@ -110,17 +113,19 @@ module sui_multisig::manage_tests{
             &mut world,
             1,
             b"add_members_increase_threshold",
-            true,
-            3,
+            option::none(),
+            option::some(3),
             vector[ALICE, BOB],
+            vector[],
         );
         multisig::assert_multisig_data_numbers(&world.multisig, 3, 3, 0);
         manage_multisig(
             &mut world,
             3,
             b"remove_members_same_threshold",
-            false,
-            2,
+            option::none(),
+            option::some(2),
+            vector[],
             vector[BOB],
         );
         multisig::assert_multisig_data_numbers(&world.multisig, 2, 2, 0);

@@ -27,7 +27,7 @@ module sui_multisig::owned_tests{
     fun start_world(): World {
         let mut scenario = ts::begin(OWNER);
         // initialize multisig and clock
-        multisig::new(scenario.ctx());
+        multisig::new(string::utf8(b"kraken"), scenario.ctx());
         let clock = clock::create_for_testing(scenario.ctx());
         clock.share_for_testing();
         scenario.next_tx(OWNER);

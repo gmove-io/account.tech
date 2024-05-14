@@ -18,6 +18,8 @@ module sui_multisig::config {
 
     // action to be stored in a Proposal
     public struct Configure has store { 
+        // new name if any
+        name: Option<String>,
         // new threshold, has to be <= to new total addresses
         threshold: Option<u64>,
         // addresses to add
@@ -31,10 +33,11 @@ module sui_multisig::config {
     // step 1: propose to modify multisig params
     public fun propose(
         multisig: &mut Multisig, 
-        name: String,
+        label: String,
         execution_time: u64,
         expiration_epoch: u64,
         description: String,
+        name: Option<String>,
         threshold: Option<u64>, 
         to_add: vector<address>, 
         to_remove: vector<address>, 
@@ -54,19 +57,21 @@ module sui_multisig::config {
 
         let new_threshold = if (threshold.is_some()) {
             // if threshold null, anyone can propose
-            assert!(threshold.extract() > 0, EThresholdNull);
-            multisig.threshold()
+            assert!(*threshold.borrow() > 0, EThresholdNull);
+            *threshold.borrow()
         } else {
-            threshold.extract()
+            multisig.threshold()
         };
         // verify threshold is reachable with new members 
         let new_len = multisig.members().length() + to_add.length() - to_remove.length();
+        print(&new_len);
+        print(&new_threshold);
         assert!(new_len >= new_threshold, EThresholdTooHigh);
 
-        let action = Configure { threshold, to_add, to_remove };
+        let action = Configure { name, threshold, to_add, to_remove };
         multisig.create_proposal(
             action,
-            name,
+            label,
             execution_time,
             expiration_epoch,
             description,
@@ -84,9 +89,10 @@ module sui_multisig::config {
         ctx: &mut TxContext
     ) {
         let action = multisig.execute_proposal(name, clock, ctx);
-        let Configure { threshold, to_add, to_remove } = action;
+        let Configure { mut name, mut threshold, to_add, to_remove } = action;
 
-        multisig.set_threshold(threshold.extract());
+        if (name.is_some()) multisig.set_name(name.extract());
+        if (threshold.is_some()) multisig.set_threshold(threshold.extract());
         multisig.add_members(to_add);
         multisig.remove_members(to_remove);
     }
