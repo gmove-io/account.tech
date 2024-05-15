@@ -7,7 +7,7 @@
 module kraken::move_call {
     use std::string::String;
     use kraken::multisig::Multisig;
-    use kraken::owned::{Self, Access};
+    use kraken::owned::{Self, Withdraw, Borrow};
 
     // === Error ===
 
@@ -19,8 +19,10 @@ module kraken::move_call {
     public struct MoveCall has store {
         // digest of the tx we want to execute
         digest: vector<u8>,
-        // sub action requesting to access owned objects (such as a Cap)
-        request_access: Access,
+        // sub action requesting to access owned objects (such as a Coin)
+        request_withdraw: Withdraw,
+        // sub action requesting to borrow owned objects (such as a Cap)
+        request_borrow: Borrow,
     }
 
     // === Multisig functions ===
@@ -37,8 +39,9 @@ module kraken::move_call {
         to_withdraw: vector<ID>,
         ctx: &mut TxContext
     ) {
-        let request_access = owned::new_access(to_borrow, to_withdraw);
-        let action = MoveCall { digest, request_access };
+        let request_withdraw = owned::new_withdraw(to_withdraw);
+        let request_borrow = owned::new_borrow(to_borrow);
+        let action = MoveCall { digest, request_withdraw, request_borrow };
 
         multisig.create_proposal(
             action,
@@ -53,15 +56,15 @@ module kraken::move_call {
     // step 2: multiple members have to approve the proposal (multisig::approve_proposal)
     // step 3: execute the proposal and return the action (multisig::execute_proposal)
 
-    // step 4: destroy MoveCall if digest match and return Access
-    public fun execute(action: MoveCall, ctx: &TxContext): Access {
-        let MoveCall { digest, request_access } = action;
+    // step 4: destroy MoveCall if digest match and return Withdraw
+    public fun execute(action: MoveCall, ctx: &TxContext): (Withdraw, Borrow) {
+        let MoveCall { digest, request_withdraw, request_borrow } = action;
         assert!(digest == ctx.digest(), EDigestDoesntMatch);
         
-        request_access
+        (request_withdraw, request_borrow)
     }    
 
     // step 5: borrow or withdraw the objects from owned (get a Cap to call another function)
-    // step 6: destroy Access in owned
+    // step 6: destroy Withdraw in owned
 }
 

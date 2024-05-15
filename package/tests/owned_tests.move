@@ -6,7 +6,7 @@ module kraken::owned_tests{
     use sui::test_scenario::{Self as ts, Scenario};
 
     use kraken::multisig::{Self, Multisig};
-    use kraken::owned::{Self, Access};
+    use kraken::owned::{Self, Withdraw, Borrow};
 
     const OWNER: address = @0xBABE;
     const ALICE: address = @0xA11CE;
@@ -52,20 +52,18 @@ module kraken::owned_tests{
         scenario.end();
     }
 
-    fun receive_owned(
+    fun borrow(
         world: &mut World,
         key: vector<u8>,
-        to_borrow: vector<ID>,
-        to_withdraw: vector<ID>,
-    ): Access {
-        owned::propose(
+        objects: vector<ID>,
+    ): Borrow {
+        owned::propose_borrow(
             &mut world.multisig,
             string::utf8(key),
             0,
             0,
             string::utf8(b""),
-            to_borrow,
-            to_withdraw,
+            objects,
             world.scenario.ctx()
         );
         multisig::approve_proposal(
@@ -90,38 +88,18 @@ module kraken::owned_tests{
     }
 
     #[test]
-    fun withdraw_and_send_object() {
-        let mut world = start_world();
-        let id = world.ids[0];
-        let mut action = receive_owned(
-            &mut world, 
-            b"withdraw", 
-            vector[],
-            vector[id]
-        );
-        let ticket = ts::receiving_ticket_by_id<Obj>(id);
-        let owned = owned::pop_owned(&mut action);
-        let obj = owned::take(&mut world.multisig, owned, ticket);
-        owned::complete(action);
-        transfer::public_transfer(obj, OWNER);
-        end_world(world);
-    }
-
-    #[test]
     fun borrow_and_return_object() {
         let mut world = start_world();
         let id = world.ids[0];
-        let mut action = receive_owned(
+        let mut action = borrow(
             &mut world, 
             b"borrow", 
             vector[id],
-            vector[]
         );
         let ticket = ts::receiving_ticket_by_id<Obj>(id);
-        let owned = owned::pop_owned(&mut action);
-        let (obj, promise) = owned::borrow(&mut world.multisig, owned, ticket);
-        owned::put_back(obj, promise);
-        owned::complete(action);
+        let obj = owned::borrow(&mut world.multisig, &mut action, ticket);
+        owned::put_back(&mut world.multisig, &mut action, obj);
+        owned::complete_borrow(action);
         end_world(world);
     }
 

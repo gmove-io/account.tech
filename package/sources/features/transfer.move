@@ -4,7 +4,7 @@ module kraken::transfer {
     use std::debug::print;
     use std::string::String;
     use sui::transfer::Receiving;
-    use kraken::owned::{Self, Access};
+    use kraken::owned::{Self, Withdraw};
     use kraken::multisig::Multisig;
 
     // === Errors ===
@@ -16,7 +16,7 @@ module kraken::transfer {
     // action to be held in a Proposal
     public struct Transfer has store {
         // sub action - owned objects to access
-        request_access: Access,
+        request_withdraw: Withdraw,
         // addresses to transfer to
         recipients: vector<address>
     }
@@ -30,13 +30,13 @@ module kraken::transfer {
         execution_time: u64,
         expiration_epoch: u64,
         description: String,
-        object_ids: vector<ID>,
+        objects: vector<ID>,
         recipients: vector<address>,
         ctx: &mut TxContext
     ) {
         // create a new access with the objects to withdraw (none to borrow)
-        let request_access = owned::new_access(vector[], object_ids);
-        let action = Transfer { request_access, recipients };
+        let request_withdraw = owned::new_withdraw(objects);
+        let action = Transfer { request_withdraw, recipients };
         multisig.create_proposal(
             action,
             key,
@@ -57,16 +57,15 @@ module kraken::transfer {
         action: &mut Transfer, 
         received: Receiving<T>
     ) {
-        let owned = action.request_access.pop_owned();
-        let coin = owned::take(multisig, owned, received);
+        let coin = owned::withdraw(multisig, &mut action.request_withdraw, received);
         transfer::public_transfer(coin, action.recipients.pop_back());
     }
 
     // step 5: destroy the action
     public fun complete(action: Transfer) {
-        let Transfer { request_access, recipients } = action;
+        let Transfer { request_withdraw, recipients } = action;
         assert!(recipients.is_empty(), ETransferAllAssetsBefore);
-        request_access.complete();
+        owned::complete_withdraw(request_withdraw);
     }
 }
 

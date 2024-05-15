@@ -1,5 +1,7 @@
 /// This module allows multisig members to access objects owned by the multisig in a secure way.
-/// The objects can be taken or borrowed, and only via an Access Proposal
+/// The objects can be taken only via an Withdraw action.
+/// This action can't be proposed directly since it wouldn't make sense to withdraw an object without using it.
+/// Objects can be borrowed using an action wrapping the Withdraw action.
 /// Caution: borrowed Coins can be emptied, only withdraw the amount you need
 
 module kraken::owned {
@@ -10,48 +12,40 @@ module kraken::owned {
     // === Errors ===
 
     const EWrongObject: u64 = 0;
-    const EShouldBeWithdrawn: u64 = 1;
-    const EShouldBeBorrowed: u64 = 2;
-    const ERetrieveAllObjectsBefore: u64 = 3;
+    const EReturnAllObjectsBefore: u64 = 1;
+    const ERetrieveAllObjectsBefore: u64 = 2;
 
     // === Structs ===
 
     // action to be stored in a Proposal
-    public struct Access has store {
+    // guard access to multisig owned objects which can only be received via this action
+    public struct Withdraw has store {
         // the owned objects we want to access
-        objects: vector<Owned>,
+        objects: vector<ID>,
     }
 
-    // can only be created in an Access action, guard access to multisig owned objects 
-    public struct Owned has store {
-        // is the object borrowed or withdrawn to know whether we issue a Promise
-        to_borrow: bool,
-        // the id of the owned object we want to retrieve/receive
-        id: ID,
-    }
-
-    // hot potato ensuring the owned object is transferred back
-    public struct Promise {
-        // the address to return the object to (Multisig)
-        return_to: address,
-        // the object being borrowed
-        object_id: ID,
+    // action to be stored in a Proposal
+    // wrapper enforcing accessed objects to be sent back to the multisig
+    public struct Borrow has store {
+        // sub action retrieving objects
+        request_access: Withdraw,
+        // list of objects to put back into the multisig
+        to_return: vector<ID>,
     }
 
     // === Multisig functions ===
 
-    // step 1: propose to Access owned objects
-    public fun propose(
+    // step 1: propose to Withdraw owned objects
+    public fun propose_borrow(
         multisig: &mut Multisig, 
         key: String,
         execution_time: u64,
         expiration_epoch: u64,
         description: String,
-        objects_to_borrow: vector<ID>,
-        objects_to_withdraw: vector<ID>,
+        objects: vector<ID>,
         ctx: &mut TxContext
     ) {
-        let action = new_access(objects_to_borrow, objects_to_withdraw);
+        let action = new_borrow(objects);
         multisig.create_proposal(
             action,
             key,
@@ -64,21 +58,49 @@ module kraken::owned {
 
     // step 2: multiple members have to approve the proposal (multisig::approve_proposal)
     // step 3: execute the proposal and return the action (multisig::execute_proposal)
-    
-    // step 4: get the Owned struct to call withdraw or borrow
-    public fun pop_owned(action: &mut Access): Owned {
-        action.objects.pop_back()
-    }
 
-    // step 5: receive and take the owned object using Owned    
-    public fun take<T: key + store>(
+    // step 4: receive and borrow the owned object using Owned    
+    public fun borrow<T: key + store>(
         multisig: &mut Multisig, 
-        owned: Owned,
+        action: &mut Borrow,
         receiving: Receiving<T>
     ): T {
-        let Owned { to_borrow, id } = owned;
-        assert!(!to_borrow, EShouldBeBorrowed);
+        withdraw(multisig, &mut action.request_access, receiving)
+    }
+    
+    // step 5: return the object to the multisig to empty `to_return` vector
+    public fun put_back<T: key + store>(
+        multisig: &mut Multisig, 
+        action: &mut Borrow,
+        returned: T, 
+    ) {
+        let (exists_, index) = action.to_return.index_of(&object::id(&returned));
+        assert!(exists_, EWrongObject);
+        action.to_return.remove(index);
+        transfer::public_transfer(returned, multisig.addr());
+    }
 
+    // step 6: destroy the action once all objects are retrieved/received
+    public fun complete_borrow(action: Borrow) {
+        let Borrow { request_access, to_return } = action;
+        complete_withdraw(request_access);
+        assert!(to_return.is_empty(), EReturnAllObjectsBefore);
+        to_return.destroy_empty();
+    }
+
+    // === Package functions ===
+
+    // Withdraw can be wrapped into another action
+    public(package) fun new_withdraw(objects: vector<ID>): Withdraw {
+        Withdraw { objects }
+    }
+
+    public(package) fun withdraw<T: key + store>(
+        multisig: &mut Multisig, 
+        action: &mut Withdraw,
+        receiving: Receiving<T>
+    ): T {
+        let id = action.objects.pop_back();
         let received = transfer::public_receive(multisig.uid_mut(), receiving);
         let received_id = object::id(&received);
         assert!(received_id == id, EWrongObject);
@@ -86,61 +108,17 @@ module kraken::owned {
         received
     }
 
-    // step 5 (bis): receive and borrow the owned object using Owned    
-    public fun borrow<T: key + store>(
-        multisig: &mut Multisig, 
-        owned: Owned,
-        receiving: Receiving<T>
-    ): (T, Promise) {
-        let Owned { to_borrow, id } = owned;
-        assert!(to_borrow, EShouldBeWithdrawn);
-
-        let received = transfer::public_receive(multisig.uid_mut(), receiving);
-        let received_id = object::id(&received);
-        assert!(received_id == id, EWrongObject);
-
-        let promise = Promise {
-            return_to: multisig.addr(),
-            object_id: received_id,
-        };
-
-        (received, promise)
-    }
-    
-    // step 5 (bis): if borrowed, return the object to the multisig to destroy the hot potato
-    public fun put_back<T: key + store>(returned: T, promise: Promise) {
-        let Promise { return_to, object_id } = promise;
-        assert!(object::id(&returned) == object_id, EWrongObject);
-        transfer::public_transfer(returned, return_to);
-    }
-
-    // step 6: destroy the action once all objects are retrieved/received
-    public fun complete(action: Access) {
-        let Access { objects } = action;
+    public(package) fun complete_withdraw(action: Withdraw) {
+        let Withdraw { objects } = action;
         assert!(objects.is_empty(), ERetrieveAllObjectsBefore);
         objects.destroy_empty();
     }
 
-    // === Package functions ===
-
-    // Access can be wrapped into another action
-    public(package) fun new_access(
-        mut to_borrow: vector<ID>,
-        mut to_withdraw: vector<ID>
-    ): Access {
-        let mut objects = vector[];
-        while (!to_borrow.is_empty()) {
-            objects.push_back(new_owned(true, to_borrow.pop_back()));
-        };
-        while (!to_withdraw.is_empty()) {
-            objects.push_back(new_owned(false, to_withdraw.pop_back()));
-        };
-        Access { objects }
-    }
-
-    // callable only via new_access
-    public(package) fun new_owned(to_borrow: bool, id: ID): Owned {
-        Owned { to_borrow, id }
+    public(package) fun new_borrow(objects: vector<ID>): Borrow {
+        Borrow {
+            request_access: new_withdraw(objects),
+            to_return: objects,
+        }
     }
 }
 
