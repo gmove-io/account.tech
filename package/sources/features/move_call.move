@@ -28,7 +28,7 @@ module kraken::move_call {
     // === Multisig functions ===
 
     // step 1: propose a MoveCall by passing the digest of the tx
-    public fun propose(
+    public fun propose_move_call(
         multisig: &mut Multisig, 
         key: String,
         execution_time: u64,
@@ -57,7 +57,7 @@ module kraken::move_call {
     // step 3: execute the proposal and return the action (multisig::execute_proposal)
 
     // step 4: destroy MoveCall if digest match and return Withdraw
-    public fun execute(action: MoveCall, ctx: &TxContext): (Withdraw, Borrow) {
+    public fun execute_move_call(action: MoveCall, ctx: &TxContext): (Withdraw, Borrow) {
         let MoveCall { digest, request_withdraw, request_borrow } = action;
         assert!(digest == ctx.digest(), EDigestDoesntMatch);
         

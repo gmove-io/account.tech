@@ -28,7 +28,7 @@ module kraken::owned {
     // wrapper enforcing accessed objects to be sent back to the multisig
     public struct Borrow has store {
         // sub action retrieving objects
-        request_access: Withdraw,
+        request_withdraw: Withdraw,
         // list of objects to put back into the multisig
         to_return: vector<ID>,
     }
@@ -61,17 +61,17 @@ module kraken::owned {
 
     // step 4: receive and borrow the owned object using Owned    
     public fun borrow<T: key + store>(
-        multisig: &mut Multisig, 
         action: &mut Borrow,
+        multisig: &mut Multisig, 
         receiving: Receiving<T>
     ): T {
-        withdraw(multisig, &mut action.request_access, receiving)
+        action.request_withdraw.withdraw(multisig, receiving)
     }
     
     // step 5: return the object to the multisig to empty `to_return` vector
     public fun put_back<T: key + store>(
-        multisig: &mut Multisig, 
         action: &mut Borrow,
+        multisig: &mut Multisig, 
         returned: T, 
     ) {
         let (exists_, index) = action.to_return.index_of(&object::id(&returned));
@@ -82,8 +82,8 @@ module kraken::owned {
 
     // step 6: destroy the action once all objects are retrieved/received
     public fun complete_borrow(action: Borrow) {
-        let Borrow { request_access, to_return } = action;
-        complete_withdraw(request_access);
+        let Borrow { request_withdraw, to_return } = action;
+        complete_withdraw(request_withdraw);
         assert!(to_return.is_empty(), EReturnAllObjectsBefore);
         to_return.destroy_empty();
     }
@@ -96,8 +96,8 @@ module kraken::owned {
     }
 
     public(package) fun withdraw<T: key + store>(
-        multisig: &mut Multisig, 
         action: &mut Withdraw,
+        multisig: &mut Multisig, 
         receiving: Receiving<T>
     ): T {
         let id = action.objects.pop_back();
@@ -116,7 +116,7 @@ module kraken::owned {
 
     public(package) fun new_borrow(objects: vector<ID>): Borrow {
         Borrow {
-            request_access: new_withdraw(objects),
+            request_withdraw: new_withdraw(objects),
             to_return: objects,
         }
     }

@@ -97,9 +97,9 @@ module kraken::owned_tests{
             vector[id],
         );
         let ticket = ts::receiving_ticket_by_id<Obj>(id);
-        let obj = owned::borrow(&mut world.multisig, &mut action, ticket);
-        owned::put_back(&mut world.multisig, &mut action, obj);
-        owned::complete_borrow(action);
+        let obj = action.borrow(&mut world.multisig, ticket);
+        action.put_back(&mut world.multisig, obj);
+        action.complete_borrow();
         end_world(world);
     }
 

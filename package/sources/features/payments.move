@@ -77,14 +77,14 @@ module kraken::payments {
 
     // step 4: loop over it in PTB, sends last object from the Send action
     public fun create_stream<C: drop>(
-        multisig: &mut Multisig, 
         action: Pay, 
+        multisig: &mut Multisig, 
         received: Receiving<Coin<C>>,
         ctx: &mut TxContext
     ) {
         let Pay { mut request_withdraw, amount, interval, recipient } = action;
-        let coin = owned::withdraw(multisig, &mut request_withdraw, received);
-        owned::complete_withdraw(request_withdraw);
+        let coin = request_withdraw.withdraw(multisig, received);
+        request_withdraw.complete_withdraw();
 
         let stream = Stream<C> { 
             id: object::new(ctx), 
@@ -130,8 +130,8 @@ module kraken::payments {
 
     // step 6 (bis): multisig member can cancel the payment (member only)
     public fun cancel_payment<C: drop>(
-        multisig: &mut Multisig,
         stream: Stream<C>, 
+        multisig: &mut Multisig,
         ctx: &mut TxContext
     ) {
         multisig.assert_is_member(ctx);

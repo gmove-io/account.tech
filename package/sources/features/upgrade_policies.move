@@ -96,8 +96,8 @@ module kraken::upgrade_policies {
 
     // step 4: destroy Upgrade and return the UpgradeTicket for upgrading
     public fun execute_upgrade(
-        multisig: &mut Multisig,
         action: Upgrade,
+        multisig: &mut Multisig,
         upgrade_lock: Receiving<UpgradeLock>,
     ): UpgradeTicket {
         let Upgrade { digest, upgrade_lock: lock_id } = action;
@@ -166,8 +166,8 @@ module kraken::upgrade_policies {
 
     // step 4: destroy Upgrade and return the UpgradeTicket for upgrading
     public fun execute_policy(
-        multisig: &mut Multisig,
         action: Policy,
+        multisig: &mut Multisig,
         upgrade_lock: Receiving<UpgradeLock>,
     ) {
         let Policy { policy, upgrade_lock: lock_id } = action;

@@ -79,11 +79,11 @@ module kraken::transfers {
 
     // step 4: loop over it in PTB, sends last object from the Send action
     public fun send<T: key + store>(
-        multisig: &mut Multisig, 
         action: &mut Send, 
+        multisig: &mut Multisig, 
         received: Receiving<T>
     ) {
-        let object = owned::withdraw(multisig, &mut action.request_withdraw, received);
+        let object = action.request_withdraw.withdraw(multisig, received);
         transfer::public_transfer(object, action.recipients.pop_back());
     }
 
@@ -91,7 +91,7 @@ module kraken::transfers {
     public fun complete_send(action: Send) {
         let Send { request_withdraw, recipients } = action;
         assert!(recipients.is_empty(), ESendAllAssetsBefore);
-        owned::complete_withdraw(request_withdraw);
+        request_withdraw.complete_withdraw();
     }
 
     // step 1: propose to deliver object to a recipient that must claim it
@@ -127,12 +127,12 @@ module kraken::transfers {
 
     // step 5: loop over it in PTB, adds last object from the Deliver action
     public fun add_to_delivery<T: key + store>(
-        multisig: &mut Multisig,
         delivery: &mut Delivery, 
         action: &mut Deliver, 
+        multisig: &mut Multisig,
         received: Receiving<T>
     ) {
-        let object = owned::withdraw(multisig, &mut action.request_withdraw, received);
+        let object = action.request_withdraw.withdraw(multisig, received);
         let index = delivery.objects.length();
         delivery.objects.add(index, object);
     }
@@ -140,7 +140,7 @@ module kraken::transfers {
     // step 6: share the Delivery and destroy the action
     public fun deliver(delivery: Delivery, action: Deliver, ctx: &mut TxContext) {
         let Deliver { request_withdraw, recipient } = action;
-        owned::complete_withdraw(request_withdraw);
+        request_withdraw.complete_withdraw();
         
         transfer::transfer(
             DeliveryCap { id: object::new(ctx), delivery_id: object::id(&delivery) }, 
@@ -169,20 +169,24 @@ module kraken::transfers {
         transfer::public_transfer(object, multisig.addr());
     }
 
-    // step 8: destroy the action
-    public fun complete_delivery(action: Delivery, cap: DeliveryCap) {
+    // step 8: destroy the delivery
+    public fun complete_delivery(delivery: Delivery, cap: DeliveryCap) {
         let DeliveryCap { id, delivery_id: _ } = cap;
         id.delete();
-        let Delivery { id, objects } = action;
+        let Delivery { id, objects } = delivery;
         id.delete();
         assert!(objects.is_empty(), EDeliveryNotEmpty);
         objects.destroy_empty();
     }
 
-    // step 8 (bis): destroy the action (member only)
-    public fun cancel_delivery(multisig: &mut Multisig, action: Delivery, ctx: &mut TxContext) {
+    // step 8 (bis): destroy the delivery (member only)
+    public fun cancel_delivery(
+        multisig: &mut Multisig, 
+        delivery: Delivery, 
+        ctx: &mut TxContext
+    ) {
         multisig.assert_is_member(ctx);
-        let Delivery { id, objects } = action;
+        let Delivery { id, objects } = delivery;
         id.delete();
         assert!(objects.is_empty(), EDeliveryNotEmpty);
         objects.destroy_empty();
