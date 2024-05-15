@@ -1,0 +1,191 @@
+/// This module uses the owned apis to transfer assets owned by the multisig.
+/// Objects can also be delivered to a single address,
+/// meaning that the recipient must claim the objects or the Multisig can retrieve them.
+
+module kraken::transfers {
+    use std::debug::print;
+    use std::string::String;
+    use sui::transfer::Receiving;
+    use sui::bag::{Self, Bag};
+    use kraken::owned::{Self, Withdraw};
+    use kraken::multisig::Multisig;
+
+    // === Errors ===
+
+    const EDifferentLength: u64 = 1;
+    const ESendAllAssetsBefore: u64 = 2;
+    const EDeliveryNotEmpty: u64 = 3;
+    const EWrongDelivery: u64 = 4;
+
+    // === Structs ===
+
+    // action to be held in a Proposal
+    public struct Send has store {
+        // sub action - owned objects to access
+        request_withdraw: Withdraw,
+        // addresses to transfer to
+        recipients: vector<address>
+    }
+
+    // action to be held in a Proposal
+    // a safe send where recipient has to confirm reception
+    public struct Deliver has store {
+        // sub action - owned objects to access
+        request_withdraw: Withdraw,
+        // address to transfer to
+        recipient: address
+    }
+
+    // shared object holding the objects to be received
+    public struct Delivery has key {
+        id: UID,
+        objects: Bag,
+    }
+
+    // cap giving right to withdraw objects from the associated Delivery
+    public struct DeliveryCap has key { 
+        id: UID,
+        delivery_id: ID,
+    }
+
+    // === Multisig functions ===
+
+    // step 1: propose to send owned objects
+    public fun propose_send(
+        multisig: &mut Multisig, 
+        key: String,
+        execution_time: u64,
+        expiration_epoch: u64,
+        description: String,
+        objects: vector<ID>,
+        recipients: vector<address>,
+        ctx: &mut TxContext
+    ) {
+        assert!(recipients.length() == objects.length(), EDifferentLength);
+        let request_withdraw = owned::new_withdraw(objects);
+        let action = Send { request_withdraw, recipients };
+        multisig.create_proposal(
+            action,
+            key,
+            execution_time,
+            expiration_epoch,
+            description,
+            ctx
+        );
+    }
+
+    // step 2: multiple members have to approve the proposal (multisig::approve_proposal)
+    // step 3: execute the proposal and return the action (multisig::execute_proposal)
+
+    // step 4: loop over it in PTB, sends last object from the Send action
+    public fun send<T: key + store>(
+        multisig: &mut Multisig, 
+        action: &mut Send, 
+        received: Receiving<T>
+    ) {
+        let object = owned::withdraw(multisig, &mut action.request_withdraw, received);
+        transfer::public_transfer(object, action.recipients.pop_back());
+    }
+
+    // step 5: destroy the action
+    public fun complete_send(action: Send) {
+        let Send { request_withdraw, recipients } = action;
+        assert!(recipients.is_empty(), ESendAllAssetsBefore);
+        owned::complete_withdraw(request_withdraw);
+    }
+
+    // step 1: propose to deliver object to a recipient that must claim it
+    public fun propose_delivery(
+        multisig: &mut Multisig, 
+        key: String,
+        execution_time: u64,
+        expiration_epoch: u64,
+        description: String,
+        objects: vector<ID>,
+        recipient: address,
+        ctx: &mut TxContext
+    ) {
+        let request_withdraw = owned::new_withdraw(objects);
+        let action = Deliver { request_withdraw, recipient };
+        multisig.create_proposal(
+            action,
+            key,
+            execution_time,
+            expiration_epoch,
+            description,
+            ctx
+        );
+    }
+
+    // step 2: multiple members have to approve the proposal (multisig::approve_proposal)
+    // step 3: execute the proposal and return the action (multisig::execute_proposal)
+
+    // step 4: creates a new delivery object that can only be shared (no store)
+    public fun create_delivery(ctx: &mut TxContext): Delivery {
+        Delivery { id: object::new(ctx), objects: bag::new(ctx) }
+    }
+
+    // step 5: loop over it in PTB, adds last object from the Deliver action
+    public fun add_to_delivery<T: key + store>(
+        multisig: &mut Multisig,
+        delivery: &mut Delivery, 
+        action: &mut Deliver, 
+        received: Receiving<T>
+    ) {
+        let object = owned::withdraw(multisig, &mut action.request_withdraw, received);
+        let index = delivery.objects.length();
+        delivery.objects.add(index, object);
+    }
+
+    // step 6: share the Delivery and destroy the action
+    public fun deliver(delivery: Delivery, action: Deliver, ctx: &mut TxContext) {
+        let Deliver { request_withdraw, recipient } = action;
+        owned::complete_withdraw(request_withdraw);
+        
+        transfer::transfer(
+            DeliveryCap { id: object::new(ctx), delivery_id: object::id(&delivery) }, 
+            recipient
+        );
+        transfer::share_object(delivery);
+    }
+
+    // step 7: loop over it in PTB, receiver claim objects
+    public fun claim<T: key + store>(delivery: &mut Delivery, cap: &DeliveryCap): T {
+        assert!(cap.delivery_id == object::id(delivery), EWrongDelivery);
+        let index = delivery.objects.length() - 1;
+        let object = delivery.objects.remove(index);
+        object
+    }
+
+    // step 7 (bis): loop over it in PTB, multisig retrieve objects (member only)
+    public fun retrieve<T: key + store>(
+        delivery: &mut Delivery, 
+        multisig: &Multisig,
+        ctx: &mut TxContext
+    ) {
+        multisig.assert_is_member(ctx);
+        let index = delivery.objects.length() - 1;
+        let object: T = delivery.objects.remove(index);
+        transfer::public_transfer(object, multisig.addr());
+    }
+
+    // step 8: destroy the action
+    public fun complete_delivery(action: Delivery, cap: DeliveryCap) {
+        let DeliveryCap { id, delivery_id: _ } = cap;
+        id.delete();
+        let Delivery { id, objects } = action;
+        id.delete();
+        assert!(objects.is_empty(), EDeliveryNotEmpty);
+        objects.destroy_empty();
+    }
+
+    // step 8 (bis): destroy the action (member only)
+    public fun cancel_delivery(multisig: &mut Multisig, action: Delivery, ctx: &mut TxContext) {
+        multisig.assert_is_member(ctx);
+        let Delivery { id, objects } = action;
+        id.delete();
+        assert!(objects.is_empty(), EDeliveryNotEmpty);
+        objects.destroy_empty();
+    }
+}
+

@@ -35,11 +35,11 @@ The project consists of several modules, each handling different aspects of the 
 
 5. **Coin Operations**: Handles the merging and splitting of coins in the multisig. Can be used to prepare a Proposal with coins with the exact amount needed.
 
-6. **Transfer**: Allows the transfer of assets owned in the multisig treasury.
+6. **Transfers**: Allows the transfer of assets owned in the multisig treasury. Objects can also be delivered, meaning the recipient has to claim the objects otherwise the Multisig can retrieve them.
 
 7. **Move Call**: Facilitates the enforcement of calling the appropriate functions. The action can also include to borrow or withdraw objects (such as a Cap).
 
-8. **Upgrade**: Secure UpgradeCaps by locking them into the Multisig and defining an optional time-lock policy.
+8. **Upgrade Policies**: Secure UpgradeCaps by locking them into the Multisig and defining an optional time-lock policy.
 
 ## Flow
 The multisig module define a common interface for all actions which are attached to a Proposal type stored in a VecMap. The keys are supposed to be human-readable identifiers to display on the frontends.
