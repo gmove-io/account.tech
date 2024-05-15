@@ -22,7 +22,7 @@ module kraken::transfers {
     // action to be held in a Proposal
     public struct Send has store {
         // sub action - owned objects to access
-        request_withdraw: Withdraw,
+        withdraw: Withdraw,
         // addresses to transfer to
         recipients: vector<address>
     }
@@ -31,7 +31,7 @@ module kraken::transfers {
     // a safe send where recipient has to confirm reception
     public struct Deliver has store {
         // sub action - owned objects to access
-        request_withdraw: Withdraw,
+        withdraw: Withdraw,
         // address to transfer to
         recipient: address
     }
@@ -62,8 +62,8 @@ module kraken::transfers {
         ctx: &mut TxContext
     ) {
         assert!(recipients.length() == objects.length(), EDifferentLength);
-        let request_withdraw = owned::new_withdraw(objects);
-        let action = Send { request_withdraw, recipients };
+        let withdraw = owned::new_withdraw(objects);
+        let action = Send { withdraw, recipients };
         multisig.create_proposal(
             action,
             key,
@@ -83,15 +83,15 @@ module kraken::transfers {
         multisig: &mut Multisig, 
         received: Receiving<T>
     ) {
-        let object = action.request_withdraw.withdraw(multisig, received);
+        let object = action.withdraw.withdraw(multisig, received);
         transfer::public_transfer(object, action.recipients.pop_back());
     }
 
     // step 5: destroy the action
     public fun complete_send(action: Send) {
-        let Send { request_withdraw, recipients } = action;
+        let Send { withdraw, recipients } = action;
         assert!(recipients.is_empty(), ESendAllAssetsBefore);
-        request_withdraw.complete_withdraw();
+        withdraw.complete_withdraw();
     }
 
     // step 1: propose to deliver object to a recipient that must claim it
@@ -105,8 +105,8 @@ module kraken::transfers {
         recipient: address,
         ctx: &mut TxContext
     ) {
-        let request_withdraw = owned::new_withdraw(objects);
-        let action = Deliver { request_withdraw, recipient };
+        let withdraw = owned::new_withdraw(objects);
+        let action = Deliver { withdraw, recipient };
         multisig.create_proposal(
             action,
             key,
@@ -132,15 +132,15 @@ module kraken::transfers {
         multisig: &mut Multisig,
         received: Receiving<T>
     ) {
-        let object = action.request_withdraw.withdraw(multisig, received);
+        let object = action.withdraw.withdraw(multisig, received);
         let index = delivery.objects.length();
         delivery.objects.add(index, object);
     }
 
     // step 6: share the Delivery and destroy the action
     public fun deliver(delivery: Delivery, action: Deliver, ctx: &mut TxContext) {
-        let Deliver { request_withdraw, recipient } = action;
-        request_withdraw.complete_withdraw();
+        let Deliver { withdraw, recipient } = action;
+        withdraw.complete_withdraw();
         
         transfer::transfer(
             DeliveryCap { id: object::new(ctx), delivery_id: object::id(&delivery) }, 

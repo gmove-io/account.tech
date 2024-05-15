@@ -28,7 +28,7 @@ module kraken::owned {
     // wrapper enforcing accessed objects to be sent back to the multisig
     public struct Borrow has store {
         // sub action retrieving objects
-        request_withdraw: Withdraw,
+        withdraw: Withdraw,
         // list of objects to put back into the multisig
         to_return: vector<ID>,
     }
@@ -65,7 +65,7 @@ module kraken::owned {
         multisig: &mut Multisig, 
         receiving: Receiving<T>
     ): T {
-        action.request_withdraw.withdraw(multisig, receiving)
+        action.withdraw.withdraw(multisig, receiving)
     }
     
     // step 5: return the object to the multisig to empty `to_return` vector
@@ -82,8 +82,8 @@ module kraken::owned {
 
     // step 6: destroy the action once all objects are retrieved/received
     public fun complete_borrow(action: Borrow) {
-        let Borrow { request_withdraw, to_return } = action;
-        complete_withdraw(request_withdraw);
+        let Borrow { withdraw, to_return } = action;
+        complete_withdraw(withdraw);
         assert!(to_return.is_empty(), EReturnAllObjectsBefore);
         to_return.destroy_empty();
     }
@@ -116,7 +116,7 @@ module kraken::owned {
 
     public(package) fun new_borrow(objects: vector<ID>): Borrow {
         Borrow {
-            request_withdraw: new_withdraw(objects),
+            withdraw: new_withdraw(objects),
             to_return: objects,
         }
     }

@@ -21,7 +21,7 @@ module kraken::payments {
     // action to be held in a Proposal
     public struct Pay has store {
         // sub action - coin to access (with the right amount)
-        request_withdraw: Withdraw,
+        withdraw: Withdraw,
         // amount to pay at each due date
         amount: u64,
         // number of epochs between each payment
@@ -60,8 +60,8 @@ module kraken::payments {
         recipient: address,
         ctx: &mut TxContext
     ) {
-        let request_withdraw = owned::new_withdraw(vector[coin]);
-        let action = Pay { request_withdraw, amount, interval, recipient };
+        let withdraw = owned::new_withdraw(vector[coin]);
+        let action = Pay { withdraw, amount, interval, recipient };
         multisig.create_proposal(
             action,
             key,
@@ -82,9 +82,9 @@ module kraken::payments {
         received: Receiving<Coin<C>>,
         ctx: &mut TxContext
     ) {
-        let Pay { mut request_withdraw, amount, interval, recipient } = action;
-        let coin = request_withdraw.withdraw(multisig, received);
-        request_withdraw.complete_withdraw();
+        let Pay { mut withdraw, amount, interval, recipient } = action;
+        let coin = withdraw.withdraw(multisig, received);
+        withdraw.complete_withdraw();
 
         let stream = Stream<C> { 
             id: object::new(ctx), 
