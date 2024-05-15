@@ -17,7 +17,7 @@ module kraken::config {
     // === Structs ===
 
     // action to be stored in a Proposal
-    public struct Configure has store { 
+    public struct Modify has store { 
         // new name if any
         name: Option<String>,
         // new threshold, has to be <= to new total addresses
@@ -31,7 +31,7 @@ module kraken::config {
     // === Multisig-only functions ===
 
     // step 1: propose to modify multisig params
-    public fun propose(
+    public fun propose_modify(
         multisig: &mut Multisig, 
         key: String,
         execution_time: u64,
@@ -66,7 +66,7 @@ module kraken::config {
         let new_len = multisig.members().length() + to_add.length() - to_remove.length();
         assert!(new_len >= new_threshold, EThresholdTooHigh);
 
-        let action = Configure { name, threshold, to_add, to_remove };
+        let action = Modify { name, threshold, to_add, to_remove };
         multisig.create_proposal(
             action,
             key,
@@ -87,7 +87,7 @@ module kraken::config {
         ctx: &mut TxContext
     ) {
         let action = multisig.execute_proposal(name, clock, ctx);
-        let Configure { mut name, mut threshold, to_add, to_remove } = action;
+        let Modify { mut name, mut threshold, to_add, to_remove } = action;
 
         if (name.is_some()) multisig.set_name(name.extract());
         if (threshold.is_some()) multisig.set_threshold(threshold.extract());

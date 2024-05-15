@@ -6,7 +6,7 @@ module kraken::manage_tests{
     use sui::test_scenario::{Self as ts, Scenario};
 
     use kraken::multisig::{Self, Multisig};
-    use kraken::config::{Self, Configure};
+    use kraken::config::{Self, Modify};
 
     const OWNER: address = @0xBABE;
     const ALICE: address = @0xA11CE;
@@ -51,7 +51,7 @@ module kraken::manage_tests{
         to_remove: vector<address>,
     ) {
         let users = vector[OWNER, ALICE, BOB];
-        config::propose(
+        config::propose_modify(
             &mut world.multisig,
             string::utf8(key),
             0,
