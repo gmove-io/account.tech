@@ -12,6 +12,15 @@ This package aims to provide a versatile implementation of a multisig mechanism 
 
 This project will eventually include both an SDK and a CLI to streamline operations. Frontends such as a webapp, extension and mobile app should eventually be developped.
 
+## Features
+
+- **Configuration**: Set up the Multisig's name, members, threshold, proposal expiration and scheduled execution.
+- **Access Control**: Securely manage access to functions in your package via a Cap owned by the Multisig.
+- **Asset Management**: Manage and send your coins or any other object types just like with classic accounts. Easily hide spam objects owned by a Multisig.
+- **Custom Proposals**: Define any actions in your module and easily manage them via the Multisig. Check out the [examples](TODO:).
+- **Package Upgrades**: Lock your UpgradeCaps in your Multisig to enforce agreement on the code to be published. Optionally follow a time-lock built-in policy to protect your users. Helpers will be provided to display upcoming upgrades on your dapp
+- **Interact with dApps**: Easily interact with dApps on Sui that are integrated to the Multisig. Stake, Swap, Lend your assets, and more. (TODO)
+
 ## Modules
 
 The project consists of several modules, each handling different aspects of the multisig functionality:
@@ -32,15 +41,14 @@ The project consists of several modules, each handling different aspects of the 
 
 8. **Upgrade**: Secure UpgradeCaps by locking them into the Multisig and defining an optional time-lock policy.
 
+## Flow
+The multisig module define a common interface for all actions which are attached to a Proposal type stored in a VecMap. The keys are supposed to be human-readable identifiers to display on the frontends.
 
-## Features
+Modules may define none or multiple actions, which are structs with store ability meant to be attached to a Proposal. For each of these actions, a `propose_` function using `multisig::create_proposal` is provided to add a Proposal for this action to the Multisig.
 
-- **Configuration**: Set up the Multisig's name, members, threshold, proposal expiration and scheduled execution.
-- **Access Control**: Securely manage access to functions in your package via a Cap owned by the Multisig.
-- **Asset Management**: Manage and send your coins or any other object types just like with classic accounts. Easily hide spam objects owned by a Multisig.
-- **Custom Proposals**: Define any actions in your module and easily manage them via the Multisig. Check out the [examples](TODO:).
-- **Package Upgrades**: Lock your UpgradeCaps in your Multisig to enforce agreement on the code to be published. Optionally follow a time-lock built-in policy to protect your users. Helpers will be provided to display upcoming upgrades on your dapp
-- **Interact with dApps**: Easily interact with dApps on Sui that are integrated to the Multisig. Stake, Swap, Lend your assets, and more. (TODO)
+When a Proposal is added to the Multisig, at least `threshold` members have to `multisig::approve_proposal` before it can be executed. Once a Proposal is executed, the action is returned to be used in the module defining it. Optionally, members can `multisig::remove_approval`.
+
+Actions are executed by an "action-named" function, sometimes several times and must be destroy via a `complete_` function if it hasn't been consumed during execution.
 
 ## Contributing
 

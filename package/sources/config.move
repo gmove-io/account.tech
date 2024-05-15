@@ -80,7 +80,7 @@ module kraken::config {
     // step 2: multiple members have to approve the proposal (multisig::approve_proposal)
     
     // step 3: execute the action and modify Multisig object
-    public fun execute(
+    public fun modify(
         multisig: &mut Multisig, 
         name: String, 
         clock: &Clock,

@@ -73,7 +73,7 @@ module kraken::manage_tests{
             approvals = approvals - 1;
             world.scenario.next_tx(users[approvals]);
         };
-        config::execute(
+        config::modify(
             &mut world.multisig,
             string::utf8(key),
             &world.clock,
