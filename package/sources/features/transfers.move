@@ -138,6 +138,7 @@ module kraken::transfers {
     }
 
     // step 6: share the Delivery and destroy the action
+    #[allow(lint(share_owned))] // cannot be owned
     public fun deliver(delivery: Delivery, action: Deliver, ctx: &mut TxContext) {
         let Deliver { withdraw, recipient } = action;
         withdraw.complete_withdraw();

@@ -16,7 +16,7 @@ This project will eventually include both an SDK and a CLI to streamline operati
 
 - **Configuration**: Set up the Multisig's name, members, threshold, proposal expiration and scheduled execution.
 - **Access Control**: Securely manage access to functions in your package via a Cap owned by the Multisig.
-- **Asset Management**: Manage and send your coins or any other object types just like with classic accounts. Easily hide spam objects owned by a Multisig.
+- **Asset Management**: Manage and send your coins or any other object types just like with classic accounts. Transfer and de/list NFTs from/to the Multisig's Kiosk. Easily hide spam objects owned by a Multisig.
 - **Pay People**: Create a payment stream to send an amount of coin to an address at regular frequency.
 - **Custom Proposals**: Define any actions in your module and easily manage them via the Multisig. Check out the [examples](TODO:).
 - **Package Upgrades**: Lock your UpgradeCaps in your Multisig to enforce agreement on the code to be published. Optionally follow a time-lock built-in policy to protect your users. Helpers will be provided to display upcoming upgrades on your dapp
@@ -40,9 +40,11 @@ The project consists of several modules, each handling different aspects of the 
 
 7. **Payments**: Handles the creation of a payment stream for a coin. The payment is done by sending an amount of the coin to the recipient at a regular interval until the balance is empty. It can be cancelled by the multisig member.
 
-7. **Move Call**: Facilitates the enforcement of calling the appropriate functions. The action can also include to borrow or withdraw objects (such as a Cap).
+8. **Kiosk**: Handles the creation of a Kiosk, which is a container for NFTs owned by the Multisig. The Kiosk module can be used to move NFTs between the Multisig and other Kiosks. NFTs can listed and delisted from the Kiosk and profits can be withdrawn.
 
-8. **Upgrade Policies**: Secure UpgradeCaps by locking them into the Multisig and defining an optional time-lock policy.
+9. **Move Call**: Facilitates the enforcement of calling the appropriate functions. The action can also include to borrow or withdraw objects (such as a Cap).
+
+10. **Upgrade Policies**: Secure UpgradeCaps by locking them into the Multisig and defining an optional time-lock policy.
 
 ## Flow
 The multisig module define a common interface for all actions which are attached to a Proposal type stored in a VecMap. The keys are supposed to be human-readable identifiers to display on the frontends.
