@@ -11,9 +11,13 @@ module kraken::kiosk {
     use kraken::multisig::Multisig;
     use kraken::owned::{Self, Borrow};
 
+    // === Errors ===
+
     const EWrongReceiver: u64 = 1;
     const ETransferAllNftsBefore: u64 = 2;
     const EWrongNftsPrices: u64 = 3;
+
+    // === Structs ===
 
     // action to be held in a proposal
     public struct Transfer has store {
@@ -34,6 +38,8 @@ module kraken::kiosk {
         // sui amount
         prices: vector<u64>, 
     }
+
+    // === Member only functions ===
 
     // should be called when user wants to activate the "NFT" option
     // because it's not composable for security
@@ -87,6 +93,8 @@ module kraken::kiosk {
     ) {
         policy.confirm_request(request);
     }
+
+    // === Multisig only functions ===
 
     // step 1: propose to transfer nfts to another kiosk
     public fun propose_transfer_to(

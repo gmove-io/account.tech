@@ -10,7 +10,11 @@ module kraken::account {
     use sui::transfer::Receiving;
     use kraken::multisig::Multisig;
 
+    // === Errors ===
+
     const ENotMember: u64 = 0;
+
+    // === Struct ===
 
     // non-transferable user account for tracking multisigs
     public struct Account has key {
@@ -27,6 +31,8 @@ module kraken::account {
         id: UID, 
         multisig: ID,
     }
+
+    // === Public mutative functions ===
 
     // creates and send a soulbound Account to the sender (1 per user)
     public fun new(username: String, profile_picture: String, ctx: &mut TxContext) {
@@ -55,6 +61,8 @@ module kraken::account {
         let Account { id, username: _, profile_picture: _, multisigs: _ } = account;
         id.delete();
     }
+
+    // === Member only functions ===
 
     // invites can be sent by a multisig member (upon multisig creation for instance)
     public fun send_invite(multisig: &mut Multisig, account: address, ctx: &mut TxContext) {
