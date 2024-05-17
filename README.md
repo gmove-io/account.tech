@@ -14,7 +14,7 @@ This project will eventually include both an SDK and a CLI to streamline operati
 
 ## Features
 
-- **Configuration**: Set up the Multisig's name, members, threshold, proposal expiration and scheduled execution.
+- **Configuration**: Set up the Multisig's name, members, threshold, proposal expiration and scheduled execution. Send on-chain invites to newly added members.
 - **Access Control**: Securely manage access to functions in your package via a Cap owned by the Multisig.
 - **Asset Management**: Manage and send your coins or any other object types just like with classic accounts. Transfer and de/list NFTs from/to the Multisig's Kiosk. Easily hide spam objects owned by a Multisig.
 - **Pay People**: Create a payment stream to send an amount of coin to an address at regular frequency.
@@ -28,7 +28,7 @@ The project consists of several modules, each handling different aspects of the 
 
 1. **Multisig**: Core module managing the multisig and proposals. It handles the creation of multisig wallets, adding and removing members, and managing proposals for executing actions.
 
-2. **Account**: Handles the creation of a non-transferable account for each user to track their Multisigs.
+2. **Account**: Handles the creation of a non-transferable account for each user to track their Multisigs. Allows members to send on-chain invites to new members.
 
 3. **Config**: Enables the modification of multisig settings such as member addition or removal, threshold changes and name update.
 

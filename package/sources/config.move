@@ -46,12 +46,12 @@ module kraken::config {
         // verify proposed addresses match current list
         let mut i = 0;
         while (i < to_add.length()) {
-            assert!(!multisig.member_exists(&to_add[i]), EAlreadyMember);
+            assert!(!multisig.members().contains(&to_add[i]), EAlreadyMember);
             i = i + 1;
         };
         let mut j = 0;
         while (j < to_remove.length()) {
-            assert!(multisig.member_exists(&to_remove[j]), ENotMember);
+            assert!(multisig.members().contains(&to_remove[j]), ENotMember);
             j = j + 1;
         };
 

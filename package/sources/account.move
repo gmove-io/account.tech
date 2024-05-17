@@ -1,9 +1,16 @@
 /// Users have a non-transferable Account used to track Multisigs in which they are a member.
 /// They can also set a username and profile picture to be displayed on the frontends.
+/// Multisig members can send on-chain invites to new members.
+/// Invited users can accept or refuse the invite, to add the multisig id to their account or not.
+/// This avoid the need for an indexer as all data can be easily found on-chain.
 
 module kraken::account {
     use std::string::String;
     use sui::vec_set::{Self, VecSet};
+    use sui::transfer::Receiving;
+    use kraken::multisig::Multisig;
+
+    const ENotMember: u64 = 0;
 
     // non-transferable user account for tracking multisigs
     public struct Account has key {
@@ -14,6 +21,11 @@ module kraken::account {
         profile_picture: String,
         // multisigs that the user has joined
         multisigs: VecSet<ID>,
+    }
+
+    public struct Invite has key { 
+        id: UID, 
+        multisig: ID,
     }
 
     // creates and send a soulbound Account to the sender (1 per user)
@@ -41,6 +53,34 @@ module kraken::account {
 
     public fun destroy(account: Account) {
         let Account { id, username: _, profile_picture: _, multisigs: _ } = account;
+        id.delete();
+    }
+
+    // invites can be sent by a multisig member (upon multisig creation for instance)
+    public fun send_invite(multisig: &mut Multisig, account: address, ctx: &mut TxContext) {
+        // user inviting must be member
+        multisig.assert_is_member(ctx);
+        // invited user must be member
+        assert!(multisig.members().contains(&ctx.sender()), ENotMember);
+        let invite = Invite { 
+            id: object::new(ctx), 
+            multisig: multisig.uid_mut().uid_to_inner() 
+        };
+        transfer::transfer(invite, account);
+    }
+
+    // invited user can register the multisig in his account
+    public fun accept_invite(account: &mut Account, invite: Receiving<Invite>) {
+        let received = transfer::receive(&mut account.id, invite);
+        let Invite { id, multisig } = received;
+        id.delete();
+        account.multisigs.insert(multisig);
+    }
+
+    // delete the invite object
+    public fun refuse_invite(account: &mut Account, invite: Receiving<Invite>) {
+        let received = transfer::receive(&mut account.id, invite);
+        let Invite { id, multisig: _ } = received;
         id.delete();
     }
 }

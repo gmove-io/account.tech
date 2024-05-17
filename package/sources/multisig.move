@@ -236,10 +236,6 @@ module kraken::multisig {
         multisig.members.into_keys()
     }
 
-    public(package) fun member_exists(multisig: &Multisig, address: &address): bool {
-        multisig.members.contains(address)
-    }
-
     public(package) fun assert_is_member(multisig: &Multisig, ctx: &TxContext) {
         assert!(multisig.members.contains(&ctx.sender()), ECallerIsNotMember);
     }
