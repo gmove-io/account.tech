@@ -8,7 +8,7 @@ module kraken::transfers {
     use sui::transfer::Receiving;
     use sui::bag::{Self, Bag};
     use kraken::owned::{Self, Withdraw};
-    use kraken::multisig::Multisig;
+    use kraken::multisig::{Multisig, Guard};
 
     // === Errors ===
 
@@ -79,17 +79,17 @@ module kraken::transfers {
 
     // step 4: loop over it in PTB, sends last object from the Send action
     public fun send<T: key + store>(
-        action: &mut Send, 
+        guard: &mut Guard<Send>, 
         multisig: &mut Multisig, 
         received: Receiving<T>
     ) {
-        let object = action.withdraw.withdraw(multisig, received);
-        transfer::public_transfer(object, action.recipients.pop_back());
+        let object = guard.action_mut().withdraw.withdraw(multisig, received);
+        transfer::public_transfer(object, guard.action_mut().recipients.pop_back());
     }
 
     // step 5: destroy the action
-    public fun complete_send(action: Send) {
-        let Send { withdraw, recipients } = action;
+    public fun complete_send(guard: Guard<Send>) {
+        let Send { withdraw, recipients } = guard.unpack_action();
         assert!(recipients.is_empty(), ESendAllAssetsBefore);
         withdraw.complete_withdraw();
     }
@@ -128,19 +128,19 @@ module kraken::transfers {
     // step 5: loop over it in PTB, adds last object from the Deliver action
     public fun add_to_delivery<T: key + store>(
         delivery: &mut Delivery, 
-        action: &mut Deliver, 
+        guard: &mut Guard<Deliver>, 
         multisig: &mut Multisig,
         received: Receiving<T>
     ) {
-        let object = action.withdraw.withdraw(multisig, received);
+        let object = guard.action_mut().withdraw.withdraw(multisig, received);
         let index = delivery.objects.length();
         delivery.objects.add(index, object);
     }
 
     // step 6: share the Delivery and destroy the action
     #[allow(lint(share_owned))] // cannot be owned
-    public fun deliver(delivery: Delivery, action: Deliver, ctx: &mut TxContext) {
-        let Deliver { withdraw, recipient } = action;
+    public fun deliver(delivery: Delivery, guard: Guard<Deliver>, ctx: &mut TxContext) {
+        let Deliver { withdraw, recipient } = guard.unpack_action();
         withdraw.complete_withdraw();
         
         transfer::transfer(

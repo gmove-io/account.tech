@@ -7,7 +7,7 @@
 module kraken::owned {
     use std::string::String;
     use sui::transfer::Receiving;
-    use kraken::multisig::Multisig;
+    use kraken::multisig::{Multisig, Guard};
 
     // === Errors ===
 
@@ -33,64 +33,8 @@ module kraken::owned {
         to_return: vector<ID>,
     }
 
-    // === Multisig functions ===
-
-    // step 1: propose to Withdraw owned objects
-    public fun propose_borrow(
-        multisig: &mut Multisig, 
-        key: String,
-        execution_time: u64,
-        expiration_epoch: u64,
-        description: String,
-        objects: vector<ID>,
-        ctx: &mut TxContext
-    ) {
-        let action = new_borrow(objects);
-        multisig.create_proposal(
-            action,
-            key,
-            execution_time,
-            expiration_epoch,
-            description,
-            ctx
-        );
-    }
-
-    // step 2: multiple members have to approve the proposal (multisig::approve_proposal)
-    // step 3: execute the proposal and return the action (multisig::execute_proposal)
-
-    // step 4: receive and borrow the owned object using Owned    
-    public fun borrow<T: key + store>(
-        action: &mut Borrow,
-        multisig: &mut Multisig, 
-        receiving: Receiving<T>
-    ): T {
-        action.withdraw.withdraw(multisig, receiving)
-    }
-    
-    // step 5: return the object to the multisig to empty `to_return` vector
-    public fun put_back<T: key + store>(
-        action: &mut Borrow,
-        multisig: &mut Multisig, 
-        returned: T, 
-    ) {
-        let (exists_, index) = action.to_return.index_of(&object::id(&returned));
-        assert!(exists_, EWrongObject);
-        action.to_return.remove(index);
-        transfer::public_transfer(returned, multisig.addr());
-    }
-
-    // step 6: destroy the action once all objects are retrieved/received
-    public fun complete_borrow(action: Borrow) {
-        let Borrow { withdraw, to_return } = action;
-        complete_withdraw(withdraw);
-        assert!(to_return.is_empty(), EReturnAllObjectsBefore);
-        to_return.destroy_empty();
-    }
-
     // === Package functions ===
 
-    // Withdraw can be wrapped into another action
     public(package) fun new_withdraw(objects: vector<ID>): Withdraw {
         Withdraw { objects }
     }
@@ -119,6 +63,35 @@ module kraken::owned {
             withdraw: new_withdraw(objects),
             to_return: objects,
         }
+    }
+
+    public(package) fun borrow<T: key + store>(
+        action: &mut Borrow,
+        multisig: &mut Multisig, 
+        receiving: Receiving<T>
+    ): T {
+        action.withdraw.withdraw(multisig, receiving)
+    }
+    
+    // step 5: return the object to the multisig to empty `to_return` vector
+    public(package) fun put_back<T: key + store>(
+        action: &mut Borrow,
+        multisig: &mut Multisig, 
+        returned: T, 
+    ) {
+        let (exists_, index) =
+            action.to_return.index_of(&object::id(&returned));
+        assert!(exists_, EWrongObject);
+        action.to_return.remove(index);
+        transfer::public_transfer(returned, multisig.addr());
+    }
+
+    // step 6: destroy the action once all objects are retrieved/received
+    public(package) fun complete_borrow(action: Borrow) {
+        let Borrow { withdraw, to_return } = action;
+        complete_withdraw(withdraw);
+        assert!(to_return.is_empty(), EReturnAllObjectsBefore);
+        to_return.destroy_empty();
     }
 }
 

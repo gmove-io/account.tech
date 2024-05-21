@@ -86,8 +86,8 @@ module kraken::config {
         clock: &Clock,
         ctx: &mut TxContext
     ) {
-        let action = multisig.execute_proposal(name, clock, ctx);
-        let Modify { mut name, mut threshold, to_add, to_remove } = action;
+        let guard = multisig.execute_proposal(name, clock, ctx);
+        let Modify { mut name, mut threshold, to_add, to_remove } = guard.unpack_action();
 
         if (name.is_some()) multisig.set_name(name.extract());
         if (threshold.is_some()) multisig.set_threshold(threshold.extract());
