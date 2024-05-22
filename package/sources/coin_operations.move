@@ -51,7 +51,7 @@ module kraken::coin_operations {
         let mut coin = transfer::public_receive(multisig.uid_mut(), to_split);
         let mut ids = vector::empty();
 
-        // merge all coins
+        // split all coins
         while (!amounts.is_empty()) {
             let split = coin.split(amounts.pop_back(), ctx);
             ids.push_back(object::id(&split));

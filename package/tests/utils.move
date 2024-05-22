@@ -2,12 +2,15 @@
 module kraken::test_utils {
     use std::string::{Self, String};
 
+    use sui::coin::Coin;
     use sui::test_utils::destroy;
+    use sui::transfer::Receiving;
     use sui::clock::{Self, Clock};
     use sui::test_scenario::{Self as ts, Scenario};
     
     use kraken::owned;
     use kraken::config;
+    use kraken::coin_operations;
     use kraken::multisig::{Self, Multisig}; 
 
     const OWNER: address = @0xBABE;
@@ -128,6 +131,22 @@ module kraken::test_utils {
         name: String, 
     ) {
         config::execute_modify(&mut world.multisig, name, &world.clock, world.scenario.ctx());
+    }
+
+    public fun merge_coins<T: drop>(
+        world: &mut World, 
+        to_keep: Receiving<Coin<T>>,
+        to_merge: vector<Receiving<Coin<T>>>, 
+    ) {
+        coin_operations::merge_coins(&mut world.multisig, to_keep, to_merge, world.scenario.ctx());
+    }
+
+    public fun split_coins<T: drop>(
+        world: &mut World,  
+        to_split: Receiving<Coin<T>>,
+        amounts: vector<u64>, 
+    ): vector<ID> {
+        coin_operations::split_coins(&mut world.multisig, to_split, amounts, world.scenario.ctx())
     }
 
     public fun end(world: World) {
