@@ -5,8 +5,9 @@ module kraken::test_utils {
     use sui::test_utils::destroy;
     use sui::clock::{Self, Clock};
     use sui::test_scenario::{Self as ts, Scenario};
-
-    use kraken::multisig::{Self, Multisig};
+    
+    use kraken::owned;
+    use kraken::multisig::{Self, Multisig}; 
 
     const OWNER: address = @0xBABE;
 
@@ -83,6 +84,17 @@ module kraken::test_utils {
         key: String, 
     ): T {
         world.multisig.execute_proposal<T>(key, &world.clock, world.scenario.ctx())
+    }
+
+    public fun propose_borrow(
+        world: &mut World, 
+        key: String,
+        execution_time: u64,
+        expiration_epoch: u64,
+        description: String,
+        objects: vector<ID>,
+    ) {
+        owned::propose_borrow(&mut world.multisig, key, execution_time, expiration_epoch, description, objects, world.scenario.ctx());
     }
 
     public fun end(world: World) {
