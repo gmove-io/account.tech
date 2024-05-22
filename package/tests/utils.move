@@ -10,6 +10,7 @@ module kraken::test_utils {
     
     use kraken::owned;
     use kraken::config;
+    use kraken::account;
     use kraken::coin_operations;
     use kraken::multisig::{Self, Multisig}; 
 
@@ -147,6 +148,10 @@ module kraken::test_utils {
         amounts: vector<u64>, 
     ): vector<ID> {
         coin_operations::split_coins(&mut world.multisig, to_split, amounts, world.scenario.ctx())
+    }
+
+    public fun send_invite(world: &mut World, account: address): ID {
+        account::send_invite(&mut world.multisig, account, world.scenario.ctx())
     }
 
     public fun end(world: World) {
