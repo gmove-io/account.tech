@@ -2,8 +2,8 @@
 /// The action can be to add or remove members, and to change the threshold.
 
 module kraken::config {
-    use std::debug::print;
     use std::string::String;
+    
     use sui::clock::Clock;
     use kraken::multisig::Multisig;
 

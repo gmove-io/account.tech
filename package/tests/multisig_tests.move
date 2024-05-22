@@ -3,7 +3,8 @@ module kraken::multisig_tests {
     use std::string;
 
     use sui::test_utils::assert_eq;
-
+    
+    use kraken::multisig;
     use kraken::test_utils::start_world;
 
     public struct Action has store { value: u64 }
@@ -11,6 +12,7 @@ module kraken::multisig_tests {
     const OWNER: address = @0xBABE;
     const ALICE: address = @0xa11e7;
     const BOB: address = @0x10;
+    const HACKER: address = @0x7ac1e7;
 
     #[test]
     fun test_new() {
@@ -217,4 +219,126 @@ module kraken::multisig_tests {
 
         world.end();
     }    
+
+    #[test]
+    #[expected_failure(abort_code = multisig::ECallerIsNotMember)]
+    fun test_create_proposal_error_caller_is_not_member() {
+        let mut world = start_world();
+
+        world.scenario().next_tx(HACKER);
+
+        world.create_proposal(Action { value: 1 }, string::utf8(b"1"), 100, 2, string::utf8(b"test-1"));
+
+        world.end();        
+    }
+
+    #[test]
+    #[expected_failure(abort_code = multisig::ECallerIsNotMember)]
+    fun test_delete_proposal_error_caller_is_not_member() {
+        let mut world = start_world();
+
+        world.scenario().next_tx(HACKER);
+
+        world.delete_proposal(string::utf8(b"1"));
+
+        world.end();        
+    } 
+
+    #[test]
+    #[expected_failure(abort_code = multisig::EProposalNotEmpty)]
+    fun test_delete_proposal_error_proposal_not_empty() {
+        let mut world = start_world();
+
+        world.create_proposal(Action { value: 1 }, string::utf8(b"1"), 100, 2, string::utf8(b"test-1"));
+
+        world.approve_proposal(string::utf8(b"1"));
+
+        world.delete_proposal(string::utf8(b"1"));
+
+        world.end();        
+    }           
+
+    #[test]
+    #[expected_failure(abort_code = multisig::ECallerIsNotMember)]
+    fun test_approve_proposal_error_caller_is_not_member() {
+        let mut world = start_world();
+
+        world.create_proposal(Action { value: 1 }, string::utf8(b"1"), 100, 2, string::utf8(b"test-1"));
+
+        world.scenario().next_tx(HACKER);
+
+        world.approve_proposal(string::utf8(b"1"));
+
+        world.end();     
+    } 
+
+    #[test]
+    #[expected_failure(abort_code = multisig::ECallerIsNotMember)]
+    fun test_remove_approval_error_caller_is_not_member() {
+        let mut world = start_world();
+
+        world.scenario().next_tx(HACKER);
+
+        world.remove_approval(string::utf8(b"1"));
+
+        world.end();     
+    } 
+
+    #[test]
+    #[expected_failure(abort_code = multisig::ECallerIsNotMember)]
+    fun test_execute_proposal_error_caller_is_not_member() {
+        let mut world = start_world();
+
+        world.scenario().next_tx(HACKER);
+
+        let Action { value: _ } = world.execute_proposal(string::utf8(b"1"));
+
+        world.end();     
+    }     
+
+    #[test]
+    #[expected_failure(abort_code = multisig::EThresholdNotReached)]
+    fun test_execute_proposal_error_thresolh_not_reached() {
+        let mut world = start_world();
+
+        world.multisig().add_members(vector[ALICE, BOB]);
+
+        world.create_proposal(Action { value: 1 }, string::utf8(b"1"), 100, 2, string::utf8(b"test-1"));
+        world.multisig().set_threshold(3);
+        assert_eq(world.multisig().num_of_proposals(), 1);
+
+        world.approve_proposal(string::utf8(b"1"));
+        world.scenario().next_tx(ALICE);
+
+        world.approve_proposal(string::utf8(b"1"));
+
+        world.clock().set_for_testing(101);
+
+        let Action { value: _ } = world.execute_proposal(string::utf8(b"1"));
+
+        world.end();     
+    }
+
+    #[test]
+    #[expected_failure(abort_code = multisig::ECantBeExecutedYet)]
+    fun test_execute_proposal_error_cant_be_executed_yet() {
+        let mut world = start_world();
+
+        world.multisig().add_members(vector[ALICE, BOB]);
+
+        world.create_proposal(Action { value: 1 }, string::utf8(b"1"), 100, 2, string::utf8(b"test-1"));
+        world.multisig().set_threshold(2);
+        assert_eq(world.multisig().num_of_proposals(), 1);
+
+        world.approve_proposal(string::utf8(b"1"));
+        world.scenario().next_tx(ALICE);
+
+        world.approve_proposal(string::utf8(b"1"));
+
+        world.clock().set_for_testing(99);
+
+        let Action { value: _ } = world.execute_proposal(string::utf8(b"1"));
+
+        world.end();     
+    }           
 }
