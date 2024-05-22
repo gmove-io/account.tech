@@ -3,10 +3,11 @@
 /// meaning that the recipient must claim the objects or the Multisig can retrieve them.
 
 module kraken::transfers {
-    use std::debug::print;
     use std::string::String;
+
     use sui::transfer::Receiving;
     use sui::bag::{Self, Bag};
+    
     use kraken::owned::{Self, Withdraw};
     use kraken::multisig::Multisig;
 

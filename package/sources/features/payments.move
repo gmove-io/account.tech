@@ -3,11 +3,12 @@
 /// It can be cancelled by the multisig member.
 
 module kraken::payments {
-    use std::debug::print;
     use std::string::String;
+
     use sui::transfer::Receiving;
     use sui::balance::Balance;
     use sui::coin::{Self, Coin};
+    
     use kraken::owned::{Self, Withdraw};
     use kraken::multisig::Multisig;
 

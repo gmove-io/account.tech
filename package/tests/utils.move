@@ -7,6 +7,7 @@ module kraken::test_utils {
     use sui::test_scenario::{Self as ts, Scenario};
     
     use kraken::owned;
+    use kraken::config;
     use kraken::multisig::{Self, Multisig}; 
 
     const OWNER: address = @0xBABE;
@@ -95,6 +96,38 @@ module kraken::test_utils {
         objects: vector<ID>,
     ) {
         owned::propose_borrow(&mut world.multisig, key, execution_time, expiration_epoch, description, objects, world.scenario.ctx());
+    }
+
+    public fun propose_modify(
+        world: &mut World, 
+        key: String,
+        execution_time: u64,
+        expiration_epoch: u64,
+        description: String,
+        name: Option<String>,
+        threshold: Option<u64>, 
+        to_add: vector<address>, 
+        to_remove: vector<address>, 
+    ) {
+        config::propose_modify(
+            &mut world.multisig, 
+            key, 
+            execution_time, 
+            expiration_epoch, 
+            description, 
+            name, 
+            threshold, 
+            to_add, 
+            to_remove, 
+            world.scenario.ctx()
+        );
+    }
+
+    public fun execute_modify(
+        world: &mut World,
+        name: String, 
+    ) {
+        config::execute_modify(&mut world.multisig, name, &world.clock, world.scenario.ctx());
     }
 
     public fun end(world: World) {
