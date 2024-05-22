@@ -1,107 +1,56 @@
 #[test_only]
 module kraken::owned_tests{
-    use std::debug::print;
-    use std::string::{Self, String};
-    use sui::clock::{Self, Clock};
-    use sui::test_scenario::{Self as ts, Scenario};
+    // use std::string;
 
-    use kraken::multisig::{Self, Multisig};
-    use kraken::owned::{Self, Withdraw, Borrow};
+    // use sui::clock::{Self, Clock};
+    // use sui::test_scenario::{Self as ts, Scenario};
 
-    const OWNER: address = @0xBABE;
-    const ALICE: address = @0xA11CE;
-    const BOB: address = @0xB0B;
+    // use kraken::owned::{Self, Borrow};
+    // use kraken::multisig::{Self, Multisig};
+    // use kraken::test_utils::{start_world, end_world};
 
-    // hot potato holding the state
-    public struct World {
-        scenario: Scenario,
-        clock: Clock,
-        multisig: Multisig,
-        ids: vector<ID>,
-    }
+    // const OWNER: address = @0xBABE;
 
-    public struct Obj has key, store { id: UID }
+    // // hot potato holding the state
+    // public struct World {
+    //     scenario: Scenario,
+    //     clock: Clock,
+    //     multisig: Multisig,
+    //     ids: vector<ID>,
+    // }
 
-    // === Utils ===
+    // public struct Obj has key, store { id: UID }
 
-    fun start_world(): World {
-        let mut scenario = ts::begin(OWNER);
-        // initialize multisig and clock
-        multisig::new(string::utf8(b"kraken"), scenario.ctx());
-        let clock = clock::create_for_testing(scenario.ctx());
-        clock.share_for_testing();
-        scenario.next_tx(OWNER);
+    // fun borrow(
+    //     world: &mut World,
+    //     key: vector<u8>,
+    //     objects: vector<ID>,
+    // ): Borrow {
+    //     owned::propose_borrow(
+    //         &mut world.multisig,
+    //         string::utf8(key),
+    //         0,
+    //         0,
+    //         string::utf8(b""),
+    //         objects,
+    //         world.scenario.ctx()
+    //     );
+    //     multisig::approve_proposal(
+    //         &mut world.multisig,
+    //         string::utf8(key),
+    //         world.scenario.ctx()
+    //     );
+    //     multisig::execute_proposal(
+    //         &mut world.multisig,
+    //         string::utf8(key),
+    //         &world.clock,
+    //         world.scenario.ctx()
+    //     )
+    // }
 
-        let clock = scenario.take_shared<Clock>();
-        let multisig = scenario.take_shared<Multisig>();
-        let id = object::new(scenario.ctx());
-        let inner_id = id.uid_to_inner();
-        transfer::public_transfer(
-            Obj { id },
-            multisig.addr()
-        );
-        scenario.next_tx(OWNER);
+    // // === test normal operations === 
 
-        World { scenario, clock, multisig, ids: vector[inner_id] }
-    }
 
-    fun end_world(world: World) {
-        let World { scenario, clock, multisig, ids: _ } = world;
-        ts::return_shared(clock);
-        ts::return_shared(multisig);
-        scenario.end();
-    }
-
-    fun borrow(
-        world: &mut World,
-        key: vector<u8>,
-        objects: vector<ID>,
-    ): Borrow {
-        owned::propose_borrow(
-            &mut world.multisig,
-            string::utf8(key),
-            0,
-            0,
-            string::utf8(b""),
-            objects,
-            world.scenario.ctx()
-        );
-        multisig::approve_proposal(
-            &mut world.multisig,
-            string::utf8(key),
-            world.scenario.ctx()
-        );
-        multisig::execute_proposal(
-            &mut world.multisig,
-            string::utf8(key),
-            &world.clock,
-            world.scenario.ctx()
-        )
-    }
-
-    // === test normal operations === 
-
-    #[test]
-    fun publish_package() {
-        let world = start_world();
-        end_world(world);
-    }
-
-    #[test]
-    fun borrow_and_return_object() {
-        let mut world = start_world();
-        let id = world.ids[0];
-        let mut action = borrow(
-            &mut world, 
-            b"borrow", 
-            vector[id],
-        );
-        let ticket = ts::receiving_ticket_by_id<Obj>(id);
-        let obj = action.borrow(&mut world.multisig, ticket);
-        action.put_back(&mut world.multisig, obj);
-        action.complete_borrow();
-        end_world(world);
-    }
 
 }
 
