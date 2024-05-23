@@ -3,10 +3,10 @@ module kraken::account_tests {
     use std::string;
 
     use sui::test_utils::assert_eq;
-    use sui::test_scenario::{receiving_ticket_by_id, take_from_address};
+    use sui::test_scenario::take_from_address;
 
     use kraken::test_utils::start_world;
-    use kraken::account::{Self, Account};
+    use kraken::account::{Self, Account, Invite};
 
     const OWNER: address = @0xBABE;
     const ALICE: address = @0xA11CE;
@@ -48,6 +48,20 @@ module kraken::account_tests {
     fun test_accept_invite() {
         let mut world = start_world();
 
+        // add Alice to the multisig
+        world.propose_modify(
+            string::utf8(b"modify"), 
+            0, 
+            0, 
+            string::utf8(b""), 
+            option::none(),
+            option::none(),
+            vector[ALICE],
+            vector[]
+        );
+        world.approve_proposal(string::utf8(b"modify"));
+        world.execute_modify(string::utf8(b"modify"));
+
         world.scenario().next_tx(ALICE);
 
         account::new(string::utf8(b"Sam"), string::utf8(b"Sam.png"), world.scenario().ctx());
@@ -56,13 +70,13 @@ module kraken::account_tests {
 
         let mut user_account = take_from_address<Account>(world.scenario(), ALICE);
 
-        world.scenario().next_tx(OWNER);
-
-        let invite_id = world.send_invite(object::id(&user_account).id_to_address());
+        world.send_invite(ALICE);
 
         world.scenario().next_tx(ALICE);
+
+        let invite = take_from_address<Invite>(world.scenario(), ALICE);
         
-        account::accept_invite(&mut user_account, receiving_ticket_by_id(invite_id));
+        account::accept_invite(&mut user_account, invite);
         
         let multisig_id = object::id(world.multisig());
 
@@ -77,21 +91,35 @@ module kraken::account_tests {
     fun test_refuse_invite() {
         let mut world = start_world();
 
+        // add Alice to the multisig
+        world.propose_modify(
+            string::utf8(b"modify"), 
+            0, 
+            0, 
+            string::utf8(b""), 
+            option::none(),
+            option::none(),
+            vector[ALICE],
+            vector[]
+        );
+        world.approve_proposal(string::utf8(b"modify"));
+        world.execute_modify(string::utf8(b"modify"));
+
         world.scenario().next_tx(ALICE);
 
         account::new(string::utf8(b"Sam"), string::utf8(b"Sam.png"), world.scenario().ctx());
 
         world.scenario().next_tx(ALICE);
 
-        let mut user_account = take_from_address<Account>(world.scenario(), ALICE);
+        let user_account = take_from_address<Account>(world.scenario(), ALICE);
 
-        world.scenario().next_tx(OWNER);
-
-        let invite_id = world.send_invite(object::id(&user_account).id_to_address());
+        world.send_invite(ALICE);
 
         world.scenario().next_tx(ALICE);
+
+        let invite = take_from_address<Invite>(world.scenario(), ALICE);
         
-        account::refuse_invite(&mut user_account, receiving_ticket_by_id(invite_id));
+        account::refuse_invite(invite);
 
         assert_eq(user_account.multisigs(), vector[]);
 

@@ -150,8 +150,8 @@ module kraken::test_utils {
         coin_operations::split_coins(&mut world.multisig, to_split, amounts, world.scenario.ctx())
     }
 
-    public fun send_invite(world: &mut World, account: address): ID {
-        account::send_invite(&mut world.multisig, account, world.scenario.ctx())
+    public fun send_invite(world: &mut World, recipient: address) {
+        account::send_invite(&mut world.multisig, recipient, world.scenario.ctx());
     }
 
     public fun end(world: World) {

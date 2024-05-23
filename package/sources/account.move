@@ -7,7 +7,6 @@
 module kraken::account {
     use std::string::String;
     use sui::vec_set::{Self, VecSet};
-    use sui::transfer::Receiving;
     use kraken::multisig::Multisig;
 
     // === Errors ===
@@ -65,33 +64,28 @@ module kraken::account {
     // === Member only functions ===
 
     // invites can be sent by a multisig member (upon multisig creation for instance)
-    public fun send_invite(multisig: &mut Multisig, account: address, ctx: &mut TxContext): ID {
+    public fun send_invite(multisig: &mut Multisig, recipient: address, ctx: &mut TxContext) {
         // user inviting must be member
         multisig.assert_is_member(ctx);
         // invited user must be member
-        assert!(multisig.members().contains(&ctx.sender()), ENotMember);
+        assert!(multisig.members().contains(&recipient), ENotMember);
         let invite = Invite { 
             id: object::new(ctx), 
             multisig: multisig.uid_mut().uid_to_inner() 
         };
-        let invite_id = object::id(&invite);
-        transfer::transfer(invite, account);
-
-        invite_id
+        transfer::transfer(invite, recipient);
     }
 
     // invited user can register the multisig in his account
-    public fun accept_invite(account: &mut Account, invite: Receiving<Invite>) {
-        let received = transfer::receive(&mut account.id, invite);
-        let Invite { id, multisig } = received;
+    public fun accept_invite(account: &mut Account, invite: Invite) {
+        let Invite { id, multisig } = invite;
         id.delete();
         account.multisigs.insert(multisig);
     }
 
     // delete the invite object
-    public fun refuse_invite(account: &mut Account, invite: Receiving<Invite>) {
-        let received = transfer::receive(&mut account.id, invite);
-        let Invite { id, multisig: _ } = received;
+    public fun refuse_invite(invite: Invite) {
+        let Invite { id, multisig: _ } = invite;
         id.delete();
     }
 
