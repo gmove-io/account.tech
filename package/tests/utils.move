@@ -8,7 +8,6 @@ module kraken::test_utils {
     use sui::clock::{Self, Clock};
     use sui::test_scenario::{Self as ts, Scenario};
     
-    use kraken::owned;
     use kraken::config;
     use kraken::account;
     use kraken::coin_operations;
