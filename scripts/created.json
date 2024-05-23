@@ -1,0 +1,10 @@
+[
+  {
+    "type": "package_id",
+    "id": "0x06b1b13873c2a5eea9e440af1c2478a90adf6b15c95c33381d3ebb350a1e60f4"
+  },
+  {
+    "type": "package::UpgradeCap",
+    "id": "0x27624343a2339ddec8ec19fb7ea049ad6e44e87d48e5c3d9ee157f853f44a128"
+  }
+]

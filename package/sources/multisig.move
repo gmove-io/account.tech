@@ -68,6 +68,7 @@ module kraken::multisig {
         }
     }
 
+    #[allow(lint(share_owned))]
     public fun share(multisig: Multisig) {
         transfer::share_object(multisig);
     }
