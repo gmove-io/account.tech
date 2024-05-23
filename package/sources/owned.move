@@ -75,7 +75,7 @@ module kraken::owned {
     // step 5: return the object to the multisig to empty `to_return` vector
     public(package) fun put_back<T: key + store>(
         action: &mut Borrow,
-        multisig: &mut Multisig, 
+        multisig: &Multisig, 
         returned: T, 
     ) {
         let (exists_, index) =
