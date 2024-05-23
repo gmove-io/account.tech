@@ -3,12 +3,12 @@
 /// The proposals have to be approved by at least the threshold number of members.
 
 module kraken::multisig {
-    use std::debug::print;
     use std::string::String;
+
+    use sui::clock::Clock;
+    use sui::dynamic_field as df;
     use sui::vec_set::{Self, VecSet};
     use sui::vec_map::{Self, VecMap};
-    use sui::dynamic_field as df;
-    use sui::clock::{Self, Clock};
 
     // === Errors ===
 
@@ -53,19 +53,18 @@ module kraken::multisig {
     // === Public mutative functions ===
 
     // init and share a new Multisig object
-    public fun new(name: String, ctx: &mut TxContext) {
-        let mut members = vec_set::empty();
-        members.insert(tx_context::sender(ctx));
+    public fun new(name: String, ctx: &mut TxContext): Multisig {
+        Multisig { 
+            id: object::new(ctx),
+            name,
+            threshold: 1,
+            members: vec_set::singleton(ctx.sender()),
+            proposals: vec_map::empty(),
+        }
+    }
 
-        transfer::share_object(
-            Multisig { 
-                id: object::new(ctx),
-                name,
-                threshold: 1,
-                members,
-                proposals: vec_map::empty(),
-            }
-        );
+    public fun share(multisig: Multisig) {
+        transfer::share_object(multisig);
     }
 
     // anyone can clean expired proposals
@@ -188,6 +187,48 @@ module kraken::multisig {
         action
     }
 
+    // === View functions ===
+
+    public fun name(multisig: &Multisig): String {
+        multisig.name
+    }
+
+    public fun threshold(multisig: &Multisig): u64 {
+        multisig.threshold
+    }
+
+    public fun members(multisig: &Multisig): vector<address> {
+        multisig.members.into_keys()
+    }
+
+    public fun addr(multisig: &Multisig): address {
+        multisig.id.uid_to_inner().id_to_address()
+    }
+
+    public fun num_of_proposals(multisig: &Multisig): u64 {
+        multisig.proposals.size()
+    }
+
+    public fun proposal(multisig: &Multisig, key: &String): &Proposal {
+        multisig.proposals.get(key)
+    }
+
+    public fun description(proposal: &Proposal): String {
+        proposal.description
+    }
+
+    public fun expiration_epoch(proposal: &Proposal): u64 {
+        proposal.expiration_epoch
+    }
+
+    public fun execution_time(proposal: &Proposal): u64 {
+        proposal.execution_time
+    }
+
+    public fun approved(proposal: &Proposal): vector<address> {
+        proposal.approved.into_keys()
+    }
+
     // === Package functions ===
 
     // callable only in management.move, if the proposal has been accepted
@@ -203,37 +244,21 @@ module kraken::multisig {
     // callable only in management.move, if the proposal has been accepted
     public(package) fun add_members(multisig: &mut Multisig, mut addresses: vector<address>) {
         while (addresses.length() > 0) {
-            let addr = vector::pop_back(&mut addresses);
-            vec_set::insert(&mut multisig.members, addr);
+            let addr = addresses.pop_back();
+            multisig.members.insert(addr);
         }
     }
 
     // callable only in management.move, if the proposal has been accepted
     public(package) fun remove_members(multisig: &mut Multisig, mut addresses: vector<address>) {
         while (addresses.length() > 0) {
-            let addr = vector::pop_back(&mut addresses);
-            vec_set::remove(&mut multisig.members, &addr);
+            let addr = addresses.pop_back();
+            multisig.members.remove(&addr);
         }
     }
 
     public(package) fun uid_mut(multisig: &mut Multisig): &mut UID {
         &mut multisig.id
-    }
-
-    public(package) fun addr(multisig: &Multisig): address {
-        multisig.id.uid_to_inner().id_to_address()
-    }
-
-    public(package) fun name(multisig: &Multisig): String {
-        multisig.name
-    }
-
-    public(package) fun threshold(multisig: &Multisig): u64 {
-        multisig.threshold
-    }
-
-    public(package) fun members(multisig: &Multisig): vector<address> {
-        multisig.members.into_keys()
     }
 
     public(package) fun assert_is_member(multisig: &Multisig, ctx: &TxContext) {

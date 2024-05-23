@@ -1,136 +1,131 @@
 #[test_only]
-module kraken::manage_tests{
-    use std::debug::print;
-    use std::string::{Self, String};
-    use sui::clock::{Self, Clock};
-    use sui::test_scenario::{Self as ts, Scenario};
+module kraken::config_tests{
+    use std::string;
 
-    use kraken::multisig::{Self, Multisig};
-    use kraken::config::{Self, Modify};
+    use sui::test_utils::assert_eq;
+
+    use kraken::config;
+    use kraken::test_utils::start_world;
 
     const OWNER: address = @0xBABE;
     const ALICE: address = @0xA11CE;
     const BOB: address = @0xB0B;
 
-    // hot potato holding the state
-    public struct World {
-        scenario: Scenario,
-        clock: Clock,
-        multisig: Multisig,
-    }
-
-    // === Utils ===
-
-    fun start_world(): World {
-        let mut scenario = ts::begin(OWNER);
-        // initialize multisig and clock
-        multisig::new(string::utf8(b"kraken"), scenario.ctx());
-        let clock = clock::create_for_testing(scenario.ctx());
-        clock.share_for_testing();
-        scenario.next_tx(OWNER);
-
-        let multisig = scenario.take_shared<Multisig>();
-        let clock = scenario.take_shared<Clock>();
-        World { scenario, clock, multisig }
-    }
-
-    fun end_world(world: World) {
-        let World { scenario, clock, multisig } = world;
-        ts::return_shared(multisig);
-        ts::return_shared(clock);
-        scenario.end();
-    }
-
-    fun manage_multisig(
-        world: &mut World,
-        mut approvals: u64,
-        key: vector<u8>,
-        name: Option<String>,
-        threshold: Option<u64>,
-        to_add: vector<address>,
-        to_remove: vector<address>,
-    ) {
-        let users = vector[OWNER, ALICE, BOB];
-        config::propose_modify(
-            &mut world.multisig,
-            string::utf8(key),
-            0,
-            0,
-            string::utf8(b""),
-            name,
-            threshold,
-            to_add,
-            to_remove,
-            world.scenario.ctx()
-        );
-        // approves as many times as necessary
-        while (approvals > 0) {
-            multisig::approve_proposal(
-                &mut world.multisig,
-                string::utf8(key),
-                world.scenario.ctx()
-            );
-            approvals = approvals - 1;
-            world.scenario.next_tx(users[approvals]);
-        };
-        config::execute_modify(
-            &mut world.multisig,
-            string::utf8(key),
-            &world.clock,
-            world.scenario.ctx()
-        );
-    }
-
-    // === test normal operations === 
-
     #[test]
-    fun publish_package() {
-        let world = start_world();
-        end_world(world);
-    }
-
-    #[test]
-    fun add_members_increase_threshold() {
+    fun test_end_to_end() {
         let mut world = start_world();
-        manage_multisig(
-            &mut world,
-            1,
-            b"add_members_increase_threshold",
-            option::none(),
+
+        let sender = world.scenario().ctx().sender();
+        let multisig = world.multisig();
+
+        assert_eq(multisig.name(), string::utf8(b"kraken"));
+        assert_eq(multisig.threshold(), 1);
+        assert_eq(multisig.members(), vector[sender]);
+        assert_eq(multisig.num_of_proposals(), 0);
+
+        world.propose_modify(
+            string::utf8(b"modify"), 
+            100, 
+            2, 
+            string::utf8(b"update parameters"), 
+            option::some(string::utf8(b"kraken-2")),
             option::some(2),
             vector[ALICE, BOB],
-            vector[],
+            vector[OWNER]
         );
-        multisig::assert_multisig_data_numbers(&world.multisig, 2, 3, 0);
-        end_world(world);
+
+        world.approve_proposal(string::utf8(b"modify"));
+        world.scenario().next_tx(OWNER);
+        world.scenario().next_tx(OWNER);
+        world.scenario().next_tx(OWNER);
+        world.clock().set_for_testing(101);
+
+        world.execute_modify(string::utf8(b"modify"));
+
+        let multisig = world.multisig();
+
+        assert_eq(multisig.name(), string::utf8(b"kraken-2"));
+        assert_eq(multisig.threshold(), 2);
+        assert_eq(multisig.members(), vector[BOB, ALICE]);
+        assert_eq(multisig.num_of_proposals(), 0);        
+
+        world.end();        
     }
 
     #[test]
-    fun add_members_then_remove_members() {
+    #[expected_failure(abort_code = config::EAlreadyMember)]
+    fun test_propose_modify_error_already_member() {
         let mut world = start_world();
-        // add 2 members and increase threshold
-        manage_multisig(
-            &mut world,
-            1,
-            b"add_members_increase_threshold",
-            option::none(),
-            option::some(3),
-            vector[ALICE, BOB],
-            vector[],
-        );
-        multisig::assert_multisig_data_numbers(&world.multisig, 3, 3, 0);
-        manage_multisig(
-            &mut world,
-            3,
-            b"remove_members_same_threshold",
-            option::none(),
+
+        world.propose_modify(
+            string::utf8(b"modify"), 
+            100, 
+            2, 
+            string::utf8(b"update parameters"), 
+            option::some(string::utf8(b"kraken-2")),
             option::some(2),
-            vector[],
+            vector[OWNER],
+            vector[OWNER]
+        );      
+
+        world.end();         
+    }
+
+    #[test]
+    #[expected_failure(abort_code = config::ENotMember)]
+    fun test_propose_modify_error_not_member() {
+        let mut world = start_world();
+
+        world.propose_modify(
+            string::utf8(b"modify"), 
+            100, 
+            2, 
+            string::utf8(b"update parameters"), 
+            option::some(string::utf8(b"kraken-2")),
+            option::some(2),
             vector[BOB],
-        );
-        multisig::assert_multisig_data_numbers(&world.multisig, 2, 2, 0);
-        end_world(world);
-    }
+            vector[ALICE]
+        );      
 
+        world.end();         
+    } 
+
+    #[test]
+    #[expected_failure(abort_code = config::EThresholdNull)]
+    fun test_propose_modify_error_threshold_null() {
+        let mut world = start_world();
+
+        world.propose_modify(
+            string::utf8(b"modify"), 
+            100, 
+            2, 
+            string::utf8(b"update parameters"), 
+            option::some(string::utf8(b"kraken-2")),
+            option::some(0),
+            vector[],
+            vector[]
+        );      
+
+        world.end();         
+    }   
+
+
+    #[test]
+    #[expected_failure(abort_code = config::EThresholdTooHigh)]
+    fun test_propose_modify_error_threshold_too_high() {
+        let mut world = start_world();
+
+        world.propose_modify(
+            string::utf8(b"modify"), 
+            100, 
+            2, 
+            string::utf8(b"update parameters"), 
+            option::some(string::utf8(b"kraken-2")),
+            option::some(4),
+            vector[ALICE, BOB],
+            vector[]
+        );      
+
+        world.end();         
+    }           
 }
-

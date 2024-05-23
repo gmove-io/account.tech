@@ -6,7 +6,9 @@
 
 module kraken::owned {
     use std::string::String;
+    
     use sui::transfer::Receiving;
+
     use kraken::multisig::Multisig;
 
     // === Errors ===

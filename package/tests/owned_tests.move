@@ -1,107 +1,209 @@
 #[test_only]
 module kraken::owned_tests{
-    use std::debug::print;
-    use std::string::{Self, String};
-    use sui::clock::{Self, Clock};
-    use sui::test_scenario::{Self as ts, Scenario};
+    use std::string;
+    
+    use sui::test_utils::{assert_eq, destroy};
+    use sui::test_scenario::{receiving_ticket_by_id, take_from_address_by_id};
 
-    use kraken::multisig::{Self, Multisig};
-    use kraken::owned::{Self, Withdraw, Borrow};
+    use kraken::owned::{Self, Borrow};
+    use kraken::test_utils::start_world;
 
     const OWNER: address = @0xBABE;
-    const ALICE: address = @0xA11CE;
-    const BOB: address = @0xB0B;
 
-    // hot potato holding the state
-    public struct World {
-        scenario: Scenario,
-        clock: Clock,
-        multisig: Multisig,
-        ids: vector<ID>,
-    }
-
-    public struct Obj has key, store { id: UID }
-
-    // === Utils ===
-
-    fun start_world(): World {
-        let mut scenario = ts::begin(OWNER);
-        // initialize multisig and clock
-        multisig::new(string::utf8(b"kraken"), scenario.ctx());
-        let clock = clock::create_for_testing(scenario.ctx());
-        clock.share_for_testing();
-        scenario.next_tx(OWNER);
-
-        let clock = scenario.take_shared<Clock>();
-        let multisig = scenario.take_shared<Multisig>();
-        let id = object::new(scenario.ctx());
-        let inner_id = id.uid_to_inner();
-        transfer::public_transfer(
-            Obj { id },
-            multisig.addr()
-        );
-        scenario.next_tx(OWNER);
-
-        World { scenario, clock, multisig, ids: vector[inner_id] }
-    }
-
-    fun end_world(world: World) {
-        let World { scenario, clock, multisig, ids: _ } = world;
-        ts::return_shared(clock);
-        ts::return_shared(multisig);
-        scenario.end();
-    }
-
-    fun borrow(
-        world: &mut World,
-        key: vector<u8>,
-        objects: vector<ID>,
-    ): Borrow {
-        owned::propose_borrow(
-            &mut world.multisig,
-            string::utf8(key),
-            0,
-            0,
-            string::utf8(b""),
-            objects,
-            world.scenario.ctx()
-        );
-        multisig::approve_proposal(
-            &mut world.multisig,
-            string::utf8(key),
-            world.scenario.ctx()
-        );
-        multisig::execute_proposal(
-            &mut world.multisig,
-            string::utf8(key),
-            &world.clock,
-            world.scenario.ctx()
-        )
-    }
-
-    // === test normal operations === 
+    public struct Object has key, store { id: UID }
 
     #[test]
-    fun publish_package() {
-        let world = start_world();
-        end_world(world);
-    }
-
-    #[test]
-    fun borrow_and_return_object() {
+    fun test_borrow_end_to_end() {
         let mut world = start_world();
-        let id = world.ids[0];
-        let mut action = borrow(
-            &mut world, 
-            b"borrow", 
-            vector[id],
-        );
-        let ticket = ts::receiving_ticket_by_id<Obj>(id);
-        let obj = action.borrow(&mut world.multisig, ticket);
-        action.put_back(&mut world.multisig, obj);
-        action.complete_borrow();
-        end_world(world);
+
+        let object1 = new_object(world.scenario().ctx());
+        let object2 = new_object(world.scenario().ctx());
+
+        let id1 = object::id(&object1);
+        let id2 = object::id(&object2);
+
+        let multisig_address = world.multisig().addr();
+
+        transfer::public_transfer(object1, multisig_address);
+        transfer::public_transfer(object2, multisig_address);
+
+        world.propose_borrow(string::utf8(b"1"), 100, 2, string::utf8(b"test-1"), vector[id1, id2]);
+
+        world.approve_proposal(string::utf8(b"1"));
+
+        // Advance time and epoch
+        world.clock().set_for_testing(101);
+        world.scenario().next_tx(OWNER);
+        world.scenario().next_tx(OWNER);
+        world.scenario().next_tx(OWNER);
+
+        let mut borrow = world.execute_proposal<Borrow>(string::utf8(b"1"));
+        
+        // Objects must be taken LIFO
+        let object2 = borrow.borrow<Object>(world.multisig(), receiving_ticket_by_id(id2));
+        let object1 = borrow.borrow<Object>(world.multisig(), receiving_ticket_by_id(id1));
+
+        assert_eq(object::id(&object1), id1);
+        assert_eq(object::id(&object2), id2);
+
+        borrow.put_back(world.multisig(), object1);
+        borrow.put_back(world.multisig(), object2);
+
+        world.scenario().next_tx(OWNER);
+
+        let object1 = take_from_address_by_id<Object>(world.scenario(), multisig_address, id1);
+        let object2 = take_from_address_by_id<Object>(world.scenario(), multisig_address, id2);
+
+        assert_eq(object::id(&object1), id1);
+        assert_eq(object::id(&object2), id2);
+
+        borrow.complete_borrow();
+        
+        destroy(object1);
+        destroy(object2);
+        world.end();
     }
 
+    #[test]
+    #[expected_failure(abort_code = owned::EWrongObject)]
+    fun test_withdraw_error_wrong_object() {
+        let mut world = start_world();
+
+        let object1 = new_object(world.scenario().ctx());
+        let object2 = new_object(world.scenario().ctx());
+
+        let id1 = object::id(&object1);
+        let id2 = object::id(&object2);
+
+        let multisig_address = world.multisig().addr();
+
+        transfer::public_transfer(object1, multisig_address);
+
+        world.propose_borrow(string::utf8(b"1"), 100, 2, string::utf8(b"test-1"), vector[id2]);
+
+        world.approve_proposal(string::utf8(b"1"));
+
+        // Advance time and epoch
+        world.clock().set_for_testing(101);
+        world.scenario().next_tx(OWNER);
+        world.scenario().next_tx(OWNER);
+        world.scenario().next_tx(OWNER);
+
+        let mut borrow = world.execute_proposal<Borrow>(string::utf8(b"1"));
+        
+        // Objects must be taken LIFO
+        let object1 = borrow.borrow<Object>(world.multisig(), receiving_ticket_by_id(id1));
+        
+        destroy(object1);
+        destroy(object2);
+        destroy(borrow);
+        world.end();        
+    }
+
+    #[test]
+    #[expected_failure(abort_code = owned::EWrongObject)]
+    fun test_put_back_error_wrong_object() {
+        let mut world = start_world();
+
+        let object1 = new_object(world.scenario().ctx());
+        let object2 = new_object(world.scenario().ctx());
+
+        let id1 = object::id(&object1);
+
+        let multisig_address = world.multisig().addr();
+
+        transfer::public_transfer(object1, multisig_address);
+
+        world.propose_borrow(string::utf8(b"1"), 100, 2, string::utf8(b"test-1"), vector[id1]);
+
+        world.approve_proposal(string::utf8(b"1"));
+
+        // Advance time and epoch
+        world.clock().set_for_testing(101);
+        world.scenario().next_tx(OWNER);
+        world.scenario().next_tx(OWNER);
+        world.scenario().next_tx(OWNER);
+
+        let mut borrow = world.execute_proposal<Borrow>(string::utf8(b"1"));
+        
+        // Objects must be taken LIFO
+        let object1 = borrow.borrow<Object>(world.multisig(), receiving_ticket_by_id(id1));
+
+        borrow.put_back(world.multisig(), object1);
+        borrow.put_back(world.multisig(), object2);
+
+        world.scenario().next_tx(OWNER);
+
+        borrow.complete_borrow();
+        
+        world.end();
+    }
+
+    #[test]
+    #[expected_failure(abort_code = owned::ERetrieveAllObjectsBefore)]
+    fun test_complete_borrow_error_retrieve_all_objects_before() {
+        let mut world = start_world();
+
+        let object1 = new_object(world.scenario().ctx());
+
+        let id1 = object::id(&object1);
+
+        let multisig_address = world.multisig().addr();
+
+        transfer::public_transfer(object1, multisig_address);
+
+        world.propose_borrow(string::utf8(b"1"), 100, 2, string::utf8(b"test-1"), vector[id1]);
+
+        world.approve_proposal(string::utf8(b"1"));
+
+        // Advance time and epoch
+        world.clock().set_for_testing(101);
+        world.scenario().next_tx(OWNER);
+        world.scenario().next_tx(OWNER);
+        world.scenario().next_tx(OWNER);
+
+        let borrow = world.execute_proposal<Borrow>(string::utf8(b"1"));
+
+        borrow.complete_borrow();
+        world.end();
+    }
+
+    #[test]
+    #[expected_failure(abort_code = owned::EReturnAllObjectsBefore)]
+    fun test_complete_borrow_error_return_all_objects_before() {
+        let mut world = start_world();
+
+        let object1 = new_object(world.scenario().ctx());
+
+        let id1 = object::id(&object1);
+
+        let multisig_address = world.multisig().addr();
+
+        transfer::public_transfer(object1, multisig_address);
+
+        world.propose_borrow(string::utf8(b"1"), 100, 2, string::utf8(b"test-1"), vector[id1]);
+
+        world.approve_proposal(string::utf8(b"1"));
+
+        // Advance time and epoch
+        world.clock().set_for_testing(101);
+        world.scenario().next_tx(OWNER);
+        world.scenario().next_tx(OWNER);
+        world.scenario().next_tx(OWNER);
+
+        let mut borrow = world.execute_proposal<Borrow>(string::utf8(b"1"));
+
+        let object1 = borrow.borrow<Object>(world.multisig(), receiving_ticket_by_id(id1));
+
+        borrow.complete_borrow();
+        destroy(object1);
+        world.end();
+    }
+
+    fun new_object(ctx: &mut TxContext): Object {
+        Object {
+            id: object::new(ctx)
+        }
+    }
 }
 
