@@ -47,6 +47,11 @@ module kraken::multisig {
         approved: VecSet<address>,
     }
 
+    // hot potato ensuring the action is executed as it can't be stored
+    public struct Guard<T: store> {
+        action: T,
+    }
+
     // key for the inner action struct of a proposal
     public struct ActionKey has copy, drop, store {}
 
@@ -167,7 +172,7 @@ module kraken::multisig {
         key: String, 
         clock: &Clock,
         ctx: &mut TxContext
-    ): T {
+    ): Guard<T> {
         assert_is_member(multisig, ctx);
 
         let (_, proposal) = multisig.proposals.remove(&key);
@@ -184,7 +189,7 @@ module kraken::multisig {
         let action = df::remove(&mut id, ActionKey {});
         id.delete();
 
-        action
+        Guard { action }
     }
 
     // === View functions ===
@@ -230,6 +235,17 @@ module kraken::multisig {
     }
 
     // === Package functions ===
+
+    // called to access and execute the action
+    public(package) fun action_mut<T: store>(guard: &mut Guard<T>): &mut T {
+        &mut guard.action
+    }
+
+    // should be called after the action has been executed 
+    public(package) fun unpack_action<T: store>(guard: Guard<T>): T {
+        let Guard { action } = guard;
+        action
+    }
 
     // callable only in management.move, if the proposal has been accepted
     public(package) fun set_name(multisig: &mut Multisig, name: String) {

@@ -10,7 +10,7 @@ module kraken::payments {
     use sui::coin::{Self, Coin};
     
     use kraken::owned::{Self, Withdraw};
-    use kraken::multisig::Multisig;
+    use kraken::multisig::{Multisig, Guard};
 
     // === Errors ===
 
@@ -78,12 +78,12 @@ module kraken::payments {
 
     // step 4: loop over it in PTB, sends last object from the Send action
     public fun create_stream<C: drop>(
-        action: Pay, 
+        guard: Guard<Pay>, 
         multisig: &mut Multisig, 
         received: Receiving<Coin<C>>,
         ctx: &mut TxContext
     ) {
-        let Pay { mut withdraw, amount, interval, recipient } = action;
+        let Pay { mut withdraw, amount, interval, recipient } = guard.unpack_action();
         let coin = withdraw.withdraw(multisig, received);
         withdraw.complete_withdraw();
 
@@ -113,7 +113,7 @@ module kraken::payments {
         stream.last_epoch = ctx.epoch();
     }
 
-    // step 6: destroy the stream
+    // step 6: destroy the stream when balance is empty
     public fun complete_stream<C: drop>(stream: Stream<C>) {
         let Stream { 
             id, 
