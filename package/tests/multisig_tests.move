@@ -187,7 +187,7 @@ module kraken::multisig_tests {
 
         world.clock().set_for_testing(101);
 
-        let Action { value } = world.execute_proposal(string::utf8(b"1"));
+        let Action { value } = world.execute_proposal(string::utf8(b"1")).unpack_action();
         assert_eq(world.multisig().num_of_proposals(), 0);
 
         assert_eq(value, 1);
@@ -291,7 +291,7 @@ module kraken::multisig_tests {
 
         world.scenario().next_tx(HACKER);
 
-        let Action { value: _ } = world.execute_proposal(string::utf8(b"1"));
+        let Action { value: _ } = world.execute_proposal(string::utf8(b"1")).unpack_action();
 
         world.end();     
     }     
@@ -314,7 +314,7 @@ module kraken::multisig_tests {
 
         world.clock().set_for_testing(101);
 
-        let Action { value: _ } = world.execute_proposal(string::utf8(b"1"));
+        let Action { value: _ } = world.execute_proposal(string::utf8(b"1")).unpack_action();
 
         world.end();     
     }
@@ -337,7 +337,7 @@ module kraken::multisig_tests {
 
         world.clock().set_for_testing(99);
 
-        let Action { value: _ } = world.execute_proposal(string::utf8(b"1"));
+        let Action { value: _ } = world.execute_proposal(string::utf8(b"1")).unpack_action();
 
         world.end();     
     }           

@@ -12,7 +12,7 @@ module kraken::test_utils {
     use kraken::config;
     use kraken::account;
     use kraken::coin_operations;
-    use kraken::multisig::{Self, Multisig}; 
+    use kraken::multisig::{Self, Multisig, Guard}; 
 
     const OWNER: address = @0xBABE;
 
@@ -87,20 +87,20 @@ module kraken::test_utils {
     public fun execute_proposal<T: store>(
         world: &mut World, 
         key: String, 
-    ): T {
+    ): Guard<T> {
         world.multisig.execute_proposal<T>(key, &world.clock, world.scenario.ctx())
     }
 
-    public fun propose_borrow(
-        world: &mut World, 
-        key: String,
-        execution_time: u64,
-        expiration_epoch: u64,
-        description: String,
-        objects: vector<ID>,
-    ) {
-        owned::propose_borrow(&mut world.multisig, key, execution_time, expiration_epoch, description, objects, world.scenario.ctx());
-    }
+    // public fun propose_borrow(
+    //     world: &mut World, 
+    //     key: String,
+    //     execution_time: u64,
+    //     expiration_epoch: u64,
+    //     description: String,
+    //     objects: vector<ID>,
+    // ) {
+    //     owned::propose_borrow(&mut world.multisig, key, execution_time, expiration_epoch, description, objects, world.scenario.ctx());
+    // }
 
     public fun propose_modify(
         world: &mut World, 
