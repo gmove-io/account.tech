@@ -8,7 +8,7 @@ module kraken::upgrade_policies {
     use sui::package::{Self, UpgradeCap, UpgradeTicket, UpgradeReceipt};
     use sui::transfer::Receiving;
     use sui::clock::Clock;
-    use kraken::multisig::{Multisig, Guard};
+    use kraken::multisig::{Multisig, Action};
 
     // === Error ===
 
@@ -96,11 +96,11 @@ module kraken::upgrade_policies {
 
     // step 4: destroy Upgrade and return the UpgradeTicket for upgrading
     public fun execute_upgrade(
-        guard: Guard<Upgrade>,
+        action: Action<Upgrade>,
         multisig: &mut Multisig,
         upgrade_lock: Receiving<UpgradeLock>,
     ): UpgradeTicket {
-        let Upgrade { digest, upgrade_lock: lock_id } = guard.unpack_action();
+        let Upgrade { digest, upgrade_lock: lock_id } = action.unpack_action();
         let mut received = transfer::receive(multisig.uid_mut(), upgrade_lock);
         assert!(received.id.uid_to_inner() == lock_id, EWrongUpgradeLock);
 
@@ -166,11 +166,11 @@ module kraken::upgrade_policies {
 
     // step 4: destroy Upgrade and return the UpgradeTicket for upgrading
     public fun execute_policy(
-        guard: Guard<Policy>,
+        action: Action<Policy>,
         multisig: &mut Multisig,
         upgrade_lock: Receiving<UpgradeLock>,
     ) {
-        let Policy { policy, upgrade_lock: lock_id } = guard.unpack_action();
+        let Policy { policy, upgrade_lock: lock_id } = action.unpack_action();
         let mut received = transfer::receive(multisig.uid_mut(), upgrade_lock);
         assert!(received.id.uid_to_inner() == lock_id, EWrongUpgradeLock);
 

@@ -8,7 +8,7 @@ module kraken::kiosk {
     use sui::sui::SUI;
     use sui::kiosk::{Self, Kiosk, KioskOwnerCap};
     use sui::transfer_policy::{TransferPolicy, TransferRequest};
-    use kraken::multisig::{Multisig, Guard};
+    use kraken::multisig::{Multisig, Action};
     use kraken::owned::{Self, Borrow};
 
     // === Errors ===
@@ -129,25 +129,25 @@ module kraken::kiosk {
 
     // step 4: get multisig's KioskOwnerCap
     public fun borrow_cap_transfer(
-        guard: &mut Guard<Transfer>,
+        action: &mut Action<Transfer>,
         multisig: &mut Multisig, 
         multisig_cap: Receiving<KioskOwnerCap>,
     ): KioskOwnerCap {
-        guard.action_mut().borrow.borrow(multisig, multisig_cap)
+        action.action_mut().borrow.borrow(multisig, multisig_cap)
     }
 
     // step 4: move the nft and return the request for each nft in the action
     public fun transfer_to<T: key + store>(
-        guard: &mut Guard<Transfer>,
+        action: &mut Action<Transfer>,
         multisig_kiosk: &mut Kiosk, 
         multisig_cap: &KioskOwnerCap,
         receiver_kiosk: &mut Kiosk, 
         receiver_cap: &KioskOwnerCap, 
         ctx: &mut TxContext
     ): TransferRequest<T> {
-        assert!(guard.action_mut().recipient == ctx.sender(), EWrongReceiver);
+        assert!(action.action_mut().recipient == ctx.sender(), EWrongReceiver);
 
-        let nft_id = guard.action_mut().nfts.pop_back();
+        let nft_id = action.action_mut().nfts.pop_back();
         multisig_kiosk.list<T>(multisig_cap, nft_id, 0);
         let coin = coin::zero<SUI>(ctx);
         let (nft, request) = multisig_kiosk.purchase<T>(nft_id, coin);
@@ -168,11 +168,11 @@ module kraken::kiosk {
 
     // step 7: destroy the action and return the cap
     public fun complete_transfer_to(
-        guard: Guard<Transfer>,
+        action: Action<Transfer>,
         multisig: &mut Multisig, 
         cap: KioskOwnerCap
     ) {
-        let Transfer { mut borrow, nfts, recipient: _ } = guard.unpack_action();
+        let Transfer { mut borrow, nfts, recipient: _ } = action.unpack_action();
         borrow.put_back(multisig, cap);
         borrow.complete_borrow();
         assert!(nfts.is_empty(), ETransferAllNftsBefore);
@@ -212,31 +212,31 @@ module kraken::kiosk {
 
     // step 4: get multisig's KioskOwnerCap
     public fun borrow_cap_list(
-        guard: &mut Guard<List>,
+        action: &mut Action<List>,
         multisig: &mut Multisig, 
         multisig_cap: Receiving<KioskOwnerCap>,
     ): KioskOwnerCap {
-        guard.action_mut().borrow.borrow(multisig, multisig_cap)
+        action.action_mut().borrow.borrow(multisig, multisig_cap)
     }
 
     // step 5: list last nft in action
     public fun list<T: key + store>(
-        guard: &mut Guard<List>,
+        action: &mut Action<List>,
         kiosk: &mut Kiosk,
         cap: &KioskOwnerCap,
     ) {
-        let nft_id = guard.action_mut().nfts.pop_back();
-        let price = guard.action_mut().prices.pop_back();
+        let nft_id = action.action_mut().nfts.pop_back();
+        let price = action.action_mut().prices.pop_back();
         kiosk.list<T>(cap, nft_id, price);
     }
     
     // step 6: destroy the action and return the cap
     public fun complete_list(
-        guard: Guard<List>, 
+        action: Action<List>, 
         multisig: &mut Multisig, 
         cap: KioskOwnerCap
     ) {
-        let List { mut borrow, nfts, prices: _ } = guard.unpack_action();
+        let List { mut borrow, nfts, prices: _ } = action.unpack_action();
         borrow.put_back(multisig, cap);
         borrow.complete_borrow();
         assert!(nfts.is_empty(), ETransferAllNftsBefore);

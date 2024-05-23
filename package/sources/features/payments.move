@@ -10,7 +10,7 @@ module kraken::payments {
     use sui::coin::{Self, Coin};
     
     use kraken::owned::{Self, Withdraw};
-    use kraken::multisig::{Multisig, Guard};
+    use kraken::multisig::{Multisig, Action};
 
     // === Errors ===
 
@@ -78,12 +78,12 @@ module kraken::payments {
 
     // step 4: loop over it in PTB, sends last object from the Send action
     public fun create_stream<C: drop>(
-        guard: Guard<Pay>, 
+        action: Action<Pay>, 
         multisig: &mut Multisig, 
         received: Receiving<Coin<C>>,
         ctx: &mut TxContext
     ) {
-        let Pay { mut withdraw, amount, interval, recipient } = guard.unpack_action();
+        let Pay { mut withdraw, amount, interval, recipient } = action.unpack_action();
         let coin = withdraw.withdraw(multisig, received);
         withdraw.complete_withdraw();
 

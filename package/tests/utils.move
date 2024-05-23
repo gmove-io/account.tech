@@ -12,7 +12,7 @@ module kraken::test_utils {
     use kraken::config;
     use kraken::account;
     use kraken::coin_operations;
-    use kraken::multisig::{Self, Multisig, Guard}; 
+    use kraken::multisig::{Self, Multisig, Action}; 
 
     const OWNER: address = @0xBABE;
 
@@ -87,7 +87,7 @@ module kraken::test_utils {
     public fun execute_proposal<T: store>(
         world: &mut World, 
         key: String, 
-    ): Guard<T> {
+    ): Action<T> {
         world.multisig.execute_proposal<T>(key, &world.clock, world.scenario.ctx())
     }
 

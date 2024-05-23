@@ -48,8 +48,8 @@ module kraken::multisig {
     }
 
     // hot potato ensuring the action is executed as it can't be stored
-    public struct Guard<T: store> {
-        action: T,
+    public struct Action<T: store> {
+        inner: T,
     }
 
     // key for the inner action struct of a proposal
@@ -172,7 +172,7 @@ module kraken::multisig {
         key: String, 
         clock: &Clock,
         ctx: &mut TxContext
-    ): Guard<T> {
+    ): Action<T> {
         assert_is_member(multisig, ctx);
 
         let (_, proposal) = multisig.proposals.remove(&key);
@@ -186,10 +186,10 @@ module kraken::multisig {
         assert!(approved.size() >= multisig.threshold, EThresholdNotReached);
         assert!(clock.timestamp_ms() >= execution_time, ECantBeExecutedYet);
 
-        let action = df::remove(&mut id, ActionKey {});
+        let inner = df::remove(&mut id, ActionKey {});
         id.delete();
 
-        Guard { action }
+        Action { inner }
     }
 
     // === View functions ===
@@ -237,14 +237,14 @@ module kraken::multisig {
     // === Package functions ===
 
     // called to access and execute the action
-    public(package) fun action_mut<T: store>(guard: &mut Guard<T>): &mut T {
-        &mut guard.action
+    public(package) fun action_mut<T: store>(action: &mut Action<T>): &mut T {
+        &mut action.inner
     }
 
     // should be called after the action has been executed 
-    public(package) fun unpack_action<T: store>(guard: Guard<T>): T {
-        let Guard { action } = guard;
-        action
+    public(package) fun unpack_action<T: store>(action: Action<T>): T {
+        let Action { inner } = action;
+        inner
     }
 
     // callable only in management.move, if the proposal has been accepted

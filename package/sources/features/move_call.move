@@ -6,7 +6,7 @@
 
 module kraken::move_call {
     use std::string::String;
-    use kraken::multisig::{Multisig, Guard};
+    use kraken::multisig::{Multisig, Action};
     use kraken::owned::{Self, Withdraw, Borrow};
 
     // === Error ===
@@ -57,8 +57,8 @@ module kraken::move_call {
     // step 3: execute the proposal and return the action (multisig::execute_proposal)
 
     // step 4: destroy MoveCall if digest match and return Withdraw
-    public fun execute_move_call(guard: Guard<MoveCall>, ctx: &TxContext): (Withdraw, Borrow) {
-        let MoveCall { digest, withdraw, borrow } = guard.unpack_action();
+    public fun execute_move_call(action: Action<MoveCall>, ctx: &TxContext): (Withdraw, Borrow) {
+        let MoveCall { digest, withdraw, borrow } = action.unpack_action();
         assert!(digest == ctx.digest(), EDigestDoesntMatch);
         
         (withdraw, borrow)

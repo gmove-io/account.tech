@@ -4,11 +4,9 @@
 /// Objects can be borrowed using an action wrapping the Withdraw action.
 /// Caution: borrowed Coins can be emptied, only withdraw the amount you need
 
-module kraken::owned {
-    use std::string::String;
-    
+module kraken::owned {    
     use sui::transfer::Receiving;
-    use kraken::multisig::{Multisig, Guard};
+    use kraken::multisig::Multisig;
 
     // === Errors ===
 
