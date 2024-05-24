@@ -10,6 +10,7 @@ module kraken::test_utils {
     
     use kraken::config;
     use kraken::account;
+    use kraken::move_call;
     use kraken::coin_operations;
     use kraken::multisig::{Self, Multisig, Action}; 
 
@@ -90,17 +91,6 @@ module kraken::test_utils {
         world.multisig.execute_proposal<T>(key, &world.clock, world.scenario.ctx())
     }
 
-    // public fun propose_borrow(
-    //     world: &mut World, 
-    //     key: String,
-    //     execution_time: u64,
-    //     expiration_epoch: u64,
-    //     description: String,
-    //     objects: vector<ID>,
-    // ) {
-    //     owned::propose_borrow(&mut world.multisig, key, execution_time, expiration_epoch, description, objects, world.scenario.ctx());
-    // }
-
     public fun propose_modify(
         world: &mut World, 
         key: String,
@@ -151,6 +141,19 @@ module kraken::test_utils {
 
     public fun send_invite(world: &mut World, recipient: address) {
         account::send_invite(&mut world.multisig, recipient, world.scenario.ctx());
+    }
+
+    public fun propose_move_call(
+        world: &mut World, 
+        key: String,
+        execution_time: u64,
+        expiration_epoch: u64,
+        description: String,
+        digest: vector<u8>,
+        to_borrow: vector<ID>,
+        to_withdraw: vector<ID>,
+    ) {
+        move_call::propose_move_call(&mut world.multisig, key, execution_time, expiration_epoch, description, digest, to_borrow, to_withdraw, world.scenario.ctx());
     }
 
     public fun end(world: World) {
