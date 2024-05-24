@@ -9,8 +9,11 @@
   },
   "scripts": {
     "publish": "bun ./src/publish.ts",
-    "new_multisig": "bun ./src/new_multisig.ts",
-    "new_multisig_with_members": "bun ./src/new_multisig_with_members.ts"
+    "newMultisig": "bun ./src/newMultisig.ts",
+    "newMultisigWithMembers": "bun ./src/newMultisigWithMembers.ts",
+    "newAccount": "bun ./src/newAccount.ts",
+    "getAccount": "bun ./src/getAccount.ts",
+    "joinMultisig": "bun ./src/joinMultisig.ts"
   },
   "dependencies": {
     "@mysten/sui.js": "^0.54.1",
