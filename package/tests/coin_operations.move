@@ -15,9 +15,9 @@ module kraken::coin_operations_tests {
     fun test_merge_coins() {
        let mut world = start_world();
 
-        let coin1 = coin::mint_for_testing<SUI>(100 ,world.scenario().ctx());
-        let coin2 = coin::mint_for_testing<SUI>(50 ,world.scenario().ctx());
-        let coin3 = coin::mint_for_testing<SUI>(20 ,world.scenario().ctx());
+        let coin1 = coin::mint_for_testing<SUI>(100, world.scenario().ctx());
+        let coin2 = coin::mint_for_testing<SUI>(50, world.scenario().ctx());
+        let coin3 = coin::mint_for_testing<SUI>(20, world.scenario().ctx());
 
         let id1 = object::id(&coin1);
         let id2 = object::id(&coin2);
