@@ -54,7 +54,7 @@ module kraken::upgrade_policies {
         time_lock: u64,
         upgrade_cap: UpgradeCap,
         ctx: &mut TxContext
-    ) {
+    ): ID {
         multisig.assert_is_member(ctx);
         let lock = UpgradeLock { 
             id: object::new(ctx), 
@@ -62,7 +62,16 @@ module kraken::upgrade_policies {
             time_lock, 
             upgrade_cap 
         };
+
+        let id = object::id(&lock);
         transfer::transfer(lock, multisig.addr());
+
+        id
+    }
+
+    public fun receive_send(multisig: &mut Multisig, upgrade_lock: Receiving<UpgradeLock>) {
+        let received = transfer::receive(multisig.uid_mut(), upgrade_lock);
+        transfer::transfer(received, multisig.addr());
     }
 
     // step 1: propose an Upgrade by passing the digest of the package build
@@ -185,6 +194,16 @@ module kraken::upgrade_policies {
             package::make_immutable(upgrade_cap);
             id.delete();
         };
+    }
+
+    // View Functions
+
+    public fun digest(upgrade: &Upgrade): vector<u8> {
+        upgrade.digest
+    }
+
+    public fun upgrade_lock(upgrade: &Upgrade): ID {
+        upgrade.upgrade_lock
     }
 }
 

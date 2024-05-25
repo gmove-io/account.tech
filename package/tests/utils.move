@@ -4,6 +4,7 @@ module kraken::test_utils {
 
     use sui::coin::Coin;
     use sui::test_utils::destroy;
+    use sui::package::UpgradeCap;
     use sui::transfer::Receiving;
     use sui::clock::{Self, Clock};
     use sui::test_scenario::{Self as ts, Scenario};
@@ -13,7 +14,8 @@ module kraken::test_utils {
     use kraken::move_call;
     use kraken::coin_operations;
     use kraken::payments::{Self, Stream, Pay};
-    use kraken::multisig::{Self, Multisig, Action}; 
+    use kraken::multisig::{Self, Multisig, Action};
+    use kraken::upgrade_policies::{Self, UpgradeLock}; 
     use kraken::transfers::{Self, Send, Delivery, Deliver};
 
     const OWNER: address = @0xBABE;
@@ -269,6 +271,36 @@ module kraken::test_utils {
         delivery: Delivery, 
     ) {
         transfers::cancel_delivery(&mut world.multisig, delivery, world.scenario.ctx());
+    }
+
+
+    public fun lock_cap(
+        world: &mut World, 
+        label: String,
+        time_lock: u64,
+        upgrade_cap: UpgradeCap
+    ): ID {
+        upgrade_policies::lock_cap(&mut world.multisig, label, time_lock, upgrade_cap, world.scenario.ctx())        
+    }
+
+    public fun propose_upgrade(
+        world: &mut World, 
+        key: String,
+        expiration_epoch: u64,
+        description: String,
+        digest: vector<u8>,
+        upgrade_lock: Receiving<UpgradeLock>
+    ) {
+        upgrade_policies::propose_upgrade(
+            &mut world.multisig, 
+            key, 
+            expiration_epoch, 
+            description, 
+            digest, 
+            upgrade_lock,
+            &world.clock,
+            world.scenario.ctx()
+        );
     }
 
     public fun end(world: World) {
