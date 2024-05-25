@@ -14,6 +14,7 @@ module kraken::test_utils {
     use kraken::coin_operations;
     use kraken::payments::{Self, Stream, Pay};
     use kraken::multisig::{Self, Multisig, Action}; 
+    use kraken::transfers::{Self, Send, Delivery, Deliver};
 
     const OWNER: address = @0xBABE;
 
@@ -195,6 +196,79 @@ module kraken::test_utils {
         stream: Stream<C>
     ) {
         stream.cancel_payment(&mut world.multisig, world.scenario.ctx());
+    }
+
+    public fun propose_send(
+        world: &mut World,  
+        key: String,
+        execution_time: u64,
+        expiration_epoch: u64,
+        description: String,
+        objects: vector<ID>,
+        recipients: vector<address>
+    ) {
+        transfers::propose_send(
+            &mut world.multisig, 
+            key, 
+            execution_time, 
+            expiration_epoch, 
+            description, 
+            objects, 
+            recipients, 
+            world.scenario.ctx()
+        );
+    }
+
+    public fun send<T: key + store>(
+        world: &mut World, 
+        action: &mut Action<Send>,  
+        received: Receiving<T>
+    ) {
+        transfers::send(action, &mut world.multisig, received);
+    }
+
+    public fun propose_delivery(
+        world: &mut World, 
+        key: String,
+        execution_time: u64,
+        expiration_epoch: u64,
+        description: String,
+        objects: vector<ID>,
+        recipient: address
+    ) {
+        transfers::propose_delivery(
+            &mut world.multisig, 
+            key, 
+            execution_time, 
+            expiration_epoch, 
+            description, 
+            objects, 
+            recipient,
+            world.scenario.ctx()
+        );
+    }
+
+    public fun add_to_delivery<T: key + store>(
+        world: &mut World, 
+        delivery: &mut Delivery, 
+        action: &mut Action<Deliver>, 
+        received: Receiving<T>
+    ) {
+        transfers::add_to_delivery(delivery, action, &mut world.multisig, received);
+    }
+
+    public fun retrieve<T: key + store>(
+        world: &mut World,
+        delivery: &mut Delivery
+    ) {
+        transfers::retrieve<T>(delivery, &world.multisig, world.scenario.ctx());
+    }
+
+    public fun cancel_delivery(
+        world: &mut World, 
+        delivery: Delivery, 
+    ) {
+        transfers::cancel_delivery(&mut world.multisig, delivery, world.scenario.ctx());
     }
 
     public fun end(world: World) {
