@@ -41,10 +41,7 @@ module kraken::kiosk {
 
     // === Member only functions ===
 
-    // should be called when user wants to activate the "NFT" option
-    // because it's not composable for security
-    #[allow(lint(share_owned))]
-    public fun new(multisig: &mut Multisig, ctx: &mut TxContext) {
+    public fun new(multisig: &mut Multisig, ctx: &mut TxContext): Kiosk {
         multisig.assert_is_member(ctx);
         let (mut kiosk, cap) = kiosk::new(ctx);
         kiosk.set_owner_custom(&cap, multisig.addr());
@@ -53,7 +50,8 @@ module kraken::kiosk {
             cap,
             multisig.addr(),
         );
-        transfer::public_share_object(kiosk);
+
+        kiosk
     }
 
     // deposit from another Kiosk, no need for proposal
@@ -84,15 +82,9 @@ module kraken::kiosk {
         request
     }
 
-    // step 2: fill the request
+    // step 2: resolve the rules for the request
 
-    // step 3: destroy the request
-    public fun complete_transfer_from<T: key + store>(
-        policy: &TransferPolicy<T>,
-        request: TransferRequest<T>,
-    ) {
-        policy.confirm_request(request);
-    }
+    // step 3: destroy the request (0x2::transfer_policy::confirm_request)
 
     // === Multisig only functions ===
 

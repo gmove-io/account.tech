@@ -13,7 +13,8 @@
     "newMultisigWithMembers": "bun ./src/newMultisigWithMembers.ts",
     "newAccount": "bun ./src/newAccount.ts",
     "getAccount": "bun ./src/getAccount.ts",
-    "joinMultisig": "bun ./src/joinMultisig.ts"
+    "joinMultisig": "bun ./src/joinMultisig.ts",
+    "getMultisig": "bun ./src/getMultisig.ts"
   },
   "dependencies": {
     "@mysten/sui.js": "^0.54.1",
