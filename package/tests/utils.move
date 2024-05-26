@@ -327,7 +327,7 @@ module kraken::test_utils {
         );
     }
 
-    public fun new_kiosk(world: &mut World): (ID, ID) {
+    public fun new_kiosk(world: &mut World): (Kiosk, KioskOwnerCap) {
         k_kiosk::new(&mut world.multisig, world.scenario.ctx())
     }
 
@@ -396,7 +396,7 @@ module kraken::test_utils {
         );
     }
 
-   public fun delist<T: key + store>(
+    public fun delist<T: key + store>(
         world: &mut World, 
         kiosk: &mut Kiosk, 
         cap: Receiving<KioskOwnerCap>,

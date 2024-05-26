@@ -2,6 +2,7 @@
 /// The functions take the caller's kiosk and the multisig's kiosk to execute the transfer.
 
 module kraken::kiosk {
+    use std::debug::print;
     use std::string::String;
     use sui::coin;
     use sui::transfer::Receiving;
@@ -26,7 +27,7 @@ module kraken::kiosk {
         // id of the nfts to transfer
         nfts: vector<ID>,
         // owner of the receiver kiosk
-        receiver_kiosk: address,
+        recipient: address,
     }
 
     // action to be held in a proposal
@@ -41,23 +42,12 @@ module kraken::kiosk {
 
     // === Member only functions ===
 
-    // should be called when user wants to activate the "NFT" option
-    // because it's not composable for security
-    #[allow(lint(share_owned))]
-    public fun new(multisig: &mut Multisig, ctx: &mut TxContext): (ID, ID) {
+    public fun new(multisig: &mut Multisig, ctx: &mut TxContext): (Kiosk, KioskOwnerCap) {
         multisig.assert_is_member(ctx);
         let (mut kiosk, cap) = kiosk::new(ctx);
-        let kiosk_id = object::id(&kiosk);
-        let cap_id = object::id(&cap);
         kiosk.set_owner_custom(&cap, multisig.addr());
 
-        transfer::public_transfer(
-            cap,
-            multisig.addr(),
-        );
-        transfer::public_share_object(kiosk);
-
-        (kiosk_id, cap_id)
+        (kiosk, cap)
     }
 
     // deposit from another Kiosk, no need for proposal
@@ -71,6 +61,8 @@ module kraken::kiosk {
         nft_id: ID,
         ctx: &mut TxContext
     ): TransferRequest<T> {
+        print(&645646549461);
+        multisig.assert_is_member(ctx);
 
         sender_kiosk.list<T>(sender_cap, nft_id, 0);
         let coin = coin::zero<SUI>(ctx);
@@ -87,15 +79,9 @@ module kraken::kiosk {
         request
     }
 
-    // step 2: fill the request
+    // step 2: resolve the rules for the request
 
-    // step 3: destroy the request
-    public fun complete_transfer_from<T: key + store>(
-        policy: &TransferPolicy<T>,
-        request: TransferRequest<T>,
-    ) {
-        policy.confirm_request(request);
-    }
+    // step 3: destroy the request (0x2::transfer_policy::confirm_request)
 
     // === Multisig only functions ===
 
@@ -108,13 +94,13 @@ module kraken::kiosk {
         description: String,
         cap_id: ID,
         nfts: vector<ID>,
-        receiver_kiosk: address,
+        recipient: address,
         ctx: &mut TxContext
     ) {
         let action = Transfer { 
             borrow: owned::new_borrow(vector[cap_id]), 
             nfts, 
-            receiver_kiosk
+            recipient 
         };
 
         multisig.create_proposal(
@@ -148,7 +134,7 @@ module kraken::kiosk {
         receiver_cap: &KioskOwnerCap, 
         ctx: &mut TxContext
     ): TransferRequest<T> {
-        assert!(action.action_mut().receiver_kiosk == object::id(receiver_kiosk).id_to_address(), EWrongReceiver);
+        assert!(action.action_mut().recipient == ctx.sender(), EWrongReceiver);
 
         let nft_id = action.action_mut().nfts.pop_back();
         multisig_kiosk.list<T>(multisig_cap, nft_id, 0);
@@ -175,7 +161,7 @@ module kraken::kiosk {
         multisig: &mut Multisig, 
         cap: KioskOwnerCap
     ) {
-        let Transfer { mut borrow, nfts, receiver_kiosk: _ } = action.unpack_action();
+        let Transfer { mut borrow, nfts, recipient: _ } = action.unpack_action();
         borrow.put_back(multisig, cap);
         borrow.complete_borrow();
         assert!(nfts.is_empty(), ETransferAllNftsBefore);

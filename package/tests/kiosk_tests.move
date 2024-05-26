@@ -1,9 +1,10 @@
 #[test_only]
 module kraken::kiosk_tests{
     use std::string::utf8;
+    use std::debug::print;
 
     use sui::transfer_policy;
-    use sui::kiosk::{Self, Kiosk};
+    use sui::kiosk::{Self, Kiosk, KioskOwnerCap};
     use sui::coin::mint_for_testing;
     use sui::test_utils::{destroy, assert_eq};
     use sui::test_scenario::{take_shared, receiving_ticket_by_id};
@@ -22,11 +23,11 @@ module kraken::kiosk_tests{
     fun test_transfer_from() {
         let mut world = start_world();
 
-        let (_, multisig_kiosk_cap_id) = world.new_kiosk();
+        let (mut multisig_kiosk, multisig_kiosk_cap) = world.new_kiosk();
+        let multisig_kiosk_cap_id = object::id(&multisig_kiosk_cap);
+        transfer::public_transfer(multisig_kiosk_cap, world.multisig().addr());
 
-        world.scenario().next_tx(ALICE);
-
-        let mut multisig_kiosk = take_shared<Kiosk>(world.scenario());
+        world.scenario().next_tx(OWNER);
 
         let (mut sender_kiosk, sender_cap) = kiosk::new(world.scenario().ctx());
 
@@ -47,7 +48,7 @@ module kraken::kiosk_tests{
             nft_id
         );
 
-        k_kiosk::complete_transfer_from(&policy, request);
+        transfer_policy::confirm_request(&policy, request);
 
         assert_eq(kiosk::has_item(&multisig_kiosk, nft_id), true);
 
@@ -63,11 +64,11 @@ module kraken::kiosk_tests{
     fun test_transfer_to_end_to_end() {
         let mut world = start_world();
 
-        let (_, multisig_kiosk_cap_id) = world.new_kiosk();
+        let (mut multisig_kiosk, multisig_kiosk_cap) = world.new_kiosk();
+        let multisig_kiosk_cap_id = object::id(&multisig_kiosk_cap);
+        transfer::public_transfer(multisig_kiosk_cap, world.multisig().addr());
 
         world.scenario().next_tx(OWNER);
-
-        let mut multisig_kiosk = take_shared<Kiosk>(world.scenario());
 
         let (mut receiver_kiosk, receiver_cap) = kiosk::new(world.scenario().ctx());
 
@@ -87,7 +88,7 @@ module kraken::kiosk_tests{
             utf8(b"take NFT"),
             multisig_kiosk_cap_id,
             vector[nft_id, nft2_id],
-            object::id(&receiver_kiosk).id_to_address()
+            OWNER
         );
 
         world.scenario().next_tx(OWNER);
@@ -111,7 +112,7 @@ module kraken::kiosk_tests{
         assert_eq(kiosk::has_item(&multisig_kiosk, nft_id), true);
         assert_eq(kiosk::has_item(&multisig_kiosk, nft2_id), true);
 
-       let request =  k_kiosk::transfer_to<NFT>(
+        let request =  k_kiosk::transfer_to<NFT>(
             &mut action,
             &mut multisig_kiosk,
             &multisig_cap,
@@ -120,7 +121,7 @@ module kraken::kiosk_tests{
             world.scenario().ctx()
         );
 
-       let request2 =  k_kiosk::transfer_to<NFT>(
+        let request2 =  k_kiosk::transfer_to<NFT>(
             &mut action,
             &mut multisig_kiosk,
             &multisig_cap,
@@ -149,11 +150,11 @@ module kraken::kiosk_tests{
     fun test_list_end_to_end() {
         let mut world = start_world();
 
-        let (_, multisig_kiosk_cap_id) = world.new_kiosk();
+        let (mut multisig_kiosk, multisig_kiosk_cap) = world.new_kiosk();
+        let multisig_kiosk_cap_id = object::id(&multisig_kiosk_cap);
+        transfer::public_transfer(multisig_kiosk_cap, world.multisig().addr());
 
         world.scenario().next_tx(OWNER);
-
-        let mut multisig_kiosk = take_shared<Kiosk>(world.scenario());
 
         let (receiver_kiosk, receiver_cap) = kiosk::new(world.scenario().ctx());
 
@@ -226,11 +227,11 @@ module kraken::kiosk_tests{
     fun test_transfer_to_error_wrong_receiver() {
         let mut world = start_world();
 
-        let (_, multisig_kiosk_cap_id) = world.new_kiosk();
+        let (mut multisig_kiosk, multisig_kiosk_cap) = world.new_kiosk();
+        let multisig_kiosk_cap_id = object::id(&multisig_kiosk_cap);
+        transfer::public_transfer(multisig_kiosk_cap, world.multisig().addr());
 
         world.scenario().next_tx(OWNER);
-
-        let mut multisig_kiosk = take_shared<Kiosk>(world.scenario());
 
         let (mut receiver_kiosk, receiver_cap) = kiosk::new(world.scenario().ctx());
 
@@ -268,7 +269,7 @@ module kraken::kiosk_tests{
 
         k_kiosk::place(&mut multisig_kiosk, &multisig_cap, nft);
 
-       let request =  k_kiosk::transfer_to<NFT>(
+        let request =  k_kiosk::transfer_to<NFT>(
             &mut action,
             &mut multisig_kiosk,
             &multisig_cap,
@@ -294,11 +295,11 @@ module kraken::kiosk_tests{
     fun test_transfer_to_error_transfer_all_nfts_before() {
         let mut world = start_world();
 
-        let (_, multisig_kiosk_cap_id) = world.new_kiosk();
+        let (mut multisig_kiosk, multisig_kiosk_cap) = world.new_kiosk();
+        let multisig_kiosk_cap_id = object::id(&multisig_kiosk_cap);
+        transfer::public_transfer(multisig_kiosk_cap, world.multisig().addr());
 
         world.scenario().next_tx(OWNER);
-
-        let mut multisig_kiosk = take_shared<Kiosk>(world.scenario());
 
         let (mut receiver_kiosk, receiver_cap) = kiosk::new(world.scenario().ctx());
 
@@ -318,7 +319,7 @@ module kraken::kiosk_tests{
             utf8(b"take NFT"),
             multisig_kiosk_cap_id,
             vector[nft_id, nft2_id],
-            object::id(&receiver_kiosk).id_to_address()
+            OWNER
         );
 
         world.scenario().next_tx(OWNER);
@@ -339,7 +340,7 @@ module kraken::kiosk_tests{
         k_kiosk::place(&mut multisig_kiosk, &multisig_cap, nft);
         k_kiosk::place(&mut multisig_kiosk, &multisig_cap, nft2);
 
-       let request =  k_kiosk::transfer_to<NFT>(
+        let request =  k_kiosk::transfer_to<NFT>(
             &mut action,
             &mut multisig_kiosk,
             &multisig_cap,
@@ -365,11 +366,11 @@ module kraken::kiosk_tests{
     fun test_propose_list_error_wrong_nfts_price() {
         let mut world = start_world();
 
-        let (_, multisig_kiosk_cap_id) = world.new_kiosk();
+        let (multisig_kiosk, multisig_kiosk_cap) = world.new_kiosk();
+        let multisig_kiosk_cap_id = object::id(&multisig_kiosk_cap);
+        transfer::public_transfer(multisig_kiosk_cap, world.multisig().addr());
 
         world.scenario().next_tx(OWNER);
-
-        let multisig_kiosk = take_shared<Kiosk>(world.scenario());
 
         let (receiver_kiosk, receiver_cap) = kiosk::new(world.scenario().ctx());
 
@@ -409,8 +410,10 @@ module kraken::kiosk_tests{
 
         world.scenario().next_tx(ALICE);
 
-        world.new_kiosk();
-
+        let (mut multisig_kiosk, multisig_kiosk_cap) = world.new_kiosk();
+        
+        destroy(multisig_kiosk);
+        destroy(multisig_kiosk_cap);
         world.end();        
     }
 
