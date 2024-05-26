@@ -1,16 +1,16 @@
 #[test_only]
 module kraken::upgrade_policies_tests {
-    use std::string::utf8;
+    // use std::string::utf8;
 
-    use sui::package;
+    // use sui::package;
 
-    use sui::test_utils::{destroy, assert_eq};
-    use sui::test_scenario::{receiving_ticket_by_id, take_from_address_by_id, return_to_address};
+    // use sui::test_utils::{destroy, assert_eq};
+    // use sui::test_scenario::{receiving_ticket_by_id, take_from_address_by_id, return_to_address};
 
-    use kraken::test_utils::start_world;
-    use kraken::upgrade_policies::{Self, Policy, UpgradeLock};
+    // use kraken::test_utils::start_world;
+    // use kraken::upgrade_policies::{Self, Policy, UpgradeLock};
 
-    const OWNER: address = @0xBABE;
+    // const OWNER: address = @0xBABE;
 
     // !IMPORTANT There is a bug on receiving_ticket_by_id. So the test below fails!
     // #[test]
