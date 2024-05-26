@@ -7,7 +7,6 @@ module kraken::transfers {
 
     use sui::bag::{Self, Bag};
     use sui::transfer::Receiving;
-    use sui::vec_map::{Self, VecMap};
 
     use kraken::owned::{Self, Withdraw};
     use kraken::multisig::{Multisig, Action};
@@ -26,7 +25,7 @@ module kraken::transfers {
         // sub action - owned objects to access
         withdraw: Withdraw,
         // addresses to transfer to
-        recipients: VecMap<ID, address>
+        recipients: vector<address>
     }
 
     // action to be held in a Proposal
@@ -65,20 +64,7 @@ module kraken::transfers {
     ) {
         assert!(recipients.length() == objects.length(), EDifferentLength);
         let withdraw = owned::new_withdraw(objects);
-
-        let mut recipients_map = vec_map::empty();
-
-        let len = recipients.length();
-        let mut i = 0;
-
-        while (len > i) {
-            
-            recipients_map.insert(objects[i], recipients[i]);
-
-            i = i + 1;
-        };
-
-        let action = Send { withdraw, recipients: recipients_map };
+        let action = Send { withdraw, recipients };
         multisig.create_proposal(
             action,
             key,
@@ -98,10 +84,8 @@ module kraken::transfers {
         multisig: &mut Multisig, 
         received: Receiving<T>
     ) {
-        let send = action.action_mut();
-        let object = send.withdraw.withdraw(multisig, received);
-        let (_, recipient ) = send.recipients.remove(&object::id(&object));
-        transfer::public_transfer(object, recipient);
+        let object = action.action_mut().withdraw.withdraw(multisig, received);
+        transfer::public_transfer(object, action.action_mut().recipients.pop_back());
     }
 
     // step 5: destroy the action

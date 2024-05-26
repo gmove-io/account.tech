@@ -303,6 +303,27 @@ module kraken::test_utils {
         );
     }
 
+    public fun propose_policy(
+        world: &mut World,  
+        key: String,
+        execution_time: u64,
+        expiration_epoch: u64,
+        description: String,
+        policy: u8,
+        upgrade_lock: Receiving<UpgradeLock>
+    ) {
+        upgrade_policies::propose_policy(
+            &mut world.multisig,
+            key,
+            execution_time,
+            expiration_epoch,
+            description,
+            policy,
+            upgrade_lock,
+            world.scenario.ctx()  
+        );
+    }
+
     public fun end(world: World) {
         let World { scenario, clock, multisig } = world;
         destroy(clock);

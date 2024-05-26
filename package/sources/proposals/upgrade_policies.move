@@ -69,11 +69,6 @@ module kraken::upgrade_policies {
         id
     }
 
-    public fun receive_send(multisig: &mut Multisig, upgrade_lock: Receiving<UpgradeLock>) {
-        let received = transfer::receive(multisig.uid_mut(), upgrade_lock);
-        transfer::transfer(received, multisig.addr());
-    }
-
     // step 1: propose an Upgrade by passing the digest of the package build
     // execution_time is automatically set to now + timelock
     public fun propose_upgrade(
@@ -108,7 +103,7 @@ module kraken::upgrade_policies {
         action: Action<Upgrade>,
         multisig: &mut Multisig,
         upgrade_lock: Receiving<UpgradeLock>,
-    ): UpgradeTicket {
+    ): (UpgradeTicket, UpgradeLock) {
         let Upgrade { digest, upgrade_lock: lock_id } = action.unpack_action();
         let mut received = transfer::receive(multisig.uid_mut(), upgrade_lock);
         assert!(received.id.uid_to_inner() == lock_id, EWrongUpgradeLock);
@@ -120,19 +115,17 @@ module kraken::upgrade_policies {
             digest
         );
 
-        transfer::transfer(received, multisig.addr());
-        ticket
+        (ticket, received)
     }    
 
     // step 5: consume the receipt to complete the upgrade
     public fun complete_upgrade(
         multisig: &mut Multisig,
-        upgrade_lock: Receiving<UpgradeLock>,
+        mut upgrade_lock: UpgradeLock,
         receipt: UpgradeReceipt,
     ) {
-        let mut received = transfer::receive(multisig.uid_mut(), upgrade_lock);
-        package::commit_upgrade(&mut received.upgrade_cap, receipt);
-        transfer::transfer(received, multisig.addr());
+        package::commit_upgrade(&mut upgrade_lock.upgrade_cap, receipt);
+        transfer::transfer(upgrade_lock, multisig.addr());
     }
 
     // step 1: propose an Upgrade by passing the digest of the package build
@@ -196,14 +189,9 @@ module kraken::upgrade_policies {
         };
     }
 
-    // View Functions
-
-    public fun digest(upgrade: &Upgrade): vector<u8> {
-        upgrade.digest
-    }
-
-    public fun upgrade_lock(upgrade: &Upgrade): ID {
-        upgrade.upgrade_lock
+    #[test_only]
+    public fun upgrade_cap(lock: &UpgradeLock): &UpgradeCap {
+        &lock.upgrade_cap
     }
 }
 
