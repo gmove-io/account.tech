@@ -9,6 +9,7 @@ import { client, keypair, getId } from './utils.js';
 
 		const pkg = getId("package_id")
 
+		// multisig creator can directly add members upon creation
 		let members = [
 			"0x608f5242acdbe2bc779de586864dc914d0dee1adfe4654b560bd5019886daa29"
 		]

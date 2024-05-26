@@ -10,7 +10,7 @@ module kraken::coin_operations {
     // === Member only functions ===
 
     // members can merge coins, no need for approvals
-    public fun merge_coins<T: drop>(
+    public fun merge<T: drop>(
         multisig: &mut Multisig, 
         to_keep: Receiving<Coin<T>>,
         mut to_merge: vector<Receiving<Coin<T>>>, 
@@ -39,7 +39,7 @@ module kraken::coin_operations {
 
     // members can split coins, no need for approvals
     // returns the IDs of the new coins for devInspect to prepare the ptb
-    public fun split_coins<T: drop>(
+    public fun split<T: drop>(
         multisig: &mut Multisig, 
         to_split: Receiving<Coin<T>>,
         mut amounts: vector<u64>, 

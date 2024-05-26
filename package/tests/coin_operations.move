@@ -12,7 +12,7 @@ module kraken::coin_operations_tests {
     const OWNER: address = @0xBABE;
 
     #[test]
-    fun test_merge_coins() {
+    fun test_merge() {
        let mut world = start_world();
 
         let coin1 = coin::mint_for_testing<SUI>(100, world.scenario().ctx());
@@ -31,7 +31,7 @@ module kraken::coin_operations_tests {
         
         world.scenario().next_tx(OWNER);
 
-        world.merge_coins<SUI>(receiving_ticket_by_id(id1), vector[receiving_ticket_by_id(id2), receiving_ticket_by_id(id3)]);
+        world.merge<SUI>(receiving_ticket_by_id(id1), vector[receiving_ticket_by_id(id2), receiving_ticket_by_id(id3)]);
 
         world.scenario().next_tx(OWNER);
 
@@ -44,7 +44,7 @@ module kraken::coin_operations_tests {
     }
 
     #[test]
-    fun test_split_coins() {
+    fun test_split() {
        let mut world = start_world();
 
         let coin1 = coin::mint_for_testing<SUI>(100 ,world.scenario().ctx());
@@ -57,7 +57,7 @@ module kraken::coin_operations_tests {
         
         world.scenario().next_tx(OWNER);
 
-        let ids = world.split_coins<SUI>(receiving_ticket_by_id(id1), vector[30, 20]);
+        let ids = world.split<SUI>(receiving_ticket_by_id(id1), vector[30, 20]);
 
         world.scenario().next_tx(OWNER);
 

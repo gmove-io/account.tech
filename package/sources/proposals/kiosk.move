@@ -42,6 +42,7 @@ module kraken::kiosk {
 
     // === Member only functions ===
 
+
     public fun new(multisig: &mut Multisig, ctx: &mut TxContext): (Kiosk, KioskOwnerCap) {
         multisig.assert_is_member(ctx);
         let (mut kiosk, cap) = kiosk::new(ctx);
