@@ -7,8 +7,11 @@ module kraken::test_utils {
     use sui::package::UpgradeCap;
     use sui::transfer::Receiving;
     use sui::clock::{Self, Clock};
+    use sui::kiosk::{Kiosk, KioskOwnerCap};
+    use sui::transfer_policy::TransferRequest;
     use sui::test_scenario::{Self as ts, Scenario};
-    
+
+    use kraken::kiosk as k_kiosk;
     use kraken::config;
     use kraken::account;
     use kraken::move_call;
@@ -322,6 +325,98 @@ module kraken::test_utils {
             upgrade_lock,
             world.scenario.ctx()  
         );
+    }
+
+    public fun new_kiosk(world: &mut World): (ID, ID) {
+        k_kiosk::new(&mut world.multisig, world.scenario.ctx())
+    }
+
+    public fun transfer_from<T: key + store>(
+        world: &mut World, 
+        multisig_kiosk: &mut Kiosk, 
+        multisig_cap: Receiving<KioskOwnerCap>,
+        sender_kiosk: &mut Kiosk, 
+        sender_cap: &KioskOwnerCap, 
+        nft_id: ID
+    ): TransferRequest<T> {
+        k_kiosk::transfer_from(
+            &mut world.multisig, 
+            multisig_kiosk, 
+            multisig_cap, 
+            sender_kiosk, 
+            sender_cap, 
+            nft_id, 
+            world.scenario.ctx()
+        )
+    }
+
+    public fun propose_transfer_to(
+        world: &mut World, 
+        key: String,
+        execution_time: u64,
+        expiration_epoch: u64,
+        description: String,
+        cap_id: ID,
+        nfts: vector<ID>,
+        recipient: address
+    ) {
+        k_kiosk::propose_transfer_to(
+            &mut world.multisig, 
+            key,
+            execution_time,
+            expiration_epoch,
+            description,
+            cap_id,
+            nfts,
+            recipient,
+            world.scenario.ctx()
+        )        
+    }
+
+    public fun propose_list(
+        world: &mut World,
+        key: String,
+        execution_time: u64,
+        expiration_epoch: u64,
+        description: String,
+        cap_id: ID,
+        nfts: vector<ID>,
+        prices: vector<u64>
+    ) {
+        k_kiosk::propose_list(
+            &mut world.multisig,
+            key,
+            execution_time,
+            expiration_epoch,
+            description,
+            cap_id,
+            nfts,
+            prices,
+            world.scenario.ctx()
+        );
+    }
+
+   public fun delist<T: key + store>(
+        world: &mut World, 
+        kiosk: &mut Kiosk, 
+        cap: Receiving<KioskOwnerCap>,
+        nft: ID
+    ) {
+        k_kiosk::delist<T>(
+            &mut world.multisig,
+            kiosk,
+            cap,
+            nft,
+            world.scenario.ctx()
+        );
+    }
+
+    public fun withdraw_profits(
+        world: &mut World, 
+        kiosk: &mut Kiosk,
+        cap: &KioskOwnerCap,
+    ) {
+        k_kiosk::withdraw_profits(&mut world.multisig, kiosk, cap, world.scenario.ctx());
     }
 
     public fun end(world: World) {
