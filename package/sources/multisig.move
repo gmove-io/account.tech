@@ -68,6 +68,11 @@ module kraken::multisig {
         }
     }
 
+    #[allow(lint(share_owned))]
+    public fun share(multisig: Multisig) {
+        transfer::share_object(multisig);
+    }
+
     // anyone can clean expired proposals
     public fun clean_proposals(multisig: &mut Multisig, ctx: &mut TxContext) {
         let mut i = multisig.proposals.size();

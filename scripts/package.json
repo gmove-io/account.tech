@@ -14,7 +14,8 @@
     "newAccount": "bun ./src/newAccount.ts",
     "getAccount": "bun ./src/getAccount.ts",
     "joinMultisig": "bun ./src/joinMultisig.ts",
-    "getMultisig": "bun ./src/getMultisig.ts"
+    "getMultisig": "bun ./src/getMultisig.ts",
+    "getAction": "bun ./src/getAction.ts"
   },
   "dependencies": {
     "@mysten/sui.js": "^0.54.1",
