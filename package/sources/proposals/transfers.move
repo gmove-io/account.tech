@@ -8,8 +8,8 @@ module kraken::transfers {
     use sui::bag::{Self, Bag};
     use sui::transfer::Receiving;
 
-    use kraken::owned::{Self, Withdraw};
-    use kraken::multisig::{Multisig, Action};
+    use kraken::access::{Self, Access};
+    use kraken::multisig::{Multisig, Executable};
 
     // === Errors ===
 
@@ -20,10 +20,11 @@ module kraken::transfers {
 
     // === Structs ===
 
+    // witness verifying a proposal is destroyed by the module that created it
+    public struct Issuer has drop {}
+
     // action to be held in a Proposal
     public struct Send has store {
-        // sub action - owned objects to access
-        withdraw: Withdraw,
         // addresses to transfer to
         recipients: vector<address>
     }
@@ -31,8 +32,6 @@ module kraken::transfers {
     // action to be held in a Proposal
     // a safe send where recipient has to confirm reception
     public struct Deliver has store {
-        // sub action - owned objects to access
-        withdraw: Withdraw,
         // address to transfer to
         recipient: address
     }
@@ -63,16 +62,16 @@ module kraken::transfers {
         ctx: &mut TxContext
     ) {
         assert!(recipients.length() == objects.length(), EDifferentLength);
-        let withdraw = owned::new_withdraw(objects);
-        let action = Send { withdraw, recipients };
-        multisig.create_proposal(
-            action,
+        let proposal_mut = multisig.create_proposal(
+            Issuer {},
             key,
             execution_time,
             expiration_epoch,
             description,
             ctx
         );
+        proposal_mut.add_action(Send { recipients });
+        proposal_mut.add_access(access::new(objects, vector[]));
     }
 
     // step 2: multiple members have to approve the proposal (multisig::approve_proposal)
@@ -80,19 +79,21 @@ module kraken::transfers {
 
     // step 4: loop over it in PTB, sends last object from the Send action
     public fun send<T: key + store>(
-        action: &mut Action<Send>, 
         multisig: &mut Multisig, 
-        received: Receiving<T>
+        executable: &mut Executable, 
+        receiving: Receiving<T>
     ) {
-        let object = action.action_mut().withdraw.withdraw(multisig, received);
-        transfer::public_transfer(object, action.action_mut().recipients.pop_back());
+        let object = access::take(multisig, executable, receiving);
+        let recipient = executable.action_mut<Send>().recipients.pop_back();
+        transfer::public_transfer(object, recipient);
     }
 
     // step 5: destroy the action
-    public fun complete_send(action: Action<Send>) {
-        let Send { withdraw, recipients } = action.unpack_action();
+    public fun complete_send(executable: Executable) {
+        let (action, access): (Send, Access) = executable.destroy_proposal(Issuer {});
+        let Send { recipients } = action;
         assert!(recipients.is_empty(), ESendAllAssetsBefore);
-        withdraw.complete_withdraw();
+        access.complete();
     }
 
     // step 1: propose to deliver object to a recipient that must claim it
@@ -106,7 +107,7 @@ module kraken::transfers {
         recipient: address,
         ctx: &mut TxContext
     ) {
-        let withdraw = owned::new_withdraw(objects);
+        let withdraw = access::new_withdraw(objects);
         let action = Deliver { withdraw, recipient };
         multisig.create_proposal(
             action,
@@ -139,7 +140,7 @@ module kraken::transfers {
     }
 
     // step 6: share the Delivery and destroy the action
-    #[allow(lint(share_owned))] // cannot be owned
+    #[allow(lint(share_owned))] // cannot be access
     public fun deliver(delivery: Delivery, action: Action<Deliver>, ctx: &mut TxContext) {
         let Deliver { withdraw, recipient } = action.unpack_action();
         withdraw.complete_withdraw();

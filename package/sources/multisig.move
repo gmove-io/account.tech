@@ -4,7 +4,7 @@
 
 module kraken::multisig {
     use std::string::String;
-
+    use std::type_name::{Self, TypeName};
     use sui::clock::Clock;
     use sui::dynamic_field as df;
     use sui::vec_set::{Self, VecSet};
@@ -16,6 +16,7 @@ module kraken::multisig {
     const EThresholdNotReached: u64 = 1;
     const EProposalNotEmpty: u64 = 2;
     const ECantBeExecutedYet: u64 = 3;
+    const ENotIssuerModule: u64 = 4;
 
     // === Structs ===
 
@@ -45,15 +46,20 @@ module kraken::multisig {
         execution_time: u64,
         // who has approved the proposal
         approved: VecSet<address>,
-    }
-
-    // hot potato ensuring the action is executed as it can't be stored
-    public struct Action<T: store> {
-        inner: T,
+        // module that issued the proposal and must destroy it
+        issuer: TypeName,
     }
 
     // key for the inner action struct of a proposal
     public struct ActionKey has copy, drop, store {}
+    // key for the associated access action 
+    public struct AccessKey has copy, drop, store {}
+
+    // hot potato ensuring the action in the proposal is executed as it can't be stored
+    public struct Executable {
+        multisig_addr: address,
+        proposal: Proposal,
+    }
 
     // === Public mutative functions ===
 
@@ -85,7 +91,8 @@ module kraken::multisig {
                     description: _, 
                     expiration_epoch: _, 
                     execution_time: _, 
-                    approved: _ 
+                    approved: _,
+                    issuer: _
                 } = proposal;
                 id.delete();
             };
@@ -97,15 +104,15 @@ module kraken::multisig {
 
     // create a new proposal for an action
     // that must be constructed in another module
-    public fun create_proposal<T: store>(
+    public fun create_proposal<Issuer: drop>(
         multisig: &mut Multisig, 
-        action: T,
-        key: String, 
+        _: Issuer, // module's witness
+        key: String, // proposal key
         execution_time: u64, // timestamp in ms
         expiration_epoch: u64,
         description: String,
         ctx: &mut TxContext
-    ) {
+    ): &mut Proposal {
         assert_is_member(multisig, ctx);
 
         let mut proposal = Proposal { 
@@ -114,11 +121,19 @@ module kraken::multisig {
             execution_time,
             expiration_epoch,
             approved: vec_set::empty(), 
+            issuer: type_name::get<Issuer>(),
         };
 
-        df::add(&mut proposal.id, ActionKey {}, action);
-
         multisig.proposals.insert(key, proposal);
+        multisig.proposals.get_mut(&key)
+    }
+
+    public fun add_action<A: store>(proposal: &mut Proposal, action: A) {
+        df::add(&mut proposal.id, ActionKey {}, action);
+    }
+
+    public fun add_access<Access: store>(proposal: &mut Proposal, access: Access) {
+        df::add(&mut proposal.id, AccessKey {}, access);
     }
 
     // remove a proposal that hasn't been approved yet
@@ -138,7 +153,8 @@ module kraken::multisig {
             expiration_epoch: _, 
             execution_time: _, 
             description: _, 
-            approved: _ 
+            approved: _,
+            issuer: _
         } = proposal;
         id.delete();
     }
@@ -168,29 +184,49 @@ module kraken::multisig {
     }
 
     // return the action if the number of signers is >= threshold
-    public fun execute_proposal<T: store>(
+    public fun execute_proposal(
         multisig: &mut Multisig, 
         key: String, 
         clock: &Clock,
         ctx: &mut TxContext
-    ): Action<T> {
+    ): Executable {
         assert_is_member(multisig, ctx);
 
         let (_, proposal) = multisig.proposals.remove(&key);
-        let Proposal { 
-            mut id, 
-            expiration_epoch: _, 
-            execution_time, 
-            description: _, 
-            approved, 
-        } = proposal;
-        assert!(approved.size() >= multisig.threshold, EThresholdNotReached);
-        assert!(clock.timestamp_ms() >= execution_time, ECantBeExecutedYet);
+        assert!(proposal.approved.size() >= multisig.threshold, EThresholdNotReached);
+        assert!(clock.timestamp_ms() >= proposal.execution_time, ECantBeExecutedYet);
 
-        let inner = df::remove(&mut id, ActionKey {});
+        Executable { multisig_addr: multisig.id.uid_to_inner().id_to_address(), proposal }
+    }
+
+    public fun action_mut<A: store>(executable: &mut Executable): &mut A {
+        df::borrow_mut(&mut executable.proposal.id, ActionKey {})
+    }
+
+    public fun access_mut<Access: store>(executable: &mut Executable): &mut Access {
+        df::borrow_mut(&mut executable.proposal.id, AccessKey {})
+    }
+
+    public fun destroy_proposal<Issuer: drop, A: store, Access: store>(
+        executable: Executable, 
+        _: Issuer
+    ): (A, Access) {
+        let Executable { multisig_addr: _, proposal } = executable;
+        let Proposal { 
+            id, 
+            description: _, 
+            expiration_epoch: _, 
+            execution_time: _, 
+            approved: _,
+            issuer
+        } = proposal;
+        assert!(issuer == type_name::get<Issuer>(), ENotIssuerModule);
+        
+        let action = df::remove(&mut id, ActionKey {});
+        let access = df::remove(&mut id, AccessKey {});
         id.delete();
 
-        Action { inner }
+        (action, access)
     }
 
     // === View functions ===
@@ -235,18 +271,11 @@ module kraken::multisig {
         proposal.approved.into_keys()
     }
 
+    public fun executable_multisig_addr(executable: &Executable): address {
+        executable.multisig_addr
+    }
+
     // === Package functions ===
-
-    // called to access and execute the action
-    public(package) fun action_mut<T: store>(action: &mut Action<T>): &mut T {
-        &mut action.inner
-    }
-
-    // should be called after the action has been executed 
-    public(package) fun unpack_action<T: store>(action: Action<T>): T {
-        let Action { inner } = action;
-        inner
-    }
 
     // callable only in management.move, if the proposal has been accepted
     public(package) fun set_name(multisig: &mut Multisig, name: String) {
