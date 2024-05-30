@@ -9,6 +9,7 @@ module kraken::multisig {
     use sui::dynamic_field as df;
     use sui::vec_set::{Self, VecSet};
     use sui::vec_map::{Self, VecMap};
+    use sui::bag::{Self, Bag};
 
     // === Errors ===
 
@@ -17,6 +18,7 @@ module kraken::multisig {
     const EProposalNotEmpty: u64 = 2;
     const ECantBeExecutedYet: u64 = 3;
     const ENotIssuerModule: u64 = 4;
+    const EHasntExpired: u64 = 5;
 
     // === Structs ===
 
@@ -37,6 +39,8 @@ module kraken::multisig {
     // can be executed if length(approved) >= multisig.threshold
     public struct Proposal has key, store {
         id: UID,
+        // module that issued the proposal and must destroy it
+        module_witness: TypeName,
         // what this proposal aims to do, for informational purpose
         description: String,
         // the proposal can be deleted from this epoch
@@ -44,21 +48,20 @@ module kraken::multisig {
         // proposer can add a timestamp_ms before which the proposal can't be executed
         // can be used to schedule actions via a backend
         execution_time: u64,
+        // actions to be executed from last to first
+        actions: Bag,
         // who has approved the proposal
         approved: VecSet<address>,
-        // module that issued the proposal and must destroy it
-        issuer: TypeName,
     }
-
-    // key for the inner action struct of a proposal
-    public struct ActionKey has copy, drop, store {}
-    // key for the associated access action 
-    public struct AccessKey has copy, drop, store {}
 
     // hot potato ensuring the action in the proposal is executed as it can't be stored
     public struct Executable {
+        // multisig that executed the proposal
         multisig_addr: address,
-        proposal: Proposal,
+        // module that issued the proposal and must destroy it
+        module_witness: TypeName,
+        // actions to be executed from last to first
+        actions: Bag,
     }
 
     // === Public mutative functions ===
@@ -79,34 +82,13 @@ module kraken::multisig {
         transfer::share_object(multisig);
     }
 
-    // anyone can clean expired proposals
-    public fun clean_proposals(multisig: &mut Multisig, ctx: &mut TxContext) {
-        let mut i = multisig.proposals.size();
-        while (i > 0) {
-            let (key, proposal) = multisig.proposals.get_entry_by_idx(i - 1);
-            if (ctx.epoch() >= proposal.expiration_epoch) {
-                let (_, proposal) = multisig.proposals.remove(&*key);
-                let Proposal { 
-                    id, 
-                    description: _, 
-                    expiration_epoch: _, 
-                    execution_time: _, 
-                    approved: _,
-                    issuer: _
-                } = proposal;
-                id.delete();
-            };
-            i = i - 1;
-        } 
-    }
-
     // === Multisig-only functions ===
 
     // create a new proposal for an action
     // that must be constructed in another module
-    public fun create_proposal<Issuer: drop>(
+    public fun create_proposal<Witness: drop>(
         multisig: &mut Multisig, 
-        _: Issuer, // module's witness
+        _: Witness, // module's witness
         key: String, // proposal key
         execution_time: u64, // timestamp in ms
         expiration_epoch: u64,
@@ -117,46 +99,22 @@ module kraken::multisig {
 
         let mut proposal = Proposal { 
             id: object::new(ctx),
+            module_witness: type_name::get<Witness>(),
             description,
             execution_time,
             expiration_epoch,
+            actions: bag::new(ctx),
             approved: vec_set::empty(), 
-            issuer: type_name::get<Issuer>(),
         };
 
         multisig.proposals.insert(key, proposal);
         multisig.proposals.get_mut(&key)
     }
 
-    public fun add_action<A: store>(proposal: &mut Proposal, action: A) {
-        df::add(&mut proposal.id, ActionKey {}, action);
-    }
-
-    public fun add_access<Access: store>(proposal: &mut Proposal, access: Access) {
-        df::add(&mut proposal.id, AccessKey {}, access);
-    }
-
-    // remove a proposal that hasn't been approved yet
-    // prevents malicious members to delete proposals that are still open
-    public fun delete_proposal(
-        multisig: &mut Multisig, 
-        key: String, 
-        ctx: &mut TxContext
-    ) {
-        assert_is_member(multisig, ctx);
-
-        let (_, proposal) = multisig.proposals.remove(&key);
-        assert!(proposal.approved.size() == 0, EProposalNotEmpty);
-        
-        let Proposal { 
-            id, 
-            expiration_epoch: _, 
-            execution_time: _, 
-            description: _, 
-            approved: _,
-            issuer: _
-        } = proposal;
-        id.delete();
+    // push_back action to the proposal bag
+    public fun push_action<A: store>(proposal: &mut Proposal, action: A) {
+        let idx = proposal.actions.length();
+        proposal.actions.add(idx, action);
     }
 
     // the signer agrees with the proposal
@@ -183,7 +141,7 @@ module kraken::multisig {
         proposal.approved.remove(&ctx.sender());
     }
 
-    // return the action if the number of signers is >= threshold
+    // return an executable if the number of signers is >= threshold
     public fun execute_proposal(
         multisig: &mut Multisig, 
         key: String, 
@@ -193,40 +151,77 @@ module kraken::multisig {
         assert_is_member(multisig, ctx);
 
         let (_, proposal) = multisig.proposals.remove(&key);
-        assert!(proposal.approved.size() >= multisig.threshold, EThresholdNotReached);
-        assert!(clock.timestamp_ms() >= proposal.execution_time, ECantBeExecutedYet);
-
-        Executable { multisig_addr: multisig.id.uid_to_inner().id_to_address(), proposal }
-    }
-
-    public fun action_mut<A: store>(executable: &mut Executable): &mut A {
-        df::borrow_mut(&mut executable.proposal.id, ActionKey {})
-    }
-
-    public fun access_mut<Access: store>(executable: &mut Executable): &mut Access {
-        df::borrow_mut(&mut executable.proposal.id, AccessKey {})
-    }
-
-    public fun destroy_proposal<Issuer: drop, A: store, Access: store>(
-        executable: Executable, 
-        _: Issuer
-    ): (A, Access) {
-        let Executable { multisig_addr: _, proposal } = executable;
         let Proposal { 
             id, 
+            module_witness,
             description: _, 
             expiration_epoch: _, 
-            execution_time: _, 
-            approved: _,
-            issuer
+            execution_time,
+            actions,
+            approved,
         } = proposal;
-        assert!(issuer == type_name::get<Issuer>(), ENotIssuerModule);
-        
-        let action = df::remove(&mut id, ActionKey {});
-        let access = df::remove(&mut id, AccessKey {});
         id.delete();
 
-        (action, access)
+        assert!(approved.size() >= multisig.threshold, EThresholdNotReached);
+        assert!(clock.timestamp_ms() >= execution_time, ECantBeExecutedYet);
+
+        Executable { 
+            multisig_addr: multisig.id.uid_to_inner().id_to_address(), 
+            module_witness: module_witness,
+            actions: actions
+        }
+    }
+
+    // if it's none it means we give access to the last action in the bag
+    public fun action_mut<A: store>(executable: &mut Executable, idx: u64): &mut A {
+        executable.actions.borrow_mut(idx)
+    }
+
+    public fun pop_action<Witness: drop, A: store>(
+        executable: &mut Executable, 
+        _: Witness
+    ): A {
+        assert!(executable.module_witness == type_name::get<Witness>(), ENotIssuerModule);
+        let idx = executable.actions.length() - 1;
+        executable.actions.remove(idx)
+    }
+
+    // to complete the execution
+    public fun destroy_executable<Witness: drop>(
+        executable: Executable, 
+        _: Witness
+    ) {
+        let Executable { 
+            multisig_addr: _, 
+            module_witness, 
+            actions 
+        } = executable;
+        assert!(module_witness == type_name::get<Witness>(), ENotIssuerModule);
+        actions.destroy_empty();
+    }
+
+    // removes a proposal if it has expired
+    public fun delete_proposal(
+        multisig: &mut Multisig, 
+        key: String, 
+        ctx: &mut TxContext
+    ): Bag {
+        let (_, proposal) = multisig.proposals.remove(&key);
+        
+        let Proposal { 
+            id, 
+            module_witness: _,
+            expiration_epoch, 
+            execution_time: _, 
+            description: _, 
+            actions,
+            approved: _,
+        } = proposal;
+
+        id.delete();
+        assert!(expiration_epoch >= ctx.epoch(), EHasntExpired);
+
+        actions
     }
 
     // === View functions ===
