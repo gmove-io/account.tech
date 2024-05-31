@@ -1,5 +1,7 @@
 # Kraken - Account Abstraction on Sui
 
+![kraken_logo](https://github.com/gmove-io/kraken/assets/92447129/258838ae-bab1-4f80-975a-a1d36c553280)
+
 ## Overview
 
 The Kraken project aims to provide a versatile ecosystem of apps with native and smart-contract based multisig mechanisms at its center, tailored for both teams and individuals on the Sui blockchain.
