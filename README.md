@@ -1,6 +1,6 @@
 # Kraken - Account Abstraction on Sui
 
-![kraken_logo](https://github.com/gmove-io/kraken/assets/92447129/258838ae-bab1-4f80-975a-a1d36c553280)
+![kraken_banner](./assets/kraken_banner.png)
 
 ## Overview
 
@@ -64,3 +64,6 @@ Contributions are welcome! If you have suggestions for improvements or new featu
 ## License
 
 This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
+
+
+![kraken_logo](./assets/kraken_logo.jpg)
