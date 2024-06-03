@@ -172,11 +172,11 @@ module kraken::multisig {
         }
     }
 
-    // if it's none it means we give access to the last action in the bag
     public fun action_mut<A: store>(executable: &mut Executable, idx: u64): &mut A {
         executable.actions.borrow_mut(idx)
     }
 
+    // need to destroy all actions before destroying the executable
     public fun pop_action<Witness: drop, A: store>(
         executable: &mut Executable, 
         _: Witness
@@ -219,7 +219,7 @@ module kraken::multisig {
         } = proposal;
 
         id.delete();
-        assert!(expiration_epoch >= ctx.epoch(), EHasntExpired);
+        assert!(expiration_epoch <= ctx.epoch(), EHasntExpired);
 
         actions
     }

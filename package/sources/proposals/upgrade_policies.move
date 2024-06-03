@@ -8,7 +8,7 @@ module kraken::upgrade_policies {
     use sui::package::{Self, UpgradeCap, UpgradeTicket, UpgradeReceipt};
     use sui::transfer::Receiving;
     use sui::clock::Clock;
-    use kraken::multisig::{Multisig, Action};
+    use kraken::multisig::{Multisig, Executable};
 
     // === Error ===
 
@@ -18,20 +18,22 @@ module kraken::upgrade_policies {
 
     // === Structs ===
 
+    public struct Witness has drop {}
+
     // action to be held in a Proposal
     public struct Upgrade has store {
         // digest of the package build we want to publish
         digest: vector<u8>,
         // UpgradeLock to receive to access the UpgradeCap
-        upgrade_lock: ID,
+        lock_id: ID,
     }
 
     // action to be held in a Proposal
-    public struct Policy has store {
+    public struct Restrict has store {
         // restrict upgrade to this policy
         policy: u8,
         // UpgradeLock to receive to access the UpgradeCap
-        upgrade_lock: ID,
+        lock_id: ID,
     }
 
     // Wrapper restricting access to an UpgradeCap, with optional timelock
@@ -46,7 +48,7 @@ module kraken::upgrade_policies {
         upgrade_cap: UpgradeCap,
     }
 
-    // === Multisig functions ===
+    // === [PROPOSALS] Public Functions ===
 
     public fun lock_cap(
         multisig: &mut Multisig,
@@ -82,16 +84,17 @@ module kraken::upgrade_policies {
         ctx: &mut TxContext
     ) {
         let received = transfer::receive(multisig.uid_mut(), upgrade_lock);
-        let action = Upgrade { digest, upgrade_lock: received.id.uid_to_inner() };
 
-        multisig.create_proposal(
-            action,
+        let proposal_mut = multisig.create_proposal(
+            Witness {},
             key,
             clock.timestamp_ms() + received.time_lock,
             expiration_epoch,
             description,
             ctx
         );
+        proposal_mut.push_action(new_upgrade(digest, received.id.uid_to_inner()));
+
         transfer::transfer(received, multisig.addr());
     }
 
@@ -100,15 +103,18 @@ module kraken::upgrade_policies {
 
     // step 4: destroy Upgrade and return the UpgradeTicket for upgrading
     public fun execute_upgrade(
-        action: Action<Upgrade>,
+        executable: Executable,
         multisig: &mut Multisig,
         upgrade_lock: Receiving<UpgradeLock>,
     ): (UpgradeTicket, UpgradeLock) {
-        let Upgrade { digest, upgrade_lock: lock_id } = action.unpack_action();
+        let upgrade: Upgrade = executable.pop_action(Witness {});
+        let (digest, lock_id) = upgrade.destroy_upgrade();
+        executable.destroy_executable(Witness {});
+        
         let mut received = transfer::receive(multisig.uid_mut(), upgrade_lock);
         assert!(received.id.uid_to_inner() == lock_id, EWrongUpgradeLock);
 
-        let policy =received.upgrade_cap.policy();
+        let policy = received.upgrade_cap.policy();
         let ticket = package::authorize_upgrade(
             &mut received.upgrade_cap, 
             policy, 
@@ -130,7 +136,7 @@ module kraken::upgrade_policies {
 
     // step 1: propose an Upgrade by passing the digest of the package build
     // execution_time is automatically set to now + timelock
-    public fun propose_policy(
+    public fun propose_restrict(
         multisig: &mut Multisig, 
         key: String,
         execution_time: u64,
@@ -150,16 +156,16 @@ module kraken::upgrade_policies {
             EInvalidPolicy
         );
 
-        let action = Policy { policy, upgrade_lock: received.id.uid_to_inner() };
-
-        multisig.create_proposal(
-            action,
+        let proposal_mut = multisig.create_proposal(
+            Witness {},
             key,
             execution_time,
             expiration_epoch,
             description,
             ctx
         );
+        proposal_mut.push_action(new_restrict(policy, received.id.uid_to_inner()));
+
         transfer::transfer(received, multisig.addr());
     }
 
@@ -167,12 +173,13 @@ module kraken::upgrade_policies {
     // step 3: execute the proposal and return the action (multisig::execute_proposal)
 
     // step 4: destroy Upgrade and return the UpgradeTicket for upgrading
-    public fun execute_policy(
-        action: Action<Policy>,
+    public fun execute_restrict(
+        executable: &mut Executable,
         multisig: &mut Multisig,
         upgrade_lock: Receiving<UpgradeLock>,
     ) {
-        let Policy { policy, upgrade_lock: lock_id } = action.unpack_action();
+        let action: Restrict = executable.pop_action(Witness {});
+        let (policy, lock_id) = destroy_restrict(action);
         let mut received = transfer::receive(multisig.uid_mut(), upgrade_lock);
         assert!(received.id.uid_to_inner() == lock_id, EWrongUpgradeLock);
 
@@ -188,6 +195,28 @@ module kraken::upgrade_policies {
             id.delete();
         };
     }
+
+    // [ACTIONS] Public Functions ===
+
+    public fun new_upgrade(digest: vector<u8>, lock_id: ID): Upgrade {
+        Upgrade { digest, lock_id }
+    }
+
+    public fun destroy_upgrade(upgrade: Upgrade): (vector<u8>, ID) {
+        let Upgrade { digest, lock_id } = upgrade;
+        (digest, lock_id)
+    }
+
+    public fun new_restrict(policy: u8, lock_id: ID): Restrict {
+        Restrict { policy, lock_id }
+    }
+
+    public fun destroy_restrict(restrict: Restrict): (u8, ID) {
+        let Restrict { policy, lock_id } = restrict;
+        (policy, lock_id)
+    }
+
+    // === Test Functions ===
 
     #[test_only]
     public fun upgrade_cap(lock: &UpgradeLock): &UpgradeCap {

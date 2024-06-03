@@ -16,6 +16,8 @@ module kraken::config {
 
     // === Structs ===
 
+    public struct Witness has drop {}
+
     // action to be stored in a Proposal
     public struct Modify has store { 
         // new name if any
@@ -66,15 +68,15 @@ module kraken::config {
         let new_len = multisig.members().length() + to_add.length() - to_remove.length();
         assert!(new_len >= new_threshold, EThresholdTooHigh);
 
-        let action = Modify { name, threshold, to_add, to_remove };
-        multisig.create_proposal(
-            action,
+        let proposal_mut = multisig.create_proposal(
+            Witness {},
             key,
             execution_time,
             expiration_epoch,
             description,
             ctx
         );
+        proposal_mut.push_action(Modify { name, threshold, to_add, to_remove });
     }
 
     // step 2: multiple members have to approve the proposal (multisig::approve_proposal)
@@ -86,8 +88,9 @@ module kraken::config {
         clock: &Clock,
         ctx: &mut TxContext
     ) {
-        let guard = multisig.execute_proposal(name, clock, ctx);
-        let Modify { mut name, mut threshold, to_add, to_remove } = guard.unpack_action();
+        let executable = multisig.execute_proposal(name, clock, ctx);
+        let Modify { mut name, mut threshold, to_add, to_remove } = executable.pop_action(Witness {});
+        executable.destroy_executable(Witness {});
 
         if (name.is_some()) multisig.set_name(name.extract());
         if (threshold.is_some()) multisig.set_threshold(threshold.extract());
