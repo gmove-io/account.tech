@@ -13,7 +13,7 @@ This package implements a multisig-like smart contract based system on the Sui b
 The Kraken's Smart Multisig is built from the ground up for teams and developers. The product provides all functionalities needed to manage multiple projects and funds.
 A fully featured Account Abstraction solution with social recovery for individuals will be built on top using zkLogin, native multisig, transfer to object and any other features replicating the behavior of a classic account. We call it the Kraken's Smart Account.
 
-The primary goal is to enable a broad spectrum of on-chain interactions, surpassing the limitations of existing solutions. It will also be easily integrable with 3rd party packages enabling the creation and management of custom proposals. This project will eventually include different front-ends as well as an SDK and a CLI to streamline operations.
+The primary goal is to enable a broad spectrum of on-chain interactions, surpassing the limitations of existing solutions. It will also be easily integrable with 3rd party packages enabling the creation and management of custom proposals (wip in [feat/executable-proposals](https://github.com/gmove-io/kraken/tree/feat/executable-proposals). This project will eventually include different front-ends as well as an SDK and a CLI to streamline operations.
 
 ## Features
 
@@ -21,7 +21,8 @@ The primary goal is to enable a broad spectrum of on-chain interactions, surpass
 - **Asset Management**: Manage and send your coins or any other object types just like with classic accounts. Transfer and de/list NFTs from/to the Multisig's Kiosk. Easily hide spam objects owned by a Multisig.
 - **Payment Streams**: Pay people by creating streams that will send an amount of coin to an address at regular frequency.
 - **Access Control**: Define any actions in your own module and securely manage their access via the Multisig. Check out the [examples](TODO:).
-- **Package Upgrades**: Lock your UpgradeCaps in your Multisig to enforce agreement on the code to be published. Optionally follow a time-lock built-in policy to protect your users. Helpers will be provided to display upcoming upgrades on your dapp
+- **Package Upgrades**: Lock your UpgradeCaps in your Multisig to enforce agreement on the code to be published. Optionally follow a time-lock built-in policy to protect your users. Helpers will be provided to display upcoming upgrades on your dapp.
+- **Validator management**: Safely manage your validator. (TODO)
 - **Interact with dApps**: Easily interact with dApps on Sui that are integrated to the Multisig. Stake, Swap, Lend your assets, and more. (TODO)
 
 ## Modules
