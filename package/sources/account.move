@@ -64,14 +64,14 @@ module kraken::account {
     // === Member only functions ===
 
     // invites can be sent by a multisig member (upon multisig creation for instance)
-    public fun send_invite(multisig: &mut Multisig, recipient: address, ctx: &mut TxContext) {
+    public fun send_invite(multisig: &Multisig, recipient: address, ctx: &mut TxContext) {
         // user inviting must be member
         multisig.assert_is_member(ctx);
         // invited user must be member
         assert!(multisig.members().contains(&recipient), ENotMember);
         let invite = Invite { 
             id: object::new(ctx), 
-            multisig: multisig.uid_mut().uid_to_inner() 
+            multisig: object::id(multisig) 
         };
         transfer::transfer(invite, recipient);
     }

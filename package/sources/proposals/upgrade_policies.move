@@ -20,7 +20,7 @@ module kraken::upgrade_policies {
 
     public struct Witness has drop {}
 
-    // action to be held in a Proposal
+    // [ACTION]
     public struct Upgrade has store {
         // digest of the package build we want to publish
         digest: vector<u8>,
@@ -28,7 +28,7 @@ module kraken::upgrade_policies {
         lock_id: ID,
     }
 
-    // action to be held in a Proposal
+    // [ACTION]
     public struct Restrict has store {
         // restrict upgrade to this policy
         policy: u8,
@@ -51,7 +51,7 @@ module kraken::upgrade_policies {
     // === [PROPOSALS] Public Functions ===
 
     public fun lock_cap(
-        multisig: &mut Multisig,
+        multisig: &Multisig,
         label: String,
         time_lock: u64,
         upgrade_cap: UpgradeCap,
@@ -126,7 +126,7 @@ module kraken::upgrade_policies {
 
     // step 5: consume the receipt to complete the upgrade
     public fun complete_upgrade(
-        multisig: &mut Multisig,
+        multisig: &Multisig,
         mut upgrade_lock: UpgradeLock,
         receipt: UpgradeReceipt,
     ) {

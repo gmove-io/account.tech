@@ -17,6 +17,7 @@ module kraken::transfers {
     const ESendAllAssetsBefore: u64 = 2;
     const EDeliveryNotEmpty: u64 = 3;
     const EWrongDelivery: u64 = 4;
+    const EWrongMultisig: u64 = 5;
 
     // === Structs ===
 
@@ -38,6 +39,7 @@ module kraken::transfers {
     // shared object holding the objects to be received
     public struct Delivery has key {
         id: UID,
+        multisig_id: ID,
         objects: Bag,
     }
 
@@ -127,8 +129,8 @@ module kraken::transfers {
     // step 3: execute the proposal and return the action (multisig::execute_proposal)
 
     // step 4: creates a new delivery object that can only be shared (no store)
-    public fun create_delivery(ctx: &mut TxContext): (Delivery, DeliveryCap) {
-        let delivery = Delivery { id: object::new(ctx), objects: bag::new(ctx) };
+    public fun create_delivery(multisig: &Multisig, ctx: &mut TxContext): (Delivery, DeliveryCap) {
+        let delivery = Delivery { id: object::new(ctx), multisig_id: object::id(multisig), objects: bag::new(ctx) };
         let cap = DeliveryCap { id: object::new(ctx), delivery_id: object::id(&delivery) };
         (delivery, cap)
     }
@@ -187,7 +189,7 @@ module kraken::transfers {
     public fun complete_delivery(delivery: Delivery, cap: DeliveryCap) {
         let DeliveryCap { id, delivery_id: _ } = cap;
         id.delete();
-        let Delivery { id, objects } = delivery;
+        let Delivery { id, multisig_id: _, objects } = delivery;
         id.delete();
         assert!(objects.is_empty(), EDeliveryNotEmpty);
         objects.destroy_empty();
@@ -195,15 +197,17 @@ module kraken::transfers {
 
     // step 8 (bis): destroy the delivery (member only)
     public fun cancel_delivery(
-        multisig: &mut Multisig, 
+        multisig: &Multisig, 
         delivery: Delivery, 
         ctx: &mut TxContext
     ) {
         multisig.assert_is_member(ctx);
-        let Delivery { id, objects } = delivery;
-        id.delete();
+        let Delivery { id, multisig_id, objects } = delivery;
+        
+        assert!(multisig_id == object::id(multisig), EWrongMultisig);
         assert!(objects.is_empty(), EDeliveryNotEmpty);
         objects.destroy_empty();
+        id.delete();
     }
 
     // === [ACTIONS] Public functions ===

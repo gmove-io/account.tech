@@ -18,7 +18,7 @@ module kraken::config {
 
     public struct Witness has drop {}
 
-    // action to be stored in a Proposal
+    // [ACTION]
     public struct Modify has store { 
         // new name if any
         name: Option<String>,

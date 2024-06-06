@@ -21,7 +21,7 @@ module kraken::payments {
 
     public struct Witness has drop {}
 
-    // action to be held in a Proposal
+    // [ACTION]
     public struct Pay has store {
         // amount to pay at each due date
         amount: u64,
@@ -137,7 +137,7 @@ module kraken::payments {
     // step 6 (bis): multisig member can cancel the payment (member only)
     public fun cancel_payment<C: drop>(
         stream: Stream<C>, 
-        multisig: &mut Multisig,
+        multisig: &Multisig,
         ctx: &mut TxContext
     ) {
         multisig.assert_is_member(ctx);
