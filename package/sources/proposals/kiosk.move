@@ -77,8 +77,6 @@ module kraken::kiosk {
     }
 
     // deposit from another Kiosk, no need for proposal
-    // step 1: borrow_cap
-    // move the nft, validate the request and confirm it
     // only doable if there is maximum a royalty and lock rule for the type
     public fun place<T: key + store>(
         multisig: &mut Multisig, 
@@ -147,18 +145,18 @@ module kraken::kiosk {
         idx: u64,
         ctx: &mut TxContext
     ) {
-        assert!(executable.action_mut<Take>(idx).recipient == ctx.sender(), EWrongReceiver);
+        let take_mut: &mut Take = executable.action_mut(Witness {}, idx);
+        assert!(take_mut.recipient == ctx.sender(), EWrongReceiver);
 
-        let nft_id = executable.action_mut<Take>(idx).nfts.pop_back();
+        let nft_id = take_mut.nfts.pop_back();
         multisig_kiosk.list<T>(&lock.kiosk_owner_cap, nft_id, 0);
-        let (nft, request) = multisig_kiosk.purchase<T>(nft_id, coin::zero<SUI>(ctx));
-        recipient_kiosk.place(recipient_cap, nft);
+        let (nft, mut request) = multisig_kiosk.purchase<T>(nft_id, coin::zero<SUI>(ctx));
 
         if (policy.has_rule<T, kiosk_lock_rule::Rule>()) {
-            recipient_kiosk.lock(&lock.kiosk_owner_cap, policy, nft);
+            recipient_kiosk.lock(recipient_cap, policy, nft);
             kiosk_lock_rule::prove(&mut request, recipient_kiosk);
         } else {
-            recipient_kiosk.place(&lock.kiosk_owner_cap, nft);
+            recipient_kiosk.place(recipient_cap, nft);
         };
 
         if (policy.has_rule<T, royalty_rule::Rule>()) {
@@ -169,7 +167,7 @@ module kraken::kiosk {
     }
 
     // step 5: destroy the executable, must `put_back_cap()`
-    public fun complete_take(executable: Executable) {
+    public fun complete_take(mut executable: Executable) {
         let take: Take = executable.pop_action(Witness {});
         let (nfts, _) = take.destroy_take();
         executable.destroy_executable(Witness {});
@@ -209,13 +207,14 @@ module kraken::kiosk {
         lock: &KioskOwnerLock,
         idx: u64,
     ) {
-        let nft_id = executable.action_mut<List>(idx).nfts.pop_back();
-        let price = executable.action_mut<List>(idx).prices.pop_back();
+        let list_mut: &mut List = executable.action_mut(Witness {}, idx);
+        let nft_id = list_mut.nfts.pop_back();
+        let price = list_mut.prices.pop_back();
         kiosk.list<T>(&lock.kiosk_owner_cap, nft_id, price);
     }
     
     // step 5: destroy the executable, must `put_back_cap()`
-    public fun complete_list(executable: Executable) {
+    public fun complete_list(mut executable: Executable) {
         let list: List = executable.pop_action(Witness {});
         let (nfts, _) = list.destroy_list();
         executable.destroy_executable(Witness {});

@@ -8,7 +8,7 @@ module kraken::transfers {
     use sui::transfer::Receiving;
     use sui::vec_map::{Self, VecMap};
 
-    use kraken::owned::{Self, Withdraw};
+    use kraken::owned;
     use kraken::multisig::{Multisig, Executable};
 
     // === Errors ===
@@ -22,7 +22,7 @@ module kraken::transfers {
     // === Structs ===
 
     // witness verifying a proposal is destroyed in the module where it was created
-    public struct Witness has drop {}
+    public struct Witness has copy, drop {}
 
     // [ACTION] 
     public struct Send has store {
@@ -80,25 +80,20 @@ module kraken::transfers {
     // step 3: execute the proposal and return the action (multisig::execute_proposal)
     
     // step 4: loop over send
-    public fun send<T: key + store>(
+    public fun execute_send<T: key + store>(
         executable: &mut Executable, 
         multisig: &mut Multisig, 
         receiving: Receiving<T>,
-        idx: u64,
     ) {
-        let object = owned::withdraw(executable, multisig, receiving, idx + 1);
-        let send = executable.action_mut<Send>(idx);
-        let (_, recipient) = send.transfers.remove(&transfer::receiving_object_id(&receiving));
-        // abort if receiving object is not in the map
-        transfer::public_transfer(object, recipient);
+        let idx = executable.executable_last_action_idx();
+        send(executable, multisig, Witness {}, receiving, idx);
     }
 
     // step 5: destroy send
-    public fun complete_send(executable: Executable) {
-        let withdraw: Withdraw = executable.pop_action(Witness {}); // 1st action to complete
-        withdraw.destroy_withdraw();
-        let send: Send = executable.pop_action(Witness {}); // 2nd action to complete
-        send.destroy_send();
+    public fun complete_send(mut executable: Executable) {
+        owned::destroy_withdraw(&mut executable, Witness {}); // 1st action to destroy
+        destroy_send(&mut executable, Witness {}); // 2nd action to destroy
+        executable.destroy_executable(Witness {});
     }
 
     // // step 1: propose to deliver object to a recipient that must claim it
@@ -136,29 +131,24 @@ module kraken::transfers {
     }
 
     // step 5: loop over it in PTB, adds last object from the Deliver action
-    public fun add_to_delivery<T: key + store>(
+    public fun execute_deliver<T: key + store>(
         delivery: &mut Delivery, 
         cap: &DeliveryCap,
         executable: &mut Executable, 
         multisig: &mut Multisig,
         received: Receiving<T>,
-        idx: u64
     ) {
-        assert!(cap.delivery_id == object::id(delivery), EWrongDelivery);
-        let object = owned::withdraw(executable, multisig, received, idx + 1);
-        let index = delivery.objects.length();
-        delivery.objects.add(index, object);
+        let idx = executable.executable_last_action_idx();
+        deliver(delivery, cap, executable, multisig, Witness {}, received, idx);
     }
 
     // step 6: share the Delivery and destroy the action
     #[allow(lint(share_owned))]
-    public fun deliver(delivery: Delivery, cap: DeliveryCap, executable: Executable) {
+    public fun complete_deliver(delivery: Delivery, cap: DeliveryCap, mut executable: Executable) {
         assert!(cap.delivery_id == object::id(&delivery), EWrongDelivery);
         
-        let withdraw: Withdraw = executable.pop_action(Witness {}); // 1st action to complete
-        withdraw.destroy_withdraw();
-        let deliver: Deliver = executable.pop_action(Witness {}); // 2nd action to complete
-        let recipient = deliver.destroy_deliver();
+        owned::destroy_withdraw(&mut executable, Witness {});
+        let recipient = destroy_deliver(&mut executable, Witness {});
         executable.destroy_executable(Witness {});
         
         transfer::transfer(cap, recipient);
@@ -186,7 +176,7 @@ module kraken::transfers {
     }
 
     // step 8: destroy the delivery
-    public fun complete_delivery(delivery: Delivery, cap: DeliveryCap) {
+    public fun confirm_delivery(delivery: Delivery, cap: DeliveryCap) {
         let DeliveryCap { id, delivery_id: _ } = cap;
         id.delete();
         let Delivery { id, multisig_id: _, objects } = delivery;
@@ -216,18 +206,48 @@ module kraken::transfers {
         Send { transfers: vec_map::from_keys_values(objects, recipients) }
     }
 
-    public fun destroy_send(action: Send) {
-        let Send { transfers } = action;
+    public fun send<W: copy + drop, T: key + store>(
+        executable: &mut Executable, 
+        multisig: &mut Multisig, 
+        witness: W,
+        receiving: Receiving<T>,
+        idx: u64, // index in actions bag 
+    ) {
+        let object = owned::withdraw(executable, multisig, witness, receiving, idx + 1);
+        let send_mut: &mut Send = executable.action_mut(witness, idx);
+        let (_, recipient) = send_mut.transfers.remove(&object::id(&object));
+        // abort if receiving object is not in the map
+        transfer::public_transfer(object, recipient);
+    }
+
+    public fun destroy_send<W: drop>(executable: &mut Executable, witness: W) {
+        let send: Send = executable.pop_action(witness);
+        let Send { transfers } = send;
         assert!(transfers.is_empty(), ESendAllAssetsBefore);
         transfers.destroy_empty();
     }
 
     public fun new_deliver(recipient: address): Deliver {
         Deliver { recipient }
+    }    
+    
+    public fun deliver<W: drop, T: key + store>(
+        delivery: &mut Delivery, 
+        cap: &DeliveryCap,
+        executable: &mut Executable, 
+        multisig: &mut Multisig,
+        witness: W,
+        received: Receiving<T>,
+        idx: u64 // index in actions bag
+    ) {
+        assert!(cap.delivery_id == object::id(delivery), EWrongDelivery);
+        let object = owned::withdraw(executable, multisig, witness, received, idx + 1);
+        let index = delivery.objects.length();
+        delivery.objects.add(index, object);
     }
 
-    public fun destroy_deliver(action: Deliver): address {
-        let Deliver { recipient } = action;
+    public fun destroy_deliver<W: drop>(executable: &mut Executable, witness: W): address {
+        let Deliver { recipient } = executable.pop_action(witness);
         recipient
     }
 }

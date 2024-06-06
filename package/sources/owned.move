@@ -34,15 +34,16 @@ module kraken::owned {
         Withdraw { objects }
     }
 
-    public fun withdraw<T: key + store>(
+    public fun withdraw<W: drop, T: key + store>(
         executable: &mut Executable,
         multisig: &mut Multisig, 
+        witness: W,
         receiving: Receiving<T>,
         idx: u64,
     ): T {
-        let action = executable.action_mut<Withdraw>(idx);
-        let (_, index) = action.objects.index_of(&transfer::receiving_object_id(&receiving));
-        let id = action.objects.remove(index);
+        let withdraw_mut: &mut Withdraw = executable.action_mut(witness, idx);
+        let (_, index) = withdraw_mut.objects.index_of(&transfer::receiving_object_id(&receiving));
+        let id = withdraw_mut.objects.remove(index);
 
         let received = transfer::public_receive(multisig.uid_mut(), receiving);
         let received_id = object::id(&received);
@@ -51,8 +52,8 @@ module kraken::owned {
         received
     }
 
-    public fun destroy_withdraw(action: Withdraw) {
-        let Withdraw { objects } = action;
+    public fun destroy_withdraw<W: drop>(executable: &mut Executable, witness: W) {
+        let Withdraw { objects } = executable.pop_action(witness);
         assert!(objects.is_empty(), ERetrieveAllObjectsBefore);
         objects.destroy_empty();
     }
@@ -61,31 +62,33 @@ module kraken::owned {
         Borrow { to_return: objects }
     }
 
-    public fun borrow<T: key + store>(
+    public fun borrow<W: drop, T: key + store>(
         executable: &mut Executable,
         multisig: &mut Multisig, 
+        witness: W,
         receiving: Receiving<T>,
         idx: u64,
     ): T {
-        withdraw(executable, multisig, receiving, idx + 1)
+        withdraw(executable, multisig, witness, receiving, idx + 1)
     }
     
-    public fun put_back<T: key + store>(
+    public fun put_back<W: drop, T: key + store>(
         executable: &mut Executable,
         multisig: &Multisig, 
+        witness: W,
         returned: T, 
         idx: u64,
     ) {
-        let action = executable.action_mut<Borrow>(idx);
-        let (exists_, index) = action.to_return.index_of(&object::id(&returned));
+        let borrow_mut: &mut Borrow = executable.action_mut(witness, idx);
+        let (exists_, index) = borrow_mut.to_return.index_of(&object::id(&returned));
         assert!(exists_, EWrongObject);
 
-        action.to_return.remove(index);
+        borrow_mut.to_return.remove(index);
         transfer::public_transfer(returned, multisig.addr());
     }
 
-    public fun destroy_borrow(action: Borrow) {
-        let Borrow { to_return } = action;
+    public fun destroy_borrow<W: drop>(executable: &mut Executable, witness: W) {
+        let Borrow { to_return } = executable.pop_action(witness);
         assert!(to_return.is_empty(), EReturnAllObjectsBefore);
         to_return.destroy_empty();
     }

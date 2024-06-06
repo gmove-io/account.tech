@@ -172,7 +172,11 @@ module kraken::multisig {
         }
     }
 
-    public fun action_mut<A: store>(executable: &mut Executable, idx: u64): &mut A {
+    public fun action_mut<Witness: drop, A: store>(
+        executable: &mut Executable, 
+        _: Witness,
+        idx: u64
+    ): &mut A {
         executable.actions.borrow_mut(idx)
     }
 
@@ -268,6 +272,10 @@ module kraken::multisig {
 
     public fun executable_multisig_addr(executable: &Executable): address {
         executable.multisig_addr
+    }
+
+    public fun executable_last_action_idx(executable: &Executable): u64 {
+        executable.actions.length() - 1
     }
 
     // === Package functions ===

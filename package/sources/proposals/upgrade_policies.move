@@ -103,7 +103,7 @@ module kraken::upgrade_policies {
 
     // step 4: destroy Upgrade and return the UpgradeTicket for upgrading
     public fun execute_upgrade(
-        executable: Executable,
+        mut executable: Executable,
         multisig: &mut Multisig,
         upgrade_lock: Receiving<UpgradeLock>,
     ): (UpgradeTicket, UpgradeLock) {

@@ -88,7 +88,7 @@ module kraken::config {
         clock: &Clock,
         ctx: &mut TxContext
     ) {
-        let executable = multisig.execute_proposal(name, clock, ctx);
+        let mut executable = multisig.execute_proposal(name, clock, ctx);
         let Modify { mut name, mut threshold, to_add, to_remove } = executable.pop_action(Witness {});
         executable.destroy_executable(Witness {});
 
