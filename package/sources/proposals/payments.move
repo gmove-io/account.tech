@@ -79,13 +79,17 @@ module kraken::payments {
 
     // step 4: loop over it in PTB, sends last object from the Send action
     public fun execute_pay<C: drop>(
-        executable: Executable, 
+        mut executable: Executable, 
         multisig: &mut Multisig, 
         received: Receiving<Coin<C>>,
         ctx: &mut TxContext
     ) {
         let idx = executable.executable_last_action_idx();
-        pay(executable, multisig, received, Witness {}, idx, ctx);
+        pay(&mut executable, multisig, received, Witness {}, idx, ctx);
+
+        owned::destroy_withdraw(&mut executable, Witness {});
+        destroy_pay(&mut executable, Witness {});
+        executable.destroy_executable(Witness {});
     }
 
     // step 5: backend send the coin to the recipient until balance is empty
@@ -149,25 +153,23 @@ module kraken::payments {
     }
 
     public fun pay<W: copy + drop, C: drop>(
-        mut executable: Executable, 
+        executable: &mut Executable, 
         multisig: &mut Multisig, 
         received: Receiving<Coin<C>>,
         witness: W,
         idx: u64, // index in actions bag
         ctx: &mut TxContext
     ) {
-        let coin = owned::withdraw(&mut executable, multisig, witness, received, idx + 1);
-        owned::destroy_withdraw(&mut executable, witness);
-        let (amount, interval, recipient) = destroy_pay(&mut executable, witness);
-        executable.destroy_executable(Witness {});
+        let coin = owned::withdraw(executable, multisig, witness, received, idx + 1);
+        let pay_mut: &mut Pay = executable.action_mut(witness, idx);
 
         let stream = Stream<C> { 
             id: object::new(ctx), 
             balance: coin.into_balance(), 
-            amount,
-            interval,
+            amount: pay_mut.amount,
+            interval: pay_mut.interval,
             last_epoch: 0,
-            recipient 
+            recipient: pay_mut.recipient
         };
         transfer::share_object(stream);
     }
