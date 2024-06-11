@@ -18,7 +18,7 @@ module kraken::config {
 
     public struct Witness has drop {}
 
-    // [ACTION]
+    // [ACTION] upgrade is separate for better ux
     public struct Modify has store { 
         // new name if any
         name: Option<String>,
@@ -30,6 +30,12 @@ module kraken::config {
         weights: vector<u64>,
         // addresses to remove
         to_remove: vector<address>,
+    }
+
+    // [ACTION] update the version of the multisig
+    public struct Migrate has store { 
+        // the new version
+        version: u64,
     }
 
     // === Multisig-only functions ===
@@ -99,6 +105,42 @@ module kraken::config {
         if (threshold.is_some()) multisig.set_threshold(threshold.extract());
         multisig.add_members(to_add, weights);
         multisig.remove_members(to_remove);
+    }
+
+    // step 1: propose to update the version
+    public fun propose_migrate(
+        multisig: &mut Multisig, 
+        key: String,
+        execution_time: u64,
+        expiration_epoch: u64,
+        description: String,
+        version: u64,
+        ctx: &mut TxContext
+    ) {
+        let proposal_mut = multisig.create_proposal(
+            Witness {},
+            key,
+            execution_time,
+            expiration_epoch,
+            description,
+            ctx
+        );
+        proposal_mut.push_action(Migrate { version });
+    }
+
+    // step 2: multiple members have to approve the proposal (multisig::approve_proposal)
+
+    // step 3: execute the action and modify Multisig object
+    public fun execute_migrate(
+        multisig: &mut Multisig, 
+        name: String,
+        clock: &Clock,
+        ctx: &mut TxContext
+    ) {
+        let mut executable = multisig.execute_proposal(name, clock, ctx);
+        let Migrate { version } = executable.pop_action(Witness {});
+        executable.destroy_executable(Witness {});
+        multisig.set_version(version);
     }
 }
 

@@ -3,10 +3,9 @@
 /// The proposals have to be approved by at least the threshold number of members.
 
 module kraken::multisig {
-    use std::string::{Self, String};
+    use std::string::String;
     use std::type_name::{Self, TypeName};
     use sui::clock::Clock;
-    use sui::dynamic_field as df;
     use sui::vec_set::{Self, VecSet};
     use sui::vec_map::{Self, VecMap};
     use sui::bag::{Self, Bag};
@@ -18,12 +17,19 @@ module kraken::multisig {
     const ECantBeExecutedYet: u64 = 2;
     const ENotIssuerModule: u64 = 3;
     const EHasntExpired: u64 = 4;
+    const EWrongVersion: u64 = 5;
+
+    // === Constants ===
+
+    const VERSION: u64 = 1;
 
     // === Structs ===
 
     // shared object 
     public struct Multisig has key {
         id: UID,
+        // version of the package this multisig is using
+        version: u64,
         // human readable name to differentiate the multisigs
         name: String,
         // has to be always <= sum(members.weight)
@@ -81,6 +87,7 @@ module kraken::multisig {
     public fun new(name: String, ctx: &mut TxContext): Multisig {
         Multisig { 
             id: object::new(ctx),
+            version: VERSION,
             name,
             threshold: 0,
             total_weight: 0,
@@ -108,7 +115,8 @@ module kraken::multisig {
         description: String,
         ctx: &mut TxContext
     ): &mut Proposal {
-        assert_is_member(multisig, ctx);
+        multisig.assert_is_member(ctx);
+        multisig.assert_version();
 
         let proposal = Proposal { 
             id: object::new(ctx),
@@ -137,7 +145,8 @@ module kraken::multisig {
         key: String, 
         ctx: &mut TxContext
     ) {
-        assert_is_member(multisig, ctx);
+        multisig.assert_is_member(ctx);
+        multisig.assert_version();
 
         let proposal = multisig.proposals.get_mut(&key);
         proposal.approved.insert(ctx.sender()); // throws if already approved
@@ -151,7 +160,8 @@ module kraken::multisig {
         key: String, 
         ctx: &mut TxContext
     ) {
-        assert_is_member(multisig, ctx);
+        multisig.assert_is_member(ctx);
+        multisig.assert_version();
 
         let proposal = multisig.proposals.get_mut(&key);
         proposal.approved.remove(&ctx.sender());
@@ -166,7 +176,8 @@ module kraken::multisig {
         clock: &Clock,
         ctx: &mut TxContext
     ): Executable {
-        assert_is_member(multisig, ctx);
+        multisig.assert_is_member(ctx);
+        multisig.assert_version();
 
         let (_, proposal) = multisig.proposals.remove(&key);
         let Proposal { 
@@ -229,8 +240,9 @@ module kraken::multisig {
         key: String, 
         ctx: &mut TxContext
     ): Bag {
+        multisig.assert_version();
         let (_, proposal) = multisig.proposals.remove(&key);
-        
+
         let Proposal { 
             id, 
             module_witness: _,
@@ -249,6 +261,10 @@ module kraken::multisig {
     }
 
     // === View functions ===
+
+    public fun assert_version(multisig: &Multisig) {
+        assert!(multisig.version == VERSION, EWrongVersion);
+    }
 
     public fun addr(multisig: &Multisig): address {
         multisig.id.uid_to_inner().id_to_address()
@@ -328,6 +344,11 @@ module kraken::multisig {
     }
 
     // === Package functions ===
+
+    // callable only in config.move, if the proposal has been accepted
+    public(package) fun set_version(multisig: &mut Multisig, version: u64) {
+        multisig.version = version;
+    }
 
     // callable only in config.move, if the proposal has been accepted
     public(package) fun set_name(multisig: &mut Multisig, name: String) {
