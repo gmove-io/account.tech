@@ -49,7 +49,7 @@ module kraken::account {
         );
     }
 
-    // === [MEMBERS] Public functions ===
+    // === [MEMBER] Public functions ===
 
     // fill account_id in Multisig, insert multisig_id in Account, abort if already joined
     public fun join_multisig(account: &mut Account, multisig: &mut Multisig, ctx: &TxContext) {

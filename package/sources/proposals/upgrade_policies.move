@@ -56,7 +56,7 @@ module kraken::upgrade_policies {
         delay_ms: u64,
     }
 
-    // === [MEMBERS] Public Functions ===
+    // === [MEMBER] Public Functions ===
 
     // must be sent to multisig with put_back_cap afterwards
     public fun lock_cap(
@@ -112,7 +112,7 @@ module kraken::upgrade_policies {
         transfer::transfer(lock, addr);
     }
 
-    // === [PROPOSALS] Public Functions ===
+    // === [PROPOSAL] Public Functions ===
 
     // step 1: propose an Upgrade by passing the digest of the package build
     // execution_time is automatically set to now + timelock
@@ -217,7 +217,7 @@ module kraken::upgrade_policies {
         executable.destroy_executable(Witness {});
     }
 
-    // [ACTIONS] Public Functions ===
+    // [ACTION] Public Functions ===
 
     public fun new_upgrade(digest: vector<u8>, lock_id: ID): Upgrade {
         Upgrade { digest, lock_id }

@@ -46,7 +46,7 @@ module kraken::kiosk {
         prices: vector<u64>, 
     }
 
-    // === [MEMBERS] Public functions ===
+    // === [MEMBER] Public functions ===
 
     // not composable because of the lock
     #[allow(lint(share_owned))]
@@ -140,7 +140,7 @@ module kraken::kiosk {
         );
     }
 
-    // === [PROPOSALS] Public functions ===
+    // === [PROPOSAL] Public functions ===
 
     // step 1: propose to transfer nfts to another kiosk
     public fun propose_take(
@@ -232,7 +232,7 @@ module kraken::kiosk {
         nfts.destroy_empty();
     }
 
-    // === [ACTIONS] Public functions ===
+    // === [ACTION] Public functions ===
 
     public fun new_take(nft_ids: vector<ID>, recipient: address): Take {
         Take { nft_ids, recipient }

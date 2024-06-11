@@ -46,7 +46,7 @@ module kraken::payments {
         recipient: address,
     }
 
-    // === [PROPOSALS] Public Functions ===
+    // === [PROPOSAL] Public Functions ===
 
     // step 1: propose to create a Stream with a specific amount to be paid at each interval
     public fun propose_pay(
@@ -146,7 +146,7 @@ module kraken::payments {
         );
     }
 
-    // === [ACTIONS] Public Functions ===
+    // === [ACTION] Public Functions ===
 
     public fun new_pay(amount: u64, interval: u64, recipient: address): Pay {
         Pay { amount, interval, recipient }

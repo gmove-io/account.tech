@@ -49,7 +49,7 @@ module kraken::transfers {
         delivery_id: ID,
     }
 
-    // === [PROPOSALS] Public functions ===
+    // === [PROPOSAL] Public functions ===
 
     // step 1: propose to send owned objects
     public fun propose_send(
@@ -200,7 +200,7 @@ module kraken::transfers {
         id.delete();
     }
 
-    // === [ACTIONS] Public functions ===
+    // === [ACTION] Public functions ===
 
     public fun new_send(objects: vector<ID>, recipients: vector<address>): Send {
         Send { transfers: vec_map::from_keys_values(objects, recipients) }

@@ -7,7 +7,7 @@ module kraken::coin_operations {
     use sui::transfer::Receiving;
     use kraken::multisig::Multisig;
 
-    // === [MEMBERS] Public functions ===
+    // === [MEMBER] Public functions ===
 
     // members can merge coins, no need for approvals
     public fun merge<T: drop>(

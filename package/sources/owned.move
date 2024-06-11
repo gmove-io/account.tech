@@ -28,7 +28,7 @@ module kraken::owned {
         to_return: vector<ID>,
     }
 
-    // === [ACTIONS] Public functions ===
+    // === [ACTION] Public functions ===
 
     public fun new_withdraw(objects: vector<ID>): Withdraw {
         Withdraw { objects }
