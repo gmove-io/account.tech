@@ -6,7 +6,7 @@
 
 module kraken::owned {    
     use sui::transfer::Receiving;
-    use kraken::multisig::Multisig;
+    use kraken::multisig::{Multisig, Executable};
 
     // === Errors ===
 
@@ -16,34 +16,35 @@ module kraken::owned {
 
     // === Structs ===
 
-    // action to be stored in a Proposal
-    // guard access to multisig owned objects which can only be received via this action
+    // [ACTION] guard access to multisig owned objects which can only be received via this action
     public struct Withdraw has store {
         // the owned objects we want to access
         objects: vector<ID>,
     }
 
-    // action to be stored in a Proposal
-    // wrapper enforcing accessed objects to be sent back to the multisig
+    // [ACTION] enforces accessed objects to be sent back to the multisig
     public struct Borrow has store {
-        // sub action retrieving objects
-        withdraw: Withdraw,
         // list of objects to put back into the multisig
         to_return: vector<ID>,
     }
 
-    // === Package functions ===
+    // === [ACTIONS] Public functions ===
 
-    public(package) fun new_withdraw(objects: vector<ID>): Withdraw {
+    public fun new_withdraw(objects: vector<ID>): Withdraw {
         Withdraw { objects }
     }
 
-    public(package) fun withdraw<T: key + store>(
-        action: &mut Withdraw,
+    public fun withdraw<W: drop, T: key + store>(
+        executable: &mut Executable,
         multisig: &mut Multisig, 
-        receiving: Receiving<T>
+        witness: W,
+        receiving: Receiving<T>,
+        idx: u64,
     ): T {
-        let id = action.objects.pop_back();
+        let withdraw_mut: &mut Withdraw = executable.action_mut(witness, idx);
+        let (_, index) = withdraw_mut.objects.index_of(&transfer::receiving_object_id(&receiving));
+        let id = withdraw_mut.objects.remove(index);
+
         let received = transfer::public_receive(multisig.uid_mut(), receiving);
         let received_id = object::id(&received);
         assert!(received_id == id, EWrongObject);
@@ -51,46 +52,44 @@ module kraken::owned {
         received
     }
 
-    public(package) fun complete_withdraw(action: Withdraw) {
-        let Withdraw { objects } = action;
+    public fun destroy_withdraw<W: drop>(executable: &mut Executable, witness: W) {
+        let Withdraw { objects } = executable.pop_action(witness);
         assert!(objects.is_empty(), ERetrieveAllObjectsBefore);
         objects.destroy_empty();
     }
 
-    public(package) fun new_borrow(objects: vector<ID>): Borrow {
-        Borrow {
-            withdraw: new_withdraw(objects),
-            to_return: objects,
-        }
+    public fun new_borrow(objects: vector<ID>): Borrow {
+        Borrow { to_return: objects }
     }
 
-    public(package) fun borrow<T: key + store>(
-        action: &mut Borrow,
+    public fun borrow<W: drop, T: key + store>(
+        executable: &mut Executable,
         multisig: &mut Multisig, 
-        receiving: Receiving<T>
+        witness: W,
+        receiving: Receiving<T>,
+        idx: u64,
     ): T {
-        action.withdraw.withdraw(multisig, receiving)
+        withdraw(executable, multisig, witness, receiving, idx + 1)
     }
     
-    // step 5: return the object to the multisig to empty `to_return` vector
-    public(package) fun put_back<T: key + store>(
-        action: &mut Borrow,
+    public fun put_back<W: drop, T: key + store>(
+        executable: &mut Executable,
         multisig: &Multisig, 
+        witness: W,
         returned: T, 
+        idx: u64,
     ) {
-        let (exists_, index) =
-            action.to_return.index_of(&object::id(&returned));
+        let borrow_mut: &mut Borrow = executable.action_mut(witness, idx);
+        let (exists_, index) = borrow_mut.to_return.index_of(&object::id(&returned));
         assert!(exists_, EWrongObject);
-        action.to_return.remove(index);
+
+        borrow_mut.to_return.remove(index);
         transfer::public_transfer(returned, multisig.addr());
     }
 
-    // step 6: destroy the action once all objects are retrieved/received
-    public(package) fun complete_borrow(action: Borrow) {
-        let Borrow { withdraw, to_return } = action;
-        complete_withdraw(withdraw);
+    public fun destroy_borrow<W: drop>(executable: &mut Executable, witness: W) {
+        let Borrow { to_return } = executable.pop_action(witness);
         assert!(to_return.is_empty(), EReturnAllObjectsBefore);
         to_return.destroy_empty();
     }
 }
-

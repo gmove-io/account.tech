@@ -12,6 +12,9 @@ module kraken::account {
     // === Errors ===
 
     const ENotMember: u64 = 0;
+    const EWrongAccount: u64 = 1;
+    const EMustLeaveAllMultisigs: u64 = 2;
+    const EWrongMultisig: u64 = 3;
 
     // === Struct ===
 
@@ -23,15 +26,15 @@ module kraken::account {
         // to display on the frontends
         profile_picture: String,
         // multisigs that the user has joined
-        multisigs: VecSet<ID>,
+        multisig_ids: VecSet<ID>,
     }
 
     public struct Invite has key { 
         id: UID, 
-        multisig: ID,
+        multisig_id: ID,
     }
 
-    // === Public mutative functions ===
+    // === Public functions ===
 
     // creates and send a soulbound Account to the sender (1 per user)
     public fun new(username: String, profile_picture: String, ctx: &mut TxContext) {
@@ -40,52 +43,59 @@ module kraken::account {
                 id: object::new(ctx),
                 username,
                 profile_picture,
-                multisigs: vec_set::empty(),
+                multisig_ids: vec_set::empty(),
             },
             ctx.sender(),
         );
     }
 
-    // doesn't modify Multisig's members, abort if already member
-    public fun join_multisig(account: &mut Account, multisig: ID) {
-        account.multisigs.insert(multisig); 
+    // === [MEMBERS] Public functions ===
+
+    // fill account_id in Multisig, insert multisig_id in Account, abort if already joined
+    public fun join_multisig(account: &mut Account, multisig: &mut Multisig, ctx: &TxContext) {
+        multisig.assert_is_member(ctx);
+        multisig.register_account_id(object::id(account), ctx);
+        account.multisig_ids.insert(object::id(multisig)); 
     }
 
-    // doesn't modify Multisig's members, abort if not member
-    public fun leave_multisig(account: &mut Account, multisig: ID) {
-        account.multisigs.remove(&multisig);
+    // extract and verify account_id in Multisig, remove multisig_id from account, abort if not member
+    public fun leave_multisig(account: &mut Account, multisig: &mut Multisig, ctx: &TxContext) {
+        multisig.assert_is_member(ctx);
+        assert!(object::id(account) == multisig.unregister_account_id(ctx), EWrongAccount);
+        account.multisig_ids.remove(&object::id(multisig));
     }
 
+    // must leave all multisigs before, for consistency
     public fun destroy(account: Account) {
-        let Account { id, username: _, profile_picture: _, multisigs: _ } = account;
+        let Account { id, username: _, profile_picture: _, multisig_ids } = account;
+        assert!(multisig_ids.is_empty(), EMustLeaveAllMultisigs);
         id.delete();
     }
 
-    // === Member only functions ===
-
     // invites can be sent by a multisig member (upon multisig creation for instance)
-    public fun send_invite(multisig: &mut Multisig, recipient: address, ctx: &mut TxContext) {
+    public fun send_invite(multisig: &Multisig, recipient: address, ctx: &mut TxContext) {
         // user inviting must be member
         multisig.assert_is_member(ctx);
         // invited user must be member
-        assert!(multisig.members().contains(&recipient), ENotMember);
+        assert!(multisig.member_addresses().contains(&recipient), ENotMember);
         let invite = Invite { 
             id: object::new(ctx), 
-            multisig: multisig.uid_mut().uid_to_inner() 
+            multisig_id: object::id(multisig) 
         };
         transfer::transfer(invite, recipient);
     }
 
     // invited user can register the multisig in his account
-    public fun accept_invite(account: &mut Account, invite: Invite) {
-        let Invite { id, multisig } = invite;
+    public fun accept_invite(account: &mut Account, multisig: &mut Multisig, invite: Invite, ctx: &TxContext) {
+        let Invite { id, multisig_id } = invite;
         id.delete();
-        account.multisigs.insert(multisig);
+        assert!(multisig_id == object::id(multisig), EWrongMultisig);
+        account.join_multisig(multisig, ctx);
     }
 
     // delete the invite object
     public fun refuse_invite(invite: Invite) {
-        let Invite { id, multisig: _ } = invite;
+        let Invite { id, multisig_id: _ } = invite;
         id.delete();
     }
 
@@ -99,11 +109,11 @@ module kraken::account {
         account.profile_picture
     }
 
-    public fun multisigs(account: &Account): vector<ID> {
-        account.multisigs.into_keys()
+    public fun multisig_ids(account: &Account): vector<ID> {
+        account.multisig_ids.into_keys()
     }
 
-    public fun multisig(invite: &Invite): ID {
-        invite.multisig
+    public fun multisig_id(invite: &Invite): ID {
+        invite.multisig_id
     }
 }

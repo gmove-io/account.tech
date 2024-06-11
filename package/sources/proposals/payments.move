@@ -9,8 +9,8 @@ module kraken::payments {
     use sui::balance::Balance;
     use sui::coin::{Self, Coin};
     
-    use kraken::owned::{Self, Withdraw};
-    use kraken::multisig::{Multisig, Action};
+    use kraken::owned;
+    use kraken::multisig::{Multisig, Executable};
 
     // === Errors ===
 
@@ -19,10 +19,10 @@ module kraken::payments {
 
     // === Structs ===
 
-    // action to be held in a Proposal
+    public struct Witness has copy, drop {}
+
+    // [ACTION]
     public struct Pay has store {
-        // sub action - coin to access (with the right amount)
-        withdraw: Withdraw,
         // amount to pay at each due date
         amount: u64,
         // number of epochs between each payment
@@ -46,7 +46,7 @@ module kraken::payments {
         recipient: address,
     }
 
-    // === Multisig functions ===
+    // === [PROPOSALS] Public Functions ===
 
     // step 1: propose to create a Stream with a specific amount to be paid at each interval
     public fun propose_pay(
@@ -61,45 +61,39 @@ module kraken::payments {
         recipient: address,
         ctx: &mut TxContext
     ) {
-        let withdraw = owned::new_withdraw(vector[coin]);
-        let action = Pay { withdraw, amount, interval, recipient };
-        multisig.create_proposal(
-            action,
+        let proposal_mut = multisig.create_proposal(
+            Witness {},
             key,
             execution_time,
             expiration_epoch,
             description,
             ctx
         );
+
+        proposal_mut.push_action(new_pay(amount, interval, recipient));
+        proposal_mut.push_action(owned::new_withdraw(vector[coin]));
     }
 
     // step 2: multiple members have to approve the proposal (multisig::approve_proposal)
     // step 3: execute the proposal and return the action (multisig::execute_proposal)
 
     // step 4: loop over it in PTB, sends last object from the Send action
-    public fun create_stream<C: drop>(
-        action: Action<Pay>, 
+    public fun execute_pay<C: drop>(
+        mut executable: Executable, 
         multisig: &mut Multisig, 
         received: Receiving<Coin<C>>,
         ctx: &mut TxContext
     ) {
-        let Pay { mut withdraw, amount, interval, recipient } = action.unpack_action();
-        let coin = withdraw.withdraw(multisig, received);
-        withdraw.complete_withdraw();
+        let idx = executable.executable_last_action_idx();
+        pay(&mut executable, multisig, received, Witness {}, idx, ctx);
 
-        let stream = Stream<C> { 
-            id: object::new(ctx), 
-            balance: coin.into_balance(), 
-            amount,
-            interval,
-            last_epoch: 0,
-            recipient 
-        };
-        transfer::share_object(stream);
+        owned::destroy_withdraw(&mut executable, Witness {});
+        destroy_pay(&mut executable, Witness {});
+        executable.destroy_executable(Witness {});
     }
 
     // step 5: backend send the coin to the recipient until balance is empty
-    public fun pay<C: drop>(stream: &mut Stream<C>, ctx: &mut TxContext) {
+    public fun disburse<C: drop>(stream: &mut Stream<C>, ctx: &mut TxContext) {
         assert!(ctx.epoch() > stream.last_epoch + stream.interval, EPayTooEarly);
 
         let amount = if (stream.balance.value() < stream.amount) {
@@ -114,7 +108,7 @@ module kraken::payments {
     }
 
     // step 6: destroy the stream when balance is empty
-    public fun complete_stream<C: drop>(stream: Stream<C>) {
+    public fun destroy_empty_stream<C: drop>(stream: Stream<C>) {
         let Stream { 
             id, 
             balance, 
@@ -130,9 +124,9 @@ module kraken::payments {
     }
 
     // step 6 (bis): multisig member can cancel the payment (member only)
-    public fun cancel_payment<C: drop>(
+    public fun cancel_payment_stream<C: drop>(
         stream: Stream<C>, 
-        multisig: &mut Multisig,
+        multisig: &Multisig,
         ctx: &mut TxContext
     ) {
         multisig.assert_is_member(ctx);
@@ -150,6 +144,39 @@ module kraken::payments {
             coin::from_balance(balance, ctx), 
             multisig.addr()
         );
+    }
+
+    // === [ACTIONS] Public Functions ===
+
+    public fun new_pay(amount: u64, interval: u64, recipient: address): Pay {
+        Pay { amount, interval, recipient }
+    }
+
+    public fun pay<W: copy + drop, C: drop>(
+        executable: &mut Executable, 
+        multisig: &mut Multisig, 
+        received: Receiving<Coin<C>>,
+        witness: W,
+        idx: u64, // index in actions bag
+        ctx: &mut TxContext
+    ) {
+        let coin = owned::withdraw(executable, multisig, witness, received, idx + 1);
+        let pay_mut: &mut Pay = executable.action_mut(witness, idx);
+
+        let stream = Stream<C> { 
+            id: object::new(ctx), 
+            balance: coin.into_balance(), 
+            amount: pay_mut.amount,
+            interval: pay_mut.interval,
+            last_epoch: 0,
+            recipient: pay_mut.recipient
+        };
+        transfer::share_object(stream);
+    }
+
+    public fun destroy_pay<W: drop>(executable: &mut Executable, witness: W): (u64, u64, address) {
+        let Pay { amount, interval, recipient } = executable.pop_action(witness);
+        (amount, interval, recipient)
     }
 }
 
