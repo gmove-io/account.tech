@@ -34,7 +34,7 @@ module kraken::account {
         multisig_id: ID,
     }
 
-    // === Public mutative functions ===
+    // === Public functions ===
 
     // creates and send a soulbound Account to the sender (1 per user)
     public fun new(username: String, profile_picture: String, ctx: &mut TxContext) {
@@ -48,6 +48,8 @@ module kraken::account {
             ctx.sender(),
         );
     }
+
+    // === [MEMBERS] Public functions ===
 
     // fill account_id in Multisig, insert multisig_id in Account, abort if already joined
     public fun join_multisig(account: &mut Account, multisig: &mut Multisig, ctx: &TxContext) {
@@ -69,8 +71,6 @@ module kraken::account {
         assert!(multisig_ids.is_empty(), EMustLeaveAllMultisigs);
         id.delete();
     }
-
-    // === Member only functions ===
 
     // invites can be sent by a multisig member (upon multisig creation for instance)
     public fun send_invite(multisig: &Multisig, recipient: address, ctx: &mut TxContext) {

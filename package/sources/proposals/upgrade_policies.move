@@ -48,7 +48,7 @@ module kraken::upgrade_policies {
         upgrade_cap: UpgradeCap,
     }
 
-    // === [PROPOSALS] Public Functions ===
+    // === [MEMBERS] Public Functions ===
 
     public fun lock_cap(
         multisig: &Multisig,
@@ -70,6 +70,8 @@ module kraken::upgrade_policies {
 
         id
     }
+
+    // === [PROPOSALS] Public Functions ===
 
     // step 1: propose an Upgrade by passing the digest of the package build
     // execution_time is automatically set to now + timelock
