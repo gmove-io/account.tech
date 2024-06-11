@@ -42,6 +42,8 @@ module kraken::upgrade_policies {
         id: UID,
         // name or description of the cap
         label: String,
+        // multisig owning the lock
+        multisig_addr: address,
         // enforced minimal duration in ms between proposal and upgrade (can be 0)
         time_lock: u64,
         // the cap to lock
@@ -61,6 +63,7 @@ module kraken::upgrade_policies {
         let lock = UpgradeLock { 
             id: object::new(ctx), 
             label, 
+            multisig_addr: multisig.addr(),
             time_lock, 
             upgrade_cap 
         };
@@ -71,33 +74,46 @@ module kraken::upgrade_policies {
         id
     }
 
+    // borrow the lock that can only be put back in the multisig because no store
+    public fun borrow_cap(
+        multisig: &mut Multisig, 
+        lock: Receiving<UpgradeLock>,
+        ctx: &mut TxContext
+    ): UpgradeLock {
+        multisig.assert_is_member(ctx);
+        transfer::receive(multisig.uid_mut(), lock)
+    }
+
+    // can only be returned here, except if make_immutable
+    public fun put_back_cap(lock: UpgradeLock) {
+        let addr = lock.multisig_addr;
+        transfer::transfer(lock, addr);
+    }
+
     // === [PROPOSALS] Public Functions ===
 
     // step 1: propose an Upgrade by passing the digest of the package build
     // execution_time is automatically set to now + timelock
+    // if timelock = 0, it means that upgrade can be executed at any time
     public fun propose_upgrade(
         multisig: &mut Multisig, 
         key: String,
         expiration_epoch: u64,
         description: String,
         digest: vector<u8>,
-        upgrade_lock: Receiving<UpgradeLock>,
+        lock: &UpgradeLock,
         clock: &Clock,
         ctx: &mut TxContext
     ) {
-        let received = transfer::receive(multisig.uid_mut(), upgrade_lock);
-
         let proposal_mut = multisig.create_proposal(
             Witness {},
             key,
-            clock.timestamp_ms() + received.time_lock,
+            clock.timestamp_ms() + lock.time_lock,
             expiration_epoch,
             description,
             ctx
         );
-        proposal_mut.push_action(new_upgrade(digest, received.id.uid_to_inner()));
-
-        transfer::transfer(received, multisig.addr());
+        proposal_mut.push_action(new_upgrade(digest, object::id(lock)));
     }
 
     // step 2: multiple members have to approve the proposal (multisig::approve_proposal)
@@ -106,34 +122,22 @@ module kraken::upgrade_policies {
     // step 4: destroy Upgrade and return the UpgradeTicket for upgrading
     public fun execute_upgrade(
         mut executable: Executable,
-        multisig: &mut Multisig,
-        upgrade_lock: Receiving<UpgradeLock>,
-    ): (UpgradeTicket, UpgradeLock) {
-        let upgrade: Upgrade = executable.pop_action(Witness {});
-        let (digest, lock_id) = upgrade.destroy_upgrade();
+        lock: &mut UpgradeLock,
+    ): UpgradeTicket {
+        let idx = executable.executable_last_action_idx();
+        let ticket = upgrade(&mut executable, lock, Witness {}, idx);
+        destroy_upgrade(&mut executable, Witness {});
         executable.destroy_executable(Witness {});
-        
-        let mut received = transfer::receive(multisig.uid_mut(), upgrade_lock);
-        assert!(received.id.uid_to_inner() == lock_id, EWrongUpgradeLock);
 
-        let policy = received.upgrade_cap.policy();
-        let ticket = package::authorize_upgrade(
-            &mut received.upgrade_cap, 
-            policy, 
-            digest
-        );
-
-        (ticket, received)
+        ticket 
     }    
 
-    // step 5: consume the receipt to complete the upgrade
-    public fun complete_upgrade(
-        multisig: &Multisig,
-        mut upgrade_lock: UpgradeLock,
+    // step 5: consume the receipt to commit the upgrade
+    public fun confirm_upgrade(
+        upgrade_lock: &mut UpgradeLock,
         receipt: UpgradeReceipt,
     ) {
         package::commit_upgrade(&mut upgrade_lock.upgrade_cap, receipt);
-        transfer::transfer(upgrade_lock, multisig.addr());
     }
 
     // step 1: propose an Upgrade by passing the digest of the package build
@@ -145,11 +149,10 @@ module kraken::upgrade_policies {
         expiration_epoch: u64,
         description: String,
         policy: u8,
-        upgrade_lock: Receiving<UpgradeLock>,
+        lock: &UpgradeLock,
         ctx: &mut TxContext
     ) {
-        let received = transfer::receive(multisig.uid_mut(), upgrade_lock);
-        let current_policy = received.upgrade_cap.policy();
+        let current_policy = lock.upgrade_cap.policy();
         assert!(policy > current_policy, EPolicyShouldRestrict);
         assert!(
             policy == package::additive_policy() ||
@@ -166,9 +169,7 @@ module kraken::upgrade_policies {
             description,
             ctx
         );
-        proposal_mut.push_action(new_restrict(policy, received.id.uid_to_inner()));
-
-        transfer::transfer(received, multisig.addr());
+        proposal_mut.push_action(new_restrict(policy, object::id(lock)));
     }
 
     // step 2: multiple members have to approve the proposal (multisig::approve_proposal)
@@ -176,45 +177,69 @@ module kraken::upgrade_policies {
 
     // step 4: destroy Upgrade and return the UpgradeTicket for upgrading
     public fun execute_restrict(
-        executable: &mut Executable,
+        mut executable: Executable,
         multisig: &mut Multisig,
-        upgrade_lock: Receiving<UpgradeLock>,
+        lock: UpgradeLock,
     ) {
-        let action: Restrict = executable.pop_action(Witness {});
-        let (policy, lock_id) = destroy_restrict(action);
-        let mut received = transfer::receive(multisig.uid_mut(), upgrade_lock);
-        assert!(received.id.uid_to_inner() == lock_id, EWrongUpgradeLock);
-
-        if (policy == package::additive_policy()) {
-            received.upgrade_cap.only_additive_upgrades();
-            transfer::transfer(received, multisig.addr());
-        } else if (policy == package::dep_only_policy()) {
-            received.upgrade_cap.only_dep_upgrades();
-            transfer::transfer(received, multisig.addr());
-        } else {
-            let UpgradeLock { id, label: _, time_lock: _, upgrade_cap } = received;
-            package::make_immutable(upgrade_cap);
-            id.delete();
-        };
+        let idx = executable.executable_last_action_idx();
+        restrict(&mut executable, multisig, lock, Witness {}, idx);
+        destroy_restrict(&mut executable, Witness {});
+        executable.destroy_executable(Witness {});
     }
 
     // [ACTIONS] Public Functions ===
 
     public fun new_upgrade(digest: vector<u8>, lock_id: ID): Upgrade {
         Upgrade { digest, lock_id }
-    }
+    }    
+    
+    public fun upgrade<W: drop>(
+        executable: &mut Executable,
+        lock: &mut UpgradeLock,
+        witness: W,
+        idx: u64,
+    ): UpgradeTicket {
+        let upgrade_mut: &mut Upgrade = executable.action_mut(witness, idx);
+        assert!(object::id(lock) == upgrade_mut.lock_id, EWrongUpgradeLock);
 
-    public fun destroy_upgrade(upgrade: Upgrade): (vector<u8>, ID) {
-        let Upgrade { digest, lock_id } = upgrade;
+        let policy = lock.upgrade_cap.policy();
+        lock.upgrade_cap.authorize_upgrade(policy, upgrade_mut.digest)
+    }    
+
+    public fun destroy_upgrade<W: drop>(executable: &mut Executable, witness: W): (vector<u8>, ID) {
+        let Upgrade { digest, lock_id } = executable.pop_action(witness);
         (digest, lock_id)
     }
 
     public fun new_restrict(policy: u8, lock_id: ID): Restrict {
         Restrict { policy, lock_id }
+    }    
+    
+    public fun restrict<W: drop>(
+        executable: &mut Executable,
+        multisig: &mut Multisig,
+        mut lock: UpgradeLock,
+        witness: W,
+        idx: u64,
+    ) {
+        let restrict_mut: &mut Restrict = executable.action_mut(witness, idx);
+        assert!(object::id(&lock) == restrict_mut.lock_id, EWrongUpgradeLock);
+
+        if (restrict_mut.policy == package::additive_policy()) {
+            lock.upgrade_cap.only_additive_upgrades();
+            transfer::transfer(lock, multisig.addr());
+        } else if (restrict_mut.policy == package::dep_only_policy()) {
+            lock.upgrade_cap.only_dep_upgrades();
+            transfer::transfer(lock, multisig.addr());
+        } else {
+            let UpgradeLock { id, label: _, multisig_addr: _, time_lock: _, upgrade_cap } = lock;
+            package::make_immutable(upgrade_cap);
+            id.delete();
+        };
     }
 
-    public fun destroy_restrict(restrict: Restrict): (u8, ID) {
-        let Restrict { policy, lock_id } = restrict;
+    public fun destroy_restrict<W: drop>(executable: &mut Executable, witness: W): (u8, ID) {
+        let Restrict { policy, lock_id } = executable.pop_action(witness);
         (policy, lock_id)
     }
 
