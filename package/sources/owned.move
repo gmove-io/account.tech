@@ -41,6 +41,7 @@ module kraken::owned {
         receiving: Receiving<T>,
         idx: u64,
     ): T {
+        multisig.assert_executed(executable);
         let withdraw_mut: &mut Withdraw = executable.action_mut(witness, idx);
         let (_, index) = withdraw_mut.objects.index_of(&transfer::receiving_object_id(&receiving));
         let id = withdraw_mut.objects.remove(index);
@@ -79,6 +80,7 @@ module kraken::owned {
         returned: T, 
         idx: u64,
     ) {
+        multisig.assert_executed(executable);
         let borrow_mut: &mut Borrow = executable.action_mut(witness, idx);
         let (exists_, index) = borrow_mut.to_return.index_of(&object::id(&returned));
         assert!(exists_, EWrongObject);

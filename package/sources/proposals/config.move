@@ -71,10 +71,10 @@ module kraken::config {
         mut executable: Executable,
         multisig: &mut Multisig, 
     ) {
-        let idx = executable.executable_last_action_idx();
+        let idx = executable.last_action_idx();
         modify(&mut executable, multisig, Witness {}, idx);
         destroy_modify(&mut executable, Witness {});
-        executable.destroy_executable(Witness {});
+        executable.destroy(Witness {});
     }
 
     // step 1: propose to update the version
@@ -105,10 +105,10 @@ module kraken::config {
         mut executable: Executable,
         multisig: &mut Multisig, 
     ) {
-        let idx = executable.executable_last_action_idx();
+        let idx = executable.last_action_idx();
         migrate(&mut executable, multisig, Witness {}, idx);
         destroy_migrate(&mut executable, Witness {});
-        executable.destroy_executable(Witness {});
+        executable.destroy(Witness {});
     }
 
     // === [ACTION] Public functions ===
@@ -153,6 +153,7 @@ module kraken::config {
         witness: W,
         idx: u64,
     ) {
+        multisig.assert_executed(executable);
         let modify_mut: &mut Modify = executable.action_mut(witness, idx);
 
         if (modify_mut.name.is_some()) multisig.set_name(modify_mut.name.extract());
@@ -179,6 +180,7 @@ module kraken::config {
         witness: W,
         idx: u64,
     ) {
+        multisig.assert_executed(executable);
         let migrate_mut: &mut Migrate = executable.action_mut(witness, idx);
         multisig.set_version(migrate_mut.version);
     }

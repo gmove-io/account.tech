@@ -154,10 +154,10 @@ module kraken::upgrade_policies {
         mut executable: Executable,
         lock: &mut UpgradeLock,
     ): UpgradeTicket {
-        let idx = executable.executable_last_action_idx();
+        let idx = executable.last_action_idx();
         let ticket = upgrade(&mut executable, lock, Witness {}, idx);
         destroy_upgrade(&mut executable, Witness {});
-        executable.destroy_executable(Witness {});
+        executable.destroy(Witness {});
 
         ticket 
     }    
@@ -211,10 +211,10 @@ module kraken::upgrade_policies {
         multisig: &mut Multisig,
         lock: UpgradeLock,
     ) {
-        let idx = executable.executable_last_action_idx();
+        let idx = executable.last_action_idx();
         restrict(&mut executable, multisig, lock, Witness {}, idx);
         destroy_restrict(&mut executable, Witness {});
-        executable.destroy_executable(Witness {});
+        executable.destroy(Witness {});
     }
 
     // [ACTION] Public Functions ===
@@ -252,6 +252,8 @@ module kraken::upgrade_policies {
         witness: W,
         idx: u64,
     ) {
+        multisig.assert_executed(executable);
+        
         let restrict_mut: &mut Restrict = executable.action_mut(witness, idx);
         assert!(object::id(&lock) == restrict_mut.lock_id, EWrongUpgradeLock);
 

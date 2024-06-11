@@ -18,6 +18,7 @@ module kraken::multisig {
     const ENotIssuerModule: u64 = 3;
     const EHasntExpired: u64 = 4;
     const EWrongVersion: u64 = 5;
+    const ENotMultisigExecutable: u64 = 6;
 
     // === Constants ===
 
@@ -221,6 +222,7 @@ module kraken::multisig {
     }
 
     // to complete the execution
+    public use fun destroy_executable as Executable.destroy;
     public fun destroy_executable<Witness: drop>(
         executable: Executable, 
         _: Witness
@@ -335,10 +337,17 @@ module kraken::multisig {
         proposal.approved.into_keys()
     }
 
+    public use fun executable_multisig_addr as Executable.multisig_addr;
     public fun executable_multisig_addr(executable: &Executable): address {
         executable.multisig_addr
     }
 
+    public use fun assert_multisig_executed as Multisig.assert_executed;
+    public fun assert_multisig_executed(multisig: &Multisig, executable: &Executable) {
+        assert!(multisig.addr() == executable.multisig_addr, ENotMultisigExecutable);
+    }
+
+    public use fun executable_last_action_idx as Executable.last_action_idx;
     public fun executable_last_action_idx(executable: &Executable): u64 {
         executable.actions.length() - 1
     }

@@ -177,14 +177,14 @@ module kraken::kiosk {
         policy: &mut TransferPolicy<T>,
         ctx: &mut TxContext
     ) {
-        let idx = executable.executable_last_action_idx();
+        let idx = executable.last_action_idx();
         take(executable, multisig_kiosk, lock, recipient_kiosk, recipient_cap, policy, idx, ctx);
     }
 
     // step 5: destroy the executable, must `put_back_cap()`
     public fun complete_take(mut executable: Executable) {
         let (nft_ids, _) = destroy_take(&mut executable);
-        executable.destroy_executable(Witness {});
+        executable.destroy(Witness {});
         assert!(nft_ids.is_empty(), ETransferAllNftsBefore);
         nft_ids.destroy_empty();
     }
@@ -220,14 +220,14 @@ module kraken::kiosk {
         kiosk: &mut Kiosk,
         lock: &KioskOwnerLock,
     ) {
-        let idx = executable.executable_last_action_idx();
+        let idx = executable.last_action_idx();
         list<T>(executable, kiosk, lock, idx);
     }
     
     // step 5: destroy the executable, must `put_back_cap()`
     public fun complete_list(mut executable: Executable) {
         let (nfts, _) = destroy_list(&mut executable);
-        executable.destroy_executable(Witness {});
+        executable.destroy(Witness {});
         assert!(nfts.is_empty(), EListAllNftsBefore);
         nfts.destroy_empty();
     }

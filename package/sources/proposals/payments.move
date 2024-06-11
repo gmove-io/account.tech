@@ -84,12 +84,12 @@ module kraken::payments {
         received: Receiving<Coin<C>>,
         ctx: &mut TxContext
     ) {
-        let idx = executable.executable_last_action_idx();
+        let idx = executable.last_action_idx();
         pay(&mut executable, multisig, received, Witness {}, idx, ctx);
 
         owned::destroy_withdraw(&mut executable, Witness {});
         destroy_pay(&mut executable, Witness {});
-        executable.destroy_executable(Witness {});
+        executable.destroy(Witness {});
     }
 
     // step 5: backend send the coin to the recipient until balance is empty
@@ -160,6 +160,8 @@ module kraken::payments {
         idx: u64, // index in actions bag
         ctx: &mut TxContext
     ) {
+        multisig.assert_executed(executable);
+        
         let coin = owned::withdraw(executable, multisig, witness, received, idx + 1);
         let pay_mut: &mut Pay = executable.action_mut(witness, idx);
 

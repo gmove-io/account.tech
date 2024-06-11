@@ -85,7 +85,7 @@ module kraken::transfers {
         multisig: &mut Multisig, 
         receiving: Receiving<T>,
     ) {
-        let idx = executable.executable_last_action_idx();
+        let idx = executable.last_action_idx();
         send(executable, multisig, Witness {}, receiving, idx);
     }
 
@@ -93,7 +93,7 @@ module kraken::transfers {
     public fun complete_send(mut executable: Executable) {
         owned::destroy_withdraw(&mut executable, Witness {}); // 1st action to destroy
         destroy_send(&mut executable, Witness {}); // 2nd action to destroy
-        executable.destroy_executable(Witness {});
+        executable.destroy(Witness {});
     }
 
     // // step 1: propose to deliver object to a recipient that must claim it
@@ -138,7 +138,7 @@ module kraken::transfers {
         multisig: &mut Multisig,
         received: Receiving<T>,
     ) {
-        let idx = executable.executable_last_action_idx();
+        let idx = executable.last_action_idx();
         deliver(delivery, cap, executable, multisig, Witness {}, received, idx);
     }
 
@@ -149,7 +149,7 @@ module kraken::transfers {
         
         owned::destroy_withdraw(&mut executable, Witness {});
         let recipient = destroy_deliver(&mut executable, Witness {});
-        executable.destroy_executable(Witness {});
+        executable.destroy(Witness {});
         
         transfer::transfer(cap, recipient);
         transfer::share_object(delivery);
@@ -213,6 +213,8 @@ module kraken::transfers {
         receiving: Receiving<T>,
         idx: u64, // index in actions bag 
     ) {
+        multisig.assert_executed(executable);
+        
         let object = owned::withdraw(executable, multisig, witness, receiving, idx + 1);
         let send_mut: &mut Send = executable.action_mut(witness, idx);
         let (_, recipient) = send_mut.transfers.remove(&object::id(&object));
@@ -240,7 +242,9 @@ module kraken::transfers {
         received: Receiving<T>,
         idx: u64 // index in actions bag
     ) {
+        multisig.assert_executed(executable);
         assert!(cap.delivery_id == object::id(delivery), EWrongDelivery);
+        
         let object = owned::withdraw(executable, multisig, witness, received, idx + 1);
         let index = delivery.objects.length();
         delivery.objects.add(index, object);
