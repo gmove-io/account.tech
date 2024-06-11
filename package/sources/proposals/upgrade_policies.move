@@ -4,10 +4,11 @@
 /// The multisig can decide to make the policy more restrictive or destroy the Cap.
 
 module kraken::upgrade_policies {
-    use std::string::String;
+    use std::string::{Self, String};
     use sui::package::{Self, UpgradeCap, UpgradeTicket, UpgradeReceipt};
     use sui::transfer::Receiving;
     use sui::clock::Clock;
+    use sui::dynamic_field as df;
     use kraken::multisig::{Multisig, Executable};
 
     // === Error ===
@@ -44,34 +45,55 @@ module kraken::upgrade_policies {
         label: String,
         // multisig owning the lock
         multisig_addr: address,
-        // enforced minimal duration in ms between proposal and upgrade (can be 0)
-        time_lock: u64,
         // the cap to lock
         upgrade_cap: UpgradeCap,
+        // each package can define its own config
+        // DF: config: C,
+    }
+
+    // timelock config for the UpgradeLock
+    public struct TimeLock has store {
+        delay_ms: u64,
     }
 
     // === [MEMBERS] Public Functions ===
 
+    // must be sent to multisig with put_back_cap afterwards
     public fun lock_cap(
         multisig: &Multisig,
         label: String,
-        time_lock: u64,
         upgrade_cap: UpgradeCap,
         ctx: &mut TxContext
-    ): ID {
+    ): UpgradeLock {
         multisig.assert_is_member(ctx);
-        let lock = UpgradeLock { 
+        UpgradeLock { 
             id: object::new(ctx), 
             label, 
             multisig_addr: multisig.addr(),
-            time_lock, 
             upgrade_cap 
-        };
+        }
+    }
 
-        let id = object::id(&lock);
-        transfer::transfer(lock, multisig.addr());
+    // add a rule with any config to the upgrade lock
+    public fun add_rule<R: store>(
+        lock: &mut UpgradeLock,
+        key: String,
+        rule: R,
+    ) {
+        df::add(&mut lock.id, key, rule);
+    }
 
-        id
+    // lock a cap with a timelock rule
+    public fun lock_cap_with_timelock(
+        multisig: &Multisig,
+        label: String,
+        delay_ms: u64,
+        upgrade_cap: UpgradeCap,
+        ctx: &mut TxContext
+    ) {
+        let mut lock = lock_cap(multisig, label, upgrade_cap, ctx);
+        add_rule(&mut lock, string::utf8(b"TimeLock"), TimeLock { delay_ms });
+        put_back_cap(lock);
     }
 
     // borrow the lock that can only be put back in the multisig because no store
@@ -105,14 +127,22 @@ module kraken::upgrade_policies {
         clock: &Clock,
         ctx: &mut TxContext
     ) {
+        let delay = if (df::exists_(&lock.id, string::utf8(b"TimeLock"))) {
+            let timelock: &TimeLock = df::borrow(&lock.id, string::utf8(b"TimeLock"));
+            timelock.delay_ms
+        } else {
+            0
+        };
+
         let proposal_mut = multisig.create_proposal(
             Witness {},
             key,
-            clock.timestamp_ms() + lock.time_lock,
+            clock.timestamp_ms() + delay,
             expiration_epoch,
             description,
             ctx
         );
+
         proposal_mut.push_action(new_upgrade(digest, object::id(lock)));
     }
 
@@ -232,7 +262,7 @@ module kraken::upgrade_policies {
             lock.upgrade_cap.only_dep_upgrades();
             transfer::transfer(lock, multisig.addr());
         } else {
-            let UpgradeLock { id, label: _, multisig_addr: _, time_lock: _, upgrade_cap } = lock;
+            let UpgradeLock { id, label: _, multisig_addr: _, upgrade_cap } = lock;
             package::make_immutable(upgrade_cap);
             id.delete();
         };
