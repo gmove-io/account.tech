@@ -33,7 +33,7 @@ module kraken::kiosk {
     // [ACTION] transfer nfts from the multisig's kiosk to another one
     public struct Take has store {
         // id of the nfts to transfer
-        nfts: vector<ID>,
+        nft_ids: vector<ID>,
         // owner of the receiver kiosk
         recipient: address,
     }
@@ -41,7 +41,7 @@ module kraken::kiosk {
     // [ACTION] list nfts for purchase
     public struct List has store {
         // id of the nfts to list
-        nfts: vector<ID>,
+        nft_ids: vector<ID>,
         // sui amount
         prices: vector<u64>, 
     }
@@ -49,6 +49,7 @@ module kraken::kiosk {
     // === Member only functions ===
 
     // not composable because of the lock
+    #[allow(lint(share_owned))]
     public fun new(multisig: &Multisig, ctx: &mut TxContext) {
         multisig.assert_is_member(ctx);
         let (mut kiosk, cap) = kiosk::new(ctx);
@@ -116,7 +117,7 @@ module kraken::kiosk {
         execution_time: u64,
         expiration_epoch: u64,
         description: String,
-        nfts: vector<ID>,
+        nft_ids: vector<ID>,
         recipient: address,
         ctx: &mut TxContext
     ) {
@@ -128,7 +129,7 @@ module kraken::kiosk {
             description,
             ctx
         );
-        proposal_mut.push_action(new_take(nfts, recipient));
+        proposal_mut.push_action(new_take(nft_ids, recipient));
     }
 
     // step 2: multiple members have to approve the proposal (multisig::approve_proposal)
@@ -148,7 +149,7 @@ module kraken::kiosk {
         let take_mut: &mut Take = executable.action_mut(Witness {}, idx);
         assert!(take_mut.recipient == ctx.sender(), EWrongReceiver);
 
-        let nft_id = take_mut.nfts.pop_back();
+        let nft_id = take_mut.nft_ids.pop_back();
         multisig_kiosk.list<T>(&lock.kiosk_owner_cap, nft_id, 0);
         let (nft, mut request) = multisig_kiosk.purchase<T>(nft_id, coin::zero<SUI>(ctx));
 
@@ -169,10 +170,10 @@ module kraken::kiosk {
     // step 5: destroy the executable, must `put_back_cap()`
     public fun complete_take(mut executable: Executable) {
         let take: Take = executable.pop_action(Witness {});
-        let (nfts, _) = take.destroy_take();
+        let (nft_ids, _) = take.destroy_take();
         executable.destroy_executable(Witness {});
-        assert!(nfts.is_empty(), ETransferAllNftsBefore);
-        nfts.destroy_empty();
+        assert!(nft_ids.is_empty(), ETransferAllNftsBefore);
+        nft_ids.destroy_empty();
     }
 
     // step 1: propose to list nfts
@@ -182,7 +183,7 @@ module kraken::kiosk {
         execution_time: u64,
         expiration_epoch: u64,
         description: String,
-        nfts: vector<ID>,
+        nft_ids: vector<ID>,
         prices: vector<u64>,
         ctx: &mut TxContext
     ) {
@@ -194,7 +195,7 @@ module kraken::kiosk {
             description,
             ctx
         );
-        proposal_mut.push_action(new_list(nfts, prices));
+        proposal_mut.push_action(new_list(nft_ids, prices));
     }
 
     // step 2: multiple members have to approve the proposal (multisig::approve_proposal)
@@ -208,7 +209,7 @@ module kraken::kiosk {
         idx: u64,
     ) {
         let list_mut: &mut List = executable.action_mut(Witness {}, idx);
-        let nft_id = list_mut.nfts.pop_back();
+        let nft_id = list_mut.nft_ids.pop_back();
         let price = list_mut.prices.pop_back();
         kiosk.list<T>(&lock.kiosk_owner_cap, nft_id, price);
     }
@@ -254,24 +255,23 @@ module kraken::kiosk {
 
     // === [ACTIONS] Public functions ===
 
-    public fun new_take(nfts: vector<ID>, recipient: address): Take {
-        Take { nfts, recipient }
+    public fun new_take(nft_ids: vector<ID>, recipient: address): Take {
+        Take { nft_ids, recipient }
     }
 
     public fun destroy_take(transfer: Take): (vector<ID>, address) {
-        let Take { nfts, recipient } = transfer;
-        
-        (nfts, recipient)
+        let Take { nft_ids, recipient } = transfer;
+        (nft_ids, recipient)
     }
 
-    public fun new_list(nfts: vector<ID>, prices: vector<u64>): List {
-        assert!(nfts.length() == prices.length(), EWrongNftsPrices);
-        List { nfts, prices }
+    public fun new_list(nft_ids: vector<ID>, prices: vector<u64>): List {
+        assert!(nft_ids.length() == prices.length(), EWrongNftsPrices);
+        List { nft_ids, prices }
     }
 
     public fun destroy_list(list: List): (vector<ID>, vector<u64>) {
-        let List { nfts, prices } = list;
-        (nfts, prices)
+        let List { nft_ids, prices } = list;
+        (nft_ids, prices)
     }
 
     // === Test functions ===

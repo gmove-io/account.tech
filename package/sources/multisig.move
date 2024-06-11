@@ -364,6 +364,18 @@ module kraken::multisig {
         }
     }
 
+    // for adding account id to members, from account.move
+    public(package) fun register_account_id(multisig: &mut Multisig, id: ID, ctx: &TxContext) {
+        let member = multisig.members.get_mut(&ctx.sender());
+        member.account_id.fill(id);
+    }
+
+    // for removing account id from members, from account.move
+    public(package) fun unregister_account_id(multisig: &mut Multisig, ctx: &TxContext): ID {
+        let member = multisig.members.get_mut(&ctx.sender());
+        member.account_id.extract()
+    }
+
     public(package) fun uid_mut(multisig: &mut Multisig): &mut UID {
         &mut multisig.id
     }
