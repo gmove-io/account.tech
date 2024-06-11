@@ -3,7 +3,7 @@
 /// The proposals have to be approved by at least the threshold number of members.
 
 module kraken::multisig {
-    use std::string::String;
+    use std::string::{Self, String};
     use std::type_name::{Self, TypeName};
     use sui::clock::Clock;
     use sui::dynamic_field as df;
@@ -15,10 +15,9 @@ module kraken::multisig {
 
     const ECallerIsNotMember: u64 = 0;
     const EThresholdNotReached: u64 = 1;
-    const EProposalNotEmpty: u64 = 2;
-    const ECantBeExecutedYet: u64 = 3;
-    const ENotIssuerModule: u64 = 4;
-    const EHasntExpired: u64 = 5;
+    const ECantBeExecutedYet: u64 = 2;
+    const ENotIssuerModule: u64 = 3;
+    const EHasntExpired: u64 = 4;
 
     // === Structs ===
 
@@ -27,12 +26,22 @@ module kraken::multisig {
         id: UID,
         // human readable name to differentiate the multisigs
         name: String,
-        // has to be always <= length(members)
+        // has to be always <= sum(members.weight)
         threshold: u64,
+        // total weight of all members, if = members.length then all weights = 1
+        total_weight: u64,
         // members of the multisig
-        members: VecSet<address>,
+        members: VecMap<address, Member>,
         // open proposals, key should be a unique descriptive name
         proposals: VecMap<String, Proposal>,
+    }
+
+    // struct for managing and displaying members
+    public struct Member has store {
+        // voting power of the member
+        weight: u64,
+        // ID of the member's account, none if he didn't join yet
+        account_id: Option<ID>,
     }
 
     // proposal owning a single action requested to be executed
@@ -48,8 +57,10 @@ module kraken::multisig {
         // proposer can add a timestamp_ms before which the proposal can't be executed
         // can be used to schedule actions via a backend
         execution_time: u64,
-        // actions to be executed from last to first
+        // heterogenous vector of actions to be executed from last to first
         actions: Bag,
+        // total weight of all members that approved the proposal
+        approval_weights: u64,
         // who has approved the proposal
         approved: VecSet<address>,
     }
@@ -71,12 +82,14 @@ module kraken::multisig {
         Multisig { 
             id: object::new(ctx),
             name,
-            threshold: 1,
-            members: vec_set::singleton(ctx.sender()),
+            threshold: 0,
+            total_weight: 0,
+            members: vec_map::empty(),
             proposals: vec_map::empty(),
         }
     }
 
+    // supposed to be initialized by the creator before shared
     #[allow(lint(share_owned))]
     public fun share(multisig: Multisig) {
         transfer::share_object(multisig);
@@ -97,13 +110,14 @@ module kraken::multisig {
     ): &mut Proposal {
         assert_is_member(multisig, ctx);
 
-        let mut proposal = Proposal { 
+        let proposal = Proposal { 
             id: object::new(ctx),
             module_witness: type_name::get<Witness>(),
             description,
             execution_time,
             expiration_epoch,
             actions: bag::new(ctx),
+            approval_weights: 0,
             approved: vec_set::empty(), 
         };
 
@@ -127,6 +141,8 @@ module kraken::multisig {
 
         let proposal = multisig.proposals.get_mut(&key);
         proposal.approved.insert(ctx.sender()); // throws if already approved
+        proposal.approval_weights = 
+            proposal.approval_weights + multisig.members.get(&ctx.sender()).weight;
     }
 
     // the signer removes his agreement
@@ -139,6 +155,8 @@ module kraken::multisig {
 
         let proposal = multisig.proposals.get_mut(&key);
         proposal.approved.remove(&ctx.sender());
+        proposal.approval_weights = 
+            proposal.approval_weights - multisig.members.get(&ctx.sender()).weight;
     }
 
     // return an executable if the number of signers is >= threshold
@@ -158,11 +176,12 @@ module kraken::multisig {
             expiration_epoch: _, 
             execution_time,
             actions,
-            approved,
+            approval_weights,
+            approved: _,
         } = proposal;
         id.delete();
 
-        assert!(approved.size() >= multisig.threshold, EThresholdNotReached);
+        assert!(approval_weights >= multisig.threshold, EThresholdNotReached);
         assert!(clock.timestamp_ms() >= execution_time, ECantBeExecutedYet);
 
         Executable { 
@@ -219,6 +238,7 @@ module kraken::multisig {
             execution_time: _, 
             description: _, 
             actions,
+            approval_weights: _,
             approved: _,
         } = proposal;
 
@@ -230,6 +250,10 @@ module kraken::multisig {
 
     // === View functions ===
 
+    public fun addr(multisig: &Multisig): address {
+        multisig.id.uid_to_inner().id_to_address()
+    }
+
     public fun name(multisig: &Multisig): String {
         multisig.name
     }
@@ -238,12 +262,37 @@ module kraken::multisig {
         multisig.threshold
     }
 
-    public fun members(multisig: &Multisig): vector<address> {
-        multisig.members.into_keys()
+    public fun member_addresses(multisig: &Multisig): vector<address> {
+        multisig.members.keys()
     }
 
-    public fun addr(multisig: &Multisig): address {
-        multisig.id.uid_to_inner().id_to_address()
+    public fun member_weight(multisig: &Multisig, addr: address): u64 {
+        let member = multisig.members.get(&addr);
+        member.weight
+    }
+    
+    public fun is_member(multisig: &Multisig, addr: address): bool {
+        multisig.members.contains(&addr)
+    }
+    
+    public fun assert_is_member(multisig: &Multisig, ctx: &TxContext) {
+        assert!(multisig.members.contains(&ctx.sender()), ECallerIsNotMember);
+    }
+
+    public fun member_account_id(multisig: &Multisig, addr: address): Option<ID> {
+        let member = multisig.members.get(&addr);
+        member.account_id
+    }
+
+    public fun total_weights(multisig: &Multisig): u64 {
+        let (mut i, mut weights) = (0, 0);
+        while (i < multisig.members.size()) {
+            let (_, member) = multisig.members.get_entry_by_idx(i);
+            weights = weights + member.weight;
+            i = i + 1;
+        };
+
+        weights
     }
 
     public fun num_of_proposals(multisig: &Multisig): u64 {
@@ -280,38 +329,43 @@ module kraken::multisig {
 
     // === Package functions ===
 
-    // callable only in management.move, if the proposal has been accepted
+    // callable only in config.move, if the proposal has been accepted
     public(package) fun set_name(multisig: &mut Multisig, name: String) {
         multisig.name = name;
     }
 
-    // callable only in management.move, if the proposal has been accepted
+    // callable only in config.move, if the proposal has been accepted
     public(package) fun set_threshold(multisig: &mut Multisig, threshold: u64) {
         multisig.threshold = threshold;
     }
 
-    // callable only in management.move, if the proposal has been accepted
-    public(package) fun add_members(multisig: &mut Multisig, mut addresses: vector<address>) {
+    // callable only in config.move, if the proposal has been accepted
+    public(package) fun add_members(
+        multisig: &mut Multisig, 
+        mut addresses: vector<address>, 
+        mut weights: vector<u64>
+    ) {
         while (addresses.length() > 0) {
             let addr = addresses.pop_back();
-            multisig.members.insert(addr);
+            let weight = weights.pop_back();
+            multisig.members.insert(
+                addr, 
+                Member { weight, account_id: option::none() }
+            );
         }
     }
 
-    // callable only in management.move, if the proposal has been accepted
+    // callable only in config.move, if the proposal has been accepted
     public(package) fun remove_members(multisig: &mut Multisig, mut addresses: vector<address>) {
         while (addresses.length() > 0) {
             let addr = addresses.pop_back();
-            multisig.members.remove(&addr);
+            let (_, member) = multisig.members.remove(&addr);
+            let Member { weight: _, account_id: _ } = member;
         }
     }
 
     public(package) fun uid_mut(multisig: &mut Multisig): &mut UID {
         &mut multisig.id
-    }
-
-    public(package) fun assert_is_member(multisig: &Multisig, ctx: &TxContext) {
-        assert!(multisig.members.contains(&ctx.sender()), ECallerIsNotMember);
     }
 
     // === Test functions ===

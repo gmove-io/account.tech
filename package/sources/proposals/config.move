@@ -26,6 +26,8 @@ module kraken::config {
         threshold: Option<u64>,
         // addresses to add
         to_add: vector<address>,
+        // weights of the members that will be added
+        weights: vector<u64>,
         // addresses to remove
         to_remove: vector<address>,
     }
@@ -42,18 +44,19 @@ module kraken::config {
         name: Option<String>,
         threshold: Option<u64>, 
         to_add: vector<address>, 
+        weights: vector<u64>,
         to_remove: vector<address>, 
         ctx: &mut TxContext
     ) {
         // verify proposed addresses match current list
         let mut i = 0;
         while (i < to_add.length()) {
-            assert!(!multisig.members().contains(&to_add[i]), EAlreadyMember);
+            assert!(!multisig.is_member(to_add[i]), EAlreadyMember);
             i = i + 1;
         };
         let mut j = 0;
         while (j < to_remove.length()) {
-            assert!(multisig.members().contains(&to_remove[j]), ENotMember);
+            assert!(multisig.is_member(to_remove[j]), ENotMember);
             j = j + 1;
         };
 
@@ -65,7 +68,7 @@ module kraken::config {
             multisig.threshold()
         };
         // verify threshold is reachable with new members 
-        let new_len = multisig.members().length() + to_add.length() - to_remove.length();
+        let new_len = multisig.member_addresses().length() + to_add.length() - to_remove.length();
         assert!(new_len >= new_threshold, EThresholdTooHigh);
 
         let proposal_mut = multisig.create_proposal(
@@ -76,7 +79,7 @@ module kraken::config {
             description,
             ctx
         );
-        proposal_mut.push_action(Modify { name, threshold, to_add, to_remove });
+        proposal_mut.push_action(Modify { name, threshold, to_add, weights, to_remove });
     }
 
     // step 2: multiple members have to approve the proposal (multisig::approve_proposal)
@@ -89,12 +92,12 @@ module kraken::config {
         ctx: &mut TxContext
     ) {
         let mut executable = multisig.execute_proposal(name, clock, ctx);
-        let Modify { mut name, mut threshold, to_add, to_remove } = executable.pop_action(Witness {});
+        let Modify { mut name, mut threshold, to_add, weights, to_remove } = executable.pop_action(Witness {});
         executable.destroy_executable(Witness {});
 
         if (name.is_some()) multisig.set_name(name.extract());
         if (threshold.is_some()) multisig.set_threshold(threshold.extract());
-        multisig.add_members(to_add);
+        multisig.add_members(to_add, weights);
         multisig.remove_members(to_remove);
     }
 }

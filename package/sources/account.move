@@ -68,7 +68,7 @@ module kraken::account {
         // user inviting must be member
         multisig.assert_is_member(ctx);
         // invited user must be member
-        assert!(multisig.members().contains(&recipient), ENotMember);
+        assert!(multisig.member_addresses().contains(&recipient), ENotMember);
         let invite = Invite { 
             id: object::new(ctx), 
             multisig: object::id(multisig) 
