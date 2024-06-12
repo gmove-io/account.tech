@@ -67,7 +67,7 @@ module kraken::multisig {
         // heterogenous vector of actions to be executed from last to first
         actions: Bag,
         // total weight of all members that approved the proposal
-        approval_weights: u64,
+        approval_weight: u64,
         // who has approved the proposal
         approved: VecSet<address>,
     }
@@ -126,7 +126,7 @@ module kraken::multisig {
             execution_time,
             expiration_epoch,
             actions: bag::new(ctx),
-            approval_weights: 0,
+            approval_weight: 0,
             approved: vec_set::empty(), 
         };
 
@@ -151,8 +151,8 @@ module kraken::multisig {
 
         let proposal = multisig.proposals.get_mut(&key);
         proposal.approved.insert(ctx.sender()); // throws if already approved
-        proposal.approval_weights = 
-            proposal.approval_weights + multisig.members.get(&ctx.sender()).weight;
+        proposal.approval_weight = 
+            proposal.approval_weight + multisig.members.get(&ctx.sender()).weight;
     }
 
     // the signer removes his agreement
@@ -166,8 +166,8 @@ module kraken::multisig {
 
         let proposal = multisig.proposals.get_mut(&key);
         proposal.approved.remove(&ctx.sender());
-        proposal.approval_weights = 
-            proposal.approval_weights - multisig.members.get(&ctx.sender()).weight;
+        proposal.approval_weight = 
+            proposal.approval_weight - multisig.members.get(&ctx.sender()).weight;
     }
 
     // return an executable if the number of signers is >= threshold
@@ -188,12 +188,12 @@ module kraken::multisig {
             expiration_epoch: _, 
             execution_time,
             actions,
-            approval_weights,
+            approval_weight,
             approved: _,
         } = proposal;
         id.delete();
 
-        assert!(approval_weights >= multisig.threshold, EThresholdNotReached);
+        assert!(approval_weight >= multisig.threshold, EThresholdNotReached);
         assert!(clock.timestamp_ms() >= execution_time, ECantBeExecutedYet);
 
         Executable { 
@@ -252,7 +252,7 @@ module kraken::multisig {
             execution_time: _, 
             description: _, 
             actions,
-            approval_weights: _,
+            approval_weight: _,
             approved: _,
         } = proposal;
 
@@ -304,17 +304,6 @@ module kraken::multisig {
     public fun member_account_id(multisig: &Multisig, addr: address): Option<ID> {
         let member = multisig.members.get(&addr);
         member.account_id
-    }
-
-    public fun total_weights(multisig: &Multisig): u64 {
-        let (mut i, mut weights) = (0, 0);
-        while (i < multisig.members.size()) {
-            let (_, member) = multisig.members.get_entry_by_idx(i);
-            weights = weights + member.weight;
-            i = i + 1;
-        };
-
-        weights
     }
 
     public fun num_of_proposals(multisig: &Multisig): u64 {
