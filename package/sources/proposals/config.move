@@ -122,14 +122,16 @@ module kraken::config {
         to_remove: vector<address>, 
     ): Modify {
         // verify proposed addresses match current list
-        let mut i = 0;
+        let (mut i, mut added_weight) = (0, 0);
         while (i < to_add.length()) {
             assert!(!multisig.is_member(to_add[i]), EAlreadyMember);
+            added_weight = added_weight + weights[i];
             i = i + 1;
         };
-        let mut j = 0;
+        let (mut j, mut removed_weight) = (0, 0);
         while (j < to_remove.length()) {
             assert!(multisig.is_member(to_remove[j]), ENotMember);
+            removed_weight = removed_weight + multisig.member_weight(to_remove[j]);
             j = j + 1;
         };
 
@@ -141,8 +143,8 @@ module kraken::config {
             multisig.threshold()
         };
         // verify threshold is reachable with new members 
-        let new_len = multisig.member_addresses().length() + to_add.length() - to_remove.length();
-        assert!(new_len >= new_threshold, EThresholdTooHigh);
+        let new_total_weight = multisig.total_weight() + added_weight - removed_weight;
+        assert!(new_total_weight >= new_threshold, EThresholdTooHigh);
         
         Modify { name, threshold, to_add, weights, to_remove }
     }    

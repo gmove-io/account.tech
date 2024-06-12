@@ -280,6 +280,10 @@ module kraken::multisig {
         multisig.threshold
     }
 
+    public fun total_weight(multisig: &Multisig): u64 {
+        multisig.total_weight
+    }
+
     public fun member_addresses(multisig: &Multisig): vector<address> {
         multisig.members.keys()
     }
