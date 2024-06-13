@@ -1,6 +1,6 @@
 /// This module uses the owned apis to stream a coin for a payment.
 /// A payment has an amount to be paid at each interval, until the balance is empty.
-/// It can be cancelled by the multisig member.
+/// It can be cancelled by multisig members.
 
 module kraken::payments {
     use std::string::String;

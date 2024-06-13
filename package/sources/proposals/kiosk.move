@@ -1,5 +1,8 @@
-/// The user to transfer from / to must be a member of the multisig.
-/// The functions take the caller's kiosk and the multisig's kiosk to execute the transfer.
+/// Members can place nfts from their kiosk into the multisig's without approval.
+/// Nfts can be transferred into any other Kiosk. Upon approval, the recipient must execute the transfer.
+/// The functions take the caller's kiosk and the multisig's kiosk to execute.
+/// Nfts can be listed for sale in the kiosk, and then purchased by anyone.
+/// The multisig can withdraw the profits from the kiosk.
 
 module kraken::kiosk {
     use std::string::String;

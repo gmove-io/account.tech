@@ -1,7 +1,7 @@
-/// Package manager can lock UpgradeCaps in the multisig. Caps can't be unlocked.
-/// Upon locking, the user defines a optional timelock corresponding to 
-/// the minimum delay between an upgrade proposal and its execution.
-/// The multisig can decide to make the policy more restrictive or destroy the Cap.
+/// Package managers can lock UpgradeCaps in the multisig. Caps can't be unlocked to enforce the policies.
+/// Any rule can be defined for the upgrade lock. The module provide a timelock rule by default, based on execution time.
+/// Upon locking, the user can define an optional timelock corresponding to the minimum delay between an upgrade proposal and its execution.
+/// The multisig can decide to make the policy more restrictive or destroy the Cap, to make the package immutable.
 
 module kraken::upgrade_policies {
     use std::string::{Self, String};

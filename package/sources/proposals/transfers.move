@@ -1,6 +1,6 @@
 /// This module uses the owned apis to transfer assets owned by the multisig.
-/// Objects can also be delivered to a single address,
-/// meaning that the recipient must claim the objects or the Multisig can retrieve them.
+/// Objects can also be delivered to a single address, meaning that the recipient must claim the objects.
+/// If the delivery is not confirmed, the Multisig can retrieve the objects.
 
 module kraken::transfers {
     use std::string::String;

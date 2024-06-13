@@ -1,5 +1,8 @@
-/// This module allows to manage a Multisig's settings.
-/// The action can be to add or remove members, and to change the threshold.
+/// This module allows to manage Multisig settings.
+/// The action can be to add or remove members, to change the threshold or the name.
+/// If one wants to update the weights of members, they must remove the members and add them back with new weights in the same proposal.
+/// The new total weight must be lower than the threshold.
+/// Teams can choose to use any version of the package and must explicitly migrate to the new version.
 
 module kraken::config {
     use std::string::String;
@@ -22,12 +25,12 @@ module kraken::config {
         name: Option<String>,
         // new threshold, has to be <= to new total addresses
         threshold: Option<u64>,
+        // addresses to remove, executed before adding new members
+        to_remove: vector<address>,
         // addresses to add
         to_add: vector<address>,
         // weights of the members that will be added
         weights: vector<u64>,
-        // addresses to remove
-        to_remove: vector<address>,
     }
 
     // [ACTION] update the version of the multisig
@@ -38,6 +41,7 @@ module kraken::config {
 
     // === [PROPOSAL] Public functions ===
 
+    // a member can be removed and added to be updated
     // step 1: propose to modify multisig params
     public fun propose_modify(
         multisig: &mut Multisig, 
@@ -47,12 +51,12 @@ module kraken::config {
         description: String,
         name: Option<String>,
         threshold: Option<u64>, 
+        to_remove: vector<address>, 
         to_add: vector<address>, 
         weights: vector<u64>,
-        to_remove: vector<address>, 
         ctx: &mut TxContext
     ) {
-        let modify = new_modify(multisig, name, threshold, to_add, weights, to_remove);
+        let modify = new_modify(multisig, name, threshold, to_remove, to_add, weights);
         let proposal_mut = multisig.create_proposal(
             Witness {},
             key,
@@ -117,9 +121,9 @@ module kraken::config {
         multisig: &Multisig,
         name: Option<String>,
         threshold: Option<u64>, 
+        to_remove: vector<address>, 
         to_add: vector<address>, 
         weights: vector<u64>,
-        to_remove: vector<address>, 
     ): Modify {
         // verify proposed addresses match current list
         let (mut i, mut added_weight) = (0, 0);
@@ -160,16 +164,16 @@ module kraken::config {
 
         if (modify_mut.name.is_some()) multisig.set_name(modify_mut.name.extract());
         if (modify_mut.threshold.is_some()) multisig.set_threshold(modify_mut.threshold.extract());
-        multisig.add_members(modify_mut.to_add, modify_mut.weights);
         multisig.remove_members(modify_mut.to_remove);
+        multisig.add_members(modify_mut.to_add, modify_mut.weights);
     }
 
     public fun destroy_modify<W: drop>(
         executable: &mut Executable,
         witness: W,
-    ): (Option<String>, Option<u64>, vector<address>, vector<u64>, vector<address>) {
-        let Modify { name, threshold, to_add, weights, to_remove } = executable.pop_action(witness);
-        (name, threshold, to_add, weights, to_remove)
+    ): (Option<String>, Option<u64>, vector<address>, vector<address>, vector<u64>) {
+        let Modify { name, threshold, to_remove, to_add, weights } = executable.pop_action(witness);
+        (name, threshold, to_remove, to_add, weights)
     }
 
     public fun new_migrate(version: u64): Migrate {

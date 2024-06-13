@@ -1,6 +1,7 @@
 /// Users have a non-transferable Account used to track Multisigs in which they are a member.
 /// They can also set a username and profile picture to be displayed on the frontends.
-/// Multisig members can send on-chain invites to new members.
+/// Multisig members can send on-chain invites to new members. 
+/// Alternatively, multisig creators can share an invite link to new members that can join the multisig without invite.
 /// Invited users can accept or refuse the invite, to add the multisig id to their account or not.
 /// This avoid the need for an indexer as all data can be easily found on-chain.
 
@@ -31,6 +32,7 @@ module kraken::account {
 
     public struct Invite has key { 
         id: UID, 
+        // multisig that issued the invite
         multisig_id: ID,
     }
 

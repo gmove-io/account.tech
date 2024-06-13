@@ -1,14 +1,27 @@
 /// This is the core module managing Multisig and Proposals.
-/// Various actions to be executed by the Multisig can be attached to a Proposal.
-/// The proposals have to be approved by at least the threshold number of members.
+/// It provides the apis to create, approve and execute proposals with actions.
+/// 
+/// Here is the flow:
+///   1. A proposal is created by pushing actions into it. 
+///      Actions are stacked from last to first, they must be executed then destroyed from last to first.
+///   2. When the threshold is reached, a proposal can be executed. 
+///      This returns an Executable hot potato constructed from certain fields of the approved Proposal. 
+///      It is directly passed into action functions to enforce multisig approval for an action to be executed.
+///   3. The module that created the proposal must destroy all of the actions and the Executable after execution 
+///      by passing the same witness that was used for instanciation. 
+///      This prevents the actions or the proposal to be stored instead of executed.
 
 module kraken::multisig {
-    use std::string::String;
-    use std::type_name::{Self, TypeName};
-    use sui::clock::Clock;
-    use sui::vec_set::{Self, VecSet};
-    use sui::vec_map::{Self, VecMap};
-    use sui::bag::{Self, Bag};
+    use std::{
+        string::String, 
+        type_name::{Self, TypeName}
+    };
+    use sui::{
+        clock::Clock, 
+        vec_set::{Self, VecSet}, 
+        vec_map::{Self, VecMap}, 
+        bag::{Self, Bag}
+    };
 
     // === Errors ===
 
@@ -85,19 +98,23 @@ module kraken::multisig {
     // === Public mutative functions ===
 
     // init and share a new Multisig object
-    public fun new(name: String, ctx: &mut TxContext): Multisig {
+    // creator is added by default with weight and threshold of 1
+    public fun new(name: String, account_id: ID, ctx: &mut TxContext): Multisig {
+        let mut members = vec_map::empty();
+        members.insert(ctx.sender(), Member { weight: 1, account_id: option::some(account_id) });
+        
         Multisig { 
             id: object::new(ctx),
             version: VERSION,
             name,
-            threshold: 0,
-            total_weight: 0,
-            members: vec_map::empty(),
+            threshold: 1,
+            total_weight: 1,
+            members,
             proposals: vec_map::empty(),
         }
     }
 
-    // supposed to be initialized by the creator before shared
+    // can be initialized by the creator before shared
     #[allow(lint(share_owned))]
     public fun share(multisig: Multisig) {
         transfer::share_object(multisig);
@@ -390,7 +407,7 @@ module kraken::multisig {
     // for adding account id to members, from account.move
     public(package) fun register_account_id(multisig: &mut Multisig, id: ID, ctx: &TxContext) {
         let member = multisig.members.get_mut(&ctx.sender());
-        member.account_id.fill(id);
+        member.account_id.swap_or_fill(id);
     }
 
     // for removing account id from members, from account.move

@@ -1,8 +1,9 @@
 /// This module allows multisig members to access objects owned by the multisig in a secure way.
 /// The objects can be taken only via an Withdraw action.
 /// This action can't be proposed directly since it wouldn't make sense to withdraw an object without using it.
-/// Objects can be borrowed using an action wrapping the Withdraw action.
-/// Caution: borrowed Coins can be emptied, only withdraw the amount you need
+/// Objects can be borrowed by adding both a Borrow and Withdraw (used by borrow) action to the proposal.
+/// This is automatically handled by the borrow functions.
+/// Caution: borrowed Coins can be emptied, only withdraw the amount you need (merge and split coins before if necessary)
 
 module kraken::owned {    
     use sui::transfer::Receiving;
@@ -22,7 +23,7 @@ module kraken::owned {
         objects: vector<ID>,
     }
 
-    // [ACTION] enforces accessed objects to be sent back to the multisig
+    // [ACTION] enforces accessed objects to be sent back to the multisig, depends on Withdraw
     public struct Borrow has store {
         // list of objects to put back into the multisig
         to_return: vector<ID>,
