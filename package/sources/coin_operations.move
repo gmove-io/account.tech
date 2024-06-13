@@ -1,25 +1,27 @@
-/// Handle coin merging and splitting for the multisig.
+/// Handles coin merging and splitting for the multisig.
 /// Any member can merge and split without approvals.
 /// Used to prepare a Proposal with coins having the exact amount needed.
 
 module kraken::coin_operations {
-    use sui::coin::Coin;
-    use sui::transfer::Receiving;
+    use sui::{
+        coin::{Self, Coin},
+        transfer::Receiving
+    };
     use kraken::multisig::Multisig;
 
     // === [MEMBER] Public functions ===
 
-    // members can merge coins, no need for approvals
-    public fun merge<T: drop>(
+    // members can merge and split coins, no need for approvals
+    // returns the IDs to use in a following proposal, sorted by "to_split" amounts
+    public fun merge_and_split<T: drop>(
         multisig: &mut Multisig, 
-        to_keep: Receiving<Coin<T>>,
-        mut to_merge: vector<Receiving<Coin<T>>>, 
-        ctx: &TxContext
-    ) {
+        mut to_merge: vector<Receiving<Coin<T>>>, // there can be only one coin if we just want to split
+        to_split: vector<u64>, // there can be no amount if we just want to merge
+        ctx: &mut TxContext
+    ): vector<ID> { 
         multisig.assert_is_member(ctx);
 
         // receive all coins
-        let mut merged = transfer::public_receive(multisig.uid_mut(), to_keep);
         let mut coins = vector::empty();
         while (!to_merge.is_empty()) {
             let item = to_merge.pop_back();
@@ -28,30 +30,32 @@ module kraken::coin_operations {
         };
         to_merge.destroy_empty();
 
-        // merge all coins
+        let coin = merge(coins, ctx);
+        let ids = split(multisig, coin, to_split, ctx);
+
+        ids
+    }
+
+    fun merge<T: drop>(
+        mut coins: vector<Coin<T>>, 
+        ctx: &mut TxContext
+    ): Coin<T> {
+        let mut merged = coin::zero<T>(ctx);
         while (!coins.is_empty()) {
             merged.join(coins.pop_back());
         };
         coins.destroy_empty();
 
-        transfer::public_transfer(merged, multisig.addr());
+        merged
     }
 
-    // members can split coins, no need for approvals
-    // returns the IDs of the new coins for devInspect to prepare the ptb
-    public fun split<T: drop>(
-        multisig: &mut Multisig, 
-        to_split: Receiving<Coin<T>>,
+    fun split<T: drop>(
+        multisig: &Multisig, 
+        mut coin: Coin<T>,
         mut amounts: vector<u64>, 
         ctx: &mut TxContext
     ): vector<ID> {
-        multisig.assert_is_member(ctx);
-
-        // receive coin to split
-        let mut coin = transfer::public_receive(multisig.uid_mut(), to_split);
         let mut ids = vector::empty();
-
-        // split all coins
         while (!amounts.is_empty()) {
             let split = coin.split(amounts.pop_back(), ctx);
             ids.push_back(object::id(&split));
