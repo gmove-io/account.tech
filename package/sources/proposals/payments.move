@@ -10,12 +10,13 @@ module kraken::payments {
     use sui::coin::{Self, Coin};
     
     use kraken::owned;
-    use kraken::multisig::{Multisig, Executable};
+    use kraken::multisig::{Multisig, Executable, Proposal};
 
     // === Errors ===
 
     const ECompletePaymentBefore: u64 = 0;
     const EPayTooEarly: u64 = 1;
+    const EPayNotExecuted: u64 = 2;
 
     // === Structs ===
 
@@ -69,9 +70,7 @@ module kraken::payments {
             description,
             ctx
         );
-
-        proposal_mut.push_action(new_pay(amount, interval, recipient));
-        proposal_mut.push_action(owned::new_withdraw(vector[coin]));
+        new_pay(proposal_mut, coin, amount, interval, recipient);
     }
 
     // step 2: multiple members have to approve the proposal (multisig::approve_proposal)
@@ -84,8 +83,7 @@ module kraken::payments {
         received: Receiving<Coin<C>>,
         ctx: &mut TxContext
     ) {
-        let idx = executable.last_action_idx();
-        pay(&mut executable, multisig, received, Witness {}, idx, ctx);
+        pay(&mut executable, multisig, received, Witness {}, 0, ctx);
 
         owned::destroy_withdraw(&mut executable, Witness {});
         destroy_pay(&mut executable, Witness {});
@@ -148,8 +146,9 @@ module kraken::payments {
 
     // === [ACTION] Public Functions ===
 
-    public fun new_pay(amount: u64, interval: u64, recipient: address): Pay {
-        Pay { amount, interval, recipient }
+    public fun new_pay(proposal: &mut Proposal, coin: ID, amount: u64, interval: u64, recipient: address) {
+        owned::new_withdraw(proposal, vector[coin]);
+        proposal.add_action(Pay { amount, interval, recipient });
     }
 
     public fun pay<W: copy + drop, C: drop>(
@@ -162,8 +161,8 @@ module kraken::payments {
     ) {
         multisig.assert_executed(executable);
         
-        let coin = owned::withdraw(executable, multisig, witness, received, idx + 1);
-        let pay_mut: &mut Pay = executable.action_mut(witness, idx);
+        let coin = owned::withdraw(executable, multisig, witness, received, idx);
+        let pay_mut: &mut Pay = executable.action_mut(witness, idx + 1);
 
         let stream = Stream<C> { 
             id: object::new(ctx), 
@@ -174,11 +173,16 @@ module kraken::payments {
             recipient: pay_mut.recipient
         };
         transfer::share_object(stream);
+
+        pay_mut.amount = 0; // clean to ensure action is executed only once
     }
 
-    public fun destroy_pay<W: drop>(executable: &mut Executable, witness: W): (u64, u64, address) {
-        let Pay { amount, interval, recipient } = executable.pop_action(witness);
-        (amount, interval, recipient)
+    public fun destroy_pay<W: copy + drop>(executable: &mut Executable, witness: W): address {
+        owned::destroy_withdraw(executable, witness);
+        let Pay { amount, interval: _, recipient } = executable.remove_action(witness);
+        assert!(amount == 0, EPayNotExecuted);
+
+        recipient
     }
 }
 

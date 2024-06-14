@@ -24,7 +24,7 @@
 //         assert_eq(multisig.name(), string::utf8(b"kraken"));
 //         assert_eq(multisig.threshold(), 1);
 //         assert_eq(multisig.members(), vector[sender]);
-//         assert_eq(multisig.num_of_proposals(), 0);
+//         assert_eq(multisig.proposals_length(), 0);
 
 //         world.end();
 //     } 
@@ -37,11 +37,11 @@
 //         world.create_proposal(Action { value: 2 }, string::utf8(b"2"), 100, 2, string::utf8(b"test-2"));
 //         world.create_proposal(Action { value: 3 }, string::utf8(b"3"), 100, 3, string::utf8(b"test-3"));
 
-//         assert_eq(world.multisig().num_of_proposals(), 3);
+//         assert_eq(world.multisig().proposals_length(), 3);
 
 //         // does nothing
 //         world.clean_proposals();
-//         assert_eq(world.multisig().num_of_proposals(), 3);
+//         assert_eq(world.multisig().proposals_length(), 3);
 
 //         // increment epoch
 //         world.scenario().ctx().increment_epoch_number();
@@ -49,13 +49,13 @@
 
 //         // Remove 2 proposals
 //         world.clean_proposals();
-//         assert_eq(world.multisig().num_of_proposals(), 1);
+//         assert_eq(world.multisig().proposals_length(), 1);
 
 //         world.scenario().ctx().increment_epoch_number();
 
 //         // remove the last proposal
 //         world.clean_proposals();
-//         assert_eq(world.multisig().num_of_proposals(), 0);
+//         assert_eq(world.multisig().proposals_length(), 0);
 
 //         world.end();
 //     }
@@ -67,7 +67,7 @@
 //         world.create_proposal(Action { value: 1 }, string::utf8(b"1"), 100, 2, string::utf8(b"test-1"));
 //         world.create_proposal(Action { value: 1 }, string::utf8(b"2"), 101, 3, string::utf8(b"test-2"));
 
-//         assert_eq(world.multisig().num_of_proposals(), 2);
+//         assert_eq(world.multisig().proposals_length(), 2);
 
 //         let proposal1 = world.multisig().proposal(&string::utf8(b"1"));
         
@@ -91,10 +91,10 @@
 //         let mut world = start_world();
 
 //         world.create_proposal(Action { value: 1 }, string::utf8(b"1"), 100, 2, string::utf8(b"test-1"));
-//         assert_eq(world.multisig().num_of_proposals(), 1);
+//         assert_eq(world.multisig().proposals_length(), 1);
 
 //         world.delete_proposal(string::utf8(b"1"));
-//         assert_eq(world.multisig().num_of_proposals(), 0);
+//         assert_eq(world.multisig().proposals_length(), 0);
 
 //         world.end();
 //     }
@@ -178,7 +178,7 @@
 
 //         world.create_proposal(Action { value: 1 }, string::utf8(b"1"), 100, 2, string::utf8(b"test-1"));
 //         world.multisig().set_threshold(2);
-//         assert_eq(world.multisig().num_of_proposals(), 1);
+//         assert_eq(world.multisig().proposals_length(), 1);
 
 //         world.approve_proposal(string::utf8(b"1"));
 //         world.scenario().next_tx(ALICE);
@@ -188,7 +188,7 @@
 //         world.clock().set_for_testing(101);
 
 //         let Action { value } = world.execute_proposal(string::utf8(b"1")).unpack_action();
-//         assert_eq(world.multisig().num_of_proposals(), 0);
+//         assert_eq(world.multisig().proposals_length(), 0);
 
 //         assert_eq(value, 1);
 
@@ -305,7 +305,7 @@
 
 //         world.create_proposal(Action { value: 1 }, string::utf8(b"1"), 100, 2, string::utf8(b"test-1"));
 //         world.multisig().set_threshold(3);
-//         assert_eq(world.multisig().num_of_proposals(), 1);
+//         assert_eq(world.multisig().proposals_length(), 1);
 
 //         world.approve_proposal(string::utf8(b"1"));
 //         world.scenario().next_tx(ALICE);
@@ -328,7 +328,7 @@
 
 //         world.create_proposal(Action { value: 1 }, string::utf8(b"1"), 100, 2, string::utf8(b"test-1"));
 //         world.multisig().set_threshold(2);
-//         assert_eq(world.multisig().num_of_proposals(), 1);
+//         assert_eq(world.multisig().proposals_length(), 1);
 
 //         world.approve_proposal(string::utf8(b"1"));
 //         world.scenario().next_tx(ALICE);

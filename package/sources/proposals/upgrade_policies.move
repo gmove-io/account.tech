@@ -9,13 +9,15 @@ module kraken::upgrade_policies {
     use sui::transfer::Receiving;
     use sui::clock::Clock;
     use sui::dynamic_field as df;
-    use kraken::multisig::{Multisig, Executable};
+    use kraken::multisig::{Multisig, Executable, Proposal};
 
     // === Error ===
 
     const EWrongUpgradeLock: u64 = 1;
     const EPolicyShouldRestrict: u64 = 2;
     const EInvalidPolicy: u64 = 3;
+    const EUpgradeNotExecuted: u64 = 4;
+    const ERestrictNotExecuted: u64 = 5;
 
     // === Structs ===
 
@@ -143,7 +145,7 @@ module kraken::upgrade_policies {
             ctx
         );
 
-        proposal_mut.push_action(new_upgrade(digest, object::id(lock)));
+        new_upgrade(proposal_mut, digest, object::id(lock));
     }
 
     // step 2: multiple members have to approve the proposal (multisig::approve_proposal)
@@ -154,8 +156,7 @@ module kraken::upgrade_policies {
         mut executable: Executable,
         lock: &mut UpgradeLock,
     ): UpgradeTicket {
-        let idx = executable.last_action_idx();
-        let ticket = upgrade(&mut executable, lock, Witness {}, idx);
+        let ticket = upgrade(&mut executable, lock, Witness {}, 0);
         destroy_upgrade(&mut executable, Witness {});
         executable.destroy(Witness {});
 
@@ -182,15 +183,6 @@ module kraken::upgrade_policies {
         lock: &UpgradeLock,
         ctx: &mut TxContext
     ) {
-        let current_policy = lock.upgrade_cap.policy();
-        assert!(policy > current_policy, EPolicyShouldRestrict);
-        assert!(
-            policy == package::additive_policy() ||
-            policy == package::dep_only_policy() ||
-            policy == 255, // make immutable
-            EInvalidPolicy
-        );
-
         let proposal_mut = multisig.create_proposal(
             Witness {},
             key,
@@ -199,7 +191,7 @@ module kraken::upgrade_policies {
             description,
             ctx
         );
-        proposal_mut.push_action(new_restrict(policy, object::id(lock)));
+        new_restrict(proposal_mut, lock, policy);
     }
 
     // step 2: multiple members have to approve the proposal (multisig::approve_proposal)
@@ -211,16 +203,15 @@ module kraken::upgrade_policies {
         multisig: &mut Multisig,
         lock: UpgradeLock,
     ) {
-        let idx = executable.last_action_idx();
-        restrict(&mut executable, multisig, lock, Witness {}, idx);
+        restrict(&mut executable, multisig, lock, Witness {}, 0);
         destroy_restrict(&mut executable, Witness {});
         executable.destroy(Witness {});
     }
 
     // [ACTION] Public Functions ===
 
-    public fun new_upgrade(digest: vector<u8>, lock_id: ID): Upgrade {
-        Upgrade { digest, lock_id }
+    public fun new_upgrade(proposal: &mut Proposal, digest: vector<u8>, lock_id: ID) {
+        proposal.add_action(Upgrade { digest, lock_id });
     }    
     
     public fun upgrade<W: drop>(
@@ -233,16 +224,29 @@ module kraken::upgrade_policies {
         assert!(object::id(lock) == upgrade_mut.lock_id, EWrongUpgradeLock);
 
         let policy = lock.upgrade_cap.policy();
-        lock.upgrade_cap.authorize_upgrade(policy, upgrade_mut.digest)
+        let ticket = lock.upgrade_cap.authorize_upgrade(policy, upgrade_mut.digest);
+        // consume digest to ensure this function has been called exactly once
+        upgrade_mut.digest = vector::empty();
+
+        ticket
     }    
 
-    public fun destroy_upgrade<W: drop>(executable: &mut Executable, witness: W): (vector<u8>, ID) {
-        let Upgrade { digest, lock_id } = executable.pop_action(witness);
-        (digest, lock_id)
+    public fun destroy_upgrade<W: drop>(executable: &mut Executable, witness: W) {
+        let Upgrade { digest, lock_id: _ } = executable.remove_action(witness);
+        assert!(digest.is_empty(), EUpgradeNotExecuted);
     }
 
-    public fun new_restrict(policy: u8, lock_id: ID): Restrict {
-        Restrict { policy, lock_id }
+    public fun new_restrict(proposal: &mut Proposal, lock: &UpgradeLock, policy: u8) {
+        let current_policy = lock.upgrade_cap.policy();
+        assert!(policy > current_policy, EPolicyShouldRestrict);
+        assert!(
+            policy == package::additive_policy() ||
+            policy == package::dep_only_policy() ||
+            policy == 255, // make immutable
+            EInvalidPolicy
+        );
+
+        proposal.add_action(Restrict { policy, lock_id: object::id(lock) });
     }    
     
     public fun restrict<W: drop>(
@@ -268,11 +272,13 @@ module kraken::upgrade_policies {
             package::make_immutable(upgrade_cap);
             id.delete();
         };
+        // consume policy to ensure this function has been called exactly once
+        restrict_mut.policy = 0;
     }
 
-    public fun destroy_restrict<W: drop>(executable: &mut Executable, witness: W): (u8, ID) {
-        let Restrict { policy, lock_id } = executable.pop_action(witness);
-        (policy, lock_id)
+    public fun destroy_restrict<W: drop>(executable: &mut Executable, witness: W) {
+        let Restrict { policy, lock_id: _ } = executable.remove_action(witness);
+        assert!(policy == 0, ERestrictNotExecuted);
     }
 
     // === Test Functions ===

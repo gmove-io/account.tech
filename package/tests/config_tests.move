@@ -21,7 +21,7 @@
 //         assert_eq(multisig.name(), string::utf8(b"kraken"));
 //         assert_eq(multisig.threshold(), 1);
 //         assert_eq(multisig.members(), vector[sender]);
-//         assert_eq(multisig.num_of_proposals(), 0);
+//         assert_eq(multisig.proposals_length(), 0);
 
 //         world.propose_modify(
 //             string::utf8(b"modify"), 
@@ -47,7 +47,7 @@
 //         assert_eq(multisig.name(), string::utf8(b"kraken-2"));
 //         assert_eq(multisig.threshold(), 2);
 //         assert_eq(multisig.members(), vector[BOB, ALICE]);
-//         assert_eq(multisig.num_of_proposals(), 0);        
+//         assert_eq(multisig.proposals_length(), 0);        
 
 //         world.end();        
 //     }

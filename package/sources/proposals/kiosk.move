@@ -12,7 +12,7 @@ module kraken::kiosk {
     use sui::kiosk::{Self, Kiosk, KioskOwnerCap};
     use sui::transfer_policy::TransferPolicy;
     use kiosk::{kiosk_lock_rule, royalty_rule};
-    use kraken::multisig::{Multisig, Executable};
+    use kraken::multisig::{Multisig, Executable, Proposal};
 
     // === Errors ===
 
@@ -164,7 +164,7 @@ module kraken::kiosk {
             description,
             ctx
         );
-        proposal_mut.push_action(new_take(nft_ids, recipient));
+        new_take(proposal_mut, nft_ids, recipient);
     }
 
     // step 2: multiple members have to approve the proposal (multisig::approve_proposal)
@@ -180,16 +180,13 @@ module kraken::kiosk {
         policy: &mut TransferPolicy<T>,
         ctx: &mut TxContext
     ) {
-        let idx = executable.last_action_idx();
-        take(executable, multisig_kiosk, lock, recipient_kiosk, recipient_cap, policy, idx, ctx);
+        take(executable, multisig_kiosk, lock, recipient_kiosk, recipient_cap, policy, Witness {}, 0, ctx);
     }
 
     // step 5: destroy the executable, must `put_back_cap()`
     public fun complete_take(mut executable: Executable) {
-        let (nft_ids, _) = destroy_take(&mut executable);
+        destroy_take(&mut executable, Witness {});
         executable.destroy(Witness {});
-        assert!(nft_ids.is_empty(), ETransferAllNftsBefore);
-        nft_ids.destroy_empty();
     }
 
     // step 1: propose to list nfts
@@ -211,7 +208,7 @@ module kraken::kiosk {
             description,
             ctx
         );
-        proposal_mut.push_action(new_list(nft_ids, prices));
+        new_list(proposal_mut, nft_ids, prices);
     }
 
     // step 2: multiple members have to approve the proposal (multisig::approve_proposal)
@@ -223,35 +220,33 @@ module kraken::kiosk {
         kiosk: &mut Kiosk,
         lock: &KioskOwnerLock,
     ) {
-        let idx = executable.last_action_idx();
-        list<T>(executable, kiosk, lock, idx);
+        list<T, Witness>(executable, kiosk, lock, Witness {}, 0);
     }
     
     // step 5: destroy the executable, must `put_back_cap()`
     public fun complete_list(mut executable: Executable) {
-        let (nfts, _) = destroy_list(&mut executable);
+        destroy_list(&mut executable, Witness {});
         executable.destroy(Witness {});
-        assert!(nfts.is_empty(), EListAllNftsBefore);
-        nfts.destroy_empty();
     }
 
     // === [ACTION] Public functions ===
 
-    public fun new_take(nft_ids: vector<ID>, recipient: address): Take {
-        Take { nft_ids, recipient }
+    public fun new_take(proposal: &mut Proposal, nft_ids: vector<ID>, recipient: address) {
+        proposal.add_action(Take { nft_ids, recipient });
     }
 
-    public fun take<T: key + store>(
+    public fun take<T: key + store, W: drop>(
         executable: &mut Executable,
         multisig_kiosk: &mut Kiosk, 
         lock: &KioskOwnerLock,
         recipient_kiosk: &mut Kiosk, 
         recipient_cap: &KioskOwnerCap, 
         policy: &mut TransferPolicy<T>,
+        witness: W,
         idx: u64,
         ctx: &mut TxContext
     ) {
-        let take_mut: &mut Take = executable.action_mut(Witness {}, idx);
+        let take_mut: &mut Take = executable.action_mut(witness, idx);
         assert!(take_mut.recipient == ctx.sender(), EWrongReceiver);
 
         let nft_id = take_mut.nft_ids.pop_back();
@@ -272,31 +267,33 @@ module kraken::kiosk {
         policy.confirm_request(request);
     }
 
-    public fun destroy_take(executable: &mut Executable): (vector<ID>, address) {
-        let Take { nft_ids, recipient } = executable.pop_action(Witness {});
-        (nft_ids, recipient)
+    public fun destroy_take<W: drop>(executable: &mut Executable, witness: W): address {
+        let Take { nft_ids, recipient } = executable.remove_action(witness);
+        assert!(nft_ids.is_empty(), ETransferAllNftsBefore);
+        recipient
     }
 
-    public fun new_list(nft_ids: vector<ID>, prices: vector<u64>): List {
+    public fun new_list(proposal: &mut Proposal, nft_ids: vector<ID>, prices: vector<u64>) {
         assert!(nft_ids.length() == prices.length(), EWrongNftsPrices);
-        List { nft_ids, prices }
+        proposal.add_action(List { nft_ids, prices });
     }
 
-    public fun list<T: key + store>(
+    public fun list<T: key + store, W: drop>(
         executable: &mut Executable,
         kiosk: &mut Kiosk,
         lock: &KioskOwnerLock,
+        witness: W,
         idx: u64,
     ) {
-        let list_mut: &mut List = executable.action_mut(Witness {}, idx);
+        let list_mut: &mut List = executable.action_mut(witness, idx);
         let nft_id = list_mut.nft_ids.pop_back();
         let price = list_mut.prices.pop_back();
         kiosk.list<T>(&lock.kiosk_owner_cap, nft_id, price);
     }
 
-    public fun destroy_list(executable: &mut Executable): (vector<ID>, vector<u64>) {
-        let List { nft_ids, prices } = executable.pop_action(Witness {});
-        (nft_ids, prices)
+    public fun destroy_list<W: drop>(executable: &mut Executable, witness: W) {
+        let List { nft_ids, prices: _ } = executable.remove_action(witness);
+        assert!(nft_ids.is_empty(), EListAllNftsBefore);
     }
 
     // === Test functions ===

@@ -7,7 +7,7 @@
 
 module kraken::owned {    
     use sui::transfer::Receiving;
-    use kraken::multisig::{Multisig, Executable};
+    use kraken::multisig::{Multisig, Executable, Proposal};
 
     // === Errors ===
 
@@ -31,8 +31,8 @@ module kraken::owned {
 
     // === [ACTION] Public functions ===
 
-    public fun new_withdraw(objects: vector<ID>): Withdraw {
-        Withdraw { objects }
+    public fun new_withdraw(proposal: &mut Proposal, objects: vector<ID>) {
+        proposal.add_action(Withdraw { objects });
     }
 
     public fun withdraw<W: drop, T: key + store>(
@@ -55,13 +55,13 @@ module kraken::owned {
     }
 
     public fun destroy_withdraw<W: drop>(executable: &mut Executable, witness: W) {
-        let Withdraw { objects } = executable.pop_action(witness);
+        let Withdraw { objects } = executable.remove_action(witness);
         assert!(objects.is_empty(), ERetrieveAllObjectsBefore);
-        objects.destroy_empty();
     }
 
-    public fun new_borrow(objects: vector<ID>): Borrow {
-        Borrow { to_return: objects }
+    public fun new_borrow(proposal: &mut Proposal, objects: vector<ID>) {
+        new_withdraw(proposal, objects);
+        proposal.add_action(Borrow { to_return: objects });
     }
 
     public fun borrow<W: drop, T: key + store>(
@@ -71,7 +71,7 @@ module kraken::owned {
         receiving: Receiving<T>,
         idx: u64,
     ): T {
-        withdraw(executable, multisig, witness, receiving, idx + 1)
+        withdraw(executable, multisig, witness, receiving, idx)
     }
     
     public fun put_back<W: drop, T: key + store>(
@@ -90,9 +90,9 @@ module kraken::owned {
         transfer::public_transfer(returned, multisig.addr());
     }
 
-    public fun destroy_borrow<W: drop>(executable: &mut Executable, witness: W) {
-        let Borrow { to_return } = executable.pop_action(witness);
+    public fun destroy_borrow<W: copy + drop>(executable: &mut Executable, witness: W) {
+        destroy_withdraw(executable, witness);
+        let Borrow { to_return } = executable.remove_action(witness);
         assert!(to_return.is_empty(), EReturnAllObjectsBefore);
-        to_return.destroy_empty();
     }
 }
