@@ -133,9 +133,9 @@ module kraken::transfers {
         cap: &DeliveryCap,
         executable: &mut Executable, 
         multisig: &mut Multisig,
-        received: Receiving<T>,
+        receiving: Receiving<T>,
     ) {
-        deliver(delivery, cap, executable, multisig, received, Witness {}, 0);
+        deliver(delivery, cap, executable, multisig, receiving, Witness {}, 0);
     }
 
     // step 6: share the Delivery and destroy the action
@@ -212,7 +212,7 @@ module kraken::transfers {
     ) {
         multisig.assert_executed(executable);
         
-        let object = owned::withdraw(executable, multisig, witness, receiving, idx);
+        let object = owned::withdraw(executable, multisig, receiving, witness, idx);
         let send_mut: &mut Send = executable.action_mut(witness, idx + 1);
         let (_, recipient) = send_mut.transfers.remove(&object::id(&object));
         // abort if receiving object is not in the map
@@ -236,14 +236,14 @@ module kraken::transfers {
         cap: &DeliveryCap,
         executable: &mut Executable, 
         multisig: &mut Multisig,
-        received: Receiving<T>,
+        receiving: Receiving<T>,
         witness: W,
         idx: u64 // index of first action in bag (withdraw)
     ) {
         multisig.assert_executed(executable);
         assert!(cap.delivery_id == object::id(delivery), EWrongDelivery);
         
-        let object = owned::withdraw(executable, multisig, witness, received, idx);
+        let object = owned::withdraw(executable, multisig, receiving, witness, idx);
         let deliver_mut: &mut Deliver = executable.action_mut(witness, idx + 1);
         let (_, index) = deliver_mut.to_deposit.index_of(&object::id(&object));
         deliver_mut.to_deposit.swap_remove(index); // we don't care about the order

@@ -80,10 +80,10 @@ module kraken::payments {
     public fun execute_pay<C: drop>(
         mut executable: Executable, 
         multisig: &mut Multisig, 
-        received: Receiving<Coin<C>>,
+        receiving: Receiving<Coin<C>>,
         ctx: &mut TxContext
     ) {
-        pay(&mut executable, multisig, received, Witness {}, 0, ctx);
+        pay(&mut executable, multisig, receiving, Witness {}, 0, ctx);
 
         owned::destroy_withdraw(&mut executable, Witness {});
         destroy_pay(&mut executable, Witness {});
@@ -154,14 +154,14 @@ module kraken::payments {
     public fun pay<W: copy + drop, C: drop>(
         executable: &mut Executable, 
         multisig: &mut Multisig, 
-        received: Receiving<Coin<C>>,
+        receiving: Receiving<Coin<C>>,
         witness: W,
         idx: u64, // index in actions bag
         ctx: &mut TxContext
     ) {
         multisig.assert_executed(executable);
         
-        let coin = owned::withdraw(executable, multisig, witness, received, idx);
+        let coin = owned::withdraw(executable, multisig, receiving, witness, idx);
         let pay_mut: &mut Pay = executable.action_mut(witness, idx + 1);
 
         let stream = Stream<C> { 
