@@ -71,7 +71,16 @@ module kraken::owned {
         receiving: Receiving<T>,
         idx: u64,
     ): T {
-        withdraw(executable, multisig, witness, receiving, idx + 1)
+        multisig.assert_executed(executable);
+        let borrow_mut: &mut Borrow = executable.action_mut(witness, idx);
+        let (_, index) = borrow_mut.to_return.index_of(&transfer::receiving_object_id(&receiving));
+        let id = *borrow_mut.to_return.borrow(index);
+
+        let received = transfer::public_receive(multisig.uid_mut(), receiving);
+        let received_id = object::id(&received);
+        assert!(received_id == id, EWrongObject);
+
+        received
     }
     
     public fun put_back<W: drop, T: key + store>(

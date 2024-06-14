@@ -95,6 +95,10 @@ module kraken::multisig {
         actions: Bag,
     }
 
+    // Method Aliases
+
+    public use fun destroy_executable as Executable.destroy;
+
     // === Public mutative functions ===
 
     // init and share a new Multisig object
@@ -239,7 +243,7 @@ module kraken::multisig {
     }
 
     // to complete the execution
-    public use fun destroy_executable as Executable.destroy;
+
     public fun destroy_executable<Witness: drop>(
         executable: Executable, 
         _: Witness
