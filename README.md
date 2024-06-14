@@ -30,6 +30,8 @@ The primary goal is to enable a broad spectrum of on-chain interactions, surpass
 
 ## Usage
 
+![kraken_graph](./assets/kraken_graph.png)
+
 ### Flow
 
 1. Proposals are created via `propose_` functions within modules, by stacking one or more predefined actions.
