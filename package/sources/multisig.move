@@ -32,6 +32,8 @@ module kraken::multisig {
     const EHasntExpired: u64 = 4;
     const EWrongVersion: u64 = 5;
     const ENotMultisigExecutable: u64 = 6;
+    const EProposalNotFound: u64 = 7;
+    const EMemberNotFound: u64 = 8;
 
     // === Constants ===
 
@@ -166,7 +168,7 @@ module kraken::multisig {
         multisig.assert_is_member(ctx);
         multisig.assert_version();
 
-        let proposal = multisig.proposals.get_mut(&key);
+        let proposal = multisig.get_proposal_mut(&key);
         proposal.approved.insert(ctx.sender()); // throws if already approved
         proposal.approval_weight = 
             proposal.approval_weight + multisig.members.get(&ctx.sender()).weight;
@@ -181,7 +183,7 @@ module kraken::multisig {
         multisig.assert_is_member(ctx);
         multisig.assert_version();
 
-        let proposal = multisig.proposals.get_mut(&key);
+        let proposal = multisig.get_proposal_mut(&key);
         proposal.approved.remove(&ctx.sender());
         proposal.approval_weight = 
             proposal.approval_weight - multisig.members.get(&ctx.sender()).weight;
@@ -305,21 +307,21 @@ module kraken::multisig {
         multisig.members.keys()
     }
 
-    public fun member_weight(multisig: &Multisig, addr: address): u64 {
-        let member = multisig.members.get(&addr);
+    public fun member_weight(multisig: &Multisig, addr: &address): u64 {
+        let member = multisig.members.get(addr);
         member.weight
     }
     
-    public fun is_member(multisig: &Multisig, addr: address): bool {
-        multisig.members.contains(&addr)
+    public fun is_member(multisig: &Multisig, addr: &address): bool {
+        multisig.members.contains(addr)
     }
     
     public fun assert_is_member(multisig: &Multisig, ctx: &TxContext) {
         assert!(multisig.members.contains(&ctx.sender()), ECallerIsNotMember);
     }
 
-    public fun member_account_id(multisig: &Multisig, addr: address): Option<ID> {
-        let member = multisig.members.get(&addr);
+    public fun member_account_id(multisig: &Multisig, addr: &address): Option<ID> {
+        let member = multisig.members.get(addr);
         member.account_id
     }
 
@@ -406,18 +408,30 @@ module kraken::multisig {
 
     // for adding account id to members, from account.move
     public(package) fun register_account_id(multisig: &mut Multisig, id: ID, ctx: &TxContext) {
-        let member = multisig.members.get_mut(&ctx.sender());
+        let member = multisig.get_member_mut(&ctx.sender());
         member.account_id.swap_or_fill(id);
     }
 
     // for removing account id from members, from account.move
     public(package) fun unregister_account_id(multisig: &mut Multisig, ctx: &TxContext): ID {
-        let member = multisig.members.get_mut(&ctx.sender());
+        let member = multisig.get_member_mut(&ctx.sender());
         member.account_id.extract()
     }
 
     public(package) fun uid_mut(multisig: &mut Multisig): &mut UID {
         &mut multisig.id
+    }
+
+    // === Private functions ===
+
+    fun get_proposal_mut(multisig: &mut Multisig, key: &String): &mut Proposal {
+        assert!(multisig.proposals.contains(key), EProposalNotFound);
+        multisig.proposals.get_mut(key)
+    }
+
+    fun get_member_mut(multisig: &mut Multisig, addr: &address): &mut Member {
+        assert!(multisig.members.contains(addr), EMemberNotFound);
+        multisig.members.get_mut(addr)
     }
 
     // === Test functions ===

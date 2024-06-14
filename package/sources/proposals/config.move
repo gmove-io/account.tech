@@ -128,14 +128,14 @@ module kraken::config {
         // verify proposed addresses match current list
         let (mut i, mut added_weight) = (0, 0);
         while (i < to_add.length()) {
-            assert!(!multisig.is_member(to_add[i]), EAlreadyMember);
+            assert!(!multisig.is_member(&to_add[i]), EAlreadyMember);
             added_weight = added_weight + weights[i];
             i = i + 1;
         };
         let (mut j, mut removed_weight) = (0, 0);
         while (j < to_remove.length()) {
-            assert!(multisig.is_member(to_remove[j]), ENotMember);
-            removed_weight = removed_weight + multisig.member_weight(to_remove[j]);
+            assert!(multisig.is_member(&to_remove[j]), ENotMember);
+            removed_weight = removed_weight + multisig.member_weight(&to_remove[j]);
             j = j + 1;
         };
 
