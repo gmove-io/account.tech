@@ -128,6 +128,15 @@ module kraken::test_utils {
         world.multisig.execute_proposal(key, &world.clock, world.scenario.ctx())
     }
 
+
+    public fun merge_and_split<T: drop>(
+        world: &mut World, 
+        to_merge: vector<Receiving<Coin<T>>>,
+        to_split: vector<u64> 
+    ): vector<ID> {
+        coin_operations::merge_and_split(&mut world.multisig, to_merge, to_split, world.scenario.ctx())
+    }
+
     // public fun clean_proposals(world: &mut World) {
     //     world.multisig.clean_proposals(world.scenario.ctx());
     // }
@@ -176,22 +185,6 @@ module kraken::test_utils {
     //     name: String, 
     // ) {
     //     config::execute_modify(&mut world.multisig, name, &world.clock, world.scenario.ctx());
-    // }
-
-    // public fun merge<T: drop>(
-    //     world: &mut World, 
-    //     to_keep: Receiving<Coin<T>>,
-    //     to_merge: vector<Receiving<Coin<T>>>, 
-    // ) {
-    //     coin_operations::merge(&mut world.multisig, to_keep, to_merge, world.scenario.ctx());
-    // }
-
-    // public fun split<T: drop>(
-    //     world: &mut World,  
-    //     to_split: Receiving<Coin<T>>,
-    //     amounts: vector<u64>, 
-    // ): vector<ID> {
-    //     coin_operations::split(&mut world.multisig, to_split, amounts, world.scenario.ctx())
     // }
 
     // public fun send_invite(world: &mut World, recipient: address) {
