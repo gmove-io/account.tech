@@ -32,6 +32,8 @@ module kraken::multisig {
     const EHasntExpired: u64 = 4;
     const EWrongVersion: u64 = 5;
     const ENotMultisigExecutable: u64 = 6;
+    const EProposalNotFound: u64 = 7;
+    const EMemberNotFound: u64 = 8;
 
     // === Constants ===
 
@@ -91,7 +93,9 @@ module kraken::multisig {
         multisig_addr: address,
         // module that issued the proposal and must destroy it
         module_witness: TypeName,
-        // actions to be executed from last to first
+        // index of the next action to destroy
+        next_to_destroy: u64,
+        // actions to be executed in order
         actions: Bag,
     }
 
@@ -155,8 +159,8 @@ module kraken::multisig {
         multisig.proposals.get_mut(&key)
     }
 
-    // push_back action to the proposal bag
-    public fun push_action<A: store>(proposal: &mut Proposal, action: A) {
+    // insert action to the proposal bag, safe because proposal_mut is only accessible upon creation
+    public fun add_action<A: store>(proposal: &mut Proposal, action: A) {
         let idx = proposal.actions.length();
         proposal.actions.add(idx, action);
     }
@@ -169,6 +173,7 @@ module kraken::multisig {
     ) {
         multisig.assert_is_member(ctx);
         multisig.assert_version();
+        assert!(multisig.proposals.contains(&key), EProposalNotFound);
 
         let proposal = multisig.proposals.get_mut(&key);
         proposal.approved.insert(ctx.sender()); // throws if already approved
@@ -184,6 +189,7 @@ module kraken::multisig {
     ) {
         multisig.assert_is_member(ctx);
         multisig.assert_version();
+        assert!(multisig.proposals.contains(&key), EProposalNotFound);
 
         let proposal = multisig.proposals.get_mut(&key);
         proposal.approved.remove(&ctx.sender());
@@ -220,7 +226,8 @@ module kraken::multisig {
         Executable { 
             multisig_addr: multisig.id.uid_to_inner().id_to_address(), 
             module_witness: module_witness,
-            actions: actions
+            next_to_destroy: 0,
+            actions
         }
     }
 
@@ -229,17 +236,20 @@ module kraken::multisig {
         _: Witness,
         idx: u64
     ): &mut A {
+        assert!(executable.module_witness == type_name::get<Witness>(), ENotIssuerModule);
         executable.actions.borrow_mut(idx)
     }
 
     // need to destroy all actions before destroying the executable
-    public fun pop_action<Witness: drop, A: store>(
+    public fun remove_action<Witness: drop, A: store>(
         executable: &mut Executable, 
-        _: Witness
+        _: Witness,
     ): A {
         assert!(executable.module_witness == type_name::get<Witness>(), ENotIssuerModule);
-        let idx = executable.actions.length() - 1;
-        executable.actions.remove(idx)
+        let next = executable.next_to_destroy;
+        executable.next_to_destroy = next + 1;
+
+        executable.actions.remove(next)
     }
 
     // to complete the execution
@@ -251,6 +261,7 @@ module kraken::multisig {
         let Executable { 
             multisig_addr: _, 
             module_witness, 
+            next_to_destroy: _,
             actions 
         } = executable;
         assert!(module_witness == type_name::get<Witness>(), ENotIssuerModule);
@@ -309,25 +320,25 @@ module kraken::multisig {
         multisig.members.keys()
     }
 
-    public fun member_weight(multisig: &Multisig, addr: address): u64 {
-        let member = multisig.members.get(&addr);
+    public fun member_weight(multisig: &Multisig, addr: &address): u64 {
+        let member = multisig.members.get(addr);
         member.weight
     }
     
-    public fun is_member(multisig: &Multisig, addr: address): bool {
-        multisig.members.contains(&addr)
+    public fun is_member(multisig: &Multisig, addr: &address): bool {
+        multisig.members.contains(addr)
     }
     
     public fun assert_is_member(multisig: &Multisig, ctx: &TxContext) {
         assert!(multisig.members.contains(&ctx.sender()), ECallerIsNotMember);
     }
 
-    public fun member_account_id(multisig: &Multisig, addr: address): Option<ID> {
-        let member = multisig.members.get(&addr);
+    public fun member_account_id(multisig: &Multisig, addr: &address): Option<ID> {
+        let member = multisig.members.get(addr);
         member.account_id
     }
 
-    public fun num_of_proposals(multisig: &Multisig): u64 {
+    public fun proposals_length(multisig: &Multisig): u64 {
         multisig.proposals.size()
     }
 
@@ -359,11 +370,6 @@ module kraken::multisig {
     public use fun assert_multisig_executed as Multisig.assert_executed;
     public fun assert_multisig_executed(multisig: &Multisig, executable: &Executable) {
         assert!(multisig.addr() == executable.multisig_addr, ENotMultisigExecutable);
-    }
-
-    public use fun executable_last_action_idx as Executable.last_action_idx;
-    public fun executable_last_action_idx(executable: &Executable): u64 {
-        executable.actions.length() - 1
     }
 
     // === Package functions ===
@@ -410,12 +416,14 @@ module kraken::multisig {
 
     // for adding account id to members, from account.move
     public(package) fun register_account_id(multisig: &mut Multisig, id: ID, ctx: &TxContext) {
+        assert!(multisig.members.contains(&ctx.sender()), EMemberNotFound);
         let member = multisig.members.get_mut(&ctx.sender());
         member.account_id.swap_or_fill(id);
     }
 
     // for removing account id from members, from account.move
     public(package) fun unregister_account_id(multisig: &mut Multisig, ctx: &TxContext): ID {
+        assert!(multisig.members.contains(&ctx.sender()), EMemberNotFound);
         let member = multisig.members.get_mut(&ctx.sender());
         member.account_id.extract()
     }

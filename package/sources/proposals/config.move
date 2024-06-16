@@ -6,7 +6,7 @@
 
 module kraken::config {
     use std::string::String;
-    use kraken::multisig::{Multisig, Executable};
+    use kraken::multisig::{Multisig, Executable, Proposal};
 
     // === Errors ===
 
@@ -14,6 +14,8 @@ module kraken::config {
     const ENotMember: u64 = 1;
     const EAlreadyMember: u64 = 2;
     const EThresholdNull: u64 = 3;
+    const EModifyNotExecuted: u64 = 4;
+    const EMigrateNotExecuted: u64 = 5;
 
     // === Structs ===
 
@@ -56,7 +58,7 @@ module kraken::config {
         weights: vector<u64>,
         ctx: &mut TxContext
     ) {
-        let modify = new_modify(multisig, name, threshold, to_remove, to_add, weights);
+        verify_new_config(multisig, threshold, to_remove, to_add, weights);
         let proposal_mut = multisig.create_proposal(
             Witness {},
             key,
@@ -65,7 +67,7 @@ module kraken::config {
             description,
             ctx
         );
-        proposal_mut.push_action(modify);
+        new_modify(proposal_mut, name, threshold, to_remove, to_add, weights);
     }
 
     // step 2: multiple members have to approve the proposal (multisig::approve_proposal)
@@ -75,8 +77,7 @@ module kraken::config {
         mut executable: Executable,
         multisig: &mut Multisig, 
     ) {
-        let idx = executable.last_action_idx();
-        modify(&mut executable, multisig, Witness {}, idx);
+        modify(&mut executable, multisig, Witness {}, 0);
         destroy_modify(&mut executable, Witness {});
         executable.destroy(Witness {});
     }
@@ -99,7 +100,7 @@ module kraken::config {
             description,
             ctx
         );
-        proposal_mut.push_action(new_migrate(version));
+        new_migrate(proposal_mut, version);
     }
 
     // step 2: multiple members have to approve the proposal (multisig::approve_proposal)
@@ -109,8 +110,7 @@ module kraken::config {
         mut executable: Executable,
         multisig: &mut Multisig, 
     ) {
-        let idx = executable.last_action_idx();
-        migrate(&mut executable, multisig, Witness {}, idx);
+        migrate(&mut executable, multisig, Witness {}, 0);
         destroy_migrate(&mut executable, Witness {});
         executable.destroy(Witness {});
     }
@@ -118,39 +118,14 @@ module kraken::config {
     // === [ACTION] Public functions ===
 
     public fun new_modify(
-        multisig: &Multisig,
+        proposal: &mut Proposal,
         name: Option<String>,
         threshold: Option<u64>, 
         to_remove: vector<address>, 
         to_add: vector<address>, 
         weights: vector<u64>,
-    ): Modify {
-        // verify proposed addresses match current list
-        let (mut i, mut added_weight) = (0, 0);
-        while (i < to_add.length()) {
-            assert!(!multisig.is_member(to_add[i]), EAlreadyMember);
-            added_weight = added_weight + weights[i];
-            i = i + 1;
-        };
-        let (mut j, mut removed_weight) = (0, 0);
-        while (j < to_remove.length()) {
-            assert!(multisig.is_member(to_remove[j]), ENotMember);
-            removed_weight = removed_weight + multisig.member_weight(to_remove[j]);
-            j = j + 1;
-        };
-
-        let new_threshold = if (threshold.is_some()) {
-            // if threshold null, anyone can propose
-            assert!(*threshold.borrow() > 0, EThresholdNull);
-            *threshold.borrow()
-        } else {
-            multisig.threshold()
-        };
-        // verify threshold is reachable with new members 
-        let new_total_weight = multisig.total_weight() + added_weight - removed_weight;
-        assert!(new_total_weight >= new_threshold, EThresholdTooHigh);
-        
-        Modify { name, threshold, to_add, weights, to_remove }
+    ) { 
+        proposal.add_action(Modify { name, threshold, to_add, weights, to_remove });
     }    
     
     public fun modify<W: drop>(
@@ -168,16 +143,19 @@ module kraken::config {
         multisig.add_members(modify_mut.to_add, modify_mut.weights);
     }
 
-    public fun destroy_modify<W: drop>(
-        executable: &mut Executable,
-        witness: W,
-    ): (Option<String>, Option<u64>, vector<address>, vector<address>, vector<u64>) {
-        let Modify { name, threshold, to_remove, to_add, weights } = executable.pop_action(witness);
-        (name, threshold, to_remove, to_add, weights)
+    public fun destroy_modify<W: drop>(executable: &mut Executable, witness: W) {
+        let Modify { name, threshold, to_remove, to_add, weights } = executable.remove_action(witness);
+        assert!(name.is_none() &&
+            threshold.is_none() &&
+            to_remove.is_empty() &&
+            to_add.is_empty() &&
+            weights.is_empty(),
+            EModifyNotExecuted
+        );
     }
 
-    public fun new_migrate(version: u64): Migrate {
-        Migrate { version }
+    public fun new_migrate(proposal: &mut Proposal, version: u64) {
+        proposal.add_action(Migrate { version });
     }
 
     public fun migrate<W: drop>(
@@ -189,14 +167,48 @@ module kraken::config {
         multisig.assert_executed(executable);
         let migrate_mut: &mut Migrate = executable.action_mut(witness, idx);
         multisig.set_version(migrate_mut.version);
+        migrate_mut.version = 0; // reset to 0 to enforce exactly one execution
     }
         
     public fun destroy_migrate<W: drop>(
         executable: &mut Executable,
         witness: W,
-    ): u64 {
-        let Migrate { version } = executable.pop_action(witness);
-        version
+    ) {
+        let Migrate { version } = executable.remove_action(witness);
+        assert!(version == 0, EMigrateNotExecuted);
+    }
+
+    public fun verify_new_config(
+        multisig: &Multisig,
+        threshold: Option<u64>, 
+        to_remove: vector<address>, 
+        to_add: vector<address>, 
+        weights: vector<u64>,
+    ) {
+        // verify proposed addresses match current list
+        let (mut i, mut added_weight) = (0, 0);
+        while (i < to_add.length()) {
+            assert!(!multisig.is_member(&to_add[i]), EAlreadyMember);
+            added_weight = added_weight + weights[i];
+            i = i + 1;
+        };
+        let (mut j, mut removed_weight) = (0, 0);
+        while (j < to_remove.length()) {
+            assert!(multisig.is_member(&to_remove[j]), ENotMember);
+            removed_weight = removed_weight + multisig.member_weight(&to_remove[j]);
+            j = j + 1;
+        };
+
+        let new_threshold = if (threshold.is_some()) {
+            // if threshold null, anyone can propose
+            assert!(*threshold.borrow() > 0, EThresholdNull);
+            *threshold.borrow()
+        } else {
+            multisig.threshold()
+        };
+        // verify threshold is reachable with new members 
+        let new_total_weight = multisig.total_weight() + added_weight - removed_weight;
+        assert!(new_total_weight >= new_threshold, EThresholdTooHigh);
     }
 }
 
