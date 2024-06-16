@@ -66,34 +66,34 @@ module kraken::test_utils {
         &mut world.scenario
     }
 
-    public fun withdraw<Witness: drop, Object: key + store>(
+    public fun withdraw<Object: key + store, Witness: drop + copy>(
         world: &mut World, 
         executable: &mut Executable,
-        witness: Witness,
         receiving: Receiving<Object>,
+        witness: Witness,
         idx: u64
     ): Object {
-        owned::withdraw<Witness, Object>(executable, &mut world.multisig, witness, receiving, idx)
+        owned::withdraw<Object, Witness>(executable, &mut world.multisig, receiving, witness, idx)
     }
 
-    public fun put_back<Witness: drop, Object: key + store>(
+    public fun put_back<Object: key + store, Witness: drop + copy>(
         world: &mut World, 
         executable: &mut Executable,
-        witness: Witness,
         returned: Object,
+        witness: Witness,
         idx: u64
     ) {
-        owned::put_back<Witness, Object>(executable, &mut world.multisig, witness, returned, idx);
+        owned::put_back<Object, Witness>(executable, &world.multisig, returned, witness, idx);
     }
 
-    public fun borrow<Witness: drop, Object: key + store>(
+    public fun borrow<Object: key + store, Witness: drop + copy>(
         world: &mut World, 
         executable: &mut Executable,
-        witness: Witness,
         receiving: Receiving<Object>,
+        witness: Witness,
         idx: u64
     ): Object {
-        owned::borrow<Witness, Object>(executable, &mut world.multisig, witness, receiving, idx)
+        owned::borrow<Object, Witness>(executable, &mut world.multisig, receiving, witness, idx)
     }
 
     public fun create_proposal<Witness: drop>(
