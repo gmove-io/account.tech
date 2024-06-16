@@ -17,7 +17,7 @@ module kraken::test_utils {
         owned,
         config,
         kiosk as k_kiosk,
-        account::{Self, Account},
+        account::{Self, Account, Invite},
         coin_operations,
         multisig::{Self, Multisig, Proposal, Executable},
         payments::{Self, Stream, Pay},
@@ -150,6 +150,21 @@ module kraken::test_utils {
     ) {
         account::leave_multisig(account, &mut world.multisig, world.scenario.ctx());
     }
+
+    public fun send_invite(
+        world: &mut World, 
+        recipient: address
+    ) {
+        account::send_invite(&world.multisig, recipient, world.scenario.ctx());
+    }    
+
+    public fun accept_invite(
+        world: &mut World, 
+        account: &mut Account,
+        invite: Invite
+    ) {
+        account::accept_invite(account, &mut world.multisig, invite, world.scenario.ctx());
+    }    
 
     // public fun clean_proposals(world: &mut World) {
     //     world.multisig.clean_proposals(world.scenario.ctx());
