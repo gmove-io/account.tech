@@ -137,6 +137,20 @@ module kraken::test_utils {
         coin_operations::merge_and_split(&mut world.multisig, to_merge, to_split, world.scenario.ctx())
     }
 
+    public fun join_multisig(
+        world: &mut World, 
+        account: &mut Account
+    ) {
+        account::join_multisig(account, &mut world.multisig, world.scenario.ctx());
+    }
+
+    public fun leave_multisig(
+        world: &mut World, 
+        account: &mut Account
+    ) {
+        account::leave_multisig(account, &mut world.multisig, world.scenario.ctx());
+    }
+
     // public fun clean_proposals(world: &mut World) {
     //     world.multisig.clean_proposals(world.scenario.ctx());
     // }
