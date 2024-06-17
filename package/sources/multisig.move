@@ -99,10 +99,6 @@ module kraken::multisig {
         actions: Bag,
     }
 
-    // Method Aliases
-
-    public use fun destroy_executable as Executable.destroy;
-
     // === Public mutative functions ===
 
     // init and share a new Multisig object
@@ -254,6 +250,7 @@ module kraken::multisig {
 
     // to complete the execution
 
+    public use fun destroy_executable as Executable.destroy;
     public fun destroy_executable<Witness: drop>(
         executable: Executable, 
         _: Witness
@@ -421,6 +418,7 @@ module kraken::multisig {
         while (addresses.length() > 0) {
             let addr = addresses.pop_back();
             let weight = weights.pop_back();
+            multisig.total_weight = multisig.total_weight + weight;
             multisig.members.insert(
                 addr, 
                 Member { weight, account_id: option::none() }
@@ -433,7 +431,8 @@ module kraken::multisig {
         while (addresses.length() > 0) {
             let addr = addresses.pop_back();
             let (_, member) = multisig.members.remove(&addr);
-            let Member { weight: _, account_id: _ } = member;
+            let Member { weight , account_id: _ } = member;
+            multisig.total_weight = multisig.total_weight - weight;
         }
     }
 

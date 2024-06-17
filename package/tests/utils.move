@@ -199,30 +199,33 @@ module kraken::test_utils {
     ) {
         multisig::assert_is_member(&world.multisig, world.scenario.ctx());
     }
-    // public fun propose_modify(
-    //     world: &mut World, 
-    //     key: String,
-    //     execution_time: u64,
-    //     expiration_epoch: u64,
-    //     description: String,
-    //     name: Option<String>,
-    //     threshold: Option<u64>, 
-    //     to_add: vector<address>, 
-    //     to_remove: vector<address>, 
-    // ) {
-    //     config::propose_modify(
-    //         &mut world.multisig, 
-    //         key, 
-    //         execution_time, 
-    //         expiration_epoch, 
-    //         description, 
-    //         name, 
-    //         threshold, 
-    //         to_add, 
-    //         to_remove, 
-    //         world.scenario.ctx()
-    //     );
-    // }
+
+    public fun propose_modify(
+        world: &mut World, 
+        key: String,
+        execution_time: u64,
+        expiration_epoch: u64,
+        description: String,
+        name: Option<String>,
+        threshold: Option<u64>, 
+        to_remove: vector<address>, 
+        to_add: vector<address>, 
+        weights: vector<u64>
+    ) {
+        config::propose_modify(
+            &mut world.multisig, 
+            key, 
+            execution_time, 
+            expiration_epoch, 
+            description, 
+            name, 
+            threshold, 
+            to_remove, 
+            to_add, 
+            weights,
+            world.scenario.ctx()
+        );
+    }
 
     // public fun execute_modify(
     //     world: &mut World,

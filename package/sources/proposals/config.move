@@ -141,10 +141,21 @@ module kraken::config {
         if (modify_mut.threshold.is_some()) multisig.set_threshold(modify_mut.threshold.extract());
         multisig.remove_members(modify_mut.to_remove);
         multisig.add_members(modify_mut.to_add, modify_mut.weights);
+
+        // @dev We need to reset the vectors here. Because add/remove members copy the vector<address>
+        modify_mut.to_remove = vector[];
+        modify_mut.to_add = vector[];
+        modify_mut.weights = vector[];
     }
 
     public fun destroy_modify<W: drop>(executable: &mut Executable, witness: W) {
         let Modify { name, threshold, to_remove, to_add, weights } = executable.remove_action(witness);
+
+        // print(&name);
+        // print(&threshold);
+        // print(&to_remove);
+        // print(&to_add);
+        // print(&weights);
         assert!(name.is_none() &&
             threshold.is_none() &&
             to_remove.is_empty() &&
