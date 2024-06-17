@@ -2,4 +2,5 @@ build
 .env
 node_modules
 bun.lockb
-Move.lock
+Move.lock 
+.idea
