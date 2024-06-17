@@ -193,6 +193,12 @@ module kraken::test_utils {
         world.multisig.unregister_account_id(world.scenario.ctx());
     }  
 
+
+    public fun assert_is_member(
+        world: &mut World, 
+    ) {
+        multisig::assert_is_member(&world.multisig, world.scenario.ctx());
+    }
     // public fun propose_modify(
     //     world: &mut World, 
     //     key: String,

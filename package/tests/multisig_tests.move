@@ -1,13 +1,16 @@
 #[test_only]
 module kraken::multisig_tests {
     use std::{
+        type_name,
         string::utf8,
-        type_name
     };
 
-    use sui::test_utils::assert_eq;
+    use sui::test_utils::{assert_eq, destroy};
     
-    use kraken::test_utils::start_world;
+    use kraken::{
+        multisig,
+        test_utils::start_world
+    };
 
     const OWNER: address = @0xBABE;
     const ALICE: address = @0xa11e7;
@@ -235,6 +238,7 @@ module kraken::multisig_tests {
 
         world.register_account_id(id1.uid_to_inner());
 
+        world.assert_is_member();
         assert_eq(world.multisig().member_account_id(&ALICE).is_none(), false);
         assert_eq(world.multisig().member_account_id(&ALICE).extract(), id1.uid_to_inner());
         assert_eq(world.multisig().member_account_id(&BOB).is_none(), true);
@@ -256,26 +260,233 @@ module kraken::multisig_tests {
         world.end();          
     }
 
-//     #[test]
-//     #[expected_failure(abort_code = multisig::ECantBeExecutedYet)]
-//     fun test_execute_proposal_error_cant_be_executed_yet() {
-//         let mut world = start_world();
+    #[test]
+    #[expected_failure(abort_code = multisig::ECallerIsNotMember)]
+    fun test_assert_is_member_error_caller_is_not_member() {
+        let mut world = start_world();
 
-//         world.multisig().add_members(vector[ALICE, BOB]);
+        world.scenario().next_tx(ALICE);
 
-//         world.create_proposal(Action { value: 1 }, string::utf8(b"1"), 100, 2, string::utf8(b"test-1"));
-//         world.multisig().set_threshold(2);
-//         assert_eq(world.multisig().proposals_length(), 1);
+        world.assert_is_member();
 
-//         world.approve_proposal(string::utf8(b"1"));
-//         world.scenario().next_tx(ALICE);
+        world.end();     
+    }    
 
-//         world.approve_proposal(string::utf8(b"1"));
+    #[test]
+    #[expected_failure(abort_code = multisig::EThresholdNotReached)]
+    fun test_execute_proposal_error_threshold_not_reached() {
+        let mut world = start_world();
 
-//         world.clock().set_for_testing(99);
+        world.multisig().add_members(
+            vector[ALICE, BOB],
+            vector[1, 3]
+        );
 
-//         let Action { value: _ } = world.execute_proposal(string::utf8(b"1")).unpack_action();
+        let key = utf8(b"key");
 
-//         world.end();     
-//     }           
+        world.create_proposal(
+            Witness {},
+            key,
+            5,
+            2,
+            utf8(b"proposal1"),
+        );
+
+        world.multisig().set_threshold(3);
+
+        world.scenario().next_tx(ALICE);
+
+        world.approve_proposal(key);
+
+        let executable = world.execute_proposal(key);
+
+        destroy(executable);
+        world.end();
+    } 
+
+    #[test]
+    #[expected_failure(abort_code = multisig::ECantBeExecutedYet)]
+    fun test_execute_proposal_error_cant_be_executed_yet() {
+        let mut world = start_world();
+
+        world.multisig().add_members(
+            vector[ALICE, BOB],
+            vector[1, 3]
+        );
+
+        let key = utf8(b"key");
+
+        world.create_proposal(
+            Witness {},
+            key,
+            5,
+            2,
+            utf8(b"proposal1"),
+        );
+
+        world.multisig().set_threshold(3);
+
+        world.scenario().next_tx(BOB);
+
+        world.approve_proposal(key);
+
+        let executable = world.execute_proposal(key);
+
+        destroy(executable);
+        world.end();
+    }      
+
+    #[test]
+    #[expected_failure(abort_code = multisig::ENotIssuerModule)]
+    fun test_action_mut_error_not_issuer_module() {
+        let mut world = start_world();
+
+        world.multisig().add_members(
+            vector[ALICE, BOB],
+            vector[1, 3]
+        );
+
+        let key = utf8(b"key");
+
+        let proposal = world.create_proposal(
+            Witness {},
+            key,
+            0,
+            0,
+            utf8(b"proposal1"),
+        );
+
+        proposal.add_action(Action { value: 1 });
+
+        world.multisig().set_threshold(3);
+
+        world.scenario().next_tx(BOB);
+
+        world.approve_proposal(key);
+
+        let mut executable = world.execute_proposal(key);
+
+        executable.action_mut<Witness2, Action>(Witness2 {}, 0);
+
+        destroy(executable);
+        world.end();
+    }  
+
+    #[test]
+    #[expected_failure(abort_code = multisig::EHasntExpired)]
+    fun test_delete_proposal_error_hasnt_expired() {
+        let mut world = start_world();
+
+        world.create_proposal(
+            Witness {},
+            utf8(b"key"),
+            5,
+            2,
+            utf8(b"proposal1"),
+        );        
+
+        assert_eq(world.multisig().proposals_length(), 1);
+
+        let actions = world.delete_proposal(utf8(b"key"));
+
+        actions.destroy_empty();
+
+        assert_eq(world.multisig().proposals_length(), 0);
+
+        world.end();
+    }
+
+    #[test]
+    #[expected_failure(abort_code = multisig::EWrongVersion)]
+    fun test_assert_version_error_wrong_version() {
+        let mut world = start_world();
+
+        world.multisig().set_version(2);
+
+        world.multisig().assert_version();
+
+        world.end();
+    }
+
+    #[test]
+    #[expected_failure(abort_code = multisig::ENotMultisigExecutable)]
+    fun test_assert_multisig_executed_error_not_multisig_executable() {
+        let mut world = start_world();
+
+        world.multisig().add_members(
+            vector[ALICE, BOB],
+            vector[1, 3]
+        );
+
+        let key = utf8(b"key");
+
+        let proposal = world.create_proposal(
+            Witness {},
+            key,
+            0,
+            0,
+            utf8(b"proposal1"),
+        );
+
+        proposal.add_action(Action { value: 1 });
+
+        world.multisig().set_threshold(3);
+
+        world.scenario().next_tx(BOB);
+
+        world.approve_proposal(key);
+
+        let id = object::new(world.scenario().ctx());
+
+        let multisig = multisig::new(utf8(b"krakenV3"), id.uid_to_inner(), world.scenario().ctx());
+
+        let executable = world.execute_proposal(key);
+
+        multisig.assert_executed(&executable);
+        
+        id.delete();
+        destroy(multisig);
+        destroy(executable);
+        world.end();
+    }
+
+    #[test]
+    #[expected_failure(abort_code = multisig::EProposalNotFound)]
+    fun test_approve_proposal_error_proposal_not_found() {
+        let mut world = start_world();
+
+        world.approve_proposal(utf8(b"does not exist"));
+
+        world.end();
+    }
+
+    #[test]
+    #[expected_failure(abort_code = multisig::EMemberNotFound)]
+    fun test_register_account_id_error_member_not_found() {
+        let mut world = start_world();
+
+        let id = object::new(world.scenario().ctx());
+
+        world.scenario().next_tx(ALICE);
+
+        world.register_account_id(id.uid_to_inner());
+
+        id.delete();
+        world.end();
+    }
+
+    #[test]
+    #[expected_failure(abort_code = multisig::EMemberNotFound)]
+    fun test_unregister_account_id_error_member_not_found() {
+        let mut world = start_world();
+
+        let id = object::new(world.scenario().ctx());
+
+        world.scenario().next_tx(ALICE);
+
+        world.unregister_account_id();
+
+        id.delete();
+        world.end();
+    }
 }
