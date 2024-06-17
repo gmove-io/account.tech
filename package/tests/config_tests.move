@@ -93,80 +93,131 @@ module kraken::config_tests{
         world.end();     
     }
 
-//     #[test]
-//     #[expected_failure(abort_code = config::EAlreadyMember)]
-//     fun test_propose_modify_error_already_member() {
-//         let mut world = start_world();
+    #[test]
+    #[expected_failure(abort_code = config::EThresholdTooHigh)]
+    fun test_verify_new_config_error_threshold_too_high() {
+        let mut world = start_world();
+        let key = utf8(b"modify proposal");
 
-//         world.propose_modify(
-//             string::utf8(b"modify"), 
-//             100, 
-//             2, 
-//             string::utf8(b"update parameters"), 
-//             option::some(string::utf8(b"kraken-2")),
-//             option::some(2),
-//             vector[OWNER],
-//             vector[OWNER]
-//         );      
+        world.propose_modify(
+            key,
+            1,
+            2,
+            utf8(b"description"),
+            option::some(utf8(b"update1")),
+            option::some(4),
+            vector[OWNER],
+            vector[ALICE, BOB],
+            vector[2, 1]
+        );
 
-//         world.end();         
-//     }
+        world.approve_proposal(key);
 
-//     #[test]
-//     #[expected_failure(abort_code = config::ENotMember)]
-//     fun test_propose_modify_error_not_member() {
-//         let mut world = start_world();
+        world.scenario().next_tx(OWNER);
+        world.scenario().next_epoch(OWNER);
+        world.scenario().next_epoch(OWNER);
+        world.clock().increment_for_testing(2);
 
-//         world.propose_modify(
-//             string::utf8(b"modify"), 
-//             100, 
-//             2, 
-//             string::utf8(b"update parameters"), 
-//             option::some(string::utf8(b"kraken-2")),
-//             option::some(2),
-//             vector[BOB],
-//             vector[ALICE]
-//         );      
+        let executable = world.execute_proposal(key);
 
-//         world.end();         
-//     } 
+        config::execute_modify(executable, world.multisig());
 
-//     #[test]
-//     #[expected_failure(abort_code = config::EThresholdNull)]
-//     fun test_propose_modify_error_threshold_null() {
-//         let mut world = start_world();
+        world.end();         
+    }
 
-//         world.propose_modify(
-//             string::utf8(b"modify"), 
-//             100, 
-//             2, 
-//             string::utf8(b"update parameters"), 
-//             option::some(string::utf8(b"kraken-2")),
-//             option::some(0),
-//             vector[],
-//             vector[]
-//         );      
+    #[test]
+    #[expected_failure(abort_code = config::ENotMember)]
+    fun test_verify_new_config_error_not_member() {
+        let mut world = start_world();
+        let key = utf8(b"modify proposal");
 
-//         world.end();         
-//     }   
+        world.propose_modify(
+            key,
+            1,
+            2,
+            utf8(b"description"),
+            option::some(utf8(b"update1")),
+            option::some(2),
+            vector[ALICE],
+            vector[ALICE, BOB],
+            vector[2, 1]
+        );
 
+        world.approve_proposal(key);
 
-//     #[test]
-//     #[expected_failure(abort_code = config::EThresholdTooHigh)]
-//     fun test_propose_modify_error_threshold_too_high() {
-//         let mut world = start_world();
+        world.scenario().next_tx(OWNER);
+        world.scenario().next_epoch(OWNER);
+        world.scenario().next_epoch(OWNER);
+        world.clock().increment_for_testing(2);
 
-//         world.propose_modify(
-//             string::utf8(b"modify"), 
-//             100, 
-//             2, 
-//             string::utf8(b"update parameters"), 
-//             option::some(string::utf8(b"kraken-2")),
-//             option::some(4),
-//             vector[ALICE, BOB],
-//             vector[]
-//         );      
+        let executable = world.execute_proposal(key);
 
-//         world.end();         
-//     }           
+        config::execute_modify(executable, world.multisig());
+
+        world.end();         
+    }
+    
+    #[test]
+    #[expected_failure(abort_code = config::EAlreadyMember)]
+    fun test_verify_new_config_error_already_member() {
+        let mut world = start_world();
+        let key = utf8(b"modify proposal");
+
+        world.propose_modify(
+            key,
+            1,
+            2,
+            utf8(b"description"),
+            option::some(utf8(b"update1")),
+            option::some(2),
+            vector[],
+            vector[OWNER],
+            vector[2, 1]
+        );
+
+        world.approve_proposal(key);
+
+        world.scenario().next_tx(OWNER);
+        world.scenario().next_epoch(OWNER);
+        world.scenario().next_epoch(OWNER);
+        world.clock().increment_for_testing(2);
+
+        let executable = world.execute_proposal(key);
+
+        config::execute_modify(executable, world.multisig());
+
+        world.end();         
+    }   
+
+    #[test]
+    #[expected_failure(abort_code = config::EThresholdNull)]
+    fun test_verify_new_config_error_threshold_null() {
+        let mut world = start_world();
+        let key = utf8(b"modify proposal");
+
+        world.propose_modify(
+            key,
+            1,
+            2,
+            utf8(b"description"),
+            option::some(utf8(b"update1")),
+            option::some(0),
+            vector[],
+            vector[ALICE],
+            vector[2, 1]
+        );
+
+        world.approve_proposal(key);
+
+        world.scenario().next_tx(OWNER);
+        world.scenario().next_epoch(OWNER);
+        world.scenario().next_epoch(OWNER);
+        world.clock().increment_for_testing(2);
+
+        let executable = world.execute_proposal(key);
+
+        config::execute_modify(executable, world.multisig());
+
+        world.end();         
+    }  
 }
