@@ -346,6 +346,11 @@ module kraken::multisig {
         multisig.proposals.get(key)
     }
 
+    public use fun proposal_module_witness as Proposal.module_witness;
+    public fun proposal_module_witness(proposal: &Proposal): TypeName {
+        proposal.module_witness
+    }
+
     public fun description(proposal: &Proposal): String {
         proposal.description
     }
@@ -362,8 +367,22 @@ module kraken::multisig {
         proposal.approved.into_keys()
     }
 
+    public fun approval_weight(proposal: &Proposal): u64 {
+        proposal.approval_weight
+    }
+
+    public use fun proposal_actions_length as Proposal.actions_length;
+    public fun proposal_actions_length(proposal: &Proposal): u64 {
+        proposal.actions.length()
+    }
+
     public use fun executable_multisig_addr as Executable.multisig_addr;
     public fun executable_multisig_addr(executable: &Executable): address {
+        executable.multisig_addr
+    }
+
+    public use fun executable_module_witness as Executable.module_witness;
+    public fun executable_module_witness(executable: &Executable): address {
         executable.multisig_addr
     }
 

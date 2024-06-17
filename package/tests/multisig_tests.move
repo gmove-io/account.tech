@@ -1,64 +1,174 @@
-// #[test_only]
-// module kraken::multisig_tests {
-//     use std::string;
+#[test_only]
+module kraken::multisig_tests {
+    use std::{
+        string::utf8,
+        type_name
+    };
 
-//     use sui::test_utils::assert_eq;
+    use sui::test_utils::assert_eq;
     
-//     use kraken::multisig;
-//     use kraken::test_utils::start_world;
+    use kraken::multisig;
+    use kraken::test_utils::start_world;
 
-//     public struct Action has store { value: u64 }
+    const OWNER: address = @0xBABE;
+    const ALICE: address = @0xa11e7;
+    const BOB: address = @0x10;
+    const HACKER: address = @0x7ac1e7;
 
-//     const OWNER: address = @0xBABE;
-//     const ALICE: address = @0xa11e7;
-//     const BOB: address = @0x10;
-//     const HACKER: address = @0x7ac1e7;
+    public struct Witness has drop {}
 
-//     #[test]
-//     fun test_new() {
-//         let mut world = start_world();
+    public struct Witness2 has drop {}
 
-//         let sender = world.scenario().ctx().sender();
-//         let multisig = world.multisig();
+    public struct Action has store {
+        value: u64
+    }
 
-//         assert_eq(multisig.name(), string::utf8(b"kraken"));
-//         assert_eq(multisig.threshold(), 1);
-//         assert_eq(multisig.members(), vector[sender]);
-//         assert_eq(multisig.proposals_length(), 0);
+    public struct Action2 has store {
+        value: u64
+    }
 
-//         world.end();
-//     } 
+    #[test]
+    fun test_new() {
+        let mut world = start_world();
 
-//     #[test]
-//     fun test_clean_proposals() {
-//         let mut world = start_world();
+        let sender = world.scenario().ctx().sender();
+        let multisig = world.multisig();
 
-//         world.create_proposal(Action { value: 1 }, string::utf8(b"1"), 100, 2, string::utf8(b"test-1"));
-//         world.create_proposal(Action { value: 2 }, string::utf8(b"2"), 100, 2, string::utf8(b"test-2"));
-//         world.create_proposal(Action { value: 3 }, string::utf8(b"3"), 100, 3, string::utf8(b"test-3"));
+        assert_eq(multisig.name(), utf8(b"kraken"));
+        assert_eq(multisig.threshold(), 1);
+        assert_eq(multisig.member_addresses(), vector[sender]);
+        assert_eq(multisig.proposals_length(), 0);
 
-//         assert_eq(world.multisig().proposals_length(), 3);
+        world.end();
+    } 
 
-//         // does nothing
-//         world.clean_proposals();
-//         assert_eq(world.multisig().proposals_length(), 3);
+    #[test]
+    fun test_create_proposal() {
+        let mut world = start_world();
 
-//         // increment epoch
-//         world.scenario().ctx().increment_epoch_number();
-//         world.scenario().ctx().increment_epoch_number();
+        let proposal = world.create_proposal(
+            Witness {},
+            utf8(b"key"),
+            5,
+            2,
+            utf8(b"proposal1"),
+        );
 
-//         // Remove 2 proposals
-//         world.clean_proposals();
-//         assert_eq(world.multisig().proposals_length(), 1);
+        proposal.add_action(Action { value: 1 });
+        proposal.add_action(Action { value: 2 });   
 
-//         world.scenario().ctx().increment_epoch_number();
+        assert_eq(proposal.approved(), vector[]);
+        assert_eq(proposal.module_witness(), type_name::get<Witness>());
+        assert_eq(proposal.description(), utf8(b"proposal1"));
+        assert_eq(proposal.expiration_epoch(), 2);
+        assert_eq(proposal.execution_time(), 5);
+        assert_eq(proposal.approval_weight(), 0);
+        assert_eq(proposal.actions_length(), 2);
 
-//         // remove the last proposal
-//         world.clean_proposals();
-//         assert_eq(world.multisig().proposals_length(), 0);
+        world.end();
+    }
 
-//         world.end();
-//     }
+    #[test]
+    fun test_approve_proposal() {
+        let mut world = start_world();
+
+        world.multisig().add_members(
+            vector[ALICE, BOB],
+            vector[2, 3]
+        );
+
+        let proposal = world.create_proposal(
+            Witness {},
+            utf8(b"key"),
+            5,
+            2,
+            utf8(b"proposal1"),
+        );
+
+        proposal.add_action(Action { value: 1 });
+        proposal.add_action(Action { value: 2 });   
+
+        assert_eq(proposal.approved(), vector[]);
+        assert_eq(proposal.module_witness(), type_name::get<Witness>());
+        assert_eq(proposal.description(), utf8(b"proposal1"));
+        assert_eq(proposal.expiration_epoch(), 2);
+        assert_eq(proposal.execution_time(), 5);
+        assert_eq(proposal.approval_weight(), 0);
+        assert_eq(proposal.actions_length(), 2);
+
+        world.scenario().next_tx(ALICE);
+
+        world.approve_proposal(utf8(b"key"));
+
+        let proposal = world.multisig().proposal(&utf8(b"key"));
+
+        assert_eq(proposal.approval_weight(), 2);
+
+        world.scenario().next_tx(BOB);
+
+        world.approve_proposal(utf8(b"key"));
+
+        let proposal = world.multisig().proposal(&utf8(b"key"));
+
+        assert_eq(proposal.approval_weight(), 5);
+
+        world.end();        
+    }
+
+    #[test]
+    fun test_remove_approval() {
+        let mut world = start_world();
+
+        world.multisig().add_members(
+            vector[ALICE, BOB],
+            vector[2, 3]
+        );
+
+        let proposal = world.create_proposal(
+            Witness {},
+            utf8(b"key"),
+            5,
+            2,
+            utf8(b"proposal1"),
+        );
+
+        proposal.add_action(Action { value: 1 });
+        proposal.add_action(Action { value: 2 });   
+
+        assert_eq(proposal.approved(), vector[]);
+        assert_eq(proposal.module_witness(), type_name::get<Witness>());
+        assert_eq(proposal.description(), utf8(b"proposal1"));
+        assert_eq(proposal.expiration_epoch(), 2);
+        assert_eq(proposal.execution_time(), 5);
+        assert_eq(proposal.approval_weight(), 0);
+        assert_eq(proposal.actions_length(), 2);
+
+        world.scenario().next_tx(ALICE);
+
+        world.approve_proposal(utf8(b"key"));
+
+        let proposal = world.multisig().proposal(&utf8(b"key"));
+
+        assert_eq(proposal.approval_weight(), 2);
+
+        world.scenario().next_tx(BOB);
+
+        world.approve_proposal(utf8(b"key"));
+
+        let proposal = world.multisig().proposal(&utf8(b"key"));
+
+        assert_eq(proposal.approval_weight(), 5);
+
+        world.scenario().next_tx(BOB);
+
+        world.remove_approval(utf8(b"key"));
+
+        let proposal = world.multisig().proposal(&utf8(b"key"));
+
+        assert_eq(proposal.approval_weight(), 2);        
+
+        world.end();        
+    }
 
 //     #[test]
 //     fun test_create_proposal() {
@@ -341,4 +451,4 @@
 
 //         world.end();     
 //     }           
-// }
+}

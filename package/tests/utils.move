@@ -121,13 +121,19 @@ module kraken::test_utils {
         world.multisig.approve_proposal(key, world.scenario.ctx());
     }
 
+    public fun remove_approval(
+        world: &mut World, 
+        key: String, 
+    ) {
+        world.multisig.remove_approval(key, world.scenario.ctx());
+    }
+
     public fun execute_proposal(
         world: &mut World, 
         key: String, 
     ): Executable {
         world.multisig.execute_proposal(key, &world.clock, world.scenario.ctx())
     }
-
 
     public fun merge_and_split<T: drop>(
         world: &mut World, 
@@ -177,12 +183,6 @@ module kraken::test_utils {
     //     world.multisig.delete_proposal(key, world.scenario.ctx());
     // }
 
-    // public fun remove_approval(
-    //     world: &mut World, 
-    //     key: String, 
-    // ) {
-    //     world.multisig.remove_approval(key, world.scenario.ctx());
-    // }
 
     // public fun propose_modify(
     //     world: &mut World, 
