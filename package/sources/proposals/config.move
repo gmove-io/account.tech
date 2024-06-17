@@ -16,6 +16,7 @@ module kraken::config {
     const EThresholdNull: u64 = 3;
     const EModifyNotExecuted: u64 = 4;
     const EMigrateNotExecuted: u64 = 5;
+    const EVersionAlreadyUpdated: u64 = 6;
 
     // === Structs ===
 
@@ -177,6 +178,7 @@ module kraken::config {
     ) {
         multisig.assert_executed(executable);
         let migrate_mut: &mut Migrate = executable.action_mut(witness, idx);
+        assert!(migrate_mut.version != 0, EVersionAlreadyUpdated);
         multisig.set_version(migrate_mut.version);
         migrate_mut.version = 0; // reset to 0 to enforce exactly one execution
     }

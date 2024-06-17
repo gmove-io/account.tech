@@ -13,7 +13,7 @@ module kraken::config_tests{
 
     #[test]
     #[allow(implicit_const_copy)]
-    fun test_end_to_end() {
+    fun test_modify_end_to_end() {
         let mut world = start_world();
 
         let sender = world.scenario().ctx().sender();
@@ -59,6 +59,38 @@ module kraken::config_tests{
         assert_eq(multisig.member_weight(&BOB), 1);      
 
         world.end();        
+    }
+
+    #[test]
+    fun test_migrate_end_to_end() {
+        let mut world = start_world();
+
+        let key = utf8(b"modify proposal");
+
+        assert_eq(world.multisig().version(), 1);
+
+        world.propose_migrate(
+            key,
+            1,
+            2,
+            utf8(b"description"),
+            2
+        );
+
+        world.approve_proposal(key);
+
+        world.scenario().next_tx(OWNER);
+        world.scenario().next_epoch(OWNER);
+        world.scenario().next_epoch(OWNER);
+        world.clock().increment_for_testing(2);
+
+        let executable = world.execute_proposal(key);    
+
+        config::execute_migrate(executable, world.multisig());
+
+        assert_eq(world.multisig().version(), 2);
+
+        world.end();     
     }
 
 //     #[test]

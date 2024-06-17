@@ -227,6 +227,25 @@ module kraken::test_utils {
         );
     }
 
+    public fun propose_migrate(
+        world: &mut World, 
+        key: String,
+        execution_time: u64,
+        expiration_epoch: u64,
+        description: String,
+        version: u64
+    ) {
+        config::propose_migrate(
+            &mut world.multisig,
+            key,
+            execution_time,
+            expiration_epoch,
+            description,
+            version,
+            world.scenario.ctx()
+        );
+    }
+
     // public fun execute_modify(
     //     world: &mut World,
     //     name: String, 
