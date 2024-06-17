@@ -7,23 +7,17 @@ module kraken::multisig_tests {
 
     use sui::test_utils::assert_eq;
     
-    use kraken::multisig;
     use kraken::test_utils::start_world;
 
     const OWNER: address = @0xBABE;
     const ALICE: address = @0xa11e7;
     const BOB: address = @0x10;
-    const HACKER: address = @0x7ac1e7;
 
     public struct Witness has drop {}
 
     public struct Witness2 has drop {}
 
     public struct Action has store {
-        value: u64
-    }
-
-    public struct Action2 has store {
         value: u64
     }
 
@@ -213,6 +207,53 @@ module kraken::multisig_tests {
         assert_eq(world.multisig().threshold(), 3);
 
         world.end();        
+    }
+
+    #[test]
+    #[allow(implicit_const_copy)]
+    fun test_members_end_to_end() {
+        let mut world = start_world();
+
+        assert_eq(world.multisig().is_member(&ALICE), false);
+        assert_eq(world.multisig().is_member(&BOB), false);
+
+        world.multisig().add_members(
+            vector[ALICE, BOB],
+            vector[2, 3]
+        );
+
+        assert_eq(world.multisig().is_member(&ALICE), true);
+        assert_eq(world.multisig().is_member(&BOB), true);
+        assert_eq(world.multisig().member_weight(&ALICE), 2);
+        assert_eq(world.multisig().member_weight(&BOB), 3);
+        assert_eq(world.multisig().member_account_id(&ALICE).is_none(), true);
+        assert_eq(world.multisig().member_account_id(&BOB).is_none(), true);
+
+        world.scenario().next_tx(ALICE);
+
+        let id1 = object::new(world.scenario().ctx());
+
+        world.register_account_id(id1.uid_to_inner());
+
+        assert_eq(world.multisig().member_account_id(&ALICE).is_none(), false);
+        assert_eq(world.multisig().member_account_id(&ALICE).extract(), id1.uid_to_inner());
+        assert_eq(world.multisig().member_account_id(&BOB).is_none(), true);
+
+        id1.delete();
+
+        world.scenario().next_tx(ALICE);
+
+        world.unregister_account_id();      
+
+        assert_eq(world.multisig().member_account_id(&ALICE).is_none(), true);
+
+        world.scenario().next_tx(OWNER);
+
+        world.multisig().remove_members(vector[ALICE]);
+
+        assert_eq(world.multisig().is_member(&ALICE), false);
+
+        world.end();          
     }
 
 //     #[test]

@@ -180,10 +180,18 @@ module kraken::test_utils {
         account::accept_invite(account, &mut world.multisig, invite, world.scenario.ctx());
     }    
 
-    // public fun clean_proposals(world: &mut World) {
-    //     world.multisig.clean_proposals(world.scenario.ctx());
-    // }
+    public fun register_account_id(
+        world: &mut World, 
+        id: ID,
+    ) {
+        world.multisig.register_account_id(id, world.scenario.ctx());
+    }     
 
+    public fun unregister_account_id(
+        world: &mut World, 
+    ) {
+        world.multisig.unregister_account_id(world.scenario.ctx());
+    }  
 
     // public fun propose_modify(
     //     world: &mut World, 
