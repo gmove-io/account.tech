@@ -308,6 +308,10 @@ module kraken::multisig {
         multisig.name
     }
 
+    public fun version(multisig: &Multisig): u64 {
+        multisig.version
+    }
+
     public fun threshold(multisig: &Multisig): u64 {
         multisig.threshold
     }

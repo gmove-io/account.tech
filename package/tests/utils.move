@@ -3,6 +3,7 @@ module kraken::test_utils {
     use std::string::{Self, String};
 
     use sui::{
+        bag::Bag,
         coin::Coin,
         test_utils::destroy,
         package::UpgradeCap,
@@ -128,6 +129,13 @@ module kraken::test_utils {
         world.multisig.remove_approval(key, world.scenario.ctx());
     }
 
+    public fun delete_proposal(
+        world: &mut World, 
+        key: String
+    ): Bag {
+        world.multisig.delete_proposal(key, world.scenario.ctx())
+    }
+
     public fun execute_proposal(
         world: &mut World, 
         key: String, 
@@ -174,13 +182,6 @@ module kraken::test_utils {
 
     // public fun clean_proposals(world: &mut World) {
     //     world.multisig.clean_proposals(world.scenario.ctx());
-    // }
-
-    // public fun delete_proposal(
-    //     world: &mut World, 
-    //     key: String
-    // ) {
-    //     world.multisig.delete_proposal(key, world.scenario.ctx());
     // }
 
 
