@@ -10,7 +10,7 @@ module kraken::test_utils {
         transfer::Receiving,
         clock::{Self, Clock},
         kiosk::{Kiosk, KioskOwnerCap},
-        transfer_policy::{TransferRequest, TransferPolicy},
+        transfer_policy::TransferPolicy,
         test_scenario::{Self as ts, Scenario, receiving_ticket_by_id},
     };
 
@@ -21,7 +21,7 @@ module kraken::test_utils {
         kiosk::{Self as k_kiosk, KioskOwnerLock},
         account::{Self, Account, Invite},
         multisig::{Self, Multisig, Proposal, Executable},
-        payments::{Self, Stream, Pay},
+        payments::{Self, Stream},
         upgrade_policies::{Self, UpgradeLock},
         transfers::{Self, DeliveryCap, Delivery}
     };
@@ -453,13 +453,12 @@ module kraken::test_utils {
     public fun propose_restrict(
         world: &mut World, 
         key: String,
-        execution_time: u64,
         expiration_epoch: u64,
         description: String,
         policy: u8,
         lock: &UpgradeLock
     ) {
-        upgrade_policies::propose_restrict(&mut world.multisig, key, execution_time, expiration_epoch, description, policy, lock, world.scenario.ctx());
+        upgrade_policies::propose_restrict(&mut world.multisig, key, expiration_epoch, description, policy, lock, &world.clock, world.scenario.ctx());
     }
 
     public fun lock_cap(
@@ -475,6 +474,15 @@ module kraken::test_utils {
         lock: Receiving<UpgradeLock>
     ): UpgradeLock {
         upgrade_policies::borrow_cap(&mut world.multisig, lock, world.scenario.ctx())
+    }
+
+    public fun lock_cap_with_timelock(
+        world: &mut World,
+        label: String,
+        delay_ms: u64,
+        upgrade_cap: UpgradeCap
+    ): ID {
+        upgrade_policies::lock_cap_with_timelock(&world.multisig, label, delay_ms, upgrade_cap, world.scenario.ctx())
     }
 
     public fun end(world: World) {

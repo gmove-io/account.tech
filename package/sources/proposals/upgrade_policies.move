@@ -104,10 +104,13 @@ module kraken::upgrade_policies {
         delay_ms: u64,
         upgrade_cap: UpgradeCap,
         ctx: &mut TxContext
-    ) {
+    ): ID {
         let mut lock = lock_cap(multisig, label, upgrade_cap, ctx);
+        let lock_id = object::id(&lock);
         add_rule(&mut lock, TIMELOCK_KEY, TimeLock { delay_ms });
         put_back_cap(lock);
+
+        lock_id
     }
 
     // borrow the lock that can only be put back in the multisig because no store
@@ -141,12 +144,7 @@ module kraken::upgrade_policies {
         clock: &Clock,
         ctx: &mut TxContext
     ) {
-        let delay = if (lock.has_rule(TIMELOCK_KEY)) {
-            let timelock: &TimeLock = df::borrow(&lock.id, TIMELOCK_KEY);
-            timelock.delay_ms
-        } else {
-            0
-        };
+        let delay = lock.get_time_delay();
 
         let proposal_mut = multisig.create_proposal(
             Witness {},
@@ -188,17 +186,19 @@ module kraken::upgrade_policies {
     public fun propose_restrict(
         multisig: &mut Multisig, 
         key: String,
-        execution_time: u64,
         expiration_epoch: u64,
         description: String,
         policy: u8,
         lock: &UpgradeLock,
+        clock: &Clock,
         ctx: &mut TxContext
     ) {
+        let delay = lock.get_time_delay();
+
         let proposal_mut = multisig.create_proposal(
             Witness {},
             key,
-            execution_time,
+            clock.timestamp_ms() + delay,
             expiration_epoch,
             description,
             ctx
@@ -291,6 +291,15 @@ module kraken::upgrade_policies {
     public fun destroy_restrict<W: drop>(executable: &mut Executable, witness: W) {
         let Restrict { policy, lock_id: _ } = executable.remove_action(witness);
         assert!(policy == 0, ERestrictNotExecuted);
+    }
+
+    fun get_time_delay(lock: &UpgradeLock): u64 {
+        if (lock.has_rule(TIMELOCK_KEY)) {
+            let timelock: &TimeLock = df::borrow(&lock.id, TIMELOCK_KEY);
+            timelock.delay_ms
+        } else {
+            0
+        }
     }
 
     // === Test Functions ===
