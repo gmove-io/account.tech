@@ -23,7 +23,7 @@ The primary goal is to enable a broad spectrum of on-chain interactions, surpass
 - **Configuration**: Set up the Multisig's name, members with their weight, threshold, proposal expiration and scheduled execution. Explicitly migrate to new versions of the Kraken package to benefit from new features.
 - **Asset Management**: Manage and send coins or any other object types in a natural way. Objects that are delivered instead of sent can be retrieved anytime. Transfer and de/list NFTs from/to the Multisig's Kiosk. Easily hide spam objects owned by a Multisig.
 - **Payment Streams**: Pay people by creating streams that will send an amount of coin to an address at regular frequency. Cancel the payment at any time.
-- **Access Control**: Define any action in your own module and securely manage their execution via the Multisig. Check out the [examples](TODO:).
+- **Access Control**: Define any action in your own module and securely manage their execution via the Multisig. Check out the [examples](./package/examples/sources/access_control.move).
 - **Package Upgrades**: Lock your UpgradeCaps in your Multisig to enforce agreement on the code to be published. Any rule(s) can be defined for an UpgradeLock. An optional time-lock built-in policy is provided by default to protect your users. The SDK will facilite the display of upcoming upgrades on your dapp.
 - **Validator management**: Safely manage your validator. (TODO)
 - **Interact with dApps**: Easily interact with dApps on Sui that are integrated to the Multisig. Stake, Swap, Lend your assets, and more. (TODO)
@@ -52,7 +52,7 @@ Modules may define none or multiple actions. They are structs with store ability
 
 ### Integration
 
-Anyone can define custom actions and proposals in their own package or separate library! 
+Anyone can define custom actions and proposals in their own package or separate library! Please refer to the [examples](./package/examples/) for more information.
 
 Create a new proposal by defining a `propose_action()` function that will instantiate a Proposal containing the actions of your choice. Then write a `execute_action()` function that will execute the actions according to their logic. Add a `complete_action()` function to destroy the actions and the `Executable` hot potato if it can't be done during the precedent step (if you need to loop over `execute_action()` for instance).
 
