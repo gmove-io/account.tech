@@ -2,7 +2,7 @@
 name = "Kraken"
 edition = "2024.beta"
 license = "MIT" 
-authors = ["Thouny (thouny@tuta.io)"]
+authors = ["Thouny (thouny@tuta.io)", "Jose (jose@interestprotocol.com)"]
 
 [dependencies]
 Sui = { override = true, git = "https://github.com/MystenLabs/sui.git", subdir = "crates/sui-framework/packages/sui-framework", rev = "framework/testnet" }
