@@ -450,6 +450,18 @@ module kraken::test_utils {
        upgrade_policies::propose_upgrade(&mut world.multisig, key, expiration_epoch, description, digest, lock, &world.clock, world.scenario.ctx()); 
     }
 
+    public fun propose_restrict(
+        world: &mut World, 
+        key: String,
+        execution_time: u64,
+        expiration_epoch: u64,
+        description: String,
+        policy: u8,
+        lock: &UpgradeLock
+    ) {
+        upgrade_policies::propose_restrict(&mut world.multisig, key, execution_time, expiration_epoch, description, policy, lock, world.scenario.ctx());
+    }
+
     public fun lock_cap(
         world: &mut World,
         label: String,

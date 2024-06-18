@@ -7,8 +7,10 @@ module kraken::upgrade_policies_tests {
     use sui::test_utils::{destroy, assert_eq};
     use sui::test_scenario::{receiving_ticket_by_id, take_from_address_by_id, return_to_address};
 
-    use kraken::test_utils::start_world;
-    use kraken::upgrade_policies::{Self, UpgradeLock};
+    use kraken::{
+        upgrade_policies,
+        test_utils::start_world
+    };
 
     const OWNER: address = @0xBABE;
 
@@ -59,48 +61,38 @@ module kraken::upgrade_policies_tests {
         world.end();
     }    
 
-    // !IMPORTANT There is a bug on receiving_ticket_by_id. So the test below fails!
-    // #[test]
-    // fun test_new_policy_end_to_end() {
-    //     let mut world = start_world();
+    #[test]
+    fun test_restrict_end_to_end() {
+        let mut world = start_world();
 
-    //     let package_id = object::new(world.scenario().ctx());
+        let rule_key = b"rule_key";
+        let package_id = object::new(world.scenario().ctx());
 
-    //     let upgrade_cap = package::test_publish(package_id.to_inner(), world.scenario().ctx());
+        let upgrade_cap = package::test_publish(package_id.to_inner(), world.scenario().ctx());   
 
-    //     let lock_id = world.lock_cap(utf8(b"upgrade_cap 1"), 50, upgrade_cap);
+        let mut upgrade_lock = world.lock_cap(utf8(b"lock"), upgrade_cap);
 
-    //     world.scenario().next_tx(OWNER);
+        let lock_id = object::id(&upgrade_lock);
 
-    //     world.propose_policy(utf8(b"1"), 100, 2, utf8(b"make additive"), 128, receiving_ticket_by_id(lock_id));
+        upgrade_lock.add_rule(rule_key, Rule { value: 7 });
 
-    //     world.clock().set_for_testing(151);
-    //     world.scenario().next_epoch(OWNER);
-    //     world.scenario().next_epoch(OWNER);
-    //     world.scenario().next_tx(OWNER);
+        assert_eq(upgrade_lock.has_rule(rule_key), true);
 
-    //     world.approve_proposal(utf8(b"1"));
+        upgrade_lock.put_back_cap();
 
-    //     world.scenario().next_tx(OWNER);
+        world.scenario().next_tx(OWNER);
 
-    //     let action = world.execute_proposal<Policy>(utf8(b"1")); 
+        let lock = world.borrow_upgrade_cap_lock(receiving_ticket_by_id(lock_id));
 
-    //     upgrade_policies::execute_policy(
-    //         action, 
-    //         world.multisig(), 
-    //         receiving_ticket_by_id(lock_id)
-    //     );  
+        world.propose_restrict(utf8(b"key"), 0, 0, utf8(b"description"), package::additive_policy(), &lock);
 
-    //     world.scenario().next_tx(OWNER);   
+        world.approve_proposal(utf8(b"key"));
 
-    //     let multisig_address = world.multisig().addr(); 
+        let executable = world.execute_proposal(utf8(b"key"));
 
-    //     let lock = take_from_address_by_id<UpgradeLock>(world.scenario(), multisig_address, lock_id);  
+        upgrade_policies::execute_restrict(executable, world.multisig(), lock);
 
-    //     assert_eq(lock.upgrade_cap().policy(), package::additive_policy()); 
-
-    //     destroy(lock);
-    //     destroy(package_id);        
-    //     world.end();
-    // }     
+        package_id.delete();
+        world.end();
+    }    
 }
