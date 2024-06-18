@@ -3,7 +3,6 @@
 /// If the delivery is not confirmed, the Multisig can retrieve the objects.
 
 module kraken::transfers {
-    use std::debug::print;
     use std::string::String;
     use sui::bag::{Self, Bag};
     use sui::transfer::Receiving;

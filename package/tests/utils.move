@@ -432,6 +432,13 @@ module kraken::test_utils {
         transfers::cancel_delivery(&world.multisig, delivery, world.scenario.ctx());
     }
 
+    public fun retrieve<T: key + store>(
+        world: &mut World,
+        delivery: &mut Delivery, 
+    ) {
+        transfers::retrieve<T>(delivery, &world.multisig, world.scenario.ctx());
+    }
+
     public fun end(world: World) {
         let World { 
             scenario, 

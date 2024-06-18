@@ -163,11 +163,24 @@ module kraken::transfers_tests {
 
         world.scenario().next_tx(OWNER);
 
-        let (delivery, delivery_cap) = world.create_delivery();
+        let (mut delivery, delivery_cap) = world.create_delivery();
+
+        let mut executable = world.execute_proposal(utf8(b"1"));
+
+        transfers::execute_deliver<Object>(&mut delivery, &delivery_cap, &mut executable, world.multisig(), receiving_ticket_by_id(id1));
+        transfers::execute_deliver<Object2>(&mut delivery, &delivery_cap, &mut executable, world.multisig(), receiving_ticket_by_id(id2));
+
+        transfers::complete_deliver(delivery, delivery_cap, executable);
+
+        world.scenario().next_tx(OWNER);
+
+        let mut delivery = world.scenario().take_shared<Delivery>();
+
+        // LIFO
+        world.retrieve<Object2>(&mut delivery);
+        world.retrieve<Object>(&mut delivery);
 
         world.cancel_delivery(delivery);
-
-        destroy(delivery_cap);
         world.end();          
     }
 
@@ -386,14 +399,24 @@ module kraken::transfers_tests {
 
         world.scenario().next_tx(OWNER);
 
-        let (delivery, delivery_cap) = world.create_delivery();
+        let (mut delivery, delivery_cap) = world.create_delivery();
+
+        let mut executable = world.execute_proposal(utf8(b"1"));
+
+        transfers::execute_deliver<Object>(&mut delivery, &delivery_cap, &mut executable, world.multisig(), receiving_ticket_by_id(id1));
+        transfers::execute_deliver<Object2>(&mut delivery, &delivery_cap, &mut executable, world.multisig(), receiving_ticket_by_id(id2));
+
+        transfers::complete_deliver(delivery, delivery_cap, executable);
+
+        world.scenario().next_tx(OWNER);
+
+        let delivery = world.scenario().take_shared<Delivery>();        
 
         let multisig2 = world.new_multisig();
 
         transfers::cancel_delivery(&multisig2, delivery, world.scenario().ctx());
 
         destroy(multisig2);
-        destroy(delivery_cap);
         world.end();          
     }
 
@@ -429,15 +452,20 @@ module kraken::transfers_tests {
         world.scenario().next_tx(OWNER);
 
         let (mut delivery, delivery_cap) = world.create_delivery();
-        
+
         let mut executable = world.execute_proposal(utf8(b"1"));
 
         transfers::execute_deliver<Object>(&mut delivery, &delivery_cap, &mut executable, world.multisig(), receiving_ticket_by_id(id1));
+        transfers::execute_deliver<Object2>(&mut delivery, &delivery_cap, &mut executable, world.multisig(), receiving_ticket_by_id(id2));
+
+        transfers::complete_deliver(delivery, delivery_cap, executable);
+
+        world.scenario().next_tx(OWNER);
+
+        let delivery = world.scenario().take_shared<Delivery>();   
 
         world.cancel_delivery(delivery);
 
-        destroy(executable);
-        destroy(delivery_cap);
         world.end();        
     }
 
