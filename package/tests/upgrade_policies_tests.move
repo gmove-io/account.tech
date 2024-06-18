@@ -4,8 +4,8 @@ module kraken::upgrade_policies_tests {
 
     use sui::package;
 
-    use sui::test_utils::{destroy, assert_eq};
-    use sui::test_scenario::{receiving_ticket_by_id, take_from_address_by_id, return_to_address};
+    use sui::test_utils::assert_eq;
+    use sui::test_scenario::receiving_ticket_by_id;
 
     use kraken::{
         upgrade_policies,
