@@ -23,7 +23,7 @@ module kraken::test_utils {
         multisig::{Self, Multisig, Proposal, Executable},
         payments::{Self, Stream, Pay},
         upgrade_policies::{Self, UpgradeLock},
-        transfers::{Self, Send, Delivery, Deliver}
+        transfers::{Self, DeliveryCap, Delivery}
     };
 
     const OWNER: address = @0xBABE;
@@ -401,6 +401,24 @@ module kraken::test_utils {
         recipients: vector<address>
     ) {
         transfers::propose_send(&mut world.multisig, key, execution_time, expiration_epoch, description, objects, recipients, world.scenario.ctx());
+    }
+
+    public fun propose_delivery(
+        world: &mut World, 
+        key: String,
+        execution_time: u64,
+        expiration_epoch: u64,
+        description: String,
+        objects: vector<ID>,
+        recipient: address
+    ) {
+        transfers::propose_delivery(&mut world.multisig, key, execution_time, expiration_epoch, description, objects, recipient, world.scenario.ctx());
+    }
+
+    public fun create_delivery(
+        world: &mut World, 
+    ): (Delivery, DeliveryCap) {
+        transfers::create_delivery(&world.multisig, world.scenario.ctx())
     }
 
     public fun end(world: World) {
