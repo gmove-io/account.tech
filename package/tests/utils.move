@@ -439,6 +439,32 @@ module kraken::test_utils {
         transfers::retrieve<T>(delivery, &world.multisig, world.scenario.ctx());
     }
 
+    public fun propose_upgrade(
+        world: &mut World, 
+        key: String,
+        expiration_epoch: u64,
+        description: String,
+        digest: vector<u8>,
+        lock: &UpgradeLock
+    ) {
+       upgrade_policies::propose_upgrade(&mut world.multisig, key, expiration_epoch, description, digest, lock, &world.clock, world.scenario.ctx()); 
+    }
+
+    public fun lock_cap(
+        world: &mut World,
+        label: String,
+        upgrade_cap: UpgradeCap
+    ): UpgradeLock {
+        upgrade_policies::lock_cap(&world.multisig, label, upgrade_cap, world.scenario.ctx())    
+    }
+
+    public fun borrow_upgrade_cap_lock(
+        world: &mut World, 
+        lock: Receiving<UpgradeLock>
+    ): UpgradeLock {
+        upgrade_policies::borrow_cap(&mut world.multisig, lock, world.scenario.ctx())
+    }
+
     public fun end(world: World) {
         let World { 
             scenario, 

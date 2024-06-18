@@ -4,7 +4,7 @@
 /// The multisig can decide to make the policy more restrictive or destroy the Cap, to make the package immutable.
 
 module kraken::upgrade_policies {
-    use std::string::{Self, String};
+    use std::string::String;
     use sui::package::{Self, UpgradeCap, UpgradeTicket, UpgradeReceipt};
     use sui::transfer::Receiving;
     use sui::clock::Clock;
