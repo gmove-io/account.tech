@@ -10,14 +10,14 @@ module kraken::test_utils {
         transfer::Receiving,
         clock::{Self, Clock},
         kiosk::{Kiosk, KioskOwnerCap},
-        transfer_policy::TransferRequest,
-        test_scenario::{Self as ts, Scenario}
+        transfer_policy::{TransferRequest, TransferPolicy},
+        test_scenario::{Self as ts, Scenario, receiving_ticket_by_id},
     };
 
     use kraken::{
         owned,
         config,
-        kiosk as k_kiosk,
+        kiosk::{Self as k_kiosk, KioskOwnerLock},
         account::{Self, Account, Invite},
         coin_operations,
         multisig::{Self, Multisig, Proposal, Executable},
@@ -34,6 +34,8 @@ module kraken::test_utils {
         scenario: Scenario,
         clock: Clock,
         multisig: Multisig,
+        kiosk: Kiosk,
+        kiosk_owner_lock_id: ID
     }
 
     public struct Obj has key, store { id: UID }
@@ -52,7 +54,13 @@ module kraken::test_utils {
         let multisig = multisig::new(string::utf8(b"kraken"), object::id(&account), scenario.ctx());
         let clock = clock::create_for_testing(scenario.ctx());
 
-        World { scenario, clock, multisig, account }
+        let kiosk_owner_lock_id = k_kiosk::new(&multisig, scenario.ctx());
+
+        scenario.next_tx(OWNER);
+
+        let kiosk = scenario.take_shared<Kiosk>();
+
+        World { scenario, clock, multisig, account, kiosk, kiosk_owner_lock_id }
     }
 
     public fun multisig(world: &mut World): &mut Multisig {
@@ -61,6 +69,10 @@ module kraken::test_utils {
 
     public fun clock(world: &mut World): &mut Clock {
         &mut world.clock
+    }
+
+    public fun kiosk(world: &mut World): &mut Kiosk {
+        &mut world.kiosk
     }
 
     public fun scenario(world: &mut World): &mut Scenario {
@@ -246,289 +258,111 @@ module kraken::test_utils {
         );
     }
 
-    // public fun execute_modify(
-    //     world: &mut World,
-    //     name: String, 
-    // ) {
-    //     config::execute_modify(&mut world.multisig, name, &world.clock, world.scenario.ctx());
-    // }
+    public fun borrow_cap(world: &mut World): KioskOwnerLock {
+        k_kiosk::borrow_cap(&mut world.multisig, receiving_ticket_by_id(world.kiosk_owner_lock_id), world.scenario.ctx())
+    }
 
-    // public fun send_invite(world: &mut World, recipient: address) {
-    //     account::send_invite(&mut world.multisig, recipient, world.scenario.ctx());
-    // }
+    public fun place<T: key + store>(
+        world: &mut World, 
+        lock: &KioskOwnerLock,
+        sender_kiosk: &mut Kiosk, 
+        sender_cap: &KioskOwnerCap, 
+        nft_id: ID,
+        policy: &mut TransferPolicy<T>,
+    ) {
+        k_kiosk::place(
+            &mut world.multisig,
+            &mut world.kiosk,
+            lock,
+            sender_kiosk,
+            sender_cap,
+            nft_id,
+            policy,
+            world.scenario.ctx()
+        )
+    }
 
-    // public fun propose_move_call(
-    //     world: &mut World, 
-    //     key: String,
-    //     execution_time: u64,
-    //     expiration_epoch: u64,
-    //     description: String,
-    //     digest: vector<u8>,
-    //     to_borrow: vector<ID>,
-    //     to_withdraw: vector<ID>,
-    // ) {
-    //     move_call::propose_move_call(&mut world.multisig, key, execution_time, expiration_epoch, description, digest, to_borrow, to_withdraw, world.scenario.ctx());
-    // }
+    public fun propose_take(
+        world: &mut World, 
+        key: String,
+        execution_time: u64,
+        expiration_epoch: u64,
+        description: String,
+        nft_ids: vector<ID>,
+        recipient: address,
+    ) {
+        k_kiosk::propose_take(
+            &mut world.multisig,
+            key,
+            execution_time,
+            expiration_epoch,
+            description,
+            nft_ids,
+            recipient,
+            world.scenario.ctx()
+        )
+    }
 
-    // public fun propose_pay(
-    //     world: &mut World,  
-    //     key: String,
-    //     execution_time: u64,
-    //     expiration_epoch: u64,
-    //     description: String,
-    //     coin: ID, // must have the total amount to be paid
-    //     amount: u64, // amount to be paid at each interval
-    //     interval: u64, // number of epochs between each payment
-    //     recipient: address
-    // ) {
-    //     payments::propose_pay(
-    //         &mut world.multisig,
-    //         key,
-    //         execution_time,
-    //         expiration_epoch,
-    //         description,
-    //         coin,
-    //         amount,
-    //         interval,
-    //         recipient,
-    //         world.scenario.ctx()
-    //     );
-    // }
+    public fun execute_take<T: key + store>(
+        world: &mut World, 
+        executable: &mut Executable,
+        lock: &KioskOwnerLock,
+        recipient_kiosk: &mut Kiosk, 
+        recipient_cap: &KioskOwnerCap, 
+        policy: &mut TransferPolicy<T>
+    ) {
+        k_kiosk::execute_take(
+            executable,
+            &mut world.kiosk,
+            lock,
+            recipient_kiosk,
+            recipient_cap,
+            policy,
+            world.scenario.ctx()
+        );
+    }
 
-    // public fun create_stream<C: drop>(
-    //     world: &mut World, 
-    //     action: Action<Pay>, 
-    //     received: Receiving<Coin<C>>,
-    // ) {
-    //     payments::create_stream(action, &mut world.multisig, received, world.scenario.ctx());
-    // }
+    public fun propose_list(
+        world: &mut World, 
+        key: String,
+        execution_time: u64,
+        expiration_epoch: u64,
+        description: String,
+        nft_ids: vector<ID>,
+        prices: vector<u64>
+    ) {
+        k_kiosk::propose_list(
+            &mut world.multisig,
+            key,
+            execution_time,
+            expiration_epoch,
+            description,
+            nft_ids,
+            prices,
+            world.scenario.ctx()
+        );
+    }
 
-    // public fun cancel_payment<C: drop>(
-    //     world: &mut World,
-    //     stream: Stream<C>
-    // ) {
-    //     stream.cancel_payment(&mut world.multisig, world.scenario.ctx());
-    // }
-
-    // public fun propose_send(
-    //     world: &mut World,  
-    //     key: String,
-    //     execution_time: u64,
-    //     expiration_epoch: u64,
-    //     description: String,
-    //     objects: vector<ID>,
-    //     recipients: vector<address>
-    // ) {
-    //     transfers::propose_send(
-    //         &mut world.multisig, 
-    //         key, 
-    //         execution_time, 
-    //         expiration_epoch, 
-    //         description, 
-    //         objects, 
-    //         recipients, 
-    //         world.scenario.ctx()
-    //     );
-    // }
-
-    // public fun send<T: key + store>(
-    //     world: &mut World, 
-    //     action: &mut Action<Send>,  
-    //     received: Receiving<T>
-    // ) {
-    //     transfers::send(action, &mut world.multisig, received);
-    // }
-
-    // public fun propose_delivery(
-    //     world: &mut World, 
-    //     key: String,
-    //     execution_time: u64,
-    //     expiration_epoch: u64,
-    //     description: String,
-    //     objects: vector<ID>,
-    //     recipient: address
-    // ) {
-    //     transfers::propose_delivery(
-    //         &mut world.multisig, 
-    //         key, 
-    //         execution_time, 
-    //         expiration_epoch, 
-    //         description, 
-    //         objects, 
-    //         recipient,
-    //         world.scenario.ctx()
-    //     );
-    // }
-
-    // public fun add_to_delivery<T: key + store>(
-    //     world: &mut World, 
-    //     delivery: &mut Delivery, 
-    //     action: &mut Action<Deliver>, 
-    //     received: Receiving<T>
-    // ) {
-    //     transfers::add_to_delivery(delivery, action, &mut world.multisig, received);
-    // }
-
-    // public fun retrieve<T: key + store>(
-    //     world: &mut World,
-    //     delivery: &mut Delivery
-    // ) {
-    //     transfers::retrieve<T>(delivery, &world.multisig, world.scenario.ctx());
-    // }
-
-    // public fun cancel_delivery(
-    //     world: &mut World, 
-    //     delivery: Delivery, 
-    // ) {
-    //     transfers::cancel_delivery(&mut world.multisig, delivery, world.scenario.ctx());
-    // }
-
-
-    // public fun lock_cap(
-    //     world: &mut World, 
-    //     label: String,
-    //     time_lock: u64,
-    //     upgrade_cap: UpgradeCap
-    // ): ID {
-    //     upgrade_policies::lock_cap(&mut world.multisig, label, time_lock, upgrade_cap, world.scenario.ctx())        
-    // }
-
-    // public fun propose_upgrade(
-    //     world: &mut World, 
-    //     key: String,
-    //     expiration_epoch: u64,
-    //     description: String,
-    //     digest: vector<u8>,
-    //     upgrade_lock: Receiving<UpgradeLock>
-    // ) {
-    //     upgrade_policies::propose_upgrade(
-    //         &mut world.multisig, 
-    //         key, 
-    //         expiration_epoch, 
-    //         description, 
-    //         digest, 
-    //         upgrade_lock,
-    //         &world.clock,
-    //         world.scenario.ctx()
-    //     );
-    // }
-
-    // public fun propose_policy(
-    //     world: &mut World,  
-    //     key: String,
-    //     execution_time: u64,
-    //     expiration_epoch: u64,
-    //     description: String,
-    //     policy: u8,
-    //     upgrade_lock: Receiving<UpgradeLock>
-    // ) {
-    //     upgrade_policies::propose_policy(
-    //         &mut world.multisig,
-    //         key,
-    //         execution_time,
-    //         expiration_epoch,
-    //         description,
-    //         policy,
-    //         upgrade_lock,
-    //         world.scenario.ctx()  
-    //     );
-    // }
-
-    // public fun new_kiosk(world: &mut World): (Kiosk, KioskOwnerCap) {
-    //     k_kiosk::new(&mut world.multisig, world.scenario.ctx())
-    // }
-
-    // public fun transfer_from<T: key + store>(
-    //     world: &mut World, 
-    //     multisig_kiosk: &mut Kiosk, 
-    //     multisig_cap: Receiving<KioskOwnerCap>,
-    //     sender_kiosk: &mut Kiosk, 
-    //     sender_cap: &KioskOwnerCap, 
-    //     nft_id: ID
-    // ): TransferRequest<T> {
-    //     k_kiosk::transfer_from(
-    //         &mut world.multisig, 
-    //         multisig_kiosk, 
-    //         multisig_cap, 
-    //         sender_kiosk, 
-    //         sender_cap, 
-    //         nft_id, 
-    //         world.scenario.ctx()
-    //     )
-    // }
-
-    // public fun propose_transfer_to(
-    //     world: &mut World, 
-    //     key: String,
-    //     execution_time: u64,
-    //     expiration_epoch: u64,
-    //     description: String,
-    //     cap_id: ID,
-    //     nfts: vector<ID>,
-    //     recipient: address
-    // ) {
-    //     k_kiosk::propose_transfer_to(
-    //         &mut world.multisig, 
-    //         key,
-    //         execution_time,
-    //         expiration_epoch,
-    //         description,
-    //         cap_id,
-    //         nfts,
-    //         recipient,
-    //         world.scenario.ctx()
-    //     )        
-    // }
-
-    // public fun propose_list(
-    //     world: &mut World,
-    //     key: String,
-    //     execution_time: u64,
-    //     expiration_epoch: u64,
-    //     description: String,
-    //     cap_id: ID,
-    //     nfts: vector<ID>,
-    //     prices: vector<u64>
-    // ) {
-    //     k_kiosk::propose_list(
-    //         &mut world.multisig,
-    //         key,
-    //         execution_time,
-    //         expiration_epoch,
-    //         description,
-    //         cap_id,
-    //         nfts,
-    //         prices,
-    //         world.scenario.ctx()
-    //     );
-    // }
-
-    // public fun delist<T: key + store>(
-    //     world: &mut World, 
-    //     kiosk: &mut Kiosk, 
-    //     cap: Receiving<KioskOwnerCap>,
-    //     nft: ID
-    // ) {
-    //     k_kiosk::delist<T>(
-    //         &mut world.multisig,
-    //         kiosk,
-    //         cap,
-    //         nft,
-    //         world.scenario.ctx()
-    //     );
-    // }
-
-    // public fun withdraw_profits(
-    //     world: &mut World, 
-    //     kiosk: &mut Kiosk,
-    //     cap: &KioskOwnerCap,
-    // ) {
-    //     k_kiosk::withdraw_profits(&mut world.multisig, kiosk, cap, world.scenario.ctx());
-    // }
+    public fun execute_list<T: key + store>(
+        world: &mut World,
+        executable: &mut Executable,
+        lock: &KioskOwnerLock,
+    ) {
+        k_kiosk::execute_list<T>(executable, &mut world.kiosk, lock);
+    }
 
     public fun end(world: World) {
-        let World { scenario, clock, multisig, account } = world;
+        let World { 
+            scenario, 
+            clock, 
+            multisig, 
+            account, 
+            kiosk,
+            kiosk_owner_lock_id: _ 
+        } = world;
+
         destroy(clock);
+        destroy(kiosk);
         destroy(account);
         destroy(multisig);
         scenario.end();

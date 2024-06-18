@@ -53,16 +53,22 @@ module kraken::kiosk {
 
     // not composable because of the lock
     #[allow(lint(share_owned))]
-    public fun new(multisig: &Multisig, ctx: &mut TxContext) {
+    public fun new(multisig: &Multisig, ctx: &mut TxContext): ID {
         multisig.assert_is_member(ctx);
         let (mut kiosk, cap) = kiosk::new(ctx);
         kiosk.set_owner_custom(&cap, multisig.addr());
 
+        let kiosk_owner_lock = KioskOwnerLock { id: object::new(ctx), kiosk_owner_cap: cap };
+
+        let cap_id = kiosk_owner_lock.id.uid_to_inner();
+
         transfer::public_share_object(kiosk);
         transfer::transfer(
-            KioskOwnerLock { id: object::new(ctx), kiosk_owner_cap: cap }, 
+            kiosk_owner_lock, 
             multisig.addr()
         );
+
+        cap_id
     }
 
     // borrow the lock that can only be put back in the multisig because no store
@@ -295,24 +301,4 @@ module kraken::kiosk {
         let List { nft_ids, prices: _ } = executable.remove_action(witness);
         assert!(nft_ids.is_empty(), EListAllNftsBefore);
     }
-
-    // === Test functions ===
-
-    // #[test_only]
-    // public fun place<T: key + store>(multisig_kiosk: &mut Kiosk, cap: &KioskOwnerCap, nft: T) {
-    //     multisig_kiosk.place(cap, nft);
-    // }
-
-    // #[test_only]
-    // public fun kiosk_list<T: key + store>(multisig_kiosk: &mut Kiosk, cap: &KioskOwnerCap, nft_id: ID, price: u64)  {
-    //     multisig_kiosk.list<T>(cap, nft_id, price);        
-    // }
-
-    // #[test_only]
-    // public fun borrow_cap(
-    //     multisig: &mut Multisig, 
-    //     multisig_cap: Receiving<KioskOwnerCap>,
-    // ): KioskOwnerCap {
-    //     transfer::public_receive(multisig.uid_mut(), multisig_cap)
-    // }    
 }
