@@ -2,7 +2,7 @@
 module kraken::owned_tests{    
     use std::string::utf8;
     use sui::test_utils::{assert_eq, destroy};
-    use sui::test_scenario::{receiving_ticket_by_id};
+    use sui::test_scenario::receiving_ticket_by_id;
 
     use kraken::owned;
     use kraken::test_utils::start_world;

@@ -351,6 +351,46 @@ module kraken::test_utils {
         k_kiosk::execute_list<T>(executable, &mut world.kiosk, lock);
     }
 
+    public fun propose_pay(
+        world: &mut World,
+        key: String,
+        execution_time: u64,
+        expiration_epoch: u64,
+        description: String,
+        coin: ID, // must have the total amount to be paid
+        amount: u64, // amount to be paid at each interval
+        interval: u64, // number of epochs between each payment
+        recipient: address,
+    ) {
+        payments::propose_pay(
+            &mut world.multisig,
+            key,
+            execution_time,
+            expiration_epoch,
+            description,
+            coin,
+            amount,
+            interval,
+            recipient,
+            world.scenario.ctx()
+        );
+    }
+
+    public fun execute_pay<C: drop>(
+        world: &mut World,
+        executable: Executable, 
+        receiving: Receiving<Coin<C>>
+    ) {
+        payments::execute_pay<C>(executable, &mut world.multisig, receiving, world.scenario.ctx());
+    }
+
+    public fun cancel_payment_stream<C: drop>(
+        world: &mut World,
+        stream: Stream<C>,
+    ) {
+        payments::cancel_payment_stream(stream, &world.multisig, world.scenario.ctx());
+    }
+
     public fun end(world: World) {
         let World { 
             scenario, 
