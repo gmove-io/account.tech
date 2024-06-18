@@ -78,6 +78,10 @@ module kraken::test_utils {
     public fun scenario(world: &mut World): &mut Scenario {
         &mut world.scenario
     }
+    
+    public fun new_multisig(world: &mut World): Multisig {
+        multisig::new(string::utf8(b"kraken2"), object::id(&world.account), world.scenario.ctx())
+    }
 
     public fun withdraw<Object: key + store, Witness: drop + copy>(
         world: &mut World, 
@@ -419,6 +423,13 @@ module kraken::test_utils {
         world: &mut World, 
     ): (Delivery, DeliveryCap) {
         transfers::create_delivery(&world.multisig, world.scenario.ctx())
+    }
+
+    public fun cancel_delivery(
+        world: &mut World, 
+        delivery: Delivery, 
+    ) {
+        transfers::cancel_delivery(&world.multisig, delivery, world.scenario.ctx());
     }
 
     public fun end(world: World) {
