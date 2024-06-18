@@ -1,7 +1,4 @@
-/// Package managers can lock UpgradeCaps in the multisig. Caps can't be unlocked to enforce the policies.
-/// Any rule can be defined for the upgrade lock. The module provide a timelock rule by default, based on execution time.
-/// Upon locking, the user can define an optional timelock corresponding to the minimum delay between an upgrade proposal and its execution.
-/// The multisig can decide to make the policy more restrictive or destroy the Cap, to make the package immutable.
+/// This module shows how to define a custom rule for an upgrade cap and enforce it in a custom proposal.
 
 module examples::upgrade_rule {
     use std::string::String;
@@ -41,9 +38,7 @@ module examples::upgrade_rule {
 
     // === [PROPOSAL] Public Functions ===
 
-    // step 1: propose an Upgrade by passing the digest of the package build
-    // execution_time is automatically set to now + timelock
-    // if timelock = 0, it means that upgrade can be executed at any time
+    // step 1: propose an Upgrade that will be executable only on a weekend
     public fun propose_upgrade(
         multisig: &mut Multisig, 
         key: String,

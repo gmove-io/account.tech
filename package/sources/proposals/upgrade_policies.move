@@ -209,7 +209,7 @@ module kraken::upgrade_policies {
     // step 2: multiple members have to approve the proposal (multisig::approve_proposal)
     // step 3: execute the proposal and return the action (multisig::execute_proposal)
 
-    // step 4: destroy Upgrade and return the UpgradeTicket for upgrading
+    // step 4: restrict the upgrade policy
     public fun execute_restrict(
         mut executable: Executable,
         multisig: &mut Multisig,
