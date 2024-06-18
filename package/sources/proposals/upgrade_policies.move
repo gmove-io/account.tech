@@ -19,6 +19,10 @@ module kraken::upgrade_policies {
     const EUpgradeNotExecuted: u64 = 4;
     const ERestrictNotExecuted: u64 = 5;
 
+    // === Constants ===
+
+    const TIMELOCK_KEY: vector<u8> = b"TimeLock";
+
     // === Structs ===
 
     public struct Witness has drop {}
@@ -79,10 +83,18 @@ module kraken::upgrade_policies {
     // add a rule with any config to the upgrade lock
     public fun add_rule<R: store>(
         lock: &mut UpgradeLock,
-        key: String,
+        key: vector<u8>,
         rule: R,
     ) {
         df::add(&mut lock.id, key, rule);
+    }
+
+    // check if a rule exists
+    public fun has_rule(
+        lock: &UpgradeLock,
+        key: vector<u8>,
+    ): bool {
+        df::exists_(&lock.id, key)
     }
 
     // lock a cap with a timelock rule
@@ -94,7 +106,7 @@ module kraken::upgrade_policies {
         ctx: &mut TxContext
     ) {
         let mut lock = lock_cap(multisig, label, upgrade_cap, ctx);
-        add_rule(&mut lock, string::utf8(b"TimeLock"), TimeLock { delay_ms });
+        add_rule(&mut lock, TIMELOCK_KEY, TimeLock { delay_ms });
         put_back_cap(lock);
     }
 
@@ -129,8 +141,8 @@ module kraken::upgrade_policies {
         clock: &Clock,
         ctx: &mut TxContext
     ) {
-        let delay = if (df::exists_(&lock.id, string::utf8(b"TimeLock"))) {
-            let timelock: &TimeLock = df::borrow(&lock.id, string::utf8(b"TimeLock"));
+        let delay = if (lock.has_rule(TIMELOCK_KEY)) {
+            let timelock: &TimeLock = df::borrow(&lock.id, TIMELOCK_KEY);
             timelock.delay_ms
         } else {
             0
