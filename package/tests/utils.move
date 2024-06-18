@@ -17,9 +17,9 @@ module kraken::test_utils {
     use kraken::{
         owned,
         config,
+        coin_operations,
         kiosk::{Self as k_kiosk, KioskOwnerLock},
         account::{Self, Account, Invite},
-        coin_operations,
         multisig::{Self, Multisig, Proposal, Executable},
         payments::{Self, Stream, Pay},
         upgrade_policies::{Self, UpgradeLock},
@@ -389,6 +389,18 @@ module kraken::test_utils {
         stream: Stream<C>,
     ) {
         payments::cancel_payment_stream(stream, &world.multisig, world.scenario.ctx());
+    }
+
+    public fun propose_send(
+        world: &mut World, 
+        key: String,
+        execution_time: u64,
+        expiration_epoch: u64,
+        description: String,
+        objects: vector<ID>,
+        recipients: vector<address>
+    ) {
+        transfers::propose_send(&mut world.multisig, key, execution_time, expiration_epoch, description, objects, recipients, world.scenario.ctx());
     }
 
     public fun end(world: World) {

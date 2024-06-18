@@ -1,72 +1,72 @@
-// #[test_only]
-// module kraken::transfers_tests {
-//     use std::string::utf8;
+#[test_only]
+module kraken::transfers_tests {
+    // use std::string::utf8;
 
-//     use sui::test_utils::{destroy, assert_eq};
-//     use sui::test_scenario::{
-//         receiving_ticket_by_id, 
-//         take_from_address_by_id, 
-//         take_from_address, 
-//         take_shared
-//     };
+    // use sui::test_utils::{destroy, assert_eq};
+    // use sui::test_scenario::{
+    //     receiving_ticket_by_id, 
+    //     take_from_address_by_id, 
+    //     take_from_address, 
+    //     take_shared
+    // };
 
-//     use kraken::test_utils::start_world;
-//     use kraken::transfers::{Self, Send, Delivery, Deliver, DeliveryCap};
+    // use kraken::test_utils::start_world;
+    // use kraken::transfers::{Self, Send, Delivery, Deliver, DeliveryCap};
 
-//     const OWNER: address = @0xBABE;
-//     const ALICE: address = @0xA11CE;
+    // const OWNER: address = @0xBABE;
+    // const ALICE: address = @0xA11CE;
 
-//     public struct Object has key, store {
-//         id: UID
-//     }
+    // public struct Object has key, store {
+    //     id: UID
+    // }
 
-//     #[test]
-//     fun test_send_end_to_end() {
-//         let mut world = start_world();
+    // #[test]
+    // fun test_send_end_to_end() {
+    //     let mut world = start_world();
 
-//         let object1 = new_object(world.scenario().ctx());
-//         let object2 = new_object(world.scenario().ctx());
+    //     let object1 = new_object(world.scenario().ctx());
+    //     let object2 = new_object(world.scenario().ctx());
 
-//         let id1 = object::id(&object1);
-//         let id2 = object::id(&object2);
+    //     let id1 = object::id(&object1);
+    //     let id2 = object::id(&object2);
 
-//         let multisig_address = world.multisig().addr();
+    //     let multisig_address = world.multisig().addr();
 
-//         transfer::public_transfer(object1, multisig_address);
-//         transfer::public_transfer(object2, multisig_address);
+    //     transfer::public_transfer(object1, multisig_address);
+    //     transfer::public_transfer(object2, multisig_address);
 
-//         world.propose_send(
-//             utf8(b"1"), 
-//             100, 
-//             1, 
-//             utf8(b"send objects"), 
-//             vector[id1, id2],
-//             vector[OWNER, ALICE]
-//         );
+    //     world.propose_send(
+    //         utf8(b"1"), 
+    //         100, 
+    //         1, 
+    //         utf8(b"send objects"), 
+    //         vector[id1, id2],
+    //         vector[OWNER, ALICE]
+    //     );
 
-//         world.scenario().next_epoch(OWNER);
-//         world.clock().set_for_testing(101);
+    //     world.scenario().next_epoch(OWNER);
+    //     world.clock().set_for_testing(101);
 
-//         world.approve_proposal(utf8(b"1"));
+    //     world.approve_proposal(utf8(b"1"));
 
-//         world.scenario().next_tx(OWNER);
+    //     world.scenario().next_tx(OWNER);
 
-//         let mut action = world.execute_proposal<Send>(utf8(b"1"));
+    //     let mut action = world.execute_proposal<Send>(utf8(b"1"));
 
-//         world.send<Object>(&mut action, receiving_ticket_by_id(id2));
-//         world.send<Object>(&mut action, receiving_ticket_by_id(id1));
+    //     world.send<Object>(&mut action, receiving_ticket_by_id(id2));
+    //     world.send<Object>(&mut action, receiving_ticket_by_id(id1));
 
-//         world.scenario().next_tx(OWNER);
+    //     world.scenario().next_tx(OWNER);
 
-//         let object1 = take_from_address_by_id<Object>(world.scenario(), OWNER, id1);
-//         let object2 = take_from_address_by_id<Object>(world.scenario(), ALICE, id2);
+    //     let object1 = take_from_address_by_id<Object>(world.scenario(), OWNER, id1);
+    //     let object2 = take_from_address_by_id<Object>(world.scenario(), ALICE, id2);
 
-//         transfers::complete_send(action);
+    //     transfers::complete_send(action);
 
-//         destroy(object1);
-//         destroy(object2);
-//         world.end();
-//     }
+    //     destroy(object1);
+    //     destroy(object2);
+    //     world.end();
+    // }
 
 //     #[test]
 //     fun test_delivery_end_to_end() {
@@ -431,9 +431,9 @@
 //         world.end();        
 //     }
 
-//     fun new_object(ctx: &mut TxContext): Object {
-//         Object {
-//             id: object::new(ctx)
-//         }
-//     }
-// }
+    // fun new_object(ctx: &mut TxContext): Object {
+    //     Object {
+    //         id: object::new(ctx)
+    //     }
+    // }
+}

@@ -4,7 +4,7 @@ module kraken::payments_tests {
 
     use sui::sui::SUI;
     use sui::coin::mint_for_testing;
-    use sui::test_utils::{assert_eq, destroy};
+    use sui::test_utils::assert_eq;
     use sui::test_scenario::receiving_ticket_by_id;
 
     use kraken::test_utils::start_world;

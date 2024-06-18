@@ -152,11 +152,6 @@ module kraken::config {
     public fun destroy_modify<W: drop>(executable: &mut Executable, witness: W) {
         let Modify { name, threshold, to_remove, to_add, weights } = executable.remove_action(witness);
 
-        // print(&name);
-        // print(&threshold);
-        // print(&to_remove);
-        // print(&to_add);
-        // print(&weights);
         assert!(name.is_none() &&
             threshold.is_none() &&
             to_remove.is_empty() &&
