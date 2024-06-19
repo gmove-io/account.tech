@@ -104,13 +104,10 @@ module kraken::upgrade_policies {
         delay_ms: u64,
         upgrade_cap: UpgradeCap,
         ctx: &mut TxContext
-    ): ID {
+    ) {
         let mut lock = lock_cap(multisig, label, upgrade_cap, ctx);
-        let lock_id = object::id(&lock);
         add_rule(&mut lock, TIMELOCK_KEY, TimeLock { delay_ms });
         put_back_cap(lock);
-
-        lock_id
     }
 
     // borrow the lock that can only be put back in the multisig because no store

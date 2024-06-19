@@ -5,10 +5,10 @@ module kraken::upgrade_policies_tests {
     use sui::package;
 
     use sui::test_utils::assert_eq;
-    use sui::test_scenario::receiving_ticket_by_id;
+    use sui::test_scenario::{receiving_ticket_by_id};
 
     use kraken::{
-        upgrade_policies,
+        upgrade_policies::{Self, UpgradeLock},
         test_utils::start_world
     };
 
@@ -69,9 +69,11 @@ module kraken::upgrade_policies_tests {
 
         let upgrade_cap = package::test_publish(package_id.to_inner(), world.scenario().ctx());   
 
-        let lock_id = world.lock_cap_with_timelock(utf8(b"lock"), 108, upgrade_cap);
+        world.lock_cap_with_timelock(utf8(b"lock"), 108, upgrade_cap);
 
         world.scenario().next_tx(OWNER);
+
+        let lock_id = world.last_id_for_multisig<UpgradeLock>();
 
         let lock = world.borrow_upgrade_cap_lock(receiving_ticket_by_id(lock_id));
 
@@ -103,9 +105,11 @@ module kraken::upgrade_policies_tests {
 
         let upgrade_cap = package::test_publish(package_id.to_inner(), world.scenario().ctx());   
 
-        let lock_id = world.lock_cap_with_timelock(utf8(b"lock"), 108, upgrade_cap);
+        world.lock_cap_with_timelock(utf8(b"lock"), 108, upgrade_cap);
 
         world.scenario().next_tx(OWNER);
+
+        let lock_id = world.last_id_for_multisig<UpgradeLock>();
 
         let lock = world.borrow_upgrade_cap_lock(receiving_ticket_by_id(lock_id));
 
@@ -137,9 +141,11 @@ module kraken::upgrade_policies_tests {
 
         let upgrade_cap = package::test_publish(package_id.to_inner(), world.scenario().ctx());   
 
-        let lock_id = world.lock_cap_with_timelock(utf8(b"lock"), 108, upgrade_cap);
+        world.lock_cap_with_timelock(utf8(b"lock"), 108, upgrade_cap);
 
         world.scenario().next_tx(OWNER);
+
+        let lock_id = world.last_id_for_multisig<UpgradeLock>();
 
         let lock = world.borrow_upgrade_cap_lock(receiving_ticket_by_id(lock_id));
 

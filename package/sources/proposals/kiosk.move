@@ -53,22 +53,18 @@ module kraken::kiosk {
 
     // not composable because of the lock
     #[allow(lint(share_owned))]
-    public fun new(multisig: &Multisig, ctx: &mut TxContext): ID {
+    public fun new(multisig: &Multisig, ctx: &mut TxContext) {
         multisig.assert_is_member(ctx);
         let (mut kiosk, cap) = kiosk::new(ctx);
         kiosk.set_owner_custom(&cap, multisig.addr());
 
         let kiosk_owner_lock = KioskOwnerLock { id: object::new(ctx), kiosk_owner_cap: cap };
 
-        let cap_id = kiosk_owner_lock.id.uid_to_inner();
-
         transfer::public_share_object(kiosk);
         transfer::transfer(
             kiosk_owner_lock, 
             multisig.addr()
         );
-
-        cap_id
     }
 
     // borrow the lock that can only be put back in the multisig because no store

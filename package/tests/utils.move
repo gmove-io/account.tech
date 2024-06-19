@@ -11,7 +11,7 @@ module kraken::test_utils {
         clock::{Self, Clock},
         kiosk::{Kiosk, KioskOwnerCap},
         transfer_policy::TransferPolicy,
-        test_scenario::{Self as ts, Scenario, receiving_ticket_by_id},
+        test_scenario::{Self as ts, Scenario, receiving_ticket_by_id, most_recent_id_for_address},
     };
 
     use kraken::{
@@ -54,9 +54,11 @@ module kraken::test_utils {
         let multisig = multisig::new(string::utf8(b"kraken"), object::id(&account), scenario.ctx());
         let clock = clock::create_for_testing(scenario.ctx());
 
-        let kiosk_owner_lock_id = k_kiosk::new(&multisig, scenario.ctx());
+        k_kiosk::new(&multisig, scenario.ctx());
 
         scenario.next_tx(OWNER);
+
+        let kiosk_owner_lock_id = most_recent_id_for_address<KioskOwnerLock>(multisig.addr()).extract();
 
         let kiosk = scenario.take_shared<Kiosk>();
 
@@ -77,6 +79,10 @@ module kraken::test_utils {
 
     public fun scenario(world: &mut World): &mut Scenario {
         &mut world.scenario
+    }
+
+    public fun last_id_for_multisig<T: key>(world: &World): ID {
+        most_recent_id_for_address<T>(world.multisig.addr()).extract()
     }
     
     public fun new_multisig(world: &mut World): Multisig {
@@ -447,7 +453,7 @@ module kraken::test_utils {
         digest: vector<u8>,
         lock: &UpgradeLock
     ) {
-       upgrade_policies::propose_upgrade(&mut world.multisig, key, expiration_epoch, description, digest, lock, &world.clock, world.scenario.ctx()); 
+        upgrade_policies::propose_upgrade(&mut world.multisig, key, expiration_epoch, description, digest, lock, &world.clock, world.scenario.ctx()); 
     }
 
     public fun propose_restrict(
@@ -481,8 +487,8 @@ module kraken::test_utils {
         label: String,
         delay_ms: u64,
         upgrade_cap: UpgradeCap
-    ): ID {
-        upgrade_policies::lock_cap_with_timelock(&world.multisig, label, delay_ms, upgrade_cap, world.scenario.ctx())
+    ) {
+        upgrade_policies::lock_cap_with_timelock(&world.multisig, label, delay_ms, upgrade_cap, world.scenario.ctx());
     }
 
     public fun end(world: World) {
