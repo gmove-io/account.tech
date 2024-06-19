@@ -85,7 +85,6 @@ module kraken::payments {
     ) {
         pay(&mut executable, multisig, receiving, Witness {}, 0, ctx);
 
-        owned::destroy_withdraw(&mut executable, Witness {});
         destroy_pay(&mut executable, Witness {});
         executable.destroy(Witness {});
     }
@@ -183,6 +182,26 @@ module kraken::payments {
         assert!(amount == 0, EPayNotExecuted);
 
         recipient
+    }
+
+    public fun balance<C: drop>(self: &Stream<C>): u64 {
+        self.balance.value()
+    }
+
+    public fun amount<C: drop>(self: &Stream<C>): u64 {
+        self.amount
+    }
+
+    public fun interval<C: drop>(self: &Stream<C>): u64 {
+        self.interval
+    }
+
+    public fun last_epoch<C: drop>(self: &Stream<C>): u64 {
+        self.last_epoch
+    }
+
+    public fun recipient<C: drop>(self: &Stream<C>): address {
+        self.recipient
     }
 }
 

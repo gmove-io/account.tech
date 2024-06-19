@@ -249,6 +249,7 @@ module kraken::multisig {
     }
 
     // to complete the execution
+
     public use fun destroy_executable as Executable.destroy;
     public fun destroy_executable<Witness: drop>(
         executable: Executable, 
@@ -304,6 +305,10 @@ module kraken::multisig {
         multisig.name
     }
 
+    public fun version(multisig: &Multisig): u64 {
+        multisig.version
+    }
+
     public fun threshold(multisig: &Multisig): u64 {
         multisig.threshold
     }
@@ -342,6 +347,11 @@ module kraken::multisig {
         multisig.proposals.get(key)
     }
 
+    public use fun proposal_module_witness as Proposal.module_witness;
+    public fun proposal_module_witness(proposal: &Proposal): TypeName {
+        proposal.module_witness
+    }
+
     public fun description(proposal: &Proposal): String {
         proposal.description
     }
@@ -358,8 +368,22 @@ module kraken::multisig {
         proposal.approved.into_keys()
     }
 
+    public fun approval_weight(proposal: &Proposal): u64 {
+        proposal.approval_weight
+    }
+
+    public use fun proposal_actions_length as Proposal.actions_length;
+    public fun proposal_actions_length(proposal: &Proposal): u64 {
+        proposal.actions.length()
+    }
+
     public use fun executable_multisig_addr as Executable.multisig_addr;
     public fun executable_multisig_addr(executable: &Executable): address {
+        executable.multisig_addr
+    }
+
+    public use fun executable_module_witness as Executable.module_witness;
+    public fun executable_module_witness(executable: &Executable): address {
         executable.multisig_addr
     }
 
@@ -394,6 +418,7 @@ module kraken::multisig {
         while (addresses.length() > 0) {
             let addr = addresses.pop_back();
             let weight = weights.pop_back();
+            multisig.total_weight = multisig.total_weight + weight;
             multisig.members.insert(
                 addr, 
                 Member { weight, account_id: option::none() }
@@ -406,7 +431,8 @@ module kraken::multisig {
         while (addresses.length() > 0) {
             let addr = addresses.pop_back();
             let (_, member) = multisig.members.remove(&addr);
-            let Member { weight: _, account_id: _ } = member;
+            let Member { weight , account_id: _ } = member;
+            multisig.total_weight = multisig.total_weight - weight;
         }
     }
 

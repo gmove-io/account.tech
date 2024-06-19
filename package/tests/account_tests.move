@@ -1,142 +1,127 @@
-// #[test_only]
-// module kraken::account_tests {
-//     use std::string;
+#[test_only]
+module kraken::account_tests {
+    use std::string;
 
-//     use sui::test_utils::assert_eq;
-//     use sui::test_scenario::take_from_address;
+    use sui::{
+        test_utils::{assert_eq, destroy}
+    };
+    
+    use kraken::{
+        multisig,
+        test_utils::start_world,
+        account::{Self, Account, Invite}
+    };
 
-//     use kraken::test_utils::start_world;
-//     use kraken::account::{Self, Account, Invite};
+    const OWNER: address = @0xBABE;
+    const ALICE: address = @0xA11CE;
 
-//     const OWNER: address = @0xBABE;
-//     const ALICE: address = @0xA11CE;
+    #[test]
+    fun test_join_multisig() {
+        let mut world = start_world();
 
-//     #[test]
-//     fun test_account_end_to_end() {
-//         let mut world = start_world();
+        account::new(string::utf8(b"Sam"), string::utf8(b"Sam.png"), world.scenario().ctx());
 
-//         account::new(string::utf8(b"Sam"), string::utf8(b"Sam.png"), world.scenario().ctx());
+        world.scenario().next_tx(OWNER);
 
-//         world.scenario().next_tx(OWNER);
+        let mut user_account = world.scenario().take_from_address<Account>(OWNER);
+        let mut multisig2 = multisig::new(string::utf8(b"Multisig2"), object::id(&user_account), world.scenario().ctx());
 
-//         let mut user_account = take_from_address<Account>(world.scenario(), OWNER);
+        assert_eq(user_account.username(), string::utf8(b"Sam"));
+        assert_eq(user_account.profile_picture(), string::utf8(b"Sam.png"));
+        assert_eq(user_account.multisig_ids(), vector[]);
 
-//         assert_eq(user_account.username(), string::utf8(b"Sam"));
-//         assert_eq(user_account.profile_picture(), string::utf8(b"Sam.png"));
-//         assert_eq(user_account.multisigs(), vector[]);
+        world.join_multisig(&mut user_account);
+        user_account.join_multisig(&mut multisig2, world.scenario().ctx());
 
-//         let id1 = object::new(world.scenario().ctx());
-//         let id2 = object::new(world.scenario().ctx());
+        assert_eq(user_account.multisig_ids(), vector[object::id(world.multisig()) ,object::id(&multisig2)]);
 
-//         user_account.join_multisig(id1.uid_to_inner());
-//         user_account.join_multisig(id2.uid_to_inner());
+        destroy(user_account);
+        destroy(multisig2);
+        world.end();
+    }
 
-//         assert_eq(user_account.multisigs(), vector[id1.uid_to_inner(), id2.uid_to_inner()]);
+    #[test]
+    fun test_leave_multisig() {
+        let mut world = start_world();
 
-//         user_account.leave_multisig(id2.uid_to_inner());
+        world.scenario().next_tx(ALICE);
 
-//         assert_eq(user_account.multisigs(), vector[id1.uid_to_inner()]);
+        account::new(string::utf8(b"Alice"), string::utf8(b"Alice.png"), world.scenario().ctx());
 
-//         user_account.destroy();
-//         id1.delete();
-//         id2.delete();
+        world.scenario().next_tx(ALICE);
 
-//         world.end();
-//     }
+        let mut user_account = world.scenario().take_from_address<Account>(ALICE);
 
-//     #[test]
-//     fun test_accept_invite() {
-//         let mut world = start_world();
+        world.multisig().add_members(vector[ALICE], vector[2]);
+        world.join_multisig(&mut user_account);
 
-//         // add Alice to the multisig
-//         world.propose_modify(
-//             string::utf8(b"modify"), 
-//             0, 
-//             0, 
-//             string::utf8(b""), 
-//             option::none(),
-//             option::none(),
-//             vector[ALICE],
-//             vector[]
-//         );
-//         world.approve_proposal(string::utf8(b"modify"));
-//         world.execute_modify(string::utf8(b"modify"));
+        assert_eq(user_account.multisig_ids(), vector[object::id(world.multisig())]);
 
-//         world.scenario().next_tx(ALICE);
+        world.leave_multisig(&mut user_account);
 
-//         account::new(string::utf8(b"Sam"), string::utf8(b"Sam.png"), world.scenario().ctx());
-
-//         world.scenario().next_tx(ALICE);
-
-//         let mut user_account = take_from_address<Account>(world.scenario(), ALICE);
-
-//         world.send_invite(ALICE);
-
-//         world.scenario().next_tx(ALICE);
-
-//         let invite = take_from_address<Invite>(world.scenario(), ALICE);
+        assert_eq(user_account.multisig_ids(), vector[]);
+        user_account.destroy();
         
-//         account::accept_invite(&mut user_account, invite);
+        world.end();
+    }
+
+    #[test]
+    fun test_accept_invite() {
+        let mut world = start_world();
+
+        world.scenario().next_tx(ALICE);
+
+        account::new(string::utf8(b"Alice"), string::utf8(b"Alice.png"), world.scenario().ctx());
+
+        world.scenario().next_tx(ALICE);
+
+        let mut user_account = world.scenario().take_from_address<Account>(ALICE);
+
+        world.multisig().add_members(vector[ALICE], vector[2]);
+
+        assert_eq(user_account.multisig_ids(), vector[]);
+
+        world.send_invite(ALICE);
+
+        world.scenario().next_tx(ALICE);
+
+        let invite = world.scenario().take_from_address<Invite>(ALICE);
+
+        assert_eq(invite.multisig_id(), object::id(world.multisig()));
+
+        world.accept_invite(&mut user_account, invite);
+
+        assert_eq(user_account.multisig_ids(), vector[object::id(world.multisig())]);
         
-//         let multisig_id = object::id(world.multisig());
+        destroy(user_account);
+        world.end();
+    }
 
-//         assert_eq(user_account.multisigs(), vector[multisig_id]);
+    #[test]
+    fun test_refuse_invite() {
+        let mut world = start_world();
 
-//         user_account.destroy();
+        world.scenario().next_tx(ALICE);
 
-//         world.end();
-//     }
+        account::new(string::utf8(b"Alice"), string::utf8(b"Alice.png"), world.scenario().ctx());
 
-//     #[test]
-//     fun test_refuse_invite() {
-//         let mut world = start_world();
+        world.scenario().next_tx(ALICE);
 
-//         // add Alice to the multisig
-//         world.propose_modify(
-//             string::utf8(b"modify"), 
-//             0, 
-//             0, 
-//             string::utf8(b""), 
-//             option::none(),
-//             option::none(),
-//             vector[ALICE],
-//             vector[]
-//         );
-//         world.approve_proposal(string::utf8(b"modify"));
-//         world.execute_modify(string::utf8(b"modify"));
+        let user_account = world.scenario().take_from_address<Account>(ALICE);
 
-//         world.scenario().next_tx(ALICE);
+        world.multisig().add_members(vector[ALICE], vector[2]);
 
-//         account::new(string::utf8(b"Sam"), string::utf8(b"Sam.png"), world.scenario().ctx());
+        assert_eq(user_account.multisig_ids(), vector[]);
 
-//         world.scenario().next_tx(ALICE);
+        world.send_invite(ALICE);
 
-//         let user_account = take_from_address<Account>(world.scenario(), ALICE);
+        world.scenario().next_tx(ALICE);
 
-//         world.send_invite(ALICE);
+        let invite = world.scenario().take_from_address<Invite>(ALICE);
 
-//         world.scenario().next_tx(ALICE);
-
-//         let invite = take_from_address<Invite>(world.scenario(), ALICE);
+        invite.refuse_invite();
         
-//         account::refuse_invite(invite);
-
-//         assert_eq(user_account.multisigs(), vector[]);
-
-//         user_account.destroy();
-
-//         world.end();        
-//     }
-
-//     #[test]
-//     #[expected_failure]
-//     fun test_send_invite_error_not_member() {
-//         let mut world = start_world();
-
-//         world.scenario().next_tx(ALICE);
-
-//         world.send_invite(@0x0);
-
-//         world.end();        
-//     }    
-// }
+        destroy(user_account);
+        world.end();
+    }
+}

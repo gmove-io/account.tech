@@ -4,7 +4,7 @@
 /// The multisig can decide to make the policy more restrictive or destroy the Cap, to make the package immutable.
 
 module kraken::upgrade_policies {
-    use std::string::{Self, String};
+    use std::string::String;
     use sui::package::{Self, UpgradeCap, UpgradeTicket, UpgradeReceipt};
     use sui::transfer::Receiving;
     use sui::clock::Clock;
@@ -141,12 +141,7 @@ module kraken::upgrade_policies {
         clock: &Clock,
         ctx: &mut TxContext
     ) {
-        let delay = if (lock.has_rule(TIMELOCK_KEY)) {
-            let timelock: &TimeLock = df::borrow(&lock.id, TIMELOCK_KEY);
-            timelock.delay_ms
-        } else {
-            0
-        };
+        let delay = lock.get_time_delay();
 
         let proposal_mut = multisig.create_proposal(
             Witness {},
@@ -188,17 +183,19 @@ module kraken::upgrade_policies {
     public fun propose_restrict(
         multisig: &mut Multisig, 
         key: String,
-        execution_time: u64,
         expiration_epoch: u64,
         description: String,
         policy: u8,
         lock: &UpgradeLock,
+        clock: &Clock,
         ctx: &mut TxContext
     ) {
+        let delay = lock.get_time_delay();
+
         let proposal_mut = multisig.create_proposal(
             Witness {},
             key,
-            execution_time,
+            clock.timestamp_ms() + delay,
             expiration_epoch,
             description,
             ctx
@@ -291,6 +288,15 @@ module kraken::upgrade_policies {
     public fun destroy_restrict<W: drop>(executable: &mut Executable, witness: W) {
         let Restrict { policy, lock_id: _ } = executable.remove_action(witness);
         assert!(policy == 0, ERestrictNotExecuted);
+    }
+
+    fun get_time_delay(lock: &UpgradeLock): u64 {
+        if (lock.has_rule(TIMELOCK_KEY)) {
+            let timelock: &TimeLock = df::borrow(&lock.id, TIMELOCK_KEY);
+            timelock.delay_ms
+        } else {
+            0
+        }
     }
 
     // === Test Functions ===

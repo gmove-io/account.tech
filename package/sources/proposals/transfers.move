@@ -143,7 +143,6 @@ module kraken::transfers {
     public fun complete_deliver(delivery: Delivery, cap: DeliveryCap, mut executable: Executable) {
         assert!(cap.delivery_id == object::id(&delivery), EWrongDelivery);
         
-        owned::destroy_withdraw(&mut executable, Witness {});
         let recipient = destroy_deliver(&mut executable, Witness {});
         executable.destroy(Witness {});
         
