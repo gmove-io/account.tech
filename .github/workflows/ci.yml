@@ -1,4 +1,4 @@
-# Run unit tests against sui mainnet
+# Run unit tests against sui testnet
 
 name: Run Sui Move Tests
 
@@ -11,9 +11,7 @@ jobs:
   move-test:
     runs-on: ubuntu-latest
     container: 
-      image: mysten/sui-tools:mainnet 
-      ports:
-        - 80
+      image: mysten/sui-tools:testnet 
     steps:
       - name: Checkout repository
         uses: actions/checkout@v2
@@ -22,4 +20,4 @@ jobs:
         run: apt-get install -y git
 
       - name: run kraken tests
-        run: cd package && sui move test
+        run: sui move test -p ./package
