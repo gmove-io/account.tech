@@ -7,8 +7,13 @@ authors = ["Thouny (thouny@tuta.io)", "Jose (jose@interestprotocol.com)"]
 [dependencies]
 Sui = { override = true, git = "https://github.com/MystenLabs/sui.git", subdir = "crates/sui-framework/packages/sui-framework", rev = "framework/testnet" }
 Kiosk = { git = "https://github.com/MystenLabs/apps.git", subdir = "kiosk", rev = "testnet" }
+
+# [dev-dependencies]
 # Kiosk = { local = "../../kraken-sdk/test/packages/kiosk" } # for tests on localnet
 
 [addresses]
 kraken = "0x0"
+kiosk = "0xbd8fc1947cf119350184107a3087e2dc27efefa0dd82e25a1f699069fe81a585"
 
+# [dev-addresses]
+# kiosk = "0x0"
