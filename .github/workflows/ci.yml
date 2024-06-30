@@ -1,0 +1,23 @@
+# Run unit tests against sui testnet
+
+name: Run Sui Move Tests
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+jobs:
+  move-test:
+    runs-on: ubuntu-latest
+    container: 
+      image: mysten/sui-tools:testnet 
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v2
+
+      - name: install git
+        run: apt-get install -y git
+
+      - name: run kraken tests
+        run: sui move test -p ./package
