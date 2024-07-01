@@ -49,7 +49,7 @@ module kraken::kiosk_tests{
         assert_eq(sender_kiosk.has_item(nft_id), false);
         assert_eq(world.kiosk().has_item(nft_id), true);
         
-        k_kiosk::put_back_cap(world.multisig(), kiosk_owner_lock);
+        k_kiosk::put_back_cap(kiosk_owner_lock);
         
         destroy(policy);
         destroy(policy_cap);

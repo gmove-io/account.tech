@@ -29,6 +29,8 @@ module kraken::kiosk {
     // doesn't have store because non-transferrable
     public struct KioskOwnerLock has key {
         id: UID,
+        // multisig owning the lock
+        multisig_addr: address,
         // the cap to lock
         kiosk_owner_cap: KioskOwnerCap,
     }
@@ -58,7 +60,11 @@ module kraken::kiosk {
         let (mut kiosk, cap) = kiosk::new(ctx);
         kiosk.set_owner_custom(&cap, multisig.addr());
 
-        let kiosk_owner_lock = KioskOwnerLock { id: object::new(ctx), kiosk_owner_cap: cap };
+        let kiosk_owner_lock = KioskOwnerLock {
+            id: object::new(ctx), 
+            multisig_addr: multisig.addr(),
+            kiosk_owner_cap: cap 
+        };
 
         transfer::public_share_object(kiosk);
         transfer::transfer(
@@ -77,11 +83,9 @@ module kraken::kiosk {
         transfer::receive(multisig.uid_mut(), kiosk_owner_lock)
     }
 
-    public fun put_back_cap(
-        multisig: &Multisig, 
-        kiosk_owner_lock: KioskOwnerLock,
-    ) {
-        transfer::transfer(kiosk_owner_lock, multisig.addr());
+    public fun put_back_cap(kiosk_owner_lock: KioskOwnerLock) {
+        let addr = kiosk_owner_lock.multisig_addr;
+        transfer::transfer(kiosk_owner_lock, addr);
     }
 
     // deposit from another Kiosk, no need for proposal

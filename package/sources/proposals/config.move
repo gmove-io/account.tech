@@ -105,8 +105,9 @@ module kraken::config {
     }
 
     // step 2: multiple members have to approve the proposal (multisig::approve_proposal)
+    // step 3: execute the proposal and return the action (multisig::execute_proposal)
 
-    // step 3: execute the action and modify Multisig object
+    // step 4: execute the action and modify Multisig object
     public fun execute_migrate(
         mut executable: Executable,
         multisig: &mut Multisig, 
