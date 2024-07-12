@@ -56,14 +56,19 @@ module kraken::currency {
         multisig: &Multisig,
         treasury_cap: TreasuryCap<C>,
         ctx: &mut TxContext
-    ) {
+    ): ID {
         multisig.assert_is_member(ctx);
         let treasury_lock = TreasuryLock { 
             id: object::new(ctx), 
             multisig_addr: multisig.addr(),
             treasury_cap 
         };
+
+        let id = treasury_lock.id.to_inner();
+
         transfer::transfer(treasury_lock, multisig.addr());
+
+        id
     }
 
     // borrow the lock that can only be put back in the multisig because no store

@@ -4,11 +4,11 @@ module kraken::test_utils {
 
     use sui::{
         bag::Bag,
-        coin::Coin,
         test_utils::destroy,
         package::UpgradeCap,
         transfer::Receiving,
         clock::{Self, Clock},
+        coin::{Coin, TreasuryCap},
         kiosk::{Kiosk, KioskOwnerCap},
         transfer_policy::TransferPolicy,
         test_scenario::{Self as ts, Scenario, receiving_ticket_by_id, most_recent_id_for_address},
@@ -18,12 +18,13 @@ module kraken::test_utils {
         owned,
         config,
         coin_operations,
-        kiosk::{Self as k_kiosk, KioskOwnerLock},
-        account::{Self, Account, Invite},
-        multisig::{Self, Multisig, Proposal, Executable},
         payments::{Self, Stream},
+        currency::{Self, TreasuryLock},
+        account::{Self, Account, Invite},
         upgrade_policies::{Self, UpgradeLock},
-        transfers::{Self, DeliveryCap, Delivery}
+        transfers::{Self, DeliveryCap, Delivery},
+        kiosk::{Self as k_kiosk, KioskOwnerLock},
+        multisig::{Self, Multisig, Proposal, Executable},
     };
 
     const OWNER: address = @0xBABE;
@@ -425,6 +426,46 @@ module kraken::test_utils {
         transfers::propose_delivery(&mut world.multisig, key, execution_time, expiration_epoch, description, objects, recipient, world.scenario.ctx());
     }
 
+    public fun propose_mint<C: drop>(
+        world: &mut World, 
+        key: String,
+        execution_time: u64,
+        expiration_epoch: u64,
+        description: String,
+        amount: u64
+    ) {
+        currency::propose_mint<C>(
+            &mut world.multisig, 
+            key, 
+            execution_time, 
+            expiration_epoch,
+            description,
+            amount,
+            world.scenario.ctx()
+        );
+    }
+
+    public fun propose_burn<C: drop>(
+        world: &mut World, 
+        key: String,
+        execution_time: u64,
+        expiration_epoch: u64,
+        description: String,
+        coin_id: ID,
+        amount: u64,
+    ) {
+        currency::propose_burn<C>(
+            &mut world.multisig, 
+            key, 
+            execution_time, 
+            expiration_epoch,
+            description,
+            coin_id,
+            amount,
+            world.scenario.ctx()
+        );
+    }
+
     public fun create_delivery(
         world: &mut World, 
     ): (Delivery, DeliveryCap) {
@@ -489,6 +530,14 @@ module kraken::test_utils {
         upgrade_cap: UpgradeCap
     ) {
         upgrade_policies::lock_cap_with_timelock(&world.multisig, label, delay_ms, upgrade_cap, world.scenario.ctx());
+    }
+
+    public fun lock_treasury_cap<C: drop>(world: &mut World, cap: TreasuryCap<C>): ID {
+        currency::lock_cap(&world.multisig, cap, world.scenario.ctx())
+    }
+
+    public fun borrow_treasury_cap<C: drop>(world: &mut World, treasury_lock: Receiving<TreasuryLock<C>>): TreasuryLock<C> {
+        currency::borrow_cap(&mut world.multisig, treasury_lock, world.scenario.ctx())
     }
 
     public fun end(world: World) {
