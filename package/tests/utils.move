@@ -466,6 +466,31 @@ module kraken::test_utils {
         );
     }
 
+    public fun propose_update(
+        world: &mut World, 
+        key: String,
+        execution_time: u64,
+        expiration_epoch: u64,
+        description: String,
+        name: Option<String>,
+        symbol: Option<String>,
+        description_md: Option<String>,
+        icon_url: Option<String>,
+    ) {
+        currency::propose_update(
+            &mut world.multisig,
+            key,
+            execution_time,
+            expiration_epoch,
+            description,
+            name,
+            symbol,
+            description_md,
+            icon_url,
+            world.scenario.ctx()
+        );
+    }
+
     public fun create_delivery(
         world: &mut World, 
     ): (Delivery, DeliveryCap) {
