@@ -6,7 +6,7 @@ authors = ["Thouny (thouny@tuta.io)", "Jose (jose@interestprotocol.com)"]
 published-at = "0x2eac5dd46537bf961f931f958a104a99ec6328f0de646ad2d08127fd0b31566e"
 
 [dependencies]
-Sui = { override = true, git = "https://github.com/MystenLabs/sui.git", subdir = "crates/sui-framework/packages/sui-framework", rev = "framework/testnet" }
+Sui = { override = true, git = "https://github.com/MystenLabs/sui.git", subdir = "crates/sui-framework/packages/sui-framework", rev = "testnet" }
 Kiosk = { git = "https://github.com/MystenLabs/apps.git", subdir = "kiosk", rev = "testnet" }
 
 # [dev-dependencies]
