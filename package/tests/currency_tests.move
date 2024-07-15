@@ -29,7 +29,12 @@ module kraken::currency_tests {
 
         let cap = coin::create_treasury_cap_for_testing<SUI>(world.scenario().ctx()); 
 
-        let lock_id = world.lock_treasury_cap(cap);
+        world.lock_treasury_cap(cap);
+
+        let effects = world.scenario().next_tx(OWNER);
+
+        // We created one new object
+        let lock_id = effects.created()[0];
 
         world.propose_mint<SUI>(
             key, 
@@ -68,11 +73,16 @@ module kraken::currency_tests {
 
         let sui_coin =  cap.mint<SUI>(100, world.scenario().ctx());
 
+        world.lock_treasury_cap(cap);
+
         let coin_id = object::id(&sui_coin);
 
         transfer::public_transfer(sui_coin, world.multisig().addr());
 
-        let lock_id = world.lock_treasury_cap(cap);
+        let effects = world.scenario().next_tx(OWNER);
+
+        // We created one new object
+        let lock_id = effects.created()[0];
 
         world.propose_burn<SUI>(
             key, 
@@ -118,7 +128,12 @@ module kraken::currency_tests {
             world.scenario().ctx()
         );
 
-        let lock_id = world.lock_treasury_cap(treasury_cap);
+        world.lock_treasury_cap(treasury_cap);
+
+        let effects = world.scenario().next_tx(OWNER);
+
+        // We created one new object
+        let lock_id = effects.created()[0];
 
         world.propose_update(
             key, 
@@ -174,7 +189,12 @@ module kraken::currency_tests {
             world.scenario().ctx()
         );
 
-        let lock_id = world.lock_treasury_cap(treasury_cap);
+        world.lock_treasury_cap(treasury_cap);
+
+        let effects = world.scenario().next_tx(OWNER);
+
+        // We created one new object
+        let lock_id = effects.created()[0];
 
         world.propose_update(
             key, 
@@ -224,7 +244,11 @@ module kraken::currency_tests {
 
         transfer::public_transfer(sui_coin, world.multisig().addr());
 
-        let lock_id = world.lock_treasury_cap(cap);
+        world.lock_treasury_cap(cap);
+
+        let effects = world.scenario().next_tx(OWNER);
+
+        let lock_id = effects.created()[1];
 
         world.propose_burn<SUI>(
             key, 
@@ -263,7 +287,12 @@ module kraken::currency_tests {
 
         let cap = coin::create_treasury_cap_for_testing<SUI>(world.scenario().ctx()); 
 
-        let lock_id = world.lock_treasury_cap(cap);
+        world.lock_treasury_cap(cap);
+
+        let effects = world.scenario().next_tx(OWNER);
+
+        // We created one new object
+        let lock_id = effects.created()[0];
 
         let proposal = world.create_proposal(
             Witness {},

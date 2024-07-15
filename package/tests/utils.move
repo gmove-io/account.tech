@@ -557,8 +557,8 @@ module kraken::test_utils {
         upgrade_policies::lock_cap_with_timelock(&world.multisig, label, delay_ms, upgrade_cap, world.scenario.ctx());
     }
 
-    public fun lock_treasury_cap<C: drop>(world: &mut World, cap: TreasuryCap<C>): ID {
-        currency::lock_cap(&world.multisig, cap, world.scenario.ctx())
+    public fun lock_treasury_cap<C: drop>(world: &mut World, cap: TreasuryCap<C>) {
+        currency::lock_cap(&world.multisig, cap, world.scenario.ctx());
     }
 
     public fun borrow_treasury_cap<C: drop>(world: &mut World, treasury_lock: Receiving<TreasuryLock<C>>): TreasuryLock<C> {
