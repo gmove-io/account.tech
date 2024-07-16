@@ -63,6 +63,7 @@ module kraken::currency {
             multisig_addr: multisig.addr(),
             treasury_cap 
         };
+
         transfer::transfer(treasury_lock, multisig.addr());
     }
 
@@ -283,6 +284,7 @@ module kraken::currency {
 
     public fun destroy_update<W: drop>(executable: &mut Executable, witness: W) {
         let Update { name, symbol, description, icon_url } = executable.remove_action(witness);
+        //@dev Future guard - impossible to trigger now
         assert!(name.is_none() && symbol.is_none() && description.is_none() && icon_url.is_none(), EUpdateNotExecuted);
     }
 }

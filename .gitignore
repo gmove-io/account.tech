@@ -4,3 +4,4 @@ node_modules
 bun.lockb
 Move.lock 
 .idea
+.trace
