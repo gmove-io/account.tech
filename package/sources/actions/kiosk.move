@@ -23,7 +23,8 @@ module kraken::kiosk {
 
     // === Structs ===    
 
-    public struct Witness has drop {}
+    // delegated witness verifying a proposal is destroyed in the module where it was created
+    public struct Witness has copy, drop {}
     
     // Wrapper restricting access to a KioskOwnerCap
     // doesn't have store because non-transferrable
@@ -241,7 +242,7 @@ module kraken::kiosk {
         proposal.add_action(Take { nft_ids, recipient });
     }
 
-    public fun take<T: key + store, W: drop>(
+    public fun take<T: key + store, W: copy + drop>(
         executable: &mut Executable,
         multisig_kiosk: &mut Kiosk, 
         lock: &KioskOwnerLock,
@@ -273,7 +274,7 @@ module kraken::kiosk {
         policy.confirm_request(request);
     }
 
-    public fun destroy_take<W: drop>(executable: &mut Executable, witness: W): address {
+    public fun destroy_take<W: copy + drop>(executable: &mut Executable, witness: W): address {
         let Take { nft_ids, recipient } = executable.remove_action(witness);
         assert!(nft_ids.is_empty(), ETransferAllNftsBefore);
         recipient
@@ -284,7 +285,7 @@ module kraken::kiosk {
         proposal.add_action(List { nft_ids, prices });
     }
 
-    public fun list<T: key + store, W: drop>(
+    public fun list<T: key + store, W: copy + drop>(
         executable: &mut Executable,
         kiosk: &mut Kiosk,
         lock: &KioskOwnerLock,
@@ -297,7 +298,7 @@ module kraken::kiosk {
         kiosk.list<T>(&lock.kiosk_owner_cap, nft_id, price);
     }
 
-    public fun destroy_list<W: drop>(executable: &mut Executable, witness: W) {
+    public fun destroy_list<W: copy + drop>(executable: &mut Executable, witness: W) {
         let List { nft_ids, prices: _ } = executable.remove_action(witness);
         assert!(nft_ids.is_empty(), EListAllNftsBefore);
     }

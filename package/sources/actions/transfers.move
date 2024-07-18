@@ -22,7 +22,7 @@ module kraken::transfers {
 
     // === Structs ===
 
-    // witness verifying a proposal is destroyed in the module where it was created
+    // delegated witness verifying a proposal is destroyed in the module where it was created
     public struct Witness has copy, drop {}
 
     // [ACTION] 

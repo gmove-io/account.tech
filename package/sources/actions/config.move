@@ -20,7 +20,8 @@ module kraken::config {
 
     // === Structs ===
 
-    public struct Witness has drop {}
+    // delegated witness verifying a proposal is destroyed in the module where it was created
+    public struct Witness has copy, drop {}
 
     // [ACTION] upgrade is separate for better ux
     public struct Modify has store { 
@@ -130,7 +131,7 @@ module kraken::config {
         proposal.add_action(Modify { name, threshold, to_add, weights, to_remove });
     }    
     
-    public fun modify<W: drop>(
+    public fun modify<W: copy + drop>(
         executable: &mut Executable,
         multisig: &mut Multisig, 
         witness: W,
@@ -150,7 +151,7 @@ module kraken::config {
         modify_mut.weights = vector[];
     }
 
-    public fun destroy_modify<W: drop>(executable: &mut Executable, witness: W) {
+    public fun destroy_modify<W: copy + drop>(executable: &mut Executable, witness: W) {
         let Modify { name, threshold, to_remove, to_add, weights } = executable.remove_action(witness);
 
         assert!(name.is_none() &&
@@ -166,7 +167,7 @@ module kraken::config {
         proposal.add_action(Migrate { version });
     }
 
-    public fun migrate<W: drop>(
+    public fun migrate<W: copy + drop>(
         executable: &mut Executable,
         multisig: &mut Multisig, 
         witness: W,
@@ -179,7 +180,7 @@ module kraken::config {
         migrate_mut.version = 0; // reset to 0 to enforce exactly one execution
     }
         
-    public fun destroy_migrate<W: drop>(
+    public fun destroy_migrate<W: copy + drop>(
         executable: &mut Executable,
         witness: W,
     ) {

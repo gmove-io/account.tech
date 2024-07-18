@@ -25,7 +25,8 @@ module kraken::upgrade_policies {
 
     // === Structs ===
 
-    public struct Witness has drop {}
+    // delegated witness verifying a proposal is destroyed in the module where it was created
+    public struct Witness has copy, drop {}
 
     // [ACTION]
     public struct Upgrade has store {
@@ -223,7 +224,7 @@ module kraken::upgrade_policies {
         proposal.add_action(Upgrade { digest, lock_id });
     }    
     
-    public fun upgrade<W: drop>(
+    public fun upgrade<W: copy + drop>(
         executable: &mut Executable,
         lock: &mut UpgradeLock,
         witness: W,
@@ -240,7 +241,7 @@ module kraken::upgrade_policies {
         ticket
     }    
 
-    public fun destroy_upgrade<W: drop>(executable: &mut Executable, witness: W) {
+    public fun destroy_upgrade<W: copy + drop>(executable: &mut Executable, witness: W) {
         let Upgrade { digest, lock_id: _ } = executable.remove_action(witness);
         assert!(digest.is_empty(), EUpgradeNotExecuted);
     }
@@ -258,7 +259,7 @@ module kraken::upgrade_policies {
         proposal.add_action(Restrict { policy, lock_id: object::id(lock) });
     }    
     
-    public fun restrict<W: drop>(
+    public fun restrict<W: copy + drop>(
         executable: &mut Executable,
         multisig: &mut Multisig,
         mut lock: UpgradeLock,
@@ -285,7 +286,7 @@ module kraken::upgrade_policies {
         restrict_mut.policy = 0;
     }
 
-    public fun destroy_restrict<W: drop>(executable: &mut Executable, witness: W) {
+    public fun destroy_restrict<W: copy + drop>(executable: &mut Executable, witness: W) {
         let Restrict { policy, lock_id: _ } = executable.remove_action(witness);
         assert!(policy == 0, ERestrictNotExecuted);
     }

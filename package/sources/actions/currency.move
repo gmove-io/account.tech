@@ -20,6 +20,7 @@ module kraken::currency {
 
     // === Structs ===    
 
+    // delegated witness verifying a proposal is destroyed in the module where it was created
     public struct Witness has copy, drop {}
     
     // Wrapper restricting access to a TreasuryCap
@@ -230,7 +231,7 @@ module kraken::currency {
         proposal.add_action(Burn<C> { amount });
     }
 
-    public fun burn<C: drop, W: drop>(
+    public fun burn<C: drop, W: copy + drop>(
         executable: &mut Executable, 
         lock: &mut TreasuryLock<C>, 
         coin: Coin<C>,
@@ -243,7 +244,7 @@ module kraken::currency {
         burn_mut.amount = 0; // reset to ensure it has been executed
     }
 
-    public fun destroy_burn<C: drop, W: drop>(executable: &mut Executable, witness: W) {
+    public fun destroy_burn<C: drop, W: copy + drop>(executable: &mut Executable, witness: W) {
         let Burn<C> { amount } = executable.remove_action(witness);
         assert!(amount == 0, EBurnNotExecuted);
     }
@@ -259,7 +260,7 @@ module kraken::currency {
         proposal.add_action(Update { name, symbol, description, icon_url });
     }
 
-    public fun update<C: drop, W: drop>(
+    public fun update<C: drop, W: copy + drop>(
         executable: &mut Executable,
         lock: &TreasuryLock<C>,
         metadata: &mut CoinMetadata<C>,
@@ -282,7 +283,7 @@ module kraken::currency {
         // all fields are set to none now
     }
 
-    public fun destroy_update<W: drop>(executable: &mut Executable, witness: W) {
+    public fun destroy_update<W: copy + drop>(executable: &mut Executable, witness: W) {
         let Update { name, symbol, description, icon_url } = executable.remove_action(witness);
         //@dev Future guard - impossible to trigger now
         assert!(name.is_none() && symbol.is_none() && description.is_none() && icon_url.is_none(), EUpdateNotExecuted);
