@@ -13,6 +13,7 @@
 
 module kraken::multisig {
     use std::{
+        ascii,
         string::String, 
         type_name::{Self, TypeName}
     };
@@ -34,6 +35,7 @@ module kraken::multisig {
     const ENotMultisigExecutable: u64 = 6;
     const EProposalNotFound: u64 = 7;
     const EMemberNotFound: u64 = 8;
+    const ERoleNotFound: u64 = 9;
 
     // === Constants ===
 
@@ -64,6 +66,8 @@ module kraken::multisig {
         weight: u64,
         // ID of the member's account, none if he didn't join yet
         account_id: Option<ID>,
+        // roles that have been attributed
+        roles: VecSet<ascii::String>,
     }
 
     // proposal owning a single action requested to be executed
@@ -93,7 +97,7 @@ module kraken::multisig {
         multisig_addr: address,
         // module that issued the proposal and must destroy it
         module_witness: TypeName,
-        // index of the next action to destroy
+        // index of the next action to destroy, starts at 0
         next_to_destroy: u64,
         // actions to be executed in order
         actions: Bag,
@@ -105,8 +109,14 @@ module kraken::multisig {
     // creator is added by default with weight and threshold of 1
     public fun new(name: String, account_id: ID, ctx: &mut TxContext): Multisig {
         let mut members = vec_map::empty();
-        members.insert(ctx.sender(), Member { weight: 1, account_id: option::some(account_id) });
-        
+        members.insert(
+            ctx.sender(), 
+            Member { 
+                weight: 1, 
+                account_id: option::some(account_id), 
+                roles: vec_set::empty() 
+            }
+        );      
         Multisig { 
             id: object::new(ctx),
             version: VERSION,
@@ -221,7 +231,44 @@ module kraken::multisig {
 
         Executable { 
             multisig_addr: multisig.id.uid_to_inner().id_to_address(), 
-            module_witness: module_witness,
+            module_witness,
+            next_to_destroy: 0,
+            actions
+        }
+    }
+
+    // return an executable if the number of signers is >= threshold
+    public fun execute_proposal_with_role(
+        multisig: &mut Multisig, 
+        key: String, 
+        clock: &Clock,
+        ctx: &mut TxContext
+    ): Executable {
+        multisig.assert_is_member(ctx);
+        multisig.assert_version();
+
+        let (_, proposal) = multisig.proposals.remove(&key);
+        let Proposal { 
+            id, 
+            module_witness,
+            description: _, 
+            expiration_epoch: _, 
+            execution_time,
+            actions,
+            approval_weight: _,
+            approved: _,
+        } = proposal;
+        id.delete();
+
+        assert!(
+            multisig.members.get(&ctx.sender()).roles.contains(&module_witness.into_string()), 
+            ERoleNotFound
+        );
+        assert!(clock.timestamp_ms() >= execution_time, ECantBeExecutedYet);
+
+        Executable { 
+            multisig_addr: multisig.id.uid_to_inner().id_to_address(), 
+            module_witness,
             next_to_destroy: 0,
             actions
         }
@@ -412,28 +459,86 @@ module kraken::multisig {
     // callable only in config.move, if the proposal has been accepted
     public(package) fun add_members(
         multisig: &mut Multisig, 
-        mut addresses: vector<address>, 
-        mut weights: vector<u64>
+        addresses: &mut vector<address>, 
     ) {
         while (addresses.length() > 0) {
+            multisig.total_weight = multisig.total_weight + 1;
             let addr = addresses.pop_back();
-            let weight = weights.pop_back();
-            multisig.total_weight = multisig.total_weight + weight;
             multisig.members.insert(
                 addr, 
-                Member { weight, account_id: option::none() }
+                Member { weight: 1, account_id: option::none(), roles: vec_set::empty() }
             );
-        }
+        };
     }
 
     // callable only in config.move, if the proposal has been accepted
-    public(package) fun remove_members(multisig: &mut Multisig, mut addresses: vector<address>) {
+    public(package) fun remove_members(multisig: &mut Multisig, addresses: &mut vector<address>) {
         while (addresses.length() > 0) {
             let addr = addresses.pop_back();
             let (_, member) = multisig.members.remove(&addr);
-            let Member { weight , account_id: _ } = member;
+            let Member { weight, account_id: _, roles: _ } = member;
             multisig.total_weight = multisig.total_weight - weight;
-        }
+        };
+    }
+
+    // callable only in config.move, if the proposal has been accepted
+    public(package) fun modify_weights(
+        multisig: &mut Multisig, 
+        addresses: &mut vector<address>, 
+        weights: &mut vector<u64>
+    ) {
+        while (addresses.length() > 0) {
+            let addr = addresses.pop_back();
+            let new_weight = weights.pop_back();
+            let weigth = multisig.members[&addr].weight;
+            
+            if (new_weight == weigth) {
+                continue
+            } else if (new_weight > weigth) {
+                let delta = new_weight - weigth;
+                multisig.total_weight = multisig.total_weight + delta;
+            } else {
+                let delta = weigth - new_weight;
+                multisig.total_weight = multisig.total_weight - delta;
+            };
+            multisig.members[&addr].weight = new_weight;
+        };
+    }
+
+    // callable only in config.move, if the proposal has been accepted
+    public(package) fun add_roles(
+        multisig: &mut Multisig, 
+        addresses: &mut vector<address>, 
+        roles: &mut vector<vector<ascii::String>>
+    ) {
+        while (addresses.length() > 0) {
+            let addr = addresses.pop_back();
+            let mut to_add = roles.pop_back();
+            let member = multisig.members.get_mut(&addr);
+            
+            while (!to_add.is_empty()) {
+                let role = to_add.pop_back();
+                member.roles.insert(role);
+            } 
+        };
+    }
+
+    // callable only in config.move, if the proposal has been accepted
+    public(package) fun remove_roles(
+        multisig: &mut Multisig, 
+        addresses: &mut vector<address>, 
+        roles: &mut vector<vector<ascii::String>>
+    ) {
+        while (addresses.length() > 0) {
+            let addr = addresses.pop_back();
+            let mut to_remove = roles.pop_back();
+            let member = multisig.members.get_mut(&addr);
+            
+            while (!to_remove.is_empty()) {
+                let role = to_remove.pop_back();
+                member.roles.remove(&role);
+            } 
+        };
     }
 
     // for adding account id to members, from account.move

@@ -95,7 +95,7 @@ module kraken::transfers {
         executable.destroy(Witness {});
     }
 
-    // // step 1: propose to deliver object to a recipient that must claim it
+    // step 1: propose to deliver object to a recipient that must claim it
     public fun propose_delivery(
         multisig: &mut Multisig, 
         key: String,
