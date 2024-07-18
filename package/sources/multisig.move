@@ -13,8 +13,7 @@
 
 module kraken::multisig {
     use std::{
-        ascii,
-        string::String, 
+        string::{Self, String}, 
         type_name::{Self, TypeName}
     };
     use sui::{
@@ -67,7 +66,7 @@ module kraken::multisig {
         // ID of the member's account, none if he didn't join yet
         account_id: Option<ID>,
         // roles that have been attributed
-        roles: VecSet<ascii::String>,
+        roles: VecSet<String>,
     }
 
     // proposal owning a single action requested to be executed
@@ -261,7 +260,7 @@ module kraken::multisig {
         id.delete();
 
         assert!(
-            multisig.members.get(&ctx.sender()).roles.contains(&module_witness.into_string()), 
+            multisig.members.get(&ctx.sender()).roles.contains(&string::from_ascii(module_witness.into_string())), 
             ERoleNotFound
         );
         assert!(clock.timestamp_ms() >= execution_time, ECantBeExecutedYet);
@@ -372,6 +371,16 @@ module kraken::multisig {
         let member = multisig.members.get(addr);
         member.weight
     }
+
+    public fun member_account_id(multisig: &Multisig, addr: &address): Option<ID> {
+        let member = multisig.members.get(addr);
+        member.account_id
+    }
+
+    public fun member_roles(multisig: &Multisig, addr: &address): vector<String> {
+        let member = multisig.members.get(addr);
+        *member.roles.keys()
+    }
     
     public fun is_member(multisig: &Multisig, addr: &address): bool {
         multisig.members.contains(addr)
@@ -379,11 +388,6 @@ module kraken::multisig {
     
     public fun assert_is_member(multisig: &Multisig, ctx: &TxContext) {
         assert!(multisig.members.contains(&ctx.sender()), ECallerIsNotMember);
-    }
-
-    public fun member_account_id(multisig: &Multisig, addr: &address): Option<ID> {
-        let member = multisig.members.get(addr);
-        member.account_id
     }
 
     public fun proposals_length(multisig: &Multisig): u64 {
@@ -509,7 +513,7 @@ module kraken::multisig {
     public(package) fun add_roles(
         multisig: &mut Multisig, 
         addresses: &mut vector<address>, 
-        roles: &mut vector<vector<ascii::String>>
+        roles: &mut vector<vector<String>>
     ) {
         while (addresses.length() > 0) {
             let addr = addresses.pop_back();
@@ -527,7 +531,7 @@ module kraken::multisig {
     public(package) fun remove_roles(
         multisig: &mut Multisig, 
         addresses: &mut vector<address>, 
-        roles: &mut vector<vector<ascii::String>>
+        roles: &mut vector<vector<String>>
     ) {
         while (addresses.length() > 0) {
             let addr = addresses.pop_back();

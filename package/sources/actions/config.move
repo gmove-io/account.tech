@@ -6,7 +6,6 @@
 
 module kraken::config {
     use std::string::{Self, String};
-    use std::ascii;
     use sui::vec_map::{Self, VecMap};
     use kraken::multisig::{Multisig, Executable, Proposal};
 
@@ -56,9 +55,9 @@ module kraken::config {
     // [ACTION] add or remove roles from chosen members
     public struct Roles has store { 
         // roles to add to each address
-        to_add: VecMap<address, vector<ascii::String>>,
+        to_add: VecMap<address, vector<String>>,
         // roles to remove from each address
-        to_remove: VecMap<address, vector<ascii::String>>,
+        to_remove: VecMap<address, vector<String>>,
     }
 
     // [ACTION] update the version of the multisig
@@ -154,10 +153,10 @@ module kraken::config {
         execution_time: u64,
         expiration_epoch: u64,
         description: String,
-        addr_to_add: vector<address>, 
-        roles_to_add: vector<vector<ascii::String>>, 
-        addr_to_remove: vector<address>,
-        roles_to_remove: vector<vector<ascii::String>>,
+        add_to_addr: vector<address>, 
+        roles_to_add: vector<vector<String>>, 
+        remove_to_addr: vector<address>,
+        roles_to_remove: vector<vector<String>>,
         ctx: &mut TxContext
     ) {
         let proposal_mut = multisig.create_proposal(
@@ -170,9 +169,9 @@ module kraken::config {
         );
         new_roles(
             proposal_mut, 
-            addr_to_add, 
+            add_to_addr, 
             roles_to_add, 
-            addr_to_remove, 
+            remove_to_addr, 
             roles_to_remove
         );
     }
@@ -324,9 +323,9 @@ module kraken::config {
     public fun new_roles(
         proposal: &mut Proposal,
         addr_to_add: vector<address>, 
-        roles_to_add: vector<vector<ascii::String>>, 
+        roles_to_add: vector<vector<String>>, 
         addr_to_remove: vector<address>,
-        roles_to_remove: vector<vector<ascii::String>>,
+        roles_to_remove: vector<vector<String>>,
     ) { 
         proposal.add_action(Roles { 
             to_add: vec_map::from_keys_values(addr_to_add, roles_to_add), 
@@ -345,8 +344,10 @@ module kraken::config {
 
         let (mut addr_to_add, mut roles_to_add) = roles_mut.to_add.into_keys_values();
         multisig.add_roles(&mut addr_to_add, &mut roles_to_add);
+        roles_mut.to_add = vec_map::empty();
         let (mut addr_to_remove, mut roles_to_remove) = roles_mut.to_remove.into_keys_values();
         multisig.remove_roles(&mut addr_to_remove, &mut roles_to_remove);
+        roles_mut.to_remove = vec_map::empty();
     }
 
     public fun destroy_roles<W: copy + drop>(
@@ -418,7 +419,7 @@ module kraken::config {
             let weight = if (multisig.is_member(&addr)) {
                 multisig.member_weight(&addr)
             } else { 1 };
-            
+
             if (new_weight == weight) {
                 continue
             } else if (new_weight > weight) {

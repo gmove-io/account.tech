@@ -70,8 +70,11 @@ module kraken::multisig_tests {
         let mut world = start_world();
 
         world.multisig().add_members(
-            vector[ALICE, BOB],
-            vector[2, 3]
+            &mut vector[ALICE, BOB],
+        );
+        world.multisig().modify_weights(
+            &mut vector[ALICE, BOB],
+            &mut vector[2, 3]
         );
 
         let proposal = world.create_proposal(
@@ -117,8 +120,11 @@ module kraken::multisig_tests {
         let mut world = start_world();
 
         world.multisig().add_members(
-            vector[ALICE, BOB],
-            vector[2, 3]
+            &mut vector[ALICE, BOB],
+        );
+        world.multisig().modify_weights(
+            &mut vector[ALICE, BOB],
+            &mut vector[2, 3]
         );
 
         let proposal = world.create_proposal(
@@ -221,8 +227,11 @@ module kraken::multisig_tests {
         assert_eq(world.multisig().is_member(&BOB), false);
 
         world.multisig().add_members(
-            vector[ALICE, BOB],
-            vector[2, 3]
+            &mut vector[ALICE, BOB],
+        );
+        world.multisig().modify_weights(
+            &mut vector[ALICE, BOB],
+            &mut vector[2, 3]
         );
 
         assert_eq(world.multisig().is_member(&ALICE), true);
@@ -253,7 +262,7 @@ module kraken::multisig_tests {
 
         world.scenario().next_tx(OWNER);
 
-        world.multisig().remove_members(vector[ALICE]);
+        world.multisig().remove_members(&mut vector[ALICE]);
 
         assert_eq(world.multisig().is_member(&ALICE), false);
 
@@ -278,8 +287,11 @@ module kraken::multisig_tests {
         let mut world = start_world();
 
         world.multisig().add_members(
-            vector[ALICE, BOB],
-            vector[1, 3]
+            &mut vector[ALICE, BOB],
+        );
+        world.multisig().modify_weights(
+            &mut vector[ALICE, BOB],
+            &mut vector[1, 3]
         );
 
         let key = utf8(b"key");
@@ -310,8 +322,11 @@ module kraken::multisig_tests {
         let mut world = start_world();
 
         world.multisig().add_members(
-            vector[ALICE, BOB],
-            vector[1, 3]
+            &mut vector[ALICE, BOB],
+        );
+        world.multisig().modify_weights(
+            &mut vector[ALICE, BOB],
+            &mut vector[2, 3]
         );
 
         let key = utf8(b"key");
@@ -342,8 +357,11 @@ module kraken::multisig_tests {
         let mut world = start_world();
 
         world.multisig().add_members(
-            vector[ALICE, BOB],
-            vector[1, 3]
+            &mut vector[ALICE, BOB],
+        );
+        world.multisig().modify_weights(
+            &mut vector[ALICE, BOB],
+            &mut vector[2, 3]
         );
 
         let key = utf8(b"key");
@@ -414,8 +432,11 @@ module kraken::multisig_tests {
         let mut world = start_world();
 
         world.multisig().add_members(
-            vector[ALICE, BOB],
-            vector[1, 3]
+            &mut vector[ALICE, BOB],
+        );
+        world.multisig().modify_weights(
+            &mut vector[ALICE, BOB],
+            &mut vector[2, 3]
         );
 
         let key = utf8(b"key");

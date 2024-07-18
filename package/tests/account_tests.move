@@ -52,7 +52,7 @@ module kraken::account_tests {
 
         let mut user_account = world.scenario().take_from_address<Account>(ALICE);
 
-        world.multisig().add_members(vector[ALICE], vector[2]);
+        world.multisig().add_members(&mut vector[ALICE]);
         world.join_multisig(&mut user_account);
 
         assert_eq(user_account.multisig_ids(), vector[object::id(world.multisig())]);
@@ -77,7 +77,7 @@ module kraken::account_tests {
 
         let mut user_account = world.scenario().take_from_address<Account>(ALICE);
 
-        world.multisig().add_members(vector[ALICE], vector[2]);
+        world.multisig().add_members(&mut vector[ALICE]);
 
         assert_eq(user_account.multisig_ids(), vector[]);
 
@@ -109,7 +109,7 @@ module kraken::account_tests {
 
         let user_account = world.scenario().take_from_address<Account>(ALICE);
 
-        world.multisig().add_members(vector[ALICE], vector[2]);
+        world.multisig().add_members(&mut vector[ALICE]);
 
         assert_eq(user_account.multisig_ids(), vector[]);
 

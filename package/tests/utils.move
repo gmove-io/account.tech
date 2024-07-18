@@ -1,7 +1,9 @@
 #[test_only]
 module kraken::test_utils {
-    use std::string::{Self, String};
-
+    use std::{
+        string::{Self, String},
+        ascii,
+    };
     use sui::{
         bag::Bag,
         test_utils::destroy,
@@ -13,7 +15,6 @@ module kraken::test_utils {
         transfer_policy::TransferPolicy,
         test_scenario::{Self as ts, Scenario, receiving_ticket_by_id, most_recent_id_for_address},
     };
-
     use kraken::{
         owned,
         config,
@@ -223,29 +224,73 @@ module kraken::test_utils {
         multisig::assert_is_member(&world.multisig, world.scenario.ctx());
     }
 
-    public fun propose_modify(
-        world: &mut World, 
+    public fun propose_name(
+        world: &mut World,
         key: String,
         execution_time: u64,
         expiration_epoch: u64,
         description: String,
-        name: Option<String>,
-        threshold: Option<u64>, 
-        to_remove: vector<address>, 
-        to_add: vector<address>, 
-        weights: vector<u64>
+        name: String
     ) {
-        config::propose_modify(
+        config::propose_name(
             &mut world.multisig, 
             key, 
             execution_time, 
             expiration_epoch, 
             description, 
             name, 
+            world.scenario.ctx()
+        );
+    }
+
+    public fun propose_modify_rules(
+        world: &mut World, 
+        key: String,
+        execution_time: u64,
+        expiration_epoch: u64,
+        description: String,
+        threshold: Option<u64>, 
+        to_add: vector<address>, 
+        to_remove: vector<address>, 
+        to_modify: vector<address>, 
+        weights: vector<u64>
+    ) {
+        config::propose_modify_rules(
+            &mut world.multisig, 
+            key, 
+            execution_time, 
+            expiration_epoch, 
+            description, 
             threshold, 
-            to_remove, 
             to_add, 
+            to_remove, 
+            to_modify, 
             weights,
+            world.scenario.ctx()
+        );
+    }
+
+    public fun propose_roles(
+        world: &mut World, 
+        key: String,
+        execution_time: u64,
+        expiration_epoch: u64,
+        description: String,
+        addr_to_add: vector<address>,
+        roles_to_add: vector<vector<String>>,
+        addr_to_remove: vector<address>,
+        roles_to_remove: vector<vector<String>>,
+    ) {
+        config::propose_roles(
+            &mut world.multisig, 
+            key, 
+            execution_time, 
+            expiration_epoch, 
+            description, 
+            addr_to_add,
+            roles_to_add,
+            addr_to_remove,
+            roles_to_remove,
             world.scenario.ctx()
         );
     }
