@@ -1,7 +1,6 @@
 #[test_only]
 module kraken::config_tests{
     use std::string::utf8;
-    use std::debug::print;
 
     use sui::test_utils::assert_eq;
 

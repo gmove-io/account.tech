@@ -2,7 +2,6 @@
 module kraken::test_utils {
     use std::{
         string::{Self, String},
-        ascii,
     };
     use sui::{
         bag::Bag,
@@ -43,6 +42,10 @@ module kraken::test_utils {
     public struct Obj has key, store { id: UID }
 
     // === Utils ===
+
+    public fun wtf(): u64 {
+        1
+    }
 
     public fun start_world(): World {
         let mut scenario = ts::begin(OWNER);
