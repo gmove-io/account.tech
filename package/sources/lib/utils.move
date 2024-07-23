@@ -5,8 +5,8 @@ module kraken::utils {
         keys: vector<K>,
         value: V,
     ): VecMap<K, V> {
-        let map = vec_map::empty();
-        keys.map_ref!(|key| {
+        let map = vec_map::empty<K, V>();
+        keys.map!(|key| {
             map.insert(key, value);
         });
         map
@@ -37,11 +37,12 @@ module kraken::utils {
         $map: &mut VecMap<$K, $V>, 
         $key: $K,
         $value: $V,
-        $f: |$V|
+        $f: |&mut $V|
     ) {
         let map = $map;
-        if (map.contains($key)) {
-            $f(map.get_mut($key));
+        let key = $key;
+        if (map.contains(&key)) {
+            $f(map.get_mut(&key));
         } else {
             map.insert($key, $value);
         };

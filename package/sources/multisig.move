@@ -22,6 +22,10 @@ module kraken::multisig {
         vec_map::{Self, VecMap}, 
         bag::{Self, Bag}
     };
+    use kraken::utils;
+
+    // === Aliases ===
+    use fun utils::map_set_or as VecMap.set_or;
 
     // === Errors ===
 
@@ -341,10 +345,10 @@ module kraken::multisig {
         
         let mut map_roles_weights: VecMap<String, u64> = vec_map::empty();
         multisig.member_addresses().do!(|addr| {
-            let weight = map_members_weights[addr];
+            let weight = map_members_weights[&addr];
             multisig.member(&addr).roles().do!(|role| {
                 map_roles_weights.set_or!(role, weight, |current| {
-                    *current = current + weight;
+                    *current = *current + weight;
                 });
             });
         });

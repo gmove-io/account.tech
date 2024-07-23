@@ -13,7 +13,7 @@ module kraken::config {
     // === Aliases ===
     use fun utils::map_append as VecMap.append;
     use fun utils::map_remove_keys as VecMap.remove_keys;
-
+    use fun utils::map_set_or as VecMap.set_or;
 
     // === Errors ===
 
@@ -494,7 +494,7 @@ module kraken::config {
         map_members_weights.remove_keys(members_to_remove);
         members_to_modify.do!(|addr| {
             assert!(map_members_weights.contains(&addr), ENotMember);
-            let weight = map_members_weights.get_mut(addr);
+            let weight = map_members_weights.get_mut(&addr);
             *weight = weights_to_modify.remove(0);
         });
 
@@ -502,33 +502,33 @@ module kraken::config {
         let mut map_roles_weights: VecMap<String, u64> = vec_map::empty();
         // init with current roles
         multisig.member_addresses().do!(|addr| {
-            let weight = map_members_weights[addr];
+            let weight = map_members_weights[&addr];
             multisig.member(&addr).roles().do!(|role| {
                 map_roles_weights.set_or!(role, weight, |current| {
-                    *current = current + weight;
+                    *current = *current + weight;
                 });
             });
         });
         // process new roles to add/remove
         addresses_add_roles.do!(|addr| {
             assert!(map_members_weights.contains(&addr), ENotMember);
-            let weight = map_members_weights[addr];
+            let weight = map_members_weights[&addr];
             let roles = roles_to_add.remove(0);
             roles.do!(|role| {
-                assert!(!multisig.member(&addr).roles().contains(role), ERoleAlreadyAttributed);
+                assert!(!multisig.member(&addr).roles().contains(&role), ERoleAlreadyAttributed);
                 map_roles_weights.set_or!(role, weight, |current| {
-                    *current = current + weight;
+                    *current = *current + weight;
                 });
             });
         });
         addresses_remove_roles.do!(|addr| {
             assert!(map_members_weights.contains(&addr), ENotMember);
-            let weight = map_members_weights[addr];
+            let weight = map_members_weights[&addr];
             let roles = roles_to_remove.remove(0);
             roles.do!(|role| {
-                assert!(multisig.member(&addr).roles().contains(role), ERoleNotAttributed);
-                let current = map_roles_weights.get_mut(role);
-                *current = current - weight;
+                assert!(multisig.member(&addr).roles().contains(&role), ERoleNotAttributed);
+                let current = map_roles_weights.get_mut(&role);
+                *current = *current - weight;
             });
         });
         
