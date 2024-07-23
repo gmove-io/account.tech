@@ -1,6 +1,6 @@
 [package]
 name = "Kraken"
-edition = "2024.beta"
+edition = "2024.alpha"
 license = "MIT" 
 authors = ["Thouny (thouny@tuta.io)", "Jose (jose@interestprotocol.com)"]
 

@@ -5,9 +5,15 @@
 /// Teams can choose to use any version of the package and must explicitly migrate to the new version.
 
 module kraken::config {
-    use std::string::{Self, String};
+    use std::string::String;
     use sui::vec_map::{Self, VecMap};
     use kraken::multisig::{Multisig, Executable, Proposal};
+    use kraken::utils;
+
+    // === Aliases ===
+    use fun utils::map_append as VecMap.append;
+    use fun utils::map_remove_keys as VecMap.remove_keys;
+
 
     // === Errors ===
 
@@ -22,34 +28,40 @@ module kraken::config {
     const EMembersNotExecuted: u64 = 8;
     const EWeightsNotExecuted: u64 = 9;
     const ERolesNotExecuted: u64 = 10;
+    const EThresholdNotLastAction: u64 = 11;
+    const ERoleAlreadyAttributed: u64 = 13;
+    const ERoleNotAttributed: u64 = 14;
+    const EThresholdsNotExecuted: u64 = 15;
 
     // === Structs ===
 
     // delegated witness verifying a proposal is destroyed in the module where it was created
     public struct Witness has copy, drop {}
 
-    // [ACTION] change the name
+    // [ACTION] change the name of the multisig
     public struct Name has store { 
         // new name
         name: String,
     }
 
-    // [ACTION] add or remove members
-    public struct Members has store {
-        // addresses to remove
-        to_remove: vector<address>,
-        // addresses to add
-        to_add: vector<address>,
+    // [ACTION] set the thresholds for roles
+    public struct Thresholds has store {
+        // new thresholds for roles, has to be <= total weight (per role)
+        thresholds: VecMap<String, u64>,
     }
 
-    // [ACTION] modify weights and threshold (total weigth)
+    // [ACTION] add or remove members (with weight = 1)
+    public struct Members has store {
+        // addresses to add
+        to_add: vector<address>,
+        // addresses to remove
+        to_remove: vector<address>,
+    }
+
+    // [ACTION] modify weights per member
     public struct Weights has store { 
-        // new threshold, has to be <= to new total weight
-        threshold: Option<u64>,
-        // addresses to modify
-        addresses: vector<address>,
-        // new weights of the members 
-        weights: vector<u64>,
+        // addresses to modify with new weights
+        weights: VecMap<address, u64>,
     }
 
     // [ACTION] add or remove roles from chosen members
@@ -104,21 +116,42 @@ module kraken::config {
     // step 1: propose to modify multisig rules (everything touching weights)
     // all vectors can be empty (if to_modify || weights are empty, the other one must be too)
     // a member can be added and modified in the same proposal
-    // threshold has to be valid (reachable and different from 0)
+    // threshold has to be valid (reachable and different from 0 for global)
     public fun propose_modify_rules(
         multisig: &mut Multisig, 
         key: String,
         execution_time: u64,
         expiration_epoch: u64,
         description: String,
-        threshold: Option<u64>, 
-        to_add: vector<address>, 
-        to_remove: vector<address>,
-        to_modify: vector<address>,
-        weights: vector<u64>,
+        // members 
+        members_to_add: vector<address>, 
+        members_to_remove: vector<address>,
+        members_to_modify: vector<address>,
+        weights_to_modify: vector<u64>,
+        // roles 
+        addresses_add_roles: vector<address>,
+        roles_to_add: vector<vector<String>>,
+        addresses_remove_roles: vector<address>,
+        roles_to_remove: vector<vector<String>>,
+        // thresholds 
+        roles_for_thresholds: vector<String>, 
+        thresholds_to_set: vector<u64>, 
         ctx: &mut TxContext
     ) {
-        verify_new_rules(multisig, threshold, to_add, to_remove, to_modify, weights);
+        verify_new_rules(
+            multisig, 
+            members_to_add,
+            members_to_remove,
+            members_to_modify,
+            weights_to_modify,
+            addresses_add_roles,
+            roles_to_add,
+            addresses_remove_roles,
+            roles_to_remove,
+            roles_for_thresholds,
+            thresholds_to_set,
+        );
+
         let proposal_mut = multisig.create_proposal(
             Witness {},
             key,
@@ -128,8 +161,12 @@ module kraken::config {
             ctx
         );
         // must execute add members before modify weights in case we add and modify the same member
-        new_members(proposal_mut, to_add, to_remove);
-        new_weights(proposal_mut, threshold, to_modify, weights);
+        new_members(proposal_mut, members_to_add, members_to_remove);
+        new_weights(proposal_mut, members_to_modify, weights_to_modify);
+        // must be given after members addition
+        new_roles(proposal_mut, addresses_add_roles, roles_to_add, addresses_remove_roles, roles_to_remove);
+        // must always be called last or execution will fail
+        new_thresholds(proposal_mut, roles_for_thresholds, thresholds_to_set); 
     }
 
     // step 2: multiple members have to approve the proposal (multisig::approve_proposal)
@@ -140,9 +177,15 @@ module kraken::config {
         multisig: &mut Multisig, 
     ) {
         members(&mut executable, multisig, Witness {}, 0);
-        destroy_members(&mut executable, Witness {});
         weights(&mut executable, multisig, Witness {}, 1);
+        roles(&mut executable, multisig, Witness {}, 2);
+        thresholds(&mut executable, multisig, Witness {}, 3);
+        
+        destroy_members(&mut executable, Witness {});
         destroy_weights(&mut executable, Witness {});
+        destroy_roles(&mut executable, Witness {});
+        destroy_thresholds(&mut executable, Witness {});
+        
         executable.destroy(Witness {});
     }
 
@@ -238,7 +281,7 @@ module kraken::config {
         let name_mut: &mut Name = executable.action_mut(witness, idx);
         assert!(!name_mut.name.is_empty(), ENameAlreadySet);
         multisig.set_name(name_mut.name);
-        name_mut.name = string::utf8(b""); // reset to confirm execution
+        name_mut.name = b"".to_string(); // reset to confirm execution
     }
         
     public fun destroy_name<W: copy + drop>(
@@ -247,6 +290,44 @@ module kraken::config {
     ) {
         let Name { name } = executable.remove_action(witness);
         assert!(name.is_empty(), ENameNotSet);
+    }
+
+    public fun new_thresholds(
+        proposal: &mut Proposal,
+        roles: vector<String>,
+        thresholds: vector<u64>, 
+    ) { 
+        let (exists_, idx) = roles.index_of(&b"".to_string());
+        if (exists_) assert!(thresholds[idx] != 0, EThresholdNull);
+        proposal.add_action(Thresholds { thresholds: vec_map::from_keys_values(roles, thresholds) });
+    }    
+
+    public fun thresholds<W: copy + drop>(
+        executable: &mut Executable,
+        multisig: &mut Multisig, 
+        witness: W,
+        idx: u64,
+    ) {
+        // threshold modification must be the latest action to be executed to ensure it is reachable
+        assert!(idx + 1 == executable.actions_length(), EThresholdNotLastAction);
+        let t_mut: &mut Thresholds = executable.action_mut(witness, idx);
+
+        let map_roles_weights = multisig.get_weights_for_roles();
+
+        while (!t_mut.thresholds.is_empty()) {
+            let idx = t_mut.thresholds.size() - 1; // cheaper to pop
+            let (role, threshold) = t_mut.thresholds.remove_entry_by_idx(idx);
+            assert!(*map_roles_weights.get(&role) >= threshold, EThresholdTooHigh);
+            multisig.set_threshold(role, threshold);
+        };
+    }
+
+    public fun destroy_thresholds<W: copy + drop>(
+        executable: &mut Executable, 
+        witness: W
+    ) {
+        let Thresholds { thresholds } = executable.remove_action(witness);
+        assert!(thresholds.is_empty(), EThresholdsNotExecuted);
     }
 
     public fun new_members(
@@ -283,11 +364,10 @@ module kraken::config {
 
     public fun new_weights(
         proposal: &mut Proposal,
-        threshold: Option<u64>, 
         addresses: vector<address>, 
         weights: vector<u64>,
     ) { 
-        proposal.add_action(Weights { threshold, addresses, weights });
+        proposal.add_action(Weights { weights: vec_map::from_keys_values(addresses, weights) });
     }    
     
     public fun weights<W: copy + drop>(
@@ -297,27 +377,22 @@ module kraken::config {
         idx: u64,
     ) {
         multisig.assert_executed(executable);
-        let weights_mut: &mut Weights = executable.action_mut(witness, idx);
+        let w_mut: &mut Weights = executable.action_mut(witness, idx);
 
-        if (weights_mut.threshold.is_some()) {
-            multisig.set_threshold(weights_mut.threshold.extract());
+        while (!w_mut.weights.is_empty()) {
+            let idx = w_mut.weights.size() - 1; // cheaper to pop
+            let (addr, weight) = w_mut.weights.remove_entry_by_idx(idx);
+            multisig.modify_weight(addr, weight);
         };
         
-        multisig.modify_weights(&mut weights_mut.addresses, &mut weights_mut.weights);
     }
 
     public fun destroy_weights<W: copy + drop>(
         executable: &mut Executable, 
         witness: W
     ) {
-        let Weights { threshold, addresses, weights } = executable.remove_action(witness);
-
-        assert!(
-            threshold.is_none() &&
-            addresses.is_empty() &&
-            weights.is_empty(),
-            EWeightsNotExecuted
-        );
+        let Weights { weights } = executable.remove_action(witness);
+        assert!(weights.is_empty(), EWeightsNotExecuted);
     }
 
     public fun new_roles(
@@ -342,12 +417,17 @@ module kraken::config {
         multisig.assert_executed(executable);
         let roles_mut: &mut Roles = executable.action_mut(witness, idx);
 
-        let (mut addr_to_add, mut roles_to_add) = roles_mut.to_add.into_keys_values();
-        multisig.add_roles(&mut addr_to_add, &mut roles_to_add);
-        roles_mut.to_add = vec_map::empty();
-        let (mut addr_to_remove, mut roles_to_remove) = roles_mut.to_remove.into_keys_values();
-        multisig.remove_roles(&mut addr_to_remove, &mut roles_to_remove);
-        roles_mut.to_remove = vec_map::empty();
+        while (!roles_mut.to_add.is_empty()) {
+            let idx = roles_mut.to_add.size() - 1;
+            let (addr, roles) = roles_mut.to_add.remove_entry_by_idx(idx);
+            multisig.add_roles(addr, roles);
+        };
+
+        while (!roles_mut.to_remove.is_empty()) {
+            let idx = roles_mut.to_remove.size() - 1;
+            let (addr, roles) = roles_mut.to_remove.remove_entry_by_idx(idx);
+            multisig.remove_roles(addr, roles);
+        };
     }
 
     public fun destroy_roles<W: copy + drop>(
@@ -389,62 +469,85 @@ module kraken::config {
 
     public fun verify_new_rules(
         multisig: &Multisig,
-        threshold: Option<u64>, 
-        mut to_add: vector<address>, 
-        mut to_remove: vector<address>, 
-        mut to_modify: vector<address>,
-        mut weights: vector<u64>,
+        // members 
+        members_to_add: vector<address>, 
+        members_to_remove: vector<address>,
+        members_to_modify: vector<address>,
+        weights_to_modify: vector<u64>,
+        // roles 
+        addresses_add_roles: vector<address>,
+        roles_to_add: vector<vector<String>>,
+        addresses_remove_roles: vector<address>,
+        roles_to_remove: vector<vector<String>>,
+        // thresholds 
+        roles_for_thresholds: vector<String>, 
+        thresholds_to_set: vector<u64>, 
     ) {
-        // save addresses to add for check
-        let add_addr = to_add;
-        // verify proposed addresses match current list and save weight
-        let mut added_weight = 0;
-        while (!to_add.is_empty()) {
-            let addr = to_add.pop_back();
-            assert!(!multisig.is_member(&addr), EAlreadyMember);
-            added_weight = added_weight + 1;
-        };
-        let mut removed_weight = 0;
-        while (!to_remove.is_empty()) {
-            let addr = to_remove.pop_back();
-            assert!(multisig.is_member(&addr), ENotMember);
-            removed_weight = removed_weight + multisig.member_weight(&addr);
-        };
-        let mut add_modified_weight = 0;
-        let mut remove_modified_weight = 0;
-        while (!to_modify.is_empty()) {
-            let addr = to_modify.pop_back();
-            assert!(multisig.is_member(&addr) || add_addr.contains(&addr), ENotMember);
-            let new_weight = weights.pop_back();
-            let weight = if (multisig.is_member(&addr)) {
-                multisig.member_weight(&addr)
-            } else { 1 };
+        // define future state: member -> weight
+        let mut map_members_weights: VecMap<address, u64> = vec_map::empty();
+        // init with current members
+        multisig.member_addresses().do!(|addr| {
+            map_members_weights.insert(addr, multisig.member(&addr).weight());
+        });
+        // process new members to add/remove/modify
+        map_members_weights.append(utils::map_from_keys(members_to_add, 1));
+        map_members_weights.remove_keys(members_to_remove);
+        members_to_modify.do!(|addr| {
+            assert!(map_members_weights.contains(&addr), ENotMember);
+            let weight = map_members_weights.get_mut(addr);
+            *weight = weights_to_modify.remove(0);
+        });
 
-            if (new_weight == weight) {
-                continue
-            } else if (new_weight > weight) {
-                let delta = new_weight - weight;
-                add_modified_weight = add_modified_weight + delta;
-            } else {
-                let delta = weight - new_weight;
-                remove_modified_weight = remove_modified_weight - delta;
-            };
-        };
+        // define future state: role -> total member weight
+        let mut map_roles_weights: VecMap<String, u64> = vec_map::empty();
+        // init with current roles
+        multisig.member_addresses().do!(|addr| {
+            let weight = map_members_weights[addr];
+            multisig.member(&addr).roles().do!(|role| {
+                map_roles_weights.set_or!(role, weight, |current| {
+                    *current = current + weight;
+                });
+            });
+        });
+        // process new roles to add/remove
+        addresses_add_roles.do!(|addr| {
+            assert!(map_members_weights.contains(&addr), ENotMember);
+            let weight = map_members_weights[addr];
+            let roles = roles_to_add.remove(0);
+            roles.do!(|role| {
+                assert!(!multisig.member(&addr).roles().contains(role), ERoleAlreadyAttributed);
+                map_roles_weights.set_or!(role, weight, |current| {
+                    *current = current + weight;
+                });
+            });
+        });
+        addresses_remove_roles.do!(|addr| {
+            assert!(map_members_weights.contains(&addr), ENotMember);
+            let weight = map_members_weights[addr];
+            let roles = roles_to_remove.remove(0);
+            roles.do!(|role| {
+                assert!(multisig.member(&addr).roles().contains(role), ERoleNotAttributed);
+                let current = map_roles_weights.get_mut(role);
+                *current = current - weight;
+            });
+        });
+        
+        // define future state: role -> threshold, init with current thresholds for roles
+        let mut map_roles_thresholds = multisig.thresholds();
+        // process the thresholds to be set
+        roles_for_thresholds.do!(|role| {
+            let threshold = thresholds_to_set.remove(0);
+            map_roles_thresholds.set_or!(role, threshold, |current| {
+                *current = threshold;
+            });
+        });
 
-        let mut new_threshold = multisig.threshold();
-        if (threshold.is_some()) {
-            // if threshold null, anyone can propose
-            assert!(*threshold.borrow() > 0, EThresholdNull);
-            new_threshold = *threshold.borrow();
-        };
         // verify threshold is reachable with new members 
-        let new_total_weight = 
-            multisig.total_weight() 
-            + added_weight 
-            - removed_weight
-            + add_modified_weight
-            - remove_modified_weight;
-        assert!(new_total_weight >= new_threshold, EThresholdTooHigh);
+        while (!map_roles_thresholds.is_empty()) {
+            let (role, threshold) = map_roles_thresholds.pop();
+            let weight = map_roles_weights[&role];
+            assert!(threshold <= weight, EThresholdTooHigh);
+        };
     }
 }
 
