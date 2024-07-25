@@ -32,7 +32,7 @@ module kraken::multisig_tests {
         let multisig = world.multisig();
 
         assert_eq(multisig.name(), utf8(b"kraken"));
-        assert_eq(multisig.threshold(), 1);
+        assert_eq(multisig.threshold(b"global".to_string()), 1);
         assert_eq(multisig.member_addresses(), vector[sender]);
         assert_eq(multisig.proposals_length(), 0);
 
@@ -59,7 +59,7 @@ module kraken::multisig_tests {
         assert_eq(proposal.description(), utf8(b"proposal1"));
         assert_eq(proposal.expiration_epoch(), 2);
         assert_eq(proposal.execution_time(), 5);
-        assert_eq(proposal.approval_weight(), 0);
+        assert_eq(proposal.total_weight(), 0);
         assert_eq(proposal.actions_length(), 2);
 
         world.end();
@@ -72,10 +72,8 @@ module kraken::multisig_tests {
         world.multisig().add_members(
             &mut vector[ALICE, BOB],
         );
-        world.multisig().modify_weights(
-            &mut vector[ALICE, BOB],
-            &mut vector[2, 3]
-        );
+        world.multisig().modify_weight(ALICE, 2);
+        world.multisig().modify_weight(BOB, 3);
 
         let proposal = world.create_proposal(
             Witness {},
@@ -93,7 +91,7 @@ module kraken::multisig_tests {
         assert_eq(proposal.description(), utf8(b"proposal1"));
         assert_eq(proposal.expiration_epoch(), 2);
         assert_eq(proposal.execution_time(), 5);
-        assert_eq(proposal.approval_weight(), 0);
+        assert_eq(proposal.total_weight(), 0);
         assert_eq(proposal.actions_length(), 2);
 
         world.scenario().next_tx(ALICE);
@@ -102,7 +100,7 @@ module kraken::multisig_tests {
 
         let proposal = world.multisig().proposal(&utf8(b"key"));
 
-        assert_eq(proposal.approval_weight(), 2);
+        assert_eq(proposal.total_weight(), 2);
 
         world.scenario().next_tx(BOB);
 
@@ -110,7 +108,7 @@ module kraken::multisig_tests {
 
         let proposal = world.multisig().proposal(&utf8(b"key"));
 
-        assert_eq(proposal.approval_weight(), 5);
+        assert_eq(proposal.total_weight(), 5);
 
         world.end();        
     }
@@ -122,10 +120,8 @@ module kraken::multisig_tests {
         world.multisig().add_members(
             &mut vector[ALICE, BOB],
         );
-        world.multisig().modify_weights(
-            &mut vector[ALICE, BOB],
-            &mut vector[2, 3]
-        );
+        world.multisig().modify_weight(ALICE, 2);
+        world.multisig().modify_weight(BOB, 3);
 
         let proposal = world.create_proposal(
             Witness {},
@@ -143,7 +139,7 @@ module kraken::multisig_tests {
         assert_eq(proposal.description(), utf8(b"proposal1"));
         assert_eq(proposal.expiration_epoch(), 2);
         assert_eq(proposal.execution_time(), 5);
-        assert_eq(proposal.approval_weight(), 0);
+        assert_eq(proposal.total_weight(), 0);
         assert_eq(proposal.actions_length(), 2);
 
         world.scenario().next_tx(ALICE);
@@ -152,7 +148,7 @@ module kraken::multisig_tests {
 
         let proposal = world.multisig().proposal(&utf8(b"key"));
 
-        assert_eq(proposal.approval_weight(), 2);
+        assert_eq(proposal.total_weight(), 2);
 
         world.scenario().next_tx(BOB);
 
@@ -160,7 +156,7 @@ module kraken::multisig_tests {
 
         let proposal = world.multisig().proposal(&utf8(b"key"));
 
-        assert_eq(proposal.approval_weight(), 5);
+        assert_eq(proposal.total_weight(), 5);
 
         world.scenario().next_tx(BOB);
 
@@ -168,7 +164,7 @@ module kraken::multisig_tests {
 
         let proposal = world.multisig().proposal(&utf8(b"key"));
 
-        assert_eq(proposal.approval_weight(), 2);        
+        assert_eq(proposal.total_weight(), 2);        
 
         world.end();        
     }
@@ -205,15 +201,15 @@ module kraken::multisig_tests {
 
         assert_eq(world.multisig().name(), utf8(b"kraken"));
         assert_eq(world.multisig().version(), 1);
-        assert_eq(world.multisig().threshold(), 1);
+        assert_eq(world.multisig().threshold(b"global".to_string()), 1);
 
         world.multisig().set_name(utf8(b"krakenV2"));
         world.multisig().set_version(2);
-        world.multisig().set_threshold(3);
+        world.multisig().set_threshold(b"global".to_string(), 3);
 
         assert_eq(world.multisig().name(), utf8(b"krakenV2"));
         assert_eq(world.multisig().version(), 2);
-        assert_eq(world.multisig().threshold(), 3);
+        assert_eq(world.multisig().threshold(b"global".to_string()), 3);
 
         world.end();        
     }
@@ -229,17 +225,15 @@ module kraken::multisig_tests {
         world.multisig().add_members(
             &mut vector[ALICE, BOB],
         );
-        world.multisig().modify_weights(
-            &mut vector[ALICE, BOB],
-            &mut vector[2, 3]
-        );
+        world.multisig().modify_weight(ALICE, 2);
+        world.multisig().modify_weight(BOB, 3);
 
         assert_eq(world.multisig().is_member(&ALICE), true);
         assert_eq(world.multisig().is_member(&BOB), true);
-        assert_eq(world.multisig().member_weight(&ALICE), 2);
-        assert_eq(world.multisig().member_weight(&BOB), 3);
-        assert_eq(world.multisig().member_account_id(&ALICE).is_none(), true);
-        assert_eq(world.multisig().member_account_id(&BOB).is_none(), true);
+        assert_eq(world.multisig().member(&ALICE).weight(), 2);
+        assert_eq(world.multisig().member(&BOB).weight(), 3);
+        assert_eq(world.multisig().member(&ALICE).account_id().is_none(), true);
+        assert_eq(world.multisig().member(&BOB).account_id().is_none(), true);
 
         world.scenario().next_tx(ALICE);
 
@@ -248,9 +242,9 @@ module kraken::multisig_tests {
         world.register_account_id(id1.uid_to_inner());
 
         world.assert_is_member();
-        assert_eq(world.multisig().member_account_id(&ALICE).is_none(), false);
-        assert_eq(world.multisig().member_account_id(&ALICE).extract(), id1.uid_to_inner());
-        assert_eq(world.multisig().member_account_id(&BOB).is_none(), true);
+        assert_eq(world.multisig().member(&ALICE).account_id().is_none(), false);
+        assert_eq(world.multisig().member(&ALICE).account_id().extract(), id1.uid_to_inner());
+        assert_eq(world.multisig().member(&BOB).account_id().is_none(), true);
 
         id1.delete();
 
@@ -258,7 +252,7 @@ module kraken::multisig_tests {
 
         world.unregister_account_id();      
 
-        assert_eq(world.multisig().member_account_id(&ALICE).is_none(), true);
+        assert_eq(world.multisig().member(&ALICE).account_id().is_none(), true);
 
         world.scenario().next_tx(OWNER);
 
@@ -289,22 +283,20 @@ module kraken::multisig_tests {
         world.multisig().add_members(
             &mut vector[ALICE, BOB],
         );
-        world.multisig().modify_weights(
-            &mut vector[ALICE, BOB],
-            &mut vector[1, 3]
-        );
+        world.multisig().modify_weight(ALICE, 1);
+        world.multisig().modify_weight(BOB, 3);
 
         let key = utf8(b"key");
 
         world.create_proposal(
             Witness {},
             key,
-            5,
+            0,
             2,
             utf8(b"proposal1"),
         );
 
-        world.multisig().set_threshold(3);
+        world.multisig().set_threshold(b"global".to_string(), 3);
 
         world.scenario().next_tx(ALICE);
 
@@ -324,10 +316,8 @@ module kraken::multisig_tests {
         world.multisig().add_members(
             &mut vector[ALICE, BOB],
         );
-        world.multisig().modify_weights(
-            &mut vector[ALICE, BOB],
-            &mut vector[2, 3]
-        );
+        world.multisig().modify_weight(ALICE, 2);
+        world.multisig().modify_weight(BOB, 3);
 
         let key = utf8(b"key");
 
@@ -339,7 +329,7 @@ module kraken::multisig_tests {
             utf8(b"proposal1"),
         );
 
-        world.multisig().set_threshold(3);
+        world.multisig().set_threshold(b"global".to_string(), 3);
 
         world.scenario().next_tx(BOB);
 
@@ -359,10 +349,8 @@ module kraken::multisig_tests {
         world.multisig().add_members(
             &mut vector[ALICE, BOB],
         );
-        world.multisig().modify_weights(
-            &mut vector[ALICE, BOB],
-            &mut vector[2, 3]
-        );
+        world.multisig().modify_weight(ALICE, 2);
+        world.multisig().modify_weight(BOB, 3);
 
         let key = utf8(b"key");
 
@@ -376,7 +364,7 @@ module kraken::multisig_tests {
 
         proposal.add_action(Action { value: 1 });
 
-        world.multisig().set_threshold(3);
+        world.multisig().set_threshold(b"global".to_string(), 3);
 
         world.scenario().next_tx(BOB);
 
@@ -434,10 +422,8 @@ module kraken::multisig_tests {
         world.multisig().add_members(
             &mut vector[ALICE, BOB],
         );
-        world.multisig().modify_weights(
-            &mut vector[ALICE, BOB],
-            &mut vector[2, 3]
-        );
+        world.multisig().modify_weight(ALICE, 2);
+        world.multisig().modify_weight(BOB, 3);
 
         let key = utf8(b"key");
 
@@ -451,7 +437,7 @@ module kraken::multisig_tests {
 
         proposal.add_action(Action { value: 1 });
 
-        world.multisig().set_threshold(3);
+        world.multisig().set_threshold(b"global".to_string(), 3);
 
         world.scenario().next_tx(BOB);
 

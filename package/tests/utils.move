@@ -252,23 +252,91 @@ module kraken::test_utils {
         execution_time: u64,
         expiration_epoch: u64,
         description: String,
-        threshold: Option<u64>, 
-        to_add: vector<address>, 
-        to_remove: vector<address>, 
-        to_modify: vector<address>, 
-        weights: vector<u64>
+        members_to_add: vector<address>, 
+        members_to_remove: vector<address>,
+        members_to_modify: vector<address>,
+        weights_to_modify: vector<u64>,
+        addresses_add_roles: vector<address>,
+        roles_to_add: vector<vector<String>>,
+        addresses_remove_roles: vector<address>,
+        roles_to_remove: vector<vector<String>>,
+        roles_for_thresholds: vector<String>, 
+        thresholds_to_set: vector<u64>, 
     ) {
         config::propose_modify_rules(
             &mut world.multisig, 
-            key, 
-            execution_time, 
-            expiration_epoch, 
-            description, 
-            threshold, 
-            to_add, 
-            to_remove, 
-            to_modify, 
-            weights,
+            key,
+            execution_time,
+            expiration_epoch,
+            description,
+            members_to_add,
+            members_to_remove,
+            members_to_modify,
+            weights_to_modify,
+            addresses_add_roles,
+            roles_to_add,
+            addresses_remove_roles,
+            roles_to_remove,
+            roles_for_thresholds,
+            thresholds_to_set,        
+            world.scenario.ctx()
+        );
+    }
+
+    public fun propose_members(
+        world: &mut World, 
+        key: String,
+        execution_time: u64,
+        expiration_epoch: u64,
+        description: String,
+        members_to_add: vector<address>, 
+        members_to_remove: vector<address>,
+    ) {
+        config::propose_modify_rules(
+            &mut world.multisig, 
+            key,
+            execution_time,
+            expiration_epoch,
+            description,
+            members_to_add,
+            members_to_remove,
+            vector[],
+            vector[],
+            vector[],
+            vector[],
+            vector[],
+            vector[],
+            vector[],
+            vector[],        
+            world.scenario.ctx()
+        );
+    }
+
+    public fun propose_weights(
+        world: &mut World, 
+        key: String,
+        execution_time: u64,
+        expiration_epoch: u64,
+        description: String,
+        members_to_modify: vector<address>,
+        weights_to_modify: vector<u64>,
+    ) {
+        config::propose_modify_rules(
+            &mut world.multisig, 
+            key,
+            execution_time,
+            expiration_epoch,
+            description,
+            vector[],
+            vector[],
+            members_to_modify,
+            weights_to_modify,
+            vector[],
+            vector[],
+            vector[],
+            vector[],
+            vector[],
+            vector[],        
             world.scenario.ctx()
         );
     }
@@ -279,21 +347,56 @@ module kraken::test_utils {
         execution_time: u64,
         expiration_epoch: u64,
         description: String,
-        addr_to_add: vector<address>,
+        addresses_add_roles: vector<address>,
         roles_to_add: vector<vector<String>>,
-        addr_to_remove: vector<address>,
+        addresses_remove_roles: vector<address>,
         roles_to_remove: vector<vector<String>>,
     ) {
-        config::propose_roles(
+        config::propose_modify_rules(
             &mut world.multisig, 
-            key, 
-            execution_time, 
-            expiration_epoch, 
-            description, 
-            addr_to_add,
+            key,
+            execution_time,
+            expiration_epoch,
+            description,
+            vector[],
+            vector[],
+            vector[],
+            vector[],
+            addresses_add_roles,
             roles_to_add,
-            addr_to_remove,
+            addresses_remove_roles,
             roles_to_remove,
+            vector[],
+            vector[],        
+            world.scenario.ctx()
+        );
+    }
+
+    public fun propose_thresholds(
+        world: &mut World, 
+        key: String,
+        execution_time: u64,
+        expiration_epoch: u64,
+        description: String,
+        roles_for_thresholds: vector<String>, 
+        thresholds_to_set: vector<u64>, 
+    ) {
+        config::propose_modify_rules(
+            &mut world.multisig, 
+            key,
+            execution_time,
+            expiration_epoch,
+            description,
+            vector[],
+            vector[],
+            vector[],
+            vector[],
+            vector[],
+            vector[],
+            vector[],
+            vector[],
+            roles_for_thresholds,
+            thresholds_to_set,        
             world.scenario.ctx()
         );
     }

@@ -1,6 +1,7 @@
 #[test_only]
 module kraken::config_tests{
     use std::string::utf8;
+    use std::debug::print;
 
     use sui::test_utils::assert_eq;
 
@@ -48,21 +49,28 @@ module kraken::config_tests{
         let key = utf8(b"modify proposal");
 
         assert_eq(multisig.name(), utf8(b"kraken"));
-        assert_eq(multisig.threshold(), 1);
+        assert_eq(multisig.threshold(b"global".to_string()), 1);
         assert_eq(multisig.member_addresses(), vector[sender]);
         assert_eq(multisig.proposals_length(), 0);
-        assert_eq(multisig.total_weight(), 1);
+        print(&b"yoooooooooooooooo".to_string());
+        // print(&multisig.get_weights_for_roles());
+        assert_eq(*multisig.get_weights_for_roles().get(&b"global".to_string()), 1);
 
         world.propose_modify_rules(
             key,
             1,
             2,
             utf8(b"description"),
-            option::some(3),
             vector[ALICE, BOB],
             vector[OWNER],
             vector[ALICE],
-            vector[2]
+            vector[2],
+            vector[],
+            vector[],
+            vector[],
+            vector[],
+            vector[b"global".to_string()],
+            vector[3],
         );
 
         world.approve_proposal(key);
@@ -78,11 +86,11 @@ module kraken::config_tests{
 
         let multisig = world.multisig();
 
-        assert_eq(multisig.threshold(), 3);
+        assert_eq(multisig.threshold(b"global".to_string()), 3);
         assert_eq(multisig.member_addresses(), vector[BOB, ALICE]);
-        assert_eq(multisig.total_weight(), 3); 
-        assert_eq(multisig.member_weight(&ALICE), 2); 
-        assert_eq(multisig.member_weight(&BOB), 1);      
+        assert_eq(*multisig.get_weights_for_roles().get(&b"global".to_string()), 3); 
+        assert_eq(multisig.member(&ALICE).weight(), 2); 
+        assert_eq(multisig.member(&BOB).weight(), 1);      
 
         world.end();        
     }
@@ -95,7 +103,7 @@ module kraken::config_tests{
         let sender = world.scenario().ctx().sender();
         let key = utf8(b"roles proposal");
 
-        assert_eq(world.multisig().member_roles(&sender), vector[]);
+        assert_eq(world.multisig().member(&sender).roles(), vector[b"global".to_string()]);
 
         // add role 
         let mut role = @kraken.to_string();
@@ -118,8 +126,8 @@ module kraken::config_tests{
         world.scenario().next_epoch(OWNER);
         world.clock().increment_for_testing(2);
         let executable = world.execute_proposal(key);
-        config::execute_roles(executable, world.multisig());
-        assert_eq(world.multisig().member_roles(&sender), vector[role]);
+        config::execute_modify_rules(executable, world.multisig());
+        assert_eq(world.multisig().member(&sender).roles(), vector[b"global".to_string(), role]);
 
         // execute action with role
         world.propose_name(
@@ -162,8 +170,8 @@ module kraken::config_tests{
         world.scenario().next_epoch(OWNER);
         world.clock().increment_for_testing(2);
         let executable = world.execute_proposal(key);
-        config::execute_roles(executable, world.multisig());
-        assert_eq(world.multisig().member_roles(&sender), vector[]);
+        config::execute_modify_rules(executable, world.multisig());
+        assert_eq(world.multisig().member(&sender).roles(), vector[b"global".to_string()]);
 
         world.end();        
     }
@@ -211,8 +219,13 @@ module kraken::config_tests{
             1,
             2,
             utf8(b"description"),
-            option::some(2),
             vector[OWNER],
+            vector[],
+            vector[],
+            vector[],
+            vector[],
+            vector[],
+            vector[],
             vector[],
             vector[],
             vector[],
@@ -243,11 +256,16 @@ module kraken::config_tests{
             1,
             2,
             utf8(b"description"),
-            option::some(2),
             vector[],
             vector[ALICE],
             vector[],
-            vector[]
+            vector[],
+            vector[],
+            vector[],
+            vector[],
+            vector[],
+            vector[],
+            vector[],
         );
 
         world.approve_proposal(key);
@@ -275,11 +293,16 @@ module kraken::config_tests{
             1,
             2,
             utf8(b"description"),
-            option::some(2),
             vector[],
             vector[],
             vector[ALICE],
-            vector[2]
+            vector[2],
+            vector[],
+            vector[],
+            vector[],
+            vector[],
+            vector[],
+            vector[],
         );
 
         world.approve_proposal(key);
@@ -302,16 +325,13 @@ module kraken::config_tests{
         let mut world = start_world();
         let key = utf8(b"modify proposal");
 
-        world.propose_modify_rules(
+        world.propose_thresholds(
             key,
             1,
             2,
             utf8(b"description"),
-            option::some(4),
-            vector[ALICE, BOB],
-            vector[OWNER],
-            vector[ALICE],
-            vector[2]
+            vector[b"global".to_string()],
+            vector[4],
         );
 
         world.approve_proposal(key);
@@ -334,16 +354,13 @@ module kraken::config_tests{
         let mut world = start_world();
         let key = utf8(b"modify proposal");
 
-        world.propose_modify_rules(
+        world.propose_thresholds(
             key,
             1,
             2,
             utf8(b"description"),
-            option::some(0),
-            vector[],
-            vector[],
-            vector[],
-            vector[],
+            vector[b"global".to_string()],
+            vector[0],
         );
 
         world.approve_proposal(key);

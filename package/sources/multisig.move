@@ -110,20 +110,19 @@ module kraken::multisig {
     // init and share a new Multisig object
     // creator is added by default with weight and threshold of 1
     public fun new(name: String, account_id: ID, ctx: &mut TxContext): Multisig {
-        let mut members = vec_map::empty();
-        members.insert(
-            ctx.sender(), 
-            Member { 
+        let members = vec_map::from_keys_values(
+            vector[ctx.sender()], 
+            vector[Member { 
                 weight: 1, 
                 account_id: option::some(account_id), 
-                roles: vec_set::empty() 
-            }
+                roles: vec_set::from_keys(vector[b"global".to_string()]) 
+            }]
         );      
         Multisig { 
             id: object::new(ctx),
             version: VERSION,
             name,
-            thresholds: vec_map::from_keys_values(vector[b"".to_string()], vector[1]),
+            thresholds: vec_map::from_keys_values(vector[b"global".to_string()], vector[1]),
             members,
             proposals: vec_map::empty(),
         }
@@ -173,6 +172,11 @@ module kraken::multisig {
         proposal.actions.add(idx, action);
     }
 
+    // insert action to the proposal bag with an arbitrary index (use with care)
+    public fun add_action_with_idx<A: store>(proposal: &mut Proposal, action: A, idx: u64) {
+        proposal.actions.add(idx, action);
+    }
+
     // increase the global threshold and the role threshold if the signer has one
     public fun approve_proposal(
         multisig: &mut Multisig, 
@@ -183,13 +187,15 @@ module kraken::multisig {
         multisig.assert_version();
         assert!(multisig.proposals.contains(&key), EProposalNotFound);
 
+        let role = multisig.proposal(&key).auth_into_role();
+        let has_role = multisig.member(&ctx.sender()).has_role(&role);
+
         let proposal = multisig.proposals.get_mut(&key);
         let weight = multisig.members.get(&ctx.sender()).weight;
         proposal.approved.insert(ctx.sender()); // throws if already approved
         proposal.total_weight = proposal.total_weight + weight;
-        if (multisig.member(&ctx.sender()).has_role(&proposal.auth_into_role())) {
+        if (has_role)
             proposal.role_weight = proposal.role_weight + weight;
-        };
     }
 
     // the signer removes his agreement
@@ -202,13 +208,15 @@ module kraken::multisig {
         multisig.assert_version();
         assert!(multisig.proposals.contains(&key), EProposalNotFound);
 
+        let role = multisig.proposal(&key).auth_into_role();
+        let has_role = multisig.member(&ctx.sender()).has_role(&role);
+
         let proposal = multisig.proposals.get_mut(&key);
         let weight = multisig.members.get(&ctx.sender()).weight;
-        proposal.approved.insert(ctx.sender()); // throws if already approved
+        proposal.approved.remove(&ctx.sender()); // throws if already approved
         proposal.total_weight = proposal.total_weight - weight;
-        if (multisig.member(&ctx.sender()).has_role(&proposal.auth_into_role())) {
+        if (has_role)
             proposal.role_weight = proposal.role_weight - weight;
-        };
     }
 
     // return an executable if the number of signers is >= threshold
@@ -234,13 +242,12 @@ module kraken::multisig {
         
         id.delete();
         let role = module_witness.into_string().to_string();
+        let has_role = multisig.member(&ctx.sender()).has_role(&role);
 
         assert!(clock.timestamp_ms() >= execution_time, ECantBeExecutedYet);
         assert!(
-            total_weight >= multisig.threshold(b"".to_string()) ||
-            (if (multisig.member(&ctx.sender()).has_role(&proposal.auth_into_role())) {
-                role_weight >= multisig.threshold(role)
-            } else { false }), 
+            total_weight >= multisig.threshold(b"global".to_string()) ||
+            if (has_role) role_weight >= multisig.threshold(role) else false, 
             EThresholdNotReached
         );
 
@@ -471,7 +478,9 @@ module kraken::multisig {
         role: String, 
         threshold: u64
     ) {
-        multisig.thresholds.insert(role, threshold);
+        multisig.thresholds.set_or!(role, threshold, |current| {
+            *current = threshold;
+        });
     }
 
     // callable only in config.move, if the proposal has been accepted
@@ -486,7 +495,7 @@ module kraken::multisig {
                 Member { 
                     weight: 1, 
                     account_id: option::none(), 
-                    roles: vec_set::empty() 
+                    roles: vec_set::from_keys(vector[b"global".to_string()])
                 }
             );
         };
@@ -517,7 +526,7 @@ module kraken::multisig {
     public(package) fun add_roles(
         multisig: &mut Multisig, 
         addr: address, 
-        roles: vector<String>,
+        mut roles: vector<String>,
     ) {
         let member = multisig.members.get_mut(&addr);
         while (!roles.is_empty()) {
@@ -530,7 +539,7 @@ module kraken::multisig {
     public(package) fun remove_roles(
         multisig: &mut Multisig, 
         addr: address,
-        roles: vector<String>,
+        mut roles: vector<String>,
     ) {
         let member = multisig.members.get_mut(&addr);
         while (!roles.is_empty()) {
