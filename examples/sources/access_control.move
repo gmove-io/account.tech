@@ -2,84 +2,84 @@
 /// Here there is no action accessor as the action is directly implemented as part of the proposal.
 /// This means that the action cannot be reused in another module.
 
-module examples::access_control {
-    use std::string::String;
-    use kraken::{
-        multisig::{Multisig, Executable}
-    };
+module examples::access_control;
 
-    // === Constants ===
+use std::string::String;
+use kraken::{
+    multisig::{Multisig, Executable}
+};
 
-    const MAX_FEE: u64 = 10000; // 100%
+// === Constants ===
 
-    // === Structs ===
+const MAX_FEE: u64 = 10000; // 100%
 
-    public struct Witness has drop {}
+// === Structs ===
 
-    // [ACTION] action structs must have store only 
-    public struct UpdateFee has store {
-        fee: u64,
-    }
+public struct Auth has copy, drop {}
 
-    public struct Protocol has key {
-        id: UID,
-        // add bunch of fields
-        fee: u64,
-    }
+// [ACTION] action structs must have store only 
+public struct UpdateFee has store {
+    fee: u64,
+}
 
-    // === Public functions ===
+public struct Protocol has key {
+    id: UID,
+    // add bunch of fields
+    fee: u64,
+}
 
-    fun init(ctx: &mut TxContext) {
-        transfer::share_object(Protocol {
-            id: object::new(ctx),
-            fee: 0,
-        });
-    }    
+// === Public functions ===
 
-    /*
-    * the rest of the module implementation 
-    * { ... }
-    */
+fun init(ctx: &mut TxContext) {
+    transfer::share_object(Protocol {
+        id: object::new(ctx),
+        fee: 0,
+    });
+}    
 
-    // === [PROPOSAL] Public functions ===
-    
-    // step 1: propose to update the version
-    public fun propose_update_fee(
-        multisig: &mut Multisig, 
-        key: String,
-        execution_time: u64,
-        expiration_epoch: u64,
-        description: String,
-        fee: u64,
-        ctx: &mut TxContext
-    ) {
-        assert!(fee <= MAX_FEE);
-        let proposal_mut = multisig.create_proposal(
-            Witness {},
-            key,
-            execution_time,
-            expiration_epoch,
-            description,
-            ctx
-        );
-        proposal_mut.add_action(UpdateFee { fee });
-    }
+/*
+* the rest of the module implementation 
+* { ... }
+*/
 
-    // step 2: multiple members have to approve the proposal (kraken::multisig::approve_proposal)
-    // step 3: execute the proposal and return the action (kraken::multisig::execute_proposal)
+// === [PROPOSAL] Public functions ===
 
-    // function guarded by a Multisig action
-    public fun execute_update_fee(
-        mut executable: Executable,
-        multisig: &mut Multisig,
-        protocol: &mut Protocol,
-    ) {
-        multisig.assert_executed(&executable);
-        // here index is 0 because there is only one action in the proposal
-        let update_fee_mut: &mut UpdateFee = executable.action_mut(Witness {}, 0);
-        protocol.fee = update_fee_mut.fee;
+// step 1: propose to update the version
+public fun propose_update_fee(
+    multisig: &mut Multisig, 
+    key: String,
+    execution_time: u64,
+    expiration_epoch: u64,
+    description: String,
+    fee: u64,
+    ctx: &mut TxContext
+) {
+    assert!(fee <= MAX_FEE);
+    let proposal_mut = multisig.create_proposal(
+        Auth {}, 
+        key,
+        execution_time,
+        expiration_epoch,
+        description,
+        ctx
+    );
+    proposal_mut.add_action(UpdateFee { fee });
+}
 
-        let UpdateFee { fee: _ } = executable.remove_action(Witness {});
-        executable.destroy(Witness {});
-    }
+// step 2: multiple members have to approve the proposal (kraken::multisig::approve_proposal)
+// step 3: execute the proposal and return the action (kraken::multisig::execute_proposal)
+
+// function guarded by a Multisig action
+public fun execute_update_fee(
+    mut executable: Executable,
+    multisig: &mut Multisig,
+    protocol: &mut Protocol,
+) {
+    multisig.assert_executed(&executable);
+    // here index is 0 because there is only one action in the proposal
+    let update_fee_mut: &mut UpdateFee = executable.action_mut(Auth {},  0);
+    protocol.fee = update_fee_mut.fee;
+
+    let UpdateFee { fee: _ } = executable.remove_action(Auth {}); 
+    executable.destroy(Auth {}); 
 }

@@ -1,250 +1,250 @@
 #[test_only]
-module kraken::owned_tests{    
-    use std::string::utf8;
-    use sui::test_utils::{assert_eq, destroy};
-    use sui::test_scenario::receiving_ticket_by_id;
+module kraken::owned_tests;
 
-    use kraken::owned;
-    use kraken::test_utils::start_world;
+use std::string::utf8;
+use sui::test_utils::{assert_eq, destroy};
+use sui::test_scenario::receiving_ticket_by_id;
 
-    const OWNER: address = @0xBABE;
+use kraken::owned;
+use kraken::test_utils::start_world;
 
-    public struct Object has key, store { id: UID }
+const OWNER: address = @0xBABE;
 
-    public struct Witness has drop, copy {}
+public struct Object has key, store { id: UID }
 
-    #[test]
-    fun test_withdraw_end_to_end() {
-        let mut world = start_world();
+public struct Witness has drop, copy {}
 
-        let key = utf8(b"owned tests");
-        let object1 = new_object(world.scenario().ctx());
+#[test]
+fun test_withdraw_end_to_end() {
+    let mut world = start_world();
 
-        let id1 = object::id(&object1);
+    let key = utf8(b"owned tests");
+    let object1 = new_object(world.scenario().ctx());
 
-        let multisig_address = world.multisig().addr();
+    let id1 = object::id(&object1);
 
-        transfer::public_transfer(object1, multisig_address);
+    let multisig_address = world.multisig().addr();
 
-        world.scenario().next_tx(OWNER);
+    transfer::public_transfer(object1, multisig_address);
 
-        let proposal = world.create_proposal(Witness {}, utf8(b"owned tests"), 5, 2, utf8(b"withdraw test"));
-        
-        owned::new_withdraw(proposal, vector[id1]);
+    world.scenario().next_tx(OWNER);
 
-        world.scenario().next_epoch(OWNER);
-        world.scenario().next_epoch(OWNER);
-        world.clock().increment_for_testing(5);
+    let proposal = world.create_proposal(Witness {}, utf8(b"owned tests"), 5, 2, utf8(b"withdraw test"));
+    
+    owned::new_withdraw(proposal, vector[id1]);
 
-        world.approve_proposal(key);
+    world.scenario().next_epoch(OWNER);
+    world.scenario().next_epoch(OWNER);
+    world.clock().increment_for_testing(5);
 
-        let mut executable = world.execute_proposal(key);
+    world.approve_proposal(key);
 
-        let object1 = world.withdraw<Object, Witness>(&mut executable, receiving_ticket_by_id(id1), Witness {}, 0);
+    let mut executable = world.execute_proposal(key);
 
-        owned::destroy_withdraw(&mut executable, Witness {});
-        executable.destroy(Witness {});
+    let object1 = world.withdraw<Object, Witness>(&mut executable, receiving_ticket_by_id(id1), Witness {}, 0);
 
-        assert_eq(object1.id.to_inner(), id1);
+    owned::destroy_withdraw(&mut executable, Witness {});
+    executable.destroy(Witness {});
 
-        destroy(object1);
-        world.end();
-    }
+    assert_eq(object1.id.to_inner(), id1);
 
-    #[test]
-    fun test_borrow_end_to_end() {
-        let mut world = start_world();
+    destroy(object1);
+    world.end();
+}
 
-        let key = utf8(b"owned tests");
-        let object1 = new_object(world.scenario().ctx());
+#[test]
+fun test_borrow_end_to_end() {
+    let mut world = start_world();
 
-        let id1 = object::id(&object1);
+    let key = utf8(b"owned tests");
+    let object1 = new_object(world.scenario().ctx());
 
-        let multisig_address = world.multisig().addr();
+    let id1 = object::id(&object1);
 
-        transfer::public_transfer(object1, multisig_address);
+    let multisig_address = world.multisig().addr();
 
-        world.scenario().next_tx(OWNER);
+    transfer::public_transfer(object1, multisig_address);
 
-        let proposal = world.create_proposal(Witness {}, utf8(b"owned tests"), 5, 2, utf8(b"borrow test"));
-        owned::new_borrow(proposal, vector[id1]);
+    world.scenario().next_tx(OWNER);
 
-        world.scenario().next_epoch(OWNER);
-        world.scenario().next_epoch(OWNER);
-        world.clock().increment_for_testing(5);
+    let proposal = world.create_proposal(Witness {}, utf8(b"owned tests"), 5, 2, utf8(b"borrow test"));
+    owned::new_borrow(proposal, vector[id1]);
 
-        world.approve_proposal(key);
+    world.scenario().next_epoch(OWNER);
+    world.scenario().next_epoch(OWNER);
+    world.clock().increment_for_testing(5);
 
-        let mut executable = world.execute_proposal(key);
+    world.approve_proposal(key);
 
-        let object1 = world.borrow<Object, Witness>(&mut executable, receiving_ticket_by_id(id1), Witness {}, 0);
+    let mut executable = world.execute_proposal(key);
 
-        assert_eq(object::id(&object1), id1);
+    let object1 = world.borrow<Object, Witness>(&mut executable, receiving_ticket_by_id(id1), Witness {}, 0);
 
-        world.put_back<Object, Witness>(&mut executable, object1, Witness {}, 1);
+    assert_eq(object::id(&object1), id1);
 
-        owned::destroy_borrow(&mut executable, Witness {});
+    world.put_back<Object, Witness>(&mut executable, object1, Witness {}, 1);
 
-        executable.destroy(Witness {});
+    owned::destroy_borrow(&mut executable, Witness {});
 
-        world.end();
-    }
+    executable.destroy(Witness {});
 
-    #[test]
-    #[expected_failure(abort_code = owned::EWrongObject)]
-    fun test_withdraw_error_wrong_object() {
-        let mut world = start_world();
+    world.end();
+}
 
-        let object1 = new_object(world.scenario().ctx());
-        let object2 = new_object(world.scenario().ctx());
+#[test]
+#[expected_failure(abort_code = owned::EWrongObject)]
+fun test_withdraw_error_wrong_object() {
+    let mut world = start_world();
 
-        let key = utf8(b"owned tests");
-        let id1 = object::id(&object1);
-        let id2 = object::id(&object2);
+    let object1 = new_object(world.scenario().ctx());
+    let object2 = new_object(world.scenario().ctx());
 
-        let multisig_address = world.multisig().addr();
+    let key = utf8(b"owned tests");
+    let id1 = object::id(&object1);
+    let id2 = object::id(&object2);
 
-        transfer::public_transfer(object1, multisig_address);
-        transfer::public_transfer(object2, multisig_address);
+    let multisig_address = world.multisig().addr();
 
-        world.scenario().next_tx(OWNER);
+    transfer::public_transfer(object1, multisig_address);
+    transfer::public_transfer(object2, multisig_address);
 
-        let proposal = world.create_proposal(Witness {}, key, 5, 2, utf8(b"withdraw test"));
-        owned::new_withdraw(proposal, vector[id1]);
+    world.scenario().next_tx(OWNER);
 
-        world.scenario().next_epoch(OWNER);
-        world.scenario().next_epoch(OWNER);
-        world.clock().increment_for_testing(5);
+    let proposal = world.create_proposal(Witness {}, key, 5, 2, utf8(b"withdraw test"));
+    owned::new_withdraw(proposal, vector[id1]);
 
-        world.approve_proposal(key);
+    world.scenario().next_epoch(OWNER);
+    world.scenario().next_epoch(OWNER);
+    world.clock().increment_for_testing(5);
 
-        let mut executable = world.execute_proposal(key);
+    world.approve_proposal(key);
 
-        let object1 = world.withdraw<Object, Witness>(&mut executable, receiving_ticket_by_id(id2), Witness {}, 0);
+    let mut executable = world.execute_proposal(key);
 
-        owned::destroy_withdraw(&mut executable, Witness {});
-        executable.destroy(Witness {});
-        
-        destroy(object1);
-        world.end();        
-    }
+    let object1 = world.withdraw<Object, Witness>(&mut executable, receiving_ticket_by_id(id2), Witness {}, 0);
 
-    #[test]
-    #[expected_failure(abort_code = owned::ERetrieveAllObjectsBefore)]
-    fun test_withdraw_error_retrieve_all_objects_before() {
-        let mut world = start_world();
+    owned::destroy_withdraw(&mut executable, Witness {});
+    executable.destroy(Witness {});
+    
+    destroy(object1);
+    world.end();        
+}
 
-        let key = utf8(b"owned tests");
-        let object1 = new_object(world.scenario().ctx());
+#[test]
+#[expected_failure(abort_code = owned::ERetrieveAllObjectsBefore)]
+fun test_withdraw_error_retrieve_all_objects_before() {
+    let mut world = start_world();
 
-        let id1 = object::id(&object1);
+    let key = utf8(b"owned tests");
+    let object1 = new_object(world.scenario().ctx());
 
-        let multisig_address = world.multisig().addr();
+    let id1 = object::id(&object1);
 
-        transfer::public_transfer(object1, multisig_address);
+    let multisig_address = world.multisig().addr();
 
-        world.scenario().next_tx(OWNER);
+    transfer::public_transfer(object1, multisig_address);
 
-        let proposal = world.create_proposal(Witness {}, utf8(b"owned tests"), 5, 2, utf8(b"withdraw test"));
-        owned::new_withdraw(proposal, vector[id1]);
+    world.scenario().next_tx(OWNER);
 
-        world.scenario().next_epoch(OWNER);
-        world.scenario().next_epoch(OWNER);
-        world.clock().increment_for_testing(5);
+    let proposal = world.create_proposal(Witness {}, utf8(b"owned tests"), 5, 2, utf8(b"withdraw test"));
+    owned::new_withdraw(proposal, vector[id1]);
 
-        world.approve_proposal(key);
+    world.scenario().next_epoch(OWNER);
+    world.scenario().next_epoch(OWNER);
+    world.clock().increment_for_testing(5);
 
-        let mut executable = world.execute_proposal(key);
+    world.approve_proposal(key);
 
-        owned::destroy_withdraw(&mut executable, Witness {});
-        executable.destroy(Witness {});
+    let mut executable = world.execute_proposal(key);
 
-        world.end();
-    }
+    owned::destroy_withdraw(&mut executable, Witness {});
+    executable.destroy(Witness {});
 
-    #[test]
-    #[expected_failure(abort_code = owned::EWrongObject)]
-    fun test_put_back_error_wrong_object() {
-        let mut world = start_world();
+    world.end();
+}
 
-        let key = utf8(b"owned tests");
-        let object1 = new_object(world.scenario().ctx());
-        let object2 = new_object(world.scenario().ctx());
+#[test]
+#[expected_failure(abort_code = owned::EWrongObject)]
+fun test_put_back_error_wrong_object() {
+    let mut world = start_world();
 
-        let id1 = object::id(&object1);
+    let key = utf8(b"owned tests");
+    let object1 = new_object(world.scenario().ctx());
+    let object2 = new_object(world.scenario().ctx());
 
-        let multisig_address = world.multisig().addr();
+    let id1 = object::id(&object1);
 
-        transfer::public_transfer(object1, multisig_address);
+    let multisig_address = world.multisig().addr();
 
-        world.scenario().next_tx(OWNER);
+    transfer::public_transfer(object1, multisig_address);
 
-        let proposal = world.create_proposal(Witness {}, utf8(b"owned tests"), 5, 2, utf8(b"borrow test"));
-        owned::new_borrow(proposal, vector[id1]);
+    world.scenario().next_tx(OWNER);
 
-        world.scenario().next_epoch(OWNER);
-        world.scenario().next_epoch(OWNER);
-        world.clock().increment_for_testing(5);
+    let proposal = world.create_proposal(Witness {}, utf8(b"owned tests"), 5, 2, utf8(b"borrow test"));
+    owned::new_borrow(proposal, vector[id1]);
 
-        world.approve_proposal(key);
+    world.scenario().next_epoch(OWNER);
+    world.scenario().next_epoch(OWNER);
+    world.clock().increment_for_testing(5);
 
-        let mut executable = world.execute_proposal(key);
+    world.approve_proposal(key);
 
-        let object1 = world.borrow<Object, Witness>(&mut executable, receiving_ticket_by_id(id1), Witness {}, 0);
+    let mut executable = world.execute_proposal(key);
 
-        assert_eq(object::id(&object1), id1);
+    let object1 = world.borrow<Object, Witness>(&mut executable, receiving_ticket_by_id(id1), Witness {}, 0);
 
-        world.put_back<Object, Witness>(&mut executable, object2, Witness {}, 1);
-        world.put_back<Object, Witness>(&mut executable, object1, Witness {}, 1);
+    assert_eq(object::id(&object1), id1);
 
-        owned::destroy_borrow(&mut executable, Witness {});
+    world.put_back<Object, Witness>(&mut executable, object2, Witness {}, 1);
+    world.put_back<Object, Witness>(&mut executable, object1, Witness {}, 1);
 
-        executable.destroy(Witness {});
+    owned::destroy_borrow(&mut executable, Witness {});
 
-        world.end();
-    }
+    executable.destroy(Witness {});
 
-    #[test]
-    #[expected_failure(abort_code = owned::EReturnAllObjectsBefore)]
-    fun test_complete_borrow_error_return_all_objects_before() {
-        let mut world = start_world();
+    world.end();
+}
 
-        let key = utf8(b"owned tests");
-        let object1 = new_object(world.scenario().ctx());
+#[test]
+#[expected_failure(abort_code = owned::EReturnAllObjectsBefore)]
+fun test_complete_borrow_error_return_all_objects_before() {
+    let mut world = start_world();
 
-        let id1 = object::id(&object1);
+    let key = utf8(b"owned tests");
+    let object1 = new_object(world.scenario().ctx());
 
-        let multisig_address = world.multisig().addr();
+    let id1 = object::id(&object1);
 
-        transfer::public_transfer(object1, multisig_address);
+    let multisig_address = world.multisig().addr();
 
-        world.scenario().next_tx(OWNER);
+    transfer::public_transfer(object1, multisig_address);
 
-        let proposal = world.create_proposal(Witness {}, utf8(b"owned tests"), 5, 2, utf8(b"borrow test"));
-        owned::new_borrow(proposal, vector[id1]);
+    world.scenario().next_tx(OWNER);
 
-        world.scenario().next_epoch(OWNER);
-        world.scenario().next_epoch(OWNER);
-        world.clock().increment_for_testing(5);
+    let proposal = world.create_proposal(Witness {}, utf8(b"owned tests"), 5, 2, utf8(b"borrow test"));
+    owned::new_borrow(proposal, vector[id1]);
 
-        world.approve_proposal(key);
+    world.scenario().next_epoch(OWNER);
+    world.scenario().next_epoch(OWNER);
+    world.clock().increment_for_testing(5);
 
-        let mut executable = world.execute_proposal(key);
+    world.approve_proposal(key);
 
-        let object1 = world.borrow<Object, Witness>(&mut executable, receiving_ticket_by_id(id1), Witness {}, 0);
+    let mut executable = world.execute_proposal(key);
 
-        owned::destroy_borrow(&mut executable, Witness {});
+    let object1 = world.borrow<Object, Witness>(&mut executable, receiving_ticket_by_id(id1), Witness {}, 0);
 
-        executable.destroy(Witness {});
+    owned::destroy_borrow(&mut executable, Witness {});
 
-        destroy(object1);
-        world.end();
-    }
+    executable.destroy(Witness {});
 
-    fun new_object(ctx: &mut TxContext): Object {
-        Object {
-            id: object::new(ctx)
-        }
+    destroy(object1);
+    world.end();
+}
+
+fun new_object(ctx: &mut TxContext): Object {
+    Object {
+        id: object::new(ctx)
     }
 }
 

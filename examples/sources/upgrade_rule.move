@@ -17,7 +17,7 @@ module examples::upgrade_rule {
 
     // === Structs ===
 
-    public struct Witness has drop {}
+    public struct Auth has copy, drop {}
 
     // timelock config for the UpgradeLock
     public struct WeekendUpgrade has store {}
@@ -55,7 +55,7 @@ module examples::upgrade_rule {
         };
 
         let proposal_mut = multisig.create_proposal(
-            Witness {},
+            Auth {},
             key,
             execution_time,
             expiration_epoch,

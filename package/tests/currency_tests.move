@@ -1,382 +1,381 @@
 #[test_only]
-module kraken::currency_tests {
+module kraken::currency_tests;
 
-    use sui::{
-        url,
-        sui::SUI,
-        coin::{Self, Coin},
-        test_utils::{destroy, assert_eq},
-        test_scenario::receiving_ticket_by_id
-    };
+use sui::{
+    url,
+    sui::SUI,
+    coin::{Self, Coin},
+    test_utils::{destroy, assert_eq},
+    test_scenario::receiving_ticket_by_id
+};
 
-    use kraken::{
-        owned,
-        currency,
-        test_utils::start_world
-    };
+use kraken::{
+    owned,
+    currency,
+    test_utils::start_world
+};
 
-    const OWNER: address = @0xBABE;
+const OWNER: address = @0xBABE;
 
-    public struct CURRENCY_TESTS has drop {}
+public struct CURRENCY_TESTS has drop {}
 
-    public struct Witness has drop, copy {}
+public struct Witness has drop, copy {}
 
-    #[test]
-    fun test_mint() {
-        let mut world = start_world();
+#[test]
+fun test_mint() {
+    let mut world = start_world();
 
-        let key = b"mint".to_string();
+    let key = b"mint".to_string();
 
-        let cap = coin::create_treasury_cap_for_testing<SUI>(world.scenario().ctx()); 
+    let cap = coin::create_treasury_cap_for_testing<SUI>(world.scenario().ctx()); 
 
-        world.lock_treasury_cap(cap);
+    world.lock_treasury_cap(cap);
 
-        let effects = world.scenario().next_tx(OWNER);
+    let effects = world.scenario().next_tx(OWNER);
 
-        // We created one new object
-        let lock_id = effects.created()[0];
+    // We created one new object
+    let lock_id = effects.created()[0];
 
-        world.propose_mint<SUI>(
-            key, 
-            10, 
-            1, 
-            b"description".to_string(), 
-            100
-        );
+    world.propose_mint<SUI>(
+        key, 
+        10, 
+        1, 
+        b"description".to_string(), 
+        100
+    );
 
-        world.scenario().next_tx(OWNER);
+    world.scenario().next_tx(OWNER);
 
-        world.approve_proposal(key);
+    world.approve_proposal(key);
 
-        world.scenario().next_tx(OWNER);
+    world.scenario().next_tx(OWNER);
 
-        world.clock().set_for_testing(11);
+    world.clock().set_for_testing(11);
 
-        let mut treasury_lock = world.borrow_treasury_cap<SUI>(receiving_ticket_by_id(lock_id));
+    let mut treasury_lock = world.borrow_treasury_cap<SUI>(receiving_ticket_by_id(lock_id));
 
-        let executable = world.execute_proposal(key);
+    let executable = world.execute_proposal(key);
 
-        currency::execute_mint(executable, &mut treasury_lock, world.scenario().ctx());
+    currency::execute_mint(executable, &mut treasury_lock, world.scenario().ctx());
 
-        currency::put_back_cap(treasury_lock);
+    currency::put_back_cap(treasury_lock);
 
-        world.end();
-    }
+    world.end();
+}
 
-    #[test]
-    fun test_burn() {
-        let mut world = start_world();
+#[test]
+fun test_burn() {
+    let mut world = start_world();
 
-        let key = b"burn".to_string();
+    let key = b"burn".to_string();
 
-        let mut cap = coin::create_treasury_cap_for_testing<SUI>(world.scenario().ctx()); 
+    let mut cap = coin::create_treasury_cap_for_testing<SUI>(world.scenario().ctx()); 
 
-        let sui_coin =  cap.mint<SUI>(100, world.scenario().ctx());
+    let sui_coin =  cap.mint<SUI>(100, world.scenario().ctx());
 
-        world.lock_treasury_cap(cap);
+    world.lock_treasury_cap(cap);
 
-        let coin_id = object::id(&sui_coin);
+    let coin_id = object::id(&sui_coin);
 
-        transfer::public_transfer(sui_coin, world.multisig().addr());
+    transfer::public_transfer(sui_coin, world.multisig().addr());
 
-        let effects = world.scenario().next_tx(OWNER);
+    let effects = world.scenario().next_tx(OWNER);
 
-        // We created one new object
-        let lock_id = effects.created()[0];
+    // We created one new object
+    let lock_id = effects.created()[0];
 
-        world.propose_burn<SUI>(
-            key, 
-            7, 
-            1, 
-            b"description".to_string(), 
-            coin_id, 
-            100
-        );
+    world.propose_burn<SUI>(
+        key, 
+        7, 
+        1, 
+        b"description".to_string(), 
+        coin_id, 
+        100
+    );
 
-        world.scenario().next_tx(OWNER);
+    world.scenario().next_tx(OWNER);
 
-        world.approve_proposal(key);
+    world.approve_proposal(key);
 
-        world.scenario().next_tx(OWNER);
+    world.scenario().next_tx(OWNER);
 
-        world.clock().set_for_testing(8);
+    world.clock().set_for_testing(8);
 
-        let mut treasury_lock = world.borrow_treasury_cap<SUI>(receiving_ticket_by_id(lock_id));
+    let mut treasury_lock = world.borrow_treasury_cap<SUI>(receiving_ticket_by_id(lock_id));
 
-        let executable = world.execute_proposal(key);
+    let executable = world.execute_proposal(key);
 
-        currency::execute_burn(executable, world.multisig(), receiving_ticket_by_id(coin_id), &mut treasury_lock);
+    currency::execute_burn(executable, world.multisig(), receiving_ticket_by_id(coin_id), &mut treasury_lock);
 
-        currency::put_back_cap(treasury_lock);
+    currency::put_back_cap(treasury_lock);
 
-        world.end();
-    }
+    world.end();
+}
 
-    #[test]
-    fun test_update() {
-        let mut world = start_world();
+#[test]
+fun test_update() {
+    let mut world = start_world();
 
-        let key = b"update".to_string();
+    let key = b"update".to_string();
 
-        let (treasury_cap, mut coin_metadata) = coin::create_currency(
-            CURRENCY_TESTS {}, 
-            9, 
-            b"symbol", 
-            b"name", 
-            b"description", 
-            option::none(), 
-            world.scenario().ctx()
-        );
+    let (treasury_cap, mut coin_metadata) = coin::create_currency(
+        CURRENCY_TESTS {}, 
+        9, 
+        b"symbol", 
+        b"name", 
+        b"description", 
+        option::none(), 
+        world.scenario().ctx()
+    );
 
-        world.lock_treasury_cap(treasury_cap);
+    world.lock_treasury_cap(treasury_cap);
 
-        let effects = world.scenario().next_tx(OWNER);
+    let effects = world.scenario().next_tx(OWNER);
 
-        // We created one new object
-        let lock_id = effects.created()[0];
+    // We created one new object
+    let lock_id = effects.created()[0];
 
-        world.propose_update(
-            key, 
-            8, 
-            2, 
-            b"update the metadata".to_string(), 
-            option::some(b"test name".to_string()), 
-            option::some(b"test symbol".to_string()), 
-            option::some(b"test description".to_string()), 
-            option::some(b"https://something.png".to_string()), 
-        );
+    world.propose_update(
+        key, 
+        8, 
+        2, 
+        b"update the metadata".to_string(), 
+        option::some(b"test name".to_string()), 
+        option::some(b"test symbol".to_string()), 
+        option::some(b"test description".to_string()), 
+        option::some(b"https://something.png".to_string()), 
+    );
 
-        world.scenario().next_tx(OWNER);
-        world.scenario().next_epoch(OWNER);
-        world.scenario().next_epoch(OWNER);
-        world.clock().set_for_testing(8);
+    world.scenario().next_tx(OWNER);
+    world.scenario().next_epoch(OWNER);
+    world.scenario().next_epoch(OWNER);
+    world.clock().set_for_testing(8);
 
-        world.approve_proposal(key);
+    world.approve_proposal(key);
 
-        let mut executable = world.execute_proposal(key);
+    let mut executable = world.execute_proposal(key);
 
-        let treasury_lock = world.borrow_treasury_cap<CURRENCY_TESTS>(receiving_ticket_by_id(lock_id));
+    let treasury_lock = world.borrow_treasury_cap<CURRENCY_TESTS>(receiving_ticket_by_id(lock_id));
 
-        currency::execute_update(&mut executable,&treasury_lock, &mut coin_metadata);
-    
-        currency::put_back_cap(treasury_lock);
+    currency::execute_update(&mut executable,&treasury_lock, &mut coin_metadata);
 
-        currency::complete_update(executable);
+    currency::put_back_cap(treasury_lock);
 
-        assert_eq(coin_metadata.get_name(), b"test name".to_string());
-        assert_eq(coin_metadata.get_description(), b"test description".to_string());
-        assert_eq(coin_metadata.get_symbol(), b"test symbol".to_ascii_string());
-        assert_eq(coin_metadata.get_icon_url(), option::some(url::new_unsafe_from_bytes(b"https://something.png")));
+    currency::complete_update(executable);
 
-        destroy(coin_metadata);
-        world.end();
-    }
+    assert_eq(coin_metadata.get_name(), b"test name".to_string());
+    assert_eq(coin_metadata.get_description(), b"test description".to_string());
+    assert_eq(coin_metadata.get_symbol(), b"test symbol".to_ascii_string());
+    assert_eq(coin_metadata.get_icon_url(), option::some(url::new_unsafe_from_bytes(b"https://something.png")));
 
-    #[test]
-    #[expected_failure(abort_code = currency::ENoChange)]
-    fun test_update_error_no_change() {
-        let mut world = start_world();
+    destroy(coin_metadata);
+    world.end();
+}
 
-        let key = b"update".to_string();
+#[test]
+#[expected_failure(abort_code = currency::ENoChange)]
+fun test_update_error_no_change() {
+    let mut world = start_world();
 
-        let (treasury_cap, mut coin_metadata) = coin::create_currency(
-            CURRENCY_TESTS {}, 
-            9, 
-            b"symbol", 
-            b"name", 
-            b"description", 
-            option::none(), 
-            world.scenario().ctx()
-        );
+    let key = b"update".to_string();
 
-        world.lock_treasury_cap(treasury_cap);
+    let (treasury_cap, mut coin_metadata) = coin::create_currency(
+        CURRENCY_TESTS {}, 
+        9, 
+        b"symbol", 
+        b"name", 
+        b"description", 
+        option::none(), 
+        world.scenario().ctx()
+    );
 
-        let effects = world.scenario().next_tx(OWNER);
+    world.lock_treasury_cap(treasury_cap);
 
-        // We created one new object
-        let lock_id = effects.created()[0];
+    let effects = world.scenario().next_tx(OWNER);
 
-        world.propose_update(
-            key, 
-            8, 
-            2, 
-            b"update the metadata".to_string(), 
-            option::none(), 
-            option::none(), 
-            option::none(), 
-            option::none(), 
-        );
+    // We created one new object
+    let lock_id = effects.created()[0];
 
-        world.scenario().next_tx(OWNER);
-        world.scenario().next_epoch(OWNER);
-        world.scenario().next_epoch(OWNER);
-        world.clock().set_for_testing(8);
+    world.propose_update(
+        key, 
+        8, 
+        2, 
+        b"update the metadata".to_string(), 
+        option::none(), 
+        option::none(), 
+        option::none(), 
+        option::none(), 
+    );
 
-        world.approve_proposal(key);
+    world.scenario().next_tx(OWNER);
+    world.scenario().next_epoch(OWNER);
+    world.scenario().next_epoch(OWNER);
+    world.clock().set_for_testing(8);
 
-        let mut executable = world.execute_proposal(key);
+    world.approve_proposal(key);
 
-        let treasury_lock = world.borrow_treasury_cap<CURRENCY_TESTS>(receiving_ticket_by_id(lock_id));
+    let mut executable = world.execute_proposal(key);
 
-        currency::execute_update(&mut executable,&treasury_lock, &mut coin_metadata);
-    
-        currency::put_back_cap(treasury_lock);
+    let treasury_lock = world.borrow_treasury_cap<CURRENCY_TESTS>(receiving_ticket_by_id(lock_id));
 
-        currency::complete_update(executable);
+    currency::execute_update(&mut executable,&treasury_lock, &mut coin_metadata);
 
-        destroy(coin_metadata);
-        world.end();
-    }
+    currency::put_back_cap(treasury_lock);
 
-    #[test]
-    #[expected_failure(abort_code = currency::EWrongValue)]
-    fun test_burn_error_wrong_value() {
-        let mut world = start_world();
+    currency::complete_update(executable);
 
-        let key = b"burn".to_string();
+    destroy(coin_metadata);
+    world.end();
+}
 
-        let mut cap = coin::create_treasury_cap_for_testing<SUI>(world.scenario().ctx()); 
+#[test]
+#[expected_failure(abort_code = currency::EWrongValue)]
+fun test_burn_error_wrong_value() {
+    let mut world = start_world();
 
-        // wrong burn value
-        let sui_coin =  cap.mint<SUI>(101, world.scenario().ctx());
+    let key = b"burn".to_string();
 
-        let coin_id = object::id(&sui_coin);
+    let mut cap = coin::create_treasury_cap_for_testing<SUI>(world.scenario().ctx()); 
 
-        transfer::public_transfer(sui_coin, world.multisig().addr());
+    // wrong burn value
+    let sui_coin =  cap.mint<SUI>(101, world.scenario().ctx());
 
-        world.lock_treasury_cap(cap);
+    let coin_id = object::id(&sui_coin);
 
-        let effects = world.scenario().next_tx(OWNER);
+    transfer::public_transfer(sui_coin, world.multisig().addr());
 
-        let lock_id = effects.created()[1];
+    world.lock_treasury_cap(cap);
 
-        world.propose_burn<SUI>(
-            key, 
-            7, 
-            1, 
-            b"description".to_string(), 
-            coin_id, 
-            100
-        );
+    let effects = world.scenario().next_tx(OWNER);
 
-        world.scenario().next_tx(OWNER);
+    let lock_id = effects.created()[1];
 
-        world.approve_proposal(key);
+    world.propose_burn<SUI>(
+        key, 
+        7, 
+        1, 
+        b"description".to_string(), 
+        coin_id, 
+        100
+    );
 
-        world.scenario().next_tx(OWNER);
+    world.scenario().next_tx(OWNER);
 
-        world.clock().set_for_testing(8);
+    world.approve_proposal(key);
 
-        let mut treasury_lock = world.borrow_treasury_cap<SUI>(receiving_ticket_by_id(lock_id));
+    world.scenario().next_tx(OWNER);
 
-        let executable = world.execute_proposal(key);
+    world.clock().set_for_testing(8);
 
-        currency::execute_burn(executable, world.multisig(), receiving_ticket_by_id(coin_id), &mut treasury_lock);
+    let mut treasury_lock = world.borrow_treasury_cap<SUI>(receiving_ticket_by_id(lock_id));
 
-        currency::put_back_cap(treasury_lock);
+    let executable = world.execute_proposal(key);
 
-        world.end();
-    }
+    currency::execute_burn(executable, world.multisig(), receiving_ticket_by_id(coin_id), &mut treasury_lock);
 
-    #[test]
-    #[expected_failure(abort_code = currency::EMintNotExecuted)]
-    fun test_destroy_mint_error_mint_not_executed() {
-        let mut world = start_world();
+    currency::put_back_cap(treasury_lock);
 
-        let key = b"mint".to_string();
+    world.end();
+}
 
-        let cap = coin::create_treasury_cap_for_testing<SUI>(world.scenario().ctx()); 
+#[test]
+#[expected_failure(abort_code = currency::EMintNotExecuted)]
+fun test_destroy_mint_error_mint_not_executed() {
+    let mut world = start_world();
 
-        world.lock_treasury_cap(cap);
+    let key = b"mint".to_string();
 
-        let effects = world.scenario().next_tx(OWNER);
+    let cap = coin::create_treasury_cap_for_testing<SUI>(world.scenario().ctx()); 
 
-        // We created one new object
-        let lock_id = effects.created()[0];
+    world.lock_treasury_cap(cap);
 
-        let proposal = world.create_proposal(
-            Witness {},
-            key, 
-            10, 
-            1, 
-            b"description".to_string(), 
-        );
+    let effects = world.scenario().next_tx(OWNER);
 
-        currency::new_mint<SUI>(proposal, 100);
+    // We created one new object
+    let lock_id = effects.created()[0];
 
-        world.scenario().next_tx(OWNER);
+    let proposal = world.create_proposal(
+        Witness {},
+        key, 
+        10, 
+        1, 
+        b"description".to_string(), 
+    );
 
-        world.approve_proposal(key);
+    currency::new_mint<SUI>(proposal, 100);
 
-        world.scenario().next_tx(OWNER);
+    world.scenario().next_tx(OWNER);
 
-        world.clock().set_for_testing(11);
+    world.approve_proposal(key);
 
-        let treasury_lock = world.borrow_treasury_cap<SUI>(receiving_ticket_by_id(lock_id));
+    world.scenario().next_tx(OWNER);
 
-        let mut executable = world.execute_proposal(key);
+    world.clock().set_for_testing(11);
 
-        currency::destroy_mint<SUI, Witness>(&mut executable, Witness {});
+    let treasury_lock = world.borrow_treasury_cap<SUI>(receiving_ticket_by_id(lock_id));
 
-        currency::put_back_cap(treasury_lock);
+    let mut executable = world.execute_proposal(key);
 
-        destroy(executable);
-        world.end();    
-    }
+    currency::destroy_mint<SUI, Witness>(&mut executable, Witness {});
 
-    #[test]
-    #[expected_failure(abort_code = currency::EBurnNotExecuted)]
-    fun test_destroy_burn_error_burn_not_executed() {
-        let mut world = start_world();
+    currency::put_back_cap(treasury_lock);
 
-        let key = b"burn".to_string();
+    destroy(executable);
+    world.end();    
+}
 
-        let mut cap = coin::create_treasury_cap_for_testing<SUI>(world.scenario().ctx()); 
+#[test]
+#[expected_failure(abort_code = currency::EBurnNotExecuted)]
+fun test_destroy_burn_error_burn_not_executed() {
+    let mut world = start_world();
 
-        let sui_coin =  cap.mint<SUI>(100, world.scenario().ctx());
+    let key = b"burn".to_string();
 
-        let coin_id = object::id(&sui_coin);
+    let mut cap = coin::create_treasury_cap_for_testing<SUI>(world.scenario().ctx()); 
 
-        transfer::public_transfer(sui_coin, world.multisig().addr());
+    let sui_coin =  cap.mint<SUI>(100, world.scenario().ctx());
 
-        world.lock_treasury_cap(cap);
+    let coin_id = object::id(&sui_coin);
 
-        let proposal = world.create_proposal(
-            Witness {},
-            key, 
-            10, 
-            1, 
-            b"description".to_string(), 
-        );
+    transfer::public_transfer(sui_coin, world.multisig().addr());
 
-        owned::new_withdraw(proposal, vector[coin_id]);
+    world.lock_treasury_cap(cap);
 
-        currency::new_burn<SUI>(proposal, 100);
+    let proposal = world.create_proposal(
+        Witness {},
+        key, 
+        10, 
+        1, 
+        b"description".to_string(), 
+    );
 
-        world.scenario().next_tx(OWNER);
+    owned::new_withdraw(proposal, vector[coin_id]);
 
-        world.approve_proposal(key);
+    currency::new_burn<SUI>(proposal, 100);
 
-        world.scenario().next_tx(OWNER);
+    world.scenario().next_tx(OWNER);
 
-        world.clock().set_for_testing(11);
+    world.approve_proposal(key);
 
-        let mut executable = world.execute_proposal(key);
+    world.scenario().next_tx(OWNER);
 
-        let coin = owned::withdraw<Coin<SUI>, Witness>(
-            &mut executable, 
-            world.multisig(), 
-            receiving_ticket_by_id(coin_id), 
-            Witness {}, 
-            0
-        );
+    world.clock().set_for_testing(11);
 
-        owned::destroy_withdraw(&mut executable, Witness {});
+    let mut executable = world.execute_proposal(key);
 
-        currency::destroy_burn<SUI, Witness>(&mut executable, Witness {});
+    let coin = owned::withdraw<Coin<SUI>, Witness>(
+        &mut executable, 
+        world.multisig(), 
+        receiving_ticket_by_id(coin_id), 
+        Witness {}, 
+        0
+    );
 
-        destroy(coin);
-        destroy(executable);
-        world.end();    
-    }
+    owned::destroy_withdraw(&mut executable, Witness {});
+
+    currency::destroy_burn<SUI, Witness>(&mut executable, Witness {});
+
+    destroy(coin);
+    destroy(executable);
+    world.end();    
 }
