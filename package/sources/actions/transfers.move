@@ -4,12 +4,15 @@
 
 module kraken::transfers {
     use std::string::String;
-    use sui::bag::{Self, Bag};
-    use sui::transfer::Receiving;
-    use sui::vec_map::{Self, VecMap};
-
-    use kraken::owned;
-    use kraken::multisig::{Multisig, Executable, Proposal};
+    use sui::{
+        bag::{Self, Bag},
+        transfer::Receiving,
+        vec_map::{Self, VecMap}
+    };
+    use kraken::{
+        multisig::{Multisig, Executable, Proposal},
+        owned,
+    };
 
     // === Errors ===
 

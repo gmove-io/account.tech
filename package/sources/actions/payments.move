@@ -4,13 +4,15 @@
 
 module kraken::payments {
     use std::string::String;
-
-    use sui::transfer::Receiving;
-    use sui::balance::Balance;
-    use sui::coin::{Self, Coin};
-    
-    use kraken::owned;
-    use kraken::multisig::{Multisig, Executable, Proposal};
+    use sui::{
+        transfer::Receiving,
+        balance::Balance,
+        coin::{Self, Coin}
+    };
+    use kraken::{
+        multisig::{Multisig, Executable, Proposal},
+        owned
+    };
 
     // === Errors ===
 

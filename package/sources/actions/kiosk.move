@@ -6,11 +6,13 @@
 
 module kraken::kiosk {
     use std::string::String;
-    use sui::coin;
-    use sui::transfer::Receiving;
-    use sui::sui::SUI;
-    use sui::kiosk::{Self, Kiosk, KioskOwnerCap};
-    use sui::transfer_policy::TransferPolicy;
+    use sui::{
+        coin,
+        transfer::Receiving,
+        sui::SUI,
+        kiosk::{Self, Kiosk, KioskOwnerCap},
+        transfer_policy::TransferPolicy,
+    };
     use kiosk::{kiosk_lock_rule, royalty_rule};
     use kraken::multisig::{Multisig, Executable, Proposal};
 

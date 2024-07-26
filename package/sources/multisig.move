@@ -25,6 +25,7 @@ module kraken::multisig {
     use kraken::utils;
 
     // === Aliases ===
+    
     use fun utils::map_set_or as VecMap.set_or;
 
     // === Errors ===

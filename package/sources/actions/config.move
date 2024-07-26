@@ -7,10 +7,13 @@
 module kraken::config {
     use std::string::String;
     use sui::vec_map::{Self, VecMap};
-    use kraken::multisig::{Multisig, Executable, Proposal};
-    use kraken::utils;
+    use kraken::{
+        multisig::{Multisig, Executable, Proposal},
+        utils
+    };
 
     // === Aliases ===
+    
     use fun utils::contains_any as vector.contains_any;
     use fun utils::map_append as VecMap.append;
     use fun utils::map_remove_keys as VecMap.remove_keys;

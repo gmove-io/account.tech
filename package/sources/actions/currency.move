@@ -5,10 +5,14 @@
 
 module kraken::currency {
     use std::string::{Self, String};
-    use sui::transfer::Receiving;
-    use sui::coin::{Coin, TreasuryCap, CoinMetadata};
-    use kraken::multisig::{Multisig, Executable, Proposal};
-    use kraken::owned;
+    use sui::{
+        transfer::Receiving,
+        coin::{Coin, TreasuryCap, CoinMetadata}
+    };
+    use kraken::{
+        multisig::{Multisig, Executable, Proposal},
+        owned
+    };
 
     // === Errors ===
 

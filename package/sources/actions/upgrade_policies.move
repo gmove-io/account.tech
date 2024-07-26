@@ -5,10 +5,12 @@
 
 module kraken::upgrade_policies {
     use std::string::String;
-    use sui::package::{Self, UpgradeCap, UpgradeTicket, UpgradeReceipt};
-    use sui::transfer::Receiving;
-    use sui::clock::Clock;
-    use sui::dynamic_field as df;
+    use sui::{
+        package::{Self, UpgradeCap, UpgradeTicket, UpgradeReceipt},
+        transfer::Receiving,
+        clock::Clock,
+        dynamic_field as df
+    };
     use kraken::multisig::{Multisig, Executable, Proposal};
 
     // === Error ===
