@@ -23,7 +23,7 @@ module kraken::transfers {
     // === Structs ===
 
     // delegated witness verifying a proposal is destroyed in the module where it was created
-    public struct Witness has copy, drop {}
+    public struct Auth has copy, drop {}
 
     // [ACTION] 
     public struct Send has store {
@@ -67,7 +67,7 @@ module kraken::transfers {
     ) {
         assert!(recipients.length() == objects.length(), EDifferentLength);
         let proposal_mut = multisig.create_proposal(
-            Witness {},
+            Auth {},
             key,
             execution_time,
             expiration_epoch,
@@ -86,13 +86,13 @@ module kraken::transfers {
         multisig: &mut Multisig, 
         receiving: Receiving<T>,
     ) {
-        send(executable, multisig, receiving, Witness {}, 0); // send action group starts from 0
+        send(executable, multisig, receiving, Auth {}, 0); // send action group starts from 0
     }
 
     // step 5: destroy send
     public fun complete_send(mut executable: Executable) {
-        destroy_send(&mut executable, Witness {});
-        executable.destroy(Witness {});
+        destroy_send(&mut executable, Auth {});
+        executable.destroy(Auth {});
     }
 
     // step 1: propose to deliver object to a recipient that must claim it
@@ -107,7 +107,7 @@ module kraken::transfers {
         ctx: &mut TxContext
     ) {
         let proposal_mut = multisig.create_proposal(
-            Witness {},
+            Auth {},
             key,
             execution_time,
             expiration_epoch,
@@ -135,7 +135,7 @@ module kraken::transfers {
         multisig: &mut Multisig,
         receiving: Receiving<T>,
     ) {
-        deliver(delivery, cap, executable, multisig, receiving, Witness {}, 0);
+        deliver(delivery, cap, executable, multisig, receiving, Auth {}, 0);
     }
 
     // step 6: share the Delivery and destroy the action
@@ -143,8 +143,8 @@ module kraken::transfers {
     public fun complete_deliver(delivery: Delivery, cap: DeliveryCap, mut executable: Executable) {
         assert!(cap.delivery_id == object::id(&delivery), EWrongDelivery);
         
-        let recipient = destroy_deliver(&mut executable, Witness {});
-        executable.destroy(Witness {});
+        let recipient = destroy_deliver(&mut executable, Auth {});
+        executable.destroy(Auth {});
         
         transfer::transfer(cap, recipient);
         transfer::share_object(delivery);

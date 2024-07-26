@@ -1,13 +1,11 @@
 module kraken::utils {
 
     // === vector ===
-use std::debug::print;
+    
     public fun contains_any<Element: drop>(
         v: &vector<Element>, 
         mut e: vector<Element>
     ): bool {
-        print(v);
-        print(&e);
         if (v.is_empty()) return false;
         while (!e.is_empty()) {
             if (v.contains(&e.pop_back())) return true;

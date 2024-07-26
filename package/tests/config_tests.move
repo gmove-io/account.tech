@@ -1,7 +1,6 @@
 #[test_only]
 module kraken::config_tests{
     use std::string::utf8;
-    use std::debug::print;
 
     use sui::test_utils::assert_eq;
 
@@ -52,8 +51,6 @@ module kraken::config_tests{
         assert_eq(multisig.threshold(b"global".to_string()), 1);
         assert_eq(multisig.member_addresses(), vector[sender]);
         assert_eq(multisig.proposals_length(), 0);
-        print(&b"yoooooooooooooooo".to_string());
-        // print(&multisig.get_weights_for_roles());
         assert_eq(*multisig.get_weights_for_roles().get(&b"global".to_string()), 1);
 
         world.propose_modify_rules(

@@ -26,7 +26,7 @@ module kraken::upgrade_policies {
     // === Structs ===
 
     // delegated witness verifying a proposal is destroyed in the module where it was created
-    public struct Witness has copy, drop {}
+    public struct Auth has copy, drop {}
 
     // [ACTION]
     public struct Upgrade has store {
@@ -145,7 +145,7 @@ module kraken::upgrade_policies {
         let delay = lock.get_time_delay();
 
         let proposal_mut = multisig.create_proposal(
-            Witness {},
+            Auth {},
             key,
             clock.timestamp_ms() + delay,
             expiration_epoch,
@@ -164,9 +164,9 @@ module kraken::upgrade_policies {
         mut executable: Executable,
         lock: &mut UpgradeLock,
     ): UpgradeTicket {
-        let ticket = upgrade(&mut executable, lock, Witness {}, 0);
-        destroy_upgrade(&mut executable, Witness {});
-        executable.destroy(Witness {});
+        let ticket = upgrade(&mut executable, lock, Auth {}, 0);
+        destroy_upgrade(&mut executable, Auth {});
+        executable.destroy(Auth {});
 
         ticket 
     }    
@@ -194,7 +194,7 @@ module kraken::upgrade_policies {
         let delay = lock.get_time_delay();
 
         let proposal_mut = multisig.create_proposal(
-            Witness {},
+            Auth {},
             key,
             clock.timestamp_ms() + delay,
             expiration_epoch,
@@ -213,9 +213,9 @@ module kraken::upgrade_policies {
         multisig: &mut Multisig,
         lock: UpgradeLock,
     ) {
-        restrict(&mut executable, multisig, lock, Witness {}, 0);
-        destroy_restrict(&mut executable, Witness {});
-        executable.destroy(Witness {});
+        restrict(&mut executable, multisig, lock, Auth {}, 0);
+        destroy_restrict(&mut executable, Auth {});
+        executable.destroy(Auth {});
     }
 
     // [ACTION] Public Functions ===

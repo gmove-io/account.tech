@@ -21,7 +21,7 @@ module kraken::payments {
     // === Structs ===
 
     // delegated witness verifying a proposal is destroyed in the module where it was created
-    public struct Witness has copy, drop {}
+    public struct Auth has copy, drop {}
 
     // [ACTION]
     public struct Pay has store {
@@ -64,7 +64,7 @@ module kraken::payments {
         ctx: &mut TxContext
     ) {
         let proposal_mut = multisig.create_proposal(
-            Witness {},
+            Auth {},
             key,
             execution_time,
             expiration_epoch,
@@ -84,10 +84,10 @@ module kraken::payments {
         receiving: Receiving<Coin<C>>,
         ctx: &mut TxContext
     ) {
-        pay(&mut executable, multisig, receiving, Witness {}, 0, ctx);
+        pay(&mut executable, multisig, receiving, Auth {}, 0, ctx);
 
-        destroy_pay(&mut executable, Witness {});
-        executable.destroy(Witness {});
+        destroy_pay(&mut executable, Auth {});
+        executable.destroy(Auth {});
     }
 
     // step 5: backend send the coin to the recipient until balance is empty

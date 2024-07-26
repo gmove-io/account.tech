@@ -38,7 +38,7 @@ module kraken::config {
     // === Structs ===
 
     // delegated witness verifying a proposal is destroyed in the module where it was created
-    public struct Witness has copy, drop {}
+    public struct Auth has copy, drop {}
 
     // [ACTION] change the name of the multisig
     public struct Name has store { 
@@ -93,7 +93,7 @@ module kraken::config {
         ctx: &mut TxContext
     ) {
         let proposal_mut = multisig.create_proposal(
-            Witness {},
+            Auth {},
             key,
             execution_time,
             expiration_epoch,
@@ -110,9 +110,9 @@ module kraken::config {
         mut executable: Executable,
         multisig: &mut Multisig, 
     ) {
-        name(&mut executable, multisig, Witness {}, 0);
-        destroy_name(&mut executable, Witness {});
-        executable.destroy(Witness {});
+        name(&mut executable, multisig, Auth {}, 0);
+        destroy_name(&mut executable, Auth {});
+        executable.destroy(Auth {});
     }
 
     // step 1: propose to modify multisig rules (everything touching weights)
@@ -156,7 +156,7 @@ module kraken::config {
         );
 
         let proposal_mut = multisig.create_proposal(
-            Witness {},
+            Auth {},
             key,
             execution_time,
             expiration_epoch,
@@ -179,60 +179,18 @@ module kraken::config {
         mut executable: Executable,
         multisig: &mut Multisig, 
     ) {
-        members(&mut executable, multisig, Witness {}, 0);
-        weights(&mut executable, multisig, Witness {}, 1);
-        roles(&mut executable, multisig, Witness {}, 2);
-        thresholds(&mut executable, multisig, Witness {}, 3);
+        members(&mut executable, multisig, Auth {}, 0);
+        weights(&mut executable, multisig, Auth {}, 1);
+        roles(&mut executable, multisig, Auth {}, 2);
+        thresholds(&mut executable, multisig, Auth {}, 3);
         
-        destroy_members(&mut executable, Witness {});
-        destroy_weights(&mut executable, Witness {});
-        destroy_roles(&mut executable, Witness {});
-        destroy_thresholds(&mut executable, Witness {});
+        destroy_members(&mut executable, Auth {});
+        destroy_weights(&mut executable, Auth {});
+        destroy_roles(&mut executable, Auth {});
+        destroy_thresholds(&mut executable, Auth {});
         
-        executable.destroy(Witness {});
+        executable.destroy(Auth {});
     }
-
-    // // step 1: propose to add or remove roles for members
-    // public fun propose_roles(
-    //     multisig: &mut Multisig, 
-    //     key: String,
-    //     execution_time: u64,
-    //     expiration_epoch: u64,
-    //     description: String,
-    //     add_to_addr: vector<address>, 
-    //     roles_to_add: vector<vector<String>>, 
-    //     remove_to_addr: vector<address>,
-    //     roles_to_remove: vector<vector<String>>,
-    //     ctx: &mut TxContext
-    // ) {
-    //     let proposal_mut = multisig.create_proposal(
-    //         Witness {},
-    //         key,
-    //         execution_time,
-    //         expiration_epoch,
-    //         description,
-    //         ctx
-    //     );
-    //     new_roles(
-    //         proposal_mut, 
-    //         add_to_addr, 
-    //         roles_to_add, 
-    //         remove_to_addr, 
-    //         roles_to_remove
-    //     );
-    // }
-
-    // // step 2: multiple members have to approve the proposal (multisig::approve_proposal)
-
-    // // step 3: execute the action and modify Multisig object
-    // public fun execute_roles(
-    //     mut executable: Executable,
-    //     multisig: &mut Multisig, 
-    // ) {
-    //     roles(&mut executable, multisig, Witness {}, 0);
-    //     destroy_roles(&mut executable, Witness {});
-    //     executable.destroy(Witness {});
-    // }
 
     // step 1: propose to update the version
     public fun propose_migrate(
@@ -245,7 +203,7 @@ module kraken::config {
         ctx: &mut TxContext
     ) {
         let proposal_mut = multisig.create_proposal(
-            Witness {},
+            Auth {},
             key,
             execution_time,
             expiration_epoch,
@@ -263,9 +221,9 @@ module kraken::config {
         mut executable: Executable,
         multisig: &mut Multisig, 
     ) {
-        migrate(&mut executable, multisig, Witness {}, 0);
-        destroy_migrate(&mut executable, Witness {});
-        executable.destroy(Witness {});
+        migrate(&mut executable, multisig, Auth {}, 0);
+        destroy_migrate(&mut executable, Auth {});
+        executable.destroy(Auth {});
     }
 
     // === [ACTION] Public functions ===

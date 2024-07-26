@@ -24,7 +24,7 @@ module kraken::kiosk {
     // === Structs ===    
 
     // delegated witness verifying a proposal is destroyed in the module where it was created
-    public struct Witness has copy, drop {}
+    public struct Auth has copy, drop {}
     
     // Wrapper restricting access to a KioskOwnerCap
     // doesn't have store because non-transferrable
@@ -164,7 +164,7 @@ module kraken::kiosk {
         ctx: &mut TxContext
     ) {
         let proposal_mut = multisig.create_proposal(
-            Witness {},
+            Auth {},
             key,
             execution_time,
             expiration_epoch,
@@ -187,13 +187,13 @@ module kraken::kiosk {
         policy: &mut TransferPolicy<T>,
         ctx: &mut TxContext
     ) {
-        take(executable, multisig_kiosk, lock, recipient_kiosk, recipient_cap, policy, Witness {}, 0, ctx);
+        take(executable, multisig_kiosk, lock, recipient_kiosk, recipient_cap, policy, Auth {}, 0, ctx);
     }
 
     // step 5: destroy the executable, must `put_back_cap()`
     public fun complete_take(mut executable: Executable) {
-        destroy_take(&mut executable, Witness {});
-        executable.destroy(Witness {});
+        destroy_take(&mut executable, Auth {});
+        executable.destroy(Auth {});
     }
 
     // step 1: propose to list nfts
@@ -208,7 +208,7 @@ module kraken::kiosk {
         ctx: &mut TxContext
     ) {
         let proposal_mut = multisig.create_proposal(
-            Witness {},
+            Auth {},
             key,
             execution_time,
             expiration_epoch,
@@ -227,13 +227,13 @@ module kraken::kiosk {
         kiosk: &mut Kiosk,
         lock: &KioskOwnerLock,
     ) {
-        list<T, Witness>(executable, kiosk, lock, Witness {}, 0);
+        list<T, Auth>(executable, kiosk, lock, Auth {}, 0);
     }
     
     // step 5: destroy the executable, must `put_back_cap()`
     public fun complete_list(mut executable: Executable) {
-        destroy_list(&mut executable, Witness {});
-        executable.destroy(Witness {});
+        destroy_list(&mut executable, Auth {});
+        executable.destroy(Auth {});
     }
 
     // === [ACTION] Public functions ===

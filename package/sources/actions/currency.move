@@ -21,7 +21,7 @@ module kraken::currency {
     // === Structs ===    
 
     // delegated witness verifying a proposal is destroyed in the module where it was created
-    public struct Witness has copy, drop {}
+    public struct Auth has copy, drop {}
     
     // Wrapper restricting access to a TreasuryCap
     // doesn't have store because non-transferrable
@@ -96,7 +96,7 @@ module kraken::currency {
         ctx: &mut TxContext
     ) {
         let proposal_mut = multisig.create_proposal(
-            Witness {}, 
+            Auth {}, 
             key, 
             execution_time, 
             expiration_epoch, 
@@ -115,10 +115,10 @@ module kraken::currency {
         lock: &mut TreasuryLock<C>,
         ctx: &mut TxContext
     ) {
-        let coin = mint<C, Witness>(&mut executable, lock, Witness {}, 0, ctx);
+        let coin = mint<C, Auth>(&mut executable, lock, Auth {}, 0, ctx);
         transfer::public_transfer(coin, executable.multisig_addr());
-        destroy_mint<C, Witness>(&mut executable, Witness {});
-        executable.destroy(Witness {});
+        destroy_mint<C, Auth>(&mut executable, Auth {});
+        executable.destroy(Auth {});
     }
 
     // step 1: propose to burn an amount of a coin owned by the multisig
@@ -133,7 +133,7 @@ module kraken::currency {
         ctx: &mut TxContext
     ) {
         let proposal_mut = multisig.create_proposal(
-            Witness {}, 
+            Auth {}, 
             key, 
             execution_time, 
             expiration_epoch, 
@@ -154,11 +154,11 @@ module kraken::currency {
         receiving: Receiving<Coin<C>>,
         lock: &mut TreasuryLock<C>,
     ) {
-        let coin = owned::withdraw(&mut executable, multisig, receiving, Witness {}, 0);
-        burn<C, Witness>(&mut executable, lock, coin, Witness {}, 1);
-        owned::destroy_withdraw(&mut executable, Witness {});
-        destroy_burn<C, Witness>(&mut executable, Witness {});
-        executable.destroy(Witness {});
+        let coin = owned::withdraw(&mut executable, multisig, receiving, Auth {}, 0);
+        burn<C, Auth>(&mut executable, lock, coin, Auth {}, 1);
+        owned::destroy_withdraw(&mut executable, Auth {});
+        destroy_burn<C, Auth>(&mut executable, Auth {});
+        executable.destroy(Auth {});
     }
 
     // step 1: propose to transfer nfts to another kiosk
@@ -175,7 +175,7 @@ module kraken::currency {
         ctx: &mut TxContext
     ) {
         let proposal_mut = multisig.create_proposal(
-            Witness {},
+            Auth {},
             key,
             execution_time,
             expiration_epoch,
@@ -194,13 +194,13 @@ module kraken::currency {
         lock: &TreasuryLock<C>,
         metadata: &mut CoinMetadata<C>,
     ) {
-        update(executable, lock, metadata, Witness {}, 0);
+        update(executable, lock, metadata, Auth {}, 0);
     }
 
     // step 5: destroy the executable, must `put_back_cap()`
     public fun complete_update(mut executable: Executable) {
-        destroy_update(&mut executable, Witness {});
-        executable.destroy(Witness {});
+        destroy_update(&mut executable, Auth {});
+        executable.destroy(Auth {});
     }
 
     // === [ACTION] Public functions ===

@@ -118,6 +118,7 @@ module kraken::multisig {
                 roles: vec_set::from_keys(vector[b"global".to_string()]) 
             }]
         );      
+        
         Multisig { 
             id: object::new(ctx),
             version: VERSION,
@@ -138,9 +139,9 @@ module kraken::multisig {
 
     // create a new proposal for an action
     // that must be constructed in another module
-    public fun create_proposal<Witness: drop>(
+    public fun create_proposal<W: drop>(
         multisig: &mut Multisig, 
-        _: Witness, // module's witness
+        _: W, // module's auth
         key: String, // proposal key
         execution_time: u64, // timestamp in ms
         expiration_epoch: u64,
@@ -152,7 +153,7 @@ module kraken::multisig {
 
         let proposal = Proposal { 
             id: object::new(ctx),
-            module_witness: type_name::get<Witness>(),
+            module_witness: type_name::get<W>(),
             description,
             execution_time,
             expiration_epoch,
@@ -169,11 +170,6 @@ module kraken::multisig {
     // insert action to the proposal bag, safe because proposal_mut is only accessible upon creation
     public fun add_action<A: store>(proposal: &mut Proposal, action: A) {
         let idx = proposal.actions.length();
-        proposal.actions.add(idx, action);
-    }
-
-    // insert action to the proposal bag with an arbitrary index (use with care)
-    public fun add_action_with_idx<A: store>(proposal: &mut Proposal, action: A, idx: u64) {
         proposal.actions.add(idx, action);
     }
 
@@ -259,21 +255,21 @@ module kraken::multisig {
         }
     }
 
-    public fun action_mut<Witness: drop, A: store>(
+    public fun action_mut<W: drop, A: store>(
         executable: &mut Executable, 
-        _: Witness,
+        _: W,
         idx: u64
     ): &mut A {
-        assert!(executable.module_witness == type_name::get<Witness>(), ENotIssuerModule);
+        assert!(executable.module_witness == type_name::get<W>(), ENotIssuerModule);
         executable.actions.borrow_mut(idx)
     }
 
     // need to destroy all actions before destroying the executable
-    public fun remove_action<Witness: drop, A: store>(
+    public fun remove_action<W: drop, A: store>(
         executable: &mut Executable, 
-        _: Witness,
+        _: W,
     ): A {
-        assert!(executable.module_witness == type_name::get<Witness>(), ENotIssuerModule);
+        assert!(executable.module_witness == type_name::get<W>(), ENotIssuerModule);
         let next = executable.next_to_destroy;
         executable.next_to_destroy = next + 1;
 
@@ -282,16 +278,17 @@ module kraken::multisig {
 
     // to complete the execution
     public use fun destroy_executable as Executable.destroy;
-    public fun destroy_executable<Witness: drop>(
+    public fun destroy_executable<W: drop>(
         executable: Executable, 
-        _: Witness
+        _: W
     ) {
         let Executable { 
             module_witness, 
             actions,
             ..
         } = executable;
-        assert!(module_witness == type_name::get<Witness>(), ENotIssuerModule);
+        
+        assert!(module_witness == type_name::get<W>(), ENotIssuerModule);
         actions.destroy_empty();
     }
 
