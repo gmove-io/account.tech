@@ -1,45 +1,75 @@
 #[test_only]
-module kraken::coin_operations_tests {
+module kraken::coin_operations_tests;
 
-    use sui::sui::SUI;
-    use sui::coin::{Self, Coin};
+use sui::{
+    sui::SUI,
+    coin::{Self, Coin},
+    test_utils::destroy,
+    test_scenario::most_recent_receiving_ticket
+};
+use kraken::test_utils::start_world;
 
-    use sui::test_utils::{assert_eq, destroy};
-    use sui::test_scenario::receiving_ticket_by_id;
+const OWNER: address = @0xBABE;
 
-    use kraken::test_utils::start_world;
+#[test]
+fun merge_and_split_2_coins() {
+    let mut world = start_world();
 
-    const OWNER: address = @0xBABE;
+    let coin_to_split = coin::mint_for_testing<SUI>(100, world.scenario().ctx());
+    let multisig_address = world.multisig().addr();
+    transfer::public_transfer(coin_to_split, multisig_address);
+    
+    world.scenario().next_tx(OWNER);
+    let receiving_to_split = most_recent_receiving_ticket<Coin<SUI>>(&multisig_address.to_id());
+    let split_coin_ids = world.merge_and_split<SUI>(
+        vector[receiving_to_split],
+        vector[30, 40] // LIFO
+    );
 
-    #[test]
-    fun test_merge() {
-       let mut world = start_world();
+    world.scenario().next_tx(OWNER);
+    let split_coin0 = world.scenario().take_from_address_by_id<Coin<SUI>>(
+        multisig_address, 
+        split_coin_ids[0]
+    );
+    let split_coin1 = world.scenario().take_from_address_by_id<Coin<SUI>>(
+        multisig_address, 
+        split_coin_ids[1]
+    );
+    assert!(split_coin0.value() == 40);
+    assert!(split_coin1.value() == 30);
 
-        let coin1 = coin::mint_for_testing<SUI>(100, world.scenario().ctx());
+    destroy(split_coin0);
+    destroy(split_coin1);
+    world.end();          
+}  
 
-        let id1 = object::id(&coin1);
+#[test]
+fun merge_2_coins_and_split() {
+    let mut world = start_world();
+    let multisig_address = world.multisig().addr();
 
-        let multisig_address = world.multisig().addr();
+    let coin1 = coin::mint_for_testing<SUI>(60, world.scenario().ctx());
+    transfer::public_transfer(coin1, multisig_address);
+    world.scenario().next_tx(OWNER);
+    let receiving1 = most_recent_receiving_ticket<Coin<SUI>>(&multisig_address.to_id());
 
-        transfer::public_transfer(coin1, multisig_address);
-        
-        world.scenario().next_tx(OWNER);
+    let coin2 = coin::mint_for_testing<SUI>(40, world.scenario().ctx());
+    transfer::public_transfer(coin2, multisig_address);
+    world.scenario().next_tx(OWNER);
+    let receiving2 = most_recent_receiving_ticket<Coin<SUI>>(&multisig_address.to_id());
+    
+    let merge_coin_id = world.merge_and_split<SUI>(
+        vector[receiving1, receiving2],
+        vector[100] // LIFO
+    );
 
-        let split_coins = world.merge_and_split<SUI>(
-            vector[receiving_ticket_by_id(id1)],
-            vector[30, 40] // LIFO
-        );
+    world.scenario().next_tx(OWNER);
+    let merge_coin = world.scenario().take_from_address_by_id<Coin<SUI>>(
+        multisig_address, 
+        merge_coin_id[0]
+    );
+    assert!(merge_coin.value() == 100);
 
-        world.scenario().next_tx(OWNER);
-        
-        let split_coin0 = world.scenario().take_from_address_by_id<Coin<SUI>>(multisig_address, split_coins[0]);
-        let split_coin1 = world.scenario().take_from_address_by_id<Coin<SUI>>(multisig_address, split_coins[1]);
-
-        assert_eq(split_coin0.value(), 40);
-        assert_eq(split_coin1.value(), 30);
-
-        destroy(split_coin0);
-        destroy(split_coin1);
-        world.end();          
-    }  
-}
+    destroy(merge_coin);
+    world.end();          
+}  

@@ -5,117 +5,119 @@
 /// Invited users can accept or refuse the invite, to add the multisig id to their account or not.
 /// This avoid the need for an indexer as all data can be easily found on-chain.
 
-module kraken::account {
-    use std::string::String;
-    use sui::vec_set::{Self, VecSet};
-    use kraken::multisig::Multisig;
+module kraken::account;
 
-    // === Errors ===
+// === Imports ===
 
-    const ENotMember: u64 = 0;
-    const EWrongAccount: u64 = 1;
-    const EMustLeaveAllMultisigs: u64 = 2;
-    const EWrongMultisig: u64 = 3;
+use std::string::String;
+use sui::vec_set::{Self, VecSet};
+use kraken::multisig::Multisig;
 
-    // === Struct ===
+// === Errors ===
 
-    // non-transferable user account for tracking multisigs
-    public struct Account has key {
-        id: UID,
-        // to display on the frontends
-        username: String,
-        // to display on the frontends
-        profile_picture: String,
-        // multisigs that the user has joined
-        multisig_ids: VecSet<ID>,
-    }
+const ENotMember: u64 = 0;
+const EWrongAccount: u64 = 1;
+const EMustLeaveAllMultisigs: u64 = 2;
+const EWrongMultisig: u64 = 3;
 
-    public struct Invite has key { 
-        id: UID, 
-        // multisig that issued the invite
-        multisig_id: ID,
-    }
+// === Struct ===
 
-    // === Public functions ===
+// non-transferable user account for tracking multisigs
+public struct Account has key {
+    id: UID,
+    // to display on the frontends
+    username: String,
+    // to display on the frontends
+    profile_picture: String,
+    // multisigs that the user has joined
+    multisig_ids: VecSet<ID>,
+}
 
-    // creates and send a soulbound Account to the sender (1 per user)
-    public fun new(username: String, profile_picture: String, ctx: &mut TxContext) {
-        transfer::transfer(
-            Account {
-                id: object::new(ctx),
-                username,
-                profile_picture,
-                multisig_ids: vec_set::empty(),
-            },
-            ctx.sender(),
-        );
-    }
+public struct Invite has key { 
+    id: UID, 
+    // multisig that issued the invite
+    multisig_id: ID,
+}
 
-    // === [MEMBER] Public functions ===
+// === Public functions ===
 
-    // fill account_id in Multisig, insert multisig_id in Account, abort if already joined
-    public fun join_multisig(account: &mut Account, multisig: &mut Multisig, ctx: &TxContext) {
-        multisig.assert_is_member(ctx);
-        multisig.register_account_id(object::id(account), ctx);
-        account.multisig_ids.insert(object::id(multisig)); 
-    }
+// creates and send a soulbound Account to the sender (1 per user)
+public fun new(username: String, profile_picture: String, ctx: &mut TxContext) {
+    transfer::transfer(
+        Account {
+            id: object::new(ctx),
+            username,
+            profile_picture,
+            multisig_ids: vec_set::empty(),
+        },
+        ctx.sender(),
+    );
+}
 
-    // extract and verify account_id in Multisig, remove multisig_id from account, abort if not member
-    public fun leave_multisig(account: &mut Account, multisig: &mut Multisig, ctx: &TxContext) {
-        multisig.assert_is_member(ctx);
-        assert!(object::id(account) == multisig.unregister_account_id(ctx), EWrongAccount);
-        account.multisig_ids.remove(&object::id(multisig));
-    }
+// === [MEMBER] Public functions ===
 
-    // must leave all multisigs before, for consistency
-    public fun destroy(account: Account) {
-        let Account { id, username: _, profile_picture: _, multisig_ids } = account;
-        assert!(multisig_ids.is_empty(), EMustLeaveAllMultisigs);
-        id.delete();
-    }
+// fill account_id in Multisig, insert multisig_id in Account, abort if already joined
+public fun join_multisig(account: &mut Account, multisig: &mut Multisig, ctx: &TxContext) {
+    multisig.assert_is_member(ctx);
+    multisig.register_account_id(object::id(account), ctx);
+    account.multisig_ids.insert(object::id(multisig)); 
+}
 
-    // invites can be sent by a multisig member (upon multisig creation for instance)
-    public fun send_invite(multisig: &Multisig, recipient: address, ctx: &mut TxContext) {
-        // user inviting must be member
-        multisig.assert_is_member(ctx);
-        // invited user must be member
-        assert!(multisig.is_member(&recipient), ENotMember);
-        let invite = Invite { 
-            id: object::new(ctx), 
-            multisig_id: object::id(multisig) 
-        };
-        transfer::transfer(invite, recipient);
-    }
+// extract and verify account_id in Multisig, remove multisig_id from account, abort if not member
+public fun leave_multisig(account: &mut Account, multisig: &mut Multisig, ctx: &TxContext) {
+    multisig.assert_is_member(ctx);
+    assert!(object::id(account) == multisig.unregister_account_id(ctx), EWrongAccount);
+    account.multisig_ids.remove(&object::id(multisig));
+}
 
-    // invited user can register the multisig in his account
-    public fun accept_invite(account: &mut Account, multisig: &mut Multisig, invite: Invite, ctx: &TxContext) {
-        let Invite { id, multisig_id } = invite;
-        id.delete();
-        assert!(multisig_id == object::id(multisig), EWrongMultisig);
-        account.join_multisig(multisig, ctx);
-    }
+// must leave all multisigs before, for consistency
+public fun destroy(account: Account) {
+    let Account { id, username: _, profile_picture: _, multisig_ids } = account;
+    assert!(multisig_ids.is_empty(), EMustLeaveAllMultisigs);
+    id.delete();
+}
 
-    // delete the invite object
-    public fun refuse_invite(invite: Invite) {
-        let Invite { id, multisig_id: _ } = invite;
-        id.delete();
-    }
+// invites can be sent by a multisig member (upon multisig creation for instance)
+public fun send_invite(multisig: &Multisig, recipient: address, ctx: &mut TxContext) {
+    // user inviting must be member
+    multisig.assert_is_member(ctx);
+    // invited user must be member
+    assert!(multisig.is_member(&recipient), ENotMember);
+    let invite = Invite { 
+        id: object::new(ctx), 
+        multisig_id: object::id(multisig) 
+    };
+    transfer::transfer(invite, recipient);
+}
 
-    // === View functions ===    
+// invited user can register the multisig in his account
+public fun accept_invite(account: &mut Account, multisig: &mut Multisig, invite: Invite, ctx: &TxContext) {
+    let Invite { id, multisig_id } = invite;
+    id.delete();
+    assert!(multisig_id == object::id(multisig), EWrongMultisig);
+    account.join_multisig(multisig, ctx);
+}
 
-    public fun username(account: &Account): String {
-        account.username
-    }
+// delete the invite object
+public fun refuse_invite(invite: Invite) {
+    let Invite { id, multisig_id: _ } = invite;
+    id.delete();
+}
 
-    public fun profile_picture(account: &Account): String {
-        account.profile_picture
-    }
+// === View functions ===    
 
-    public fun multisig_ids(account: &Account): vector<ID> {
-        account.multisig_ids.into_keys()
-    }
+public fun username(account: &Account): String {
+    account.username
+}
 
-    public fun multisig_id(invite: &Invite): ID {
-        invite.multisig_id
-    }
+public fun profile_picture(account: &Account): String {
+    account.profile_picture
+}
+
+public fun multisig_ids(account: &Account): vector<ID> {
+    account.multisig_ids.into_keys()
+}
+
+public fun multisig_id(invite: &Invite): ID {
+    invite.multisig_id
 }
