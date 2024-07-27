@@ -497,7 +497,8 @@ public fun verify_new_rules(
             let weight = map_members_weights[&addr];
             let roles = roles_to_add.remove(0);
             roles.do!(|role| {
-                assert!(!multisig.member(&addr).roles().contains(&role), ERoleAlreadyAttributed);
+                if (multisig.is_member(&addr)) 
+                    assert!(!multisig.member(&addr).roles().contains(&role), ERoleAlreadyAttributed);
                 map_roles_weights.set_or!(role, weight, |current| {
                     *current = *current + weight;
                 });
@@ -508,7 +509,8 @@ public fun verify_new_rules(
             let weight = map_members_weights[&addr];
             let roles = roles_to_remove.remove(0);
             roles.do!(|role| {
-                assert!(multisig.member(&addr).roles().contains(&role), ERoleNotAttributed);
+                if (multisig.is_member(&addr)) 
+                    assert!(multisig.member(&addr).roles().contains(&role), ERoleNotAttributed);
                 let current = map_roles_weights.get_mut(&role);
                 *current = *current - weight;
             });
