@@ -91,7 +91,7 @@ fun update_metadata_end_to_end() {
 
     world.scenario().next_tx(OWNER);
     let receiving_lock = most_recent_receiving_ticket(&world.multisig().addr().to_id());
-    world.propose_update(
+    world.propose_update<CURRENCY_TESTS>(
         key, 
         option::some(b"test name".to_string()), 
         option::some(b"test symbol".to_string()), 
@@ -133,7 +133,7 @@ fun update_error_no_change() {
 
     world.scenario().next_tx(OWNER);
     let receiving_lock = most_recent_receiving_ticket(&world.multisig().addr().to_id());
-    world.propose_update(
+    world.propose_update<CURRENCY_TESTS>(
         key, 
         option::none(), 
         option::none(), 

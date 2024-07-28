@@ -7,7 +7,10 @@ module kraken::currency;
 
 // === Imports ===
 
-use std::string::{Self, String};
+use std::{
+    type_name,
+    string::{Self, String}
+};
 use sui::{
     transfer::Receiving,
     coin::{Coin, TreasuryCap, CoinMetadata}
@@ -24,6 +27,7 @@ const EUpdateNotExecuted: u64 = 1;
 const EWrongValue: u64 = 2;
 const EMintNotExecuted: u64 = 3;
 const EBurnNotExecuted: u64 = 4;
+const EWrongCoinType: u64 = 5;
 
 // === Structs ===    
 
@@ -52,6 +56,7 @@ public struct Burn<phantom C: drop> has store {
 
 // [ACTION] update a CoinMetadata object using a locked TreasuryCap 
 public struct Update has store { 
+    coin_type: String,
     name: Option<String>,
     symbol: Option<String>,
     description: Option<String>,
@@ -96,15 +101,15 @@ public fun put_back_cap<C: drop>(treasury_lock: TreasuryLock<C>) {
 public fun propose_mint<C: drop>(
     multisig: &mut Multisig,
     key: String,
+    description: String,
     execution_time: u64,
     expiration_epoch: u64,
-    description: String,
     amount: u64,
     ctx: &mut TxContext
 ) {
     let proposal_mut = multisig.create_proposal(
         Issuer {}, 
-        b"".to_string(),
+        type_to_name<C>(), // the coin type is the auth name 
         key, 
         description, 
         execution_time, 
@@ -133,16 +138,16 @@ public fun execute_mint<C: drop>(
 public fun propose_burn<C: drop>(
     multisig: &mut Multisig,
     key: String,
+    description: String,
     execution_time: u64,
     expiration_epoch: u64,
-    description: String,
     coin_id: ID,
     amount: u64,
     ctx: &mut TxContext
 ) {
     let proposal_mut = multisig.create_proposal(
         Issuer {}, 
-        b"".to_string(),
+        type_to_name<C>(), // the coin type is the auth name 
         key, 
         description, 
         execution_time, 
@@ -171,28 +176,28 @@ public fun execute_burn<C: drop>(
 }
 
 // step 1: propose to transfer nfts to another kiosk
-public fun propose_update(
+public fun propose_update<C: drop>(
     multisig: &mut Multisig,
     key: String,
+    description: String,
     execution_time: u64,
     expiration_epoch: u64,
-    description: String,
-    name: Option<String>,
-    symbol: Option<String>,
-    description_md: Option<String>,
-    icon_url: Option<String>,
+    md_name: Option<String>,
+    md_symbol: Option<String>,
+    md_description: Option<String>,
+    md_icon: Option<String>,
     ctx: &mut TxContext
 ) {
     let proposal_mut = multisig.create_proposal(
         Issuer {},
-        b"".to_string(),
+        type_to_name<C>(), // the coin type is the auth name 
         key,
         description,
         execution_time,
         expiration_epoch,
         ctx
     );
-    new_update(proposal_mut, name, symbol, description_md, icon_url);
+    new_update<C>(proposal_mut, md_name, md_symbol, md_description, md_icon);
 }
 
 // step 2: multiple members have to approve the proposal (multisig::approve_proposal)
@@ -259,7 +264,7 @@ public fun destroy_burn<C: drop, I: copy + drop>(executable: &mut Executable, is
     assert!(amount == 0, EBurnNotExecuted);
 }
 
-public fun new_update(
+public fun new_update<C: drop>(
     proposal: &mut Proposal,
     name: Option<String>,
     symbol: Option<String>,
@@ -267,7 +272,7 @@ public fun new_update(
     icon_url: Option<String>,
 ) {
     assert!(name.is_some() || symbol.is_some() || description.is_some() || icon_url.is_some(), ENoChange);
-    proposal.add_action(Update { name, symbol, description, icon_url });
+    proposal.add_action(Update { coin_type: type_to_name<C>(), name, symbol, description, icon_url });
 }
 
 public fun update<C: drop, I: copy + drop>(
@@ -278,6 +283,8 @@ public fun update<C: drop, I: copy + drop>(
     idx: u64,
 ) {
     let update_mut: &mut Update = executable.action_mut(issuer, idx);
+    assert!(update_mut.coin_type == type_to_name<C>(), EWrongCoinType);
+
     if (update_mut.name.is_some()) {
         lock.treasury_cap.update_name(metadata, update_mut.name.extract());
     };
@@ -294,7 +301,10 @@ public fun update<C: drop, I: copy + drop>(
 }
 
 public fun destroy_update<I: copy + drop>(executable: &mut Executable, issuer: I) {
-    let Update { name, symbol, description, icon_url } = executable.remove_action(issuer);
-    //@dev Future guard - impossible to trigger now
+    let Update { coin_type: _, name, symbol, description, icon_url } = executable.remove_action(issuer);
     assert!(name.is_none() && symbol.is_none() && description.is_none() && icon_url.is_none(), EUpdateNotExecuted);
+}
+
+fun type_to_name<T: drop>(): String {
+    type_name::get<T>().into_string().to_string()
 }

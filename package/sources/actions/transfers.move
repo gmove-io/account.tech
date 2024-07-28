@@ -34,7 +34,7 @@ public struct Issuer has copy, drop {}
 // [ACTION] 
 public struct Send has store {
     // object id -> recipient address
-    transfers: VecMap<ID, address>,
+    objects_recipients_map: VecMap<ID, address>,
 }
 
 // [ACTION] a safe send where recipient has to confirm reception
@@ -64,9 +64,9 @@ public struct DeliveryCap has key {
 public fun propose_send(
     multisig: &mut Multisig, 
     key: String,
+    description: String,
     execution_time: u64,
     expiration_epoch: u64,
-    description: String,
     objects: vector<ID>,
     recipients: vector<address>,
     ctx: &mut TxContext
@@ -106,9 +106,9 @@ public fun complete_send(mut executable: Executable) {
 public fun propose_delivery(
     multisig: &mut Multisig, 
     key: String,
+    description: String,
     execution_time: u64,
     expiration_epoch: u64,
-    description: String,
     objects: vector<ID>,
     recipient: address,
     ctx: &mut TxContext
@@ -207,7 +207,7 @@ public fun cancel_delivery(
 
 public fun new_send(proposal: &mut Proposal, objects: vector<ID>, recipients: vector<address>) {
     owned::new_withdraw(proposal, objects); // 1st action to be executed
-    proposal.add_action(Send { transfers: vec_map::from_keys_values(objects, recipients) }); // 2nd action to be executed
+    proposal.add_action(Send { objects_recipients_map: vec_map::from_keys_values(objects, recipients) }); // 2nd action to be executed
 }
 
 public fun send<T: key + store, I: copy + drop>(
@@ -221,7 +221,7 @@ public fun send<T: key + store, I: copy + drop>(
     
     let object = owned::withdraw(executable, multisig, receiving, issuer, idx);
     let send_mut: &mut Send = executable.action_mut(issuer, idx + 1);
-    let (_, recipient) = send_mut.transfers.remove(&object::id(&object));
+    let (_, recipient) = send_mut.objects_recipients_map.remove(&object::id(&object));
     // abort if receiving object is not in the map
     transfer::public_transfer(object, recipient);
 }
@@ -229,8 +229,8 @@ public fun send<T: key + store, I: copy + drop>(
 public fun destroy_send<I: copy + drop>(executable: &mut Executable, issuer: I) {
     owned::destroy_withdraw(executable, issuer);
     let send: Send = executable.remove_action(issuer);
-    let Send { transfers } = send;
-    assert!(transfers.is_empty(), ESendAllAssetsBefore);
+    let Send { objects_recipients_map } = send;
+    assert!(objects_recipients_map.is_empty(), ESendAllAssetsBefore);
 }
 
 public fun new_deliver(proposal: &mut Proposal, objects: vector<ID>, recipient: address) {

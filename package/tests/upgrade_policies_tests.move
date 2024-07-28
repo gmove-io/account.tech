@@ -28,12 +28,12 @@ fun upgrade_end_to_end() {
     let mut upgrade_lock = world.lock_cap(b"lock".to_string(), upgrade_cap);
     upgrade_lock.add_rule(rule_key, Rule { value: 7 });
     assert!(upgrade_lock.has_rule(rule_key));
-    upgrade_lock.put_back_cap();
+    upgrade_lock.put_back_lock();
 
     world.scenario().next_tx(OWNER);
     let receiving_lock = most_recent_receiving_ticket(&world.multisig().addr().to_id());
     let digest = vector[0, 1, 0, 1];
-    let mut lock = world.borrow_upgrade_cap_lock(receiving_lock);
+    let mut lock = world.borrow_upgrade_lock(receiving_lock);
     
     world.propose_upgrade(key, digest, &lock);
     world.approve_proposal(key);
@@ -42,7 +42,7 @@ fun upgrade_end_to_end() {
     let ticket = upgrade_policies::execute_upgrade(executable, &mut lock);
     let receipt = ticket.test_upgrade();
     upgrade_policies::confirm_upgrade(&mut lock, receipt);
-    lock.put_back_cap();
+    lock.put_back_lock();
 
     package_id.delete();
     world.end();
@@ -59,7 +59,7 @@ fun restrict_end_to_end() {
 
     world.scenario().next_tx(OWNER);
     let receiving_lock = most_recent_receiving_ticket(&world.multisig().addr().to_id());
-    let lock = world.borrow_upgrade_cap_lock(receiving_lock);
+    let lock = world.borrow_upgrade_lock(receiving_lock);
 
     world.propose_restrict(key, package::additive_policy(), &lock);
     let proposal = world.multisig().proposal(&key);
@@ -85,7 +85,7 @@ fun restrict_error_policy_should_restrict() {
 
     world.scenario().next_tx(OWNER);
     let receiving_lock = most_recent_receiving_ticket(&world.multisig().addr().to_id());
-    let lock = world.borrow_upgrade_cap_lock(receiving_lock);
+    let lock = world.borrow_upgrade_lock(receiving_lock);
 
     world.propose_restrict(key, package::compatible_policy(), &lock);
     let proposal = world.multisig().proposal(&key);
@@ -110,7 +110,7 @@ fun restrict_error_invalid_policy() {
 
     world.scenario().next_tx(OWNER);
     let receiving_lock = most_recent_receiving_ticket(&world.multisig().addr().to_id());
-    let lock = world.borrow_upgrade_cap_lock(receiving_lock);
+    let lock = world.borrow_upgrade_lock(receiving_lock);
 
     world.propose_restrict(key, 7, &lock);
     let proposal = world.multisig().proposal(&key);

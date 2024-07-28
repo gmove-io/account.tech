@@ -53,8 +53,8 @@ public struct Restrict has store {
 // doesn't have store because non-transferrable
 public struct UpgradeLock has key {
     id: UID,
-    // name or description of the cap
-    label: String,
+    // name of the package
+    name: String,
     // multisig owning the lock
     multisig_addr: address,
     // the cap to lock
@@ -73,14 +73,14 @@ public struct TimeLock has store {
 // must be sent to multisig with put_back_cap afterwards
 public fun lock_cap(
     multisig: &Multisig,
-    label: String,
+    name: String,
     upgrade_cap: UpgradeCap,
     ctx: &mut TxContext
 ): UpgradeLock {
     multisig.assert_is_member(ctx);
     UpgradeLock { 
         id: object::new(ctx), 
-        label, 
+        name, 
         multisig_addr: multisig.addr(),
         upgrade_cap 
     }
@@ -106,18 +106,18 @@ public fun has_rule(
 // lock a cap with a timelock rule
 public fun lock_cap_with_timelock(
     multisig: &Multisig,
-    label: String,
+    name: String,
     delay_ms: u64,
     upgrade_cap: UpgradeCap,
     ctx: &mut TxContext
 ) {
-    let mut lock = lock_cap(multisig, label, upgrade_cap, ctx);
+    let mut lock = lock_cap(multisig, name, upgrade_cap, ctx);
     add_rule(&mut lock, TIMELOCK_KEY, TimeLock { delay_ms });
-    put_back_cap(lock);
+    put_back_lock(lock);
 }
 
 // borrow the lock that can only be put back in the multisig because no store
-public fun borrow_cap(
+public fun borrow_lock(
     multisig: &mut Multisig, 
     lock: Receiving<UpgradeLock>,
     ctx: &mut TxContext
@@ -127,7 +127,7 @@ public fun borrow_cap(
 }
 
 // can only be returned here, except if make_immutable
-public fun put_back_cap(lock: UpgradeLock) {
+public fun put_back_lock(lock: UpgradeLock) {
     let addr = lock.multisig_addr;
     transfer::transfer(lock, addr);
 }
@@ -140,18 +140,18 @@ public fun put_back_cap(lock: UpgradeLock) {
 public fun propose_upgrade(
     multisig: &mut Multisig, 
     key: String,
-    expiration_epoch: u64,
     description: String,
+    expiration_epoch: u64,
     digest: vector<u8>,
     lock: &UpgradeLock,
     clock: &Clock,
     ctx: &mut TxContext
 ) {
-    let delay = lock.get_time_delay();
+    let delay = lock.time_delay();
 
     let proposal_mut = multisig.create_proposal(
         Issuer {},
-        b"".to_string(),
+        lock.name,
         key,
         description,
         clock.timestamp_ms() + delay,
@@ -190,18 +190,18 @@ public fun confirm_upgrade(
 public fun propose_restrict(
     multisig: &mut Multisig, 
     key: String,
-    expiration_epoch: u64,
     description: String,
+    expiration_epoch: u64,
     policy: u8,
     lock: &UpgradeLock,
     clock: &Clock,
     ctx: &mut TxContext
 ) {
-    let delay = lock.get_time_delay();
+    let delay = lock.time_delay();
 
     let proposal_mut = multisig.create_proposal(
         Issuer {},
-        b"".to_string(),
+        lock.name,
         key,
         description,
         clock.timestamp_ms() + delay,
@@ -285,7 +285,7 @@ public fun restrict<I: copy + drop>(
         lock.upgrade_cap.only_dep_upgrades();
         transfer::transfer(lock, multisig.addr());
     } else {
-        let UpgradeLock { id, label: _, multisig_addr: _, upgrade_cap } = lock;
+        let UpgradeLock { id, name: _, multisig_addr: _, upgrade_cap } = lock;
         package::make_immutable(upgrade_cap);
         id.delete();
     };
@@ -298,7 +298,7 @@ public fun destroy_restrict<I: copy + drop>(executable: &mut Executable, issuer:
     assert!(policy == 0, ERestrictNotExecuted);
 }
 
-fun get_time_delay(lock: &UpgradeLock): u64 {
+fun time_delay(lock: &UpgradeLock): u64 {
     if (lock.has_rule(TIMELOCK_KEY)) {
         let timelock: &TimeLock = df::borrow(&lock.id, TIMELOCK_KEY);
         timelock.delay_ms

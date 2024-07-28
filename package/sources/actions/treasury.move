@@ -26,6 +26,7 @@ const ETreasuryAlreadyExists: u64 = 2;
 const EWrongLength: u64 = 3;
 const ECoinTypeDoesntExist: u64 = 4;
 const EWithdrawNotExecuted: u64 = 5;
+const ETreasuryNotEmpty: u64 = 6;
 
 // === Structs ===
 
@@ -43,7 +44,7 @@ public struct Withdraw has store {
     // name of the treasury to withdraw from
     name: String,
     // coin types to amounts
-    coin_amounts: VecMap<String, u64>,
+    coins_amounts_map: VecMap<String, u64>,
 }
 
 // [ACTION] used in combination with Withdraw to transfer the coins to a recipient
@@ -80,15 +81,22 @@ public fun deposit<C: drop>(
     };
 }
 
+public fun close(multisig: &mut Multisig, name: String, ctx: &mut TxContext) {
+    multisig.assert_is_member(ctx);
+    let Treasury { bag } = df::remove(multisig.uid_mut(), name);
+    assert!(bag.is_empty(), ETreasuryNotEmpty);
+    bag.destroy_empty();
+}
+
 // === [PROPOSAL] Public Functions ===
 
 // step 1: propose to open a treasury for the multisig
 public fun propose_open(
     multisig: &mut Multisig,
     key: String,
+    description: String,
     execution_time: u64,
     expiration_epoch: u64,
-    description: String,
     name: String,
     ctx: &mut TxContext
 ) {
@@ -122,9 +130,9 @@ public fun execute_open(
 public fun propose_batch_transfer(
     multisig: &mut Multisig,
     key: String,
+    description: String,
     execution_time: u64,
     expiration_epoch: u64,
-    description: String,
     name: String,
     coin_types: vector<String>,
     amounts: vector<u64>,
@@ -205,7 +213,7 @@ public fun new_withdraw(
     amounts: vector<u64>
 ) {
     assert!(coin_types.length() == amounts.length(), EWrongLength);
-    proposal.add_action(Withdraw { name, coin_amounts: vec_map::from_keys_values(coin_types, amounts) });
+    proposal.add_action(Withdraw { name, coins_amounts_map: vec_map::from_keys_values(coin_types, amounts) });
 }
 
 public fun withdraw<I: copy + drop, C: drop>(
@@ -216,17 +224,23 @@ public fun withdraw<I: copy + drop, C: drop>(
     ctx: &mut TxContext
 ): Coin<C> {
     let withdraw_mut: &mut Withdraw = executable.action_mut(issuer, idx);
-    let (coin_type, amount) = withdraw_mut.coin_amounts.remove(&coin_type_string<C>());
+    let (coin_type, amount) = withdraw_mut.coins_amounts_map.remove(&coin_type_string<C>());
     
     let treasury: &mut Treasury = df::borrow_mut(multisig.uid_mut(), withdraw_mut.name);
     let balance: &mut Balance<C> = treasury.bag.borrow_mut(coin_type);
-    
-    coin::take(balance, amount, ctx)
+    let coin = coin::take(balance, amount, ctx);
+
+    if (balance.value() == 0) { // clean empty balances
+        let balance: Balance<C> = treasury.bag.remove(coin_type);
+        balance.destroy_zero();
+    };
+
+    coin
 }
 
 public fun destroy_withdraw<I: copy + drop>(executable: &mut Executable, issuer: I) {
-    let Withdraw { name: _, coin_amounts } = executable.remove_action(issuer);
-    assert!(coin_amounts.is_empty(), EWithdrawNotExecuted);
+    let Withdraw { name: _, coins_amounts_map } = executable.remove_action(issuer);
+    assert!(coins_amounts_map.is_empty(), EWithdrawNotExecuted);
 }
 
 public fun new_transfer(

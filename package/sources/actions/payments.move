@@ -59,9 +59,9 @@ public struct Stream<phantom C: drop> has key {
 public fun propose_pay(
     multisig: &mut Multisig, 
     key: String,
+    description: String,
     execution_time: u64,
     expiration_epoch: u64,
-    description: String,
     coin: ID, // must have the total amount to be paid
     amount: u64, // amount to be paid at each interval
     interval: u64, // number of epochs between each payment

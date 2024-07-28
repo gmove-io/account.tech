@@ -64,21 +64,21 @@ public struct Members has store {
 // [ACTION] modify weights per member
 public struct Weights has store { 
     // addresses to modify with new weights
-    weights: VecMap<address, u64>,
+    addresses_weights_map: VecMap<address, u64>,
 }
 
 // [ACTION] add or remove roles from chosen members
 public struct Roles has store { 
     // roles to add to each address
-    to_add: VecMap<address, vector<String>>,
+    to_add_map: VecMap<address, vector<String>>,
     // roles to remove from each address
-    to_remove: VecMap<address, vector<String>>,
+    to_remove_map: VecMap<address, vector<String>>,
 }
 
 // [ACTION] set the thresholds for roles
 public struct Thresholds has store {
     // new thresholds for roles, has to be <= total weight (per role)
-    thresholds: VecMap<String, u64>,
+    roles_thresholds_map: VecMap<String, u64>,
 }
 
 // [ACTION] update the version of the multisig
@@ -93,9 +93,9 @@ public struct Migrate has store {
 public fun propose_name(
     multisig: &mut Multisig, 
     key: String,
+    description: String,
     execution_time: u64,
     expiration_epoch: u64,
-    description: String,
     name: String,
     ctx: &mut TxContext
 ) {
@@ -130,9 +130,9 @@ public fun execute_name(
 public fun propose_modify_rules(
     multisig: &mut Multisig, 
     key: String,
+    description: String,
     execution_time: u64,
     expiration_epoch: u64,
-    description: String,
     // members 
     members_to_add: vector<address>, 
     members_to_remove: vector<address>,
@@ -205,9 +205,9 @@ public fun execute_modify_rules(
 public fun propose_migrate(
     multisig: &mut Multisig, 
     key: String,
+    description: String,
     execution_time: u64,
     expiration_epoch: u64,
-    description: String,
     version: u64,
     ctx: &mut TxContext
 ) {
@@ -270,7 +270,7 @@ public fun new_thresholds(
 ) { 
     let (exists_, idx) = roles.index_of(&b"global".to_string());
     if (exists_) assert!(thresholds[idx] != 0, EThresholdNull);
-    proposal.add_action(Thresholds { thresholds: vec_map::from_keys_values(roles, thresholds) });
+    proposal.add_action(Thresholds { roles_thresholds_map: vec_map::from_keys_values(roles, thresholds) });
 }    
 
 public fun thresholds<I: copy + drop>(
@@ -283,12 +283,12 @@ public fun thresholds<I: copy + drop>(
     assert!(idx + 1 == executable.actions_length(), EThresholdNotLastAction);
     let t_mut: &mut Thresholds = executable.action_mut(issuer, idx);
 
-    let map_roles_weights = multisig.get_weights_for_roles();
+    let roles_weights_map = multisig.get_weights_for_roles();
 
-    while (!t_mut.thresholds.is_empty()) {
-        let idx = t_mut.thresholds.size() - 1; // cheaper to pop
-        let (role, threshold) = t_mut.thresholds.remove_entry_by_idx(idx);
-        assert!(*map_roles_weights.get(&role) >= threshold, EThresholdTooHigh);
+    while (!t_mut.roles_thresholds_map.is_empty()) {
+        let idx = t_mut.roles_thresholds_map.size() - 1; // cheaper to pop
+        let (role, threshold) = t_mut.roles_thresholds_map.remove_entry_by_idx(idx);
+        assert!(*roles_weights_map.get(&role) >= threshold, EThresholdTooHigh);
         multisig.set_threshold(role, threshold);
     };
 }
@@ -297,8 +297,8 @@ public fun destroy_thresholds<I: copy + drop>(
     executable: &mut Executable, 
     issuer: I
 ) {
-    let Thresholds { thresholds } = executable.remove_action(issuer);
-    assert!(thresholds.is_empty(), EThresholdsNotExecuted);
+    let Thresholds { roles_thresholds_map } = executable.remove_action(issuer);
+    assert!(roles_thresholds_map.is_empty(), EThresholdsNotExecuted);
 }
 
 public fun new_members(
@@ -338,7 +338,7 @@ public fun new_weights(
     addresses: vector<address>, 
     weights: vector<u64>,
 ) { 
-    proposal.add_action(Weights { weights: vec_map::from_keys_values(addresses, weights) });
+    proposal.add_action(Weights { addresses_weights_map: vec_map::from_keys_values(addresses, weights) });
 }    
 
 public fun weights<I: copy + drop>(
@@ -350,9 +350,9 @@ public fun weights<I: copy + drop>(
     multisig.assert_executed(executable);
     let w_mut: &mut Weights = executable.action_mut(issuer, idx);
 
-    while (!w_mut.weights.is_empty()) {
-        let idx = w_mut.weights.size() - 1; // cheaper to pop
-        let (addr, weight) = w_mut.weights.remove_entry_by_idx(idx);
+    while (!w_mut.addresses_weights_map.is_empty()) {
+        let idx = w_mut.addresses_weights_map.size() - 1; // cheaper to pop
+        let (addr, weight) = w_mut.addresses_weights_map.remove_entry_by_idx(idx);
         multisig.modify_weight(addr, weight);
     };
     
@@ -362,8 +362,8 @@ public fun destroy_weights<I: copy + drop>(
     executable: &mut Executable, 
     issuer: I
 ) {
-    let Weights { weights } = executable.remove_action(issuer);
-    assert!(weights.is_empty(), EWeightsNotExecuted);
+    let Weights { addresses_weights_map } = executable.remove_action(issuer);
+    assert!(addresses_weights_map.is_empty(), EWeightsNotExecuted);
 }
 
 public fun new_roles(
@@ -374,8 +374,8 @@ public fun new_roles(
     roles_to_remove: vector<vector<String>>,
 ) { 
     proposal.add_action(Roles { 
-        to_add: vec_map::from_keys_values(addr_to_add, roles_to_add), 
-        to_remove: vec_map::from_keys_values(addr_to_remove, roles_to_remove) 
+        to_add_map: vec_map::from_keys_values(addr_to_add, roles_to_add), 
+        to_remove_map: vec_map::from_keys_values(addr_to_remove, roles_to_remove) 
     });
 }
 
@@ -388,15 +388,15 @@ public fun roles<I: copy + drop>(
     multisig.assert_executed(executable);
     let roles_mut: &mut Roles = executable.action_mut(issuer, idx);
 
-    while (!roles_mut.to_add.is_empty()) {
-        let idx = roles_mut.to_add.size() - 1;
-        let (addr, roles) = roles_mut.to_add.remove_entry_by_idx(idx);
+    while (!roles_mut.to_add_map.is_empty()) {
+        let idx = roles_mut.to_add_map.size() - 1;
+        let (addr, roles) = roles_mut.to_add_map.remove_entry_by_idx(idx);
         multisig.add_roles(addr, roles);
     };
 
-    while (!roles_mut.to_remove.is_empty()) {
-        let idx = roles_mut.to_remove.size() - 1;
-        let (addr, roles) = roles_mut.to_remove.remove_entry_by_idx(idx);
+    while (!roles_mut.to_remove_map.is_empty()) {
+        let idx = roles_mut.to_remove_map.size() - 1;
+        let (addr, roles) = roles_mut.to_remove_map.remove_entry_by_idx(idx);
         multisig.remove_roles(addr, roles);
     };
 }
@@ -405,10 +405,10 @@ public fun destroy_roles<I: copy + drop>(
     executable: &mut Executable, 
     issuer: I
 ) {
-    let Roles { to_add, to_remove } = executable.remove_action(issuer);
+    let Roles { to_add_map, to_remove_map } = executable.remove_action(issuer);
     assert!(
-        to_remove.is_empty() &&
-        to_add.is_empty(),
+        to_remove_map.is_empty() &&
+        to_add_map.is_empty(),
         ERolesNotExecuted
     );
 }
@@ -463,33 +463,33 @@ public fun verify_new_rules(
         EVectorLengthMismatch
     );
     // define future state: member -> weight
-    let mut map_members_weights: VecMap<address, u64> = vec_map::empty();
+    let mut members_weights_map: VecMap<address, u64> = vec_map::empty();
     // init with current members
     multisig.member_addresses().do!(|addr| {
-        map_members_weights.insert(addr, multisig.member(&addr).weight());
+        members_weights_map.insert(addr, multisig.member(&addr).weight());
     });
     // process new members to add/remove/modify
     if (!members_to_add.is_empty())
         assert!(!members_to_add.contains_any(multisig.member_addresses()), EAlreadyMember);
-        map_members_weights.append(utils::map_from_keys(members_to_add, 1));
+        members_weights_map.append(utils::map_from_keys(members_to_add, 1));
     if (!members_to_remove.is_empty())
         assert!(members_to_remove.contains_any(multisig.member_addresses()), ENotMember);
-        map_members_weights.remove_keys(members_to_remove);
+        members_weights_map.remove_keys(members_to_remove);
     if (!members_to_modify.is_empty())
         members_to_modify.do!(|addr| {
-            assert!(map_members_weights.contains(&addr), ENotMember);
-            let weight = map_members_weights.get_mut(&addr);
+            assert!(members_weights_map.contains(&addr), ENotMember);
+            let weight = members_weights_map.get_mut(&addr);
             *weight = weights_to_modify.remove(0);
         });
 
     // define future state: role -> total member weight
-    let mut map_roles_weights: VecMap<String, u64> = vec_map::empty();
+    let mut roles_weights_map: VecMap<String, u64> = vec_map::empty();
     // init with current roles
-    map_members_weights.keys().do!(|addr| {
-        let weight = map_members_weights[&addr];
+    members_weights_map.keys().do!(|addr| {
+        let weight = members_weights_map[&addr];
         if (multisig.is_member(&addr))
             multisig.member(&addr).roles().do!(|role| {
-                map_roles_weights.set_or!(role, weight, |current| {
+                roles_weights_map.set_or!(role, weight, |current| {
                     *current = *current + weight;
                 });
             });
@@ -497,25 +497,25 @@ public fun verify_new_rules(
     // process new roles to add/remove
     if (!addresses_add_roles.is_empty())
         addresses_add_roles.do!(|addr| {
-            assert!(map_members_weights.contains(&addr), ENotMember);
-            let weight = map_members_weights[&addr];
+            assert!(members_weights_map.contains(&addr), ENotMember);
+            let weight = members_weights_map[&addr];
             let roles = roles_to_add.remove(0);
             roles.do!(|role| {
                 if (multisig.is_member(&addr)) 
                     assert!(!multisig.member(&addr).roles().contains(&role), ERoleAlreadyAttributed);
-                map_roles_weights.set_or!(role, weight, |current| {
+                roles_weights_map.set_or!(role, weight, |current| {
                     *current = *current + weight;
                 });
             });
         });
         addresses_remove_roles.do!(|addr| {
-            assert!(map_members_weights.contains(&addr), ENotMember);
-            let weight = map_members_weights[&addr];
+            assert!(members_weights_map.contains(&addr), ENotMember);
+            let weight = members_weights_map[&addr];
             let roles = roles_to_remove.remove(0);
             roles.do!(|role| {
                 if (multisig.is_member(&addr)) 
                     assert!(multisig.member(&addr).roles().contains(&role), ERoleNotAttributed);
-                let current = map_roles_weights.get_mut(&role);
+                let current = roles_weights_map.get_mut(&role);
                 *current = *current - weight;
             });
         });
@@ -534,7 +534,7 @@ public fun verify_new_rules(
     // verify threshold is reachable with new members 
     while (!map_roles_thresholds.is_empty()) {
         let (role, threshold) = map_roles_thresholds.pop();
-        let mut weight = map_roles_weights.try_get(&role);
+        let mut weight = roles_weights_map.try_get(&role);
         if (weight.is_some())
             assert!(threshold <= weight.extract(), EThresholdTooHigh);
     };

@@ -15,10 +15,7 @@ module kraken::multisig;
 
 // === Imports ===
 
-use std::{
-    string::String, 
-    type_name::{Self, TypeName}
-};
+use std::string::String;
 use sui::{
     clock::Clock, 
     vec_set::{Self, VecSet}, 
@@ -350,22 +347,22 @@ public fun threshold(multisig: &Multisig, role: String): u64 {
 }
 
 public fun get_weights_for_roles(multisig: &Multisig): VecMap<String, u64> {
-    let mut map_members_weights: VecMap<address, u64> = vec_map::empty();
+    let mut members_weights_map: VecMap<address, u64> = vec_map::empty();
     multisig.member_addresses().do!(|addr| {
-        map_members_weights.insert(addr, multisig.member(&addr).weight());
+        members_weights_map.insert(addr, multisig.member(&addr).weight());
     });
     
-    let mut map_roles_weights: VecMap<String, u64> = vec_map::empty();
+    let mut roles_weights_map: VecMap<String, u64> = vec_map::empty();
     multisig.member_addresses().do!(|addr| {
-        let weight = map_members_weights[&addr];
+        let weight = members_weights_map[&addr];
         multisig.member(&addr).roles().do!(|role| {
-            map_roles_weights.set_or!(role, weight, |current| {
+            roles_weights_map.set_or!(role, weight, |current| {
                 *current = *current + weight;
             });
         });
     });
 
-    map_roles_weights
+    roles_weights_map
 }
 
 public fun member_addresses(multisig: &Multisig): vector<address> {
