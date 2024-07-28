@@ -14,7 +14,7 @@ const OWNER: address = @0xBABE;
 
 public struct Object has key, store { id: UID }
 
-public struct Auth has drop, copy {}
+public struct Issuer has drop, copy {}
 
 #[test]
 fun withdraw_end_to_end() {
@@ -27,14 +27,14 @@ fun withdraw_end_to_end() {
     transfer::public_transfer(object1, multisig_address);
 
     world.scenario().next_tx(OWNER);
-    let proposal = world.create_proposal(Auth {}, key, 0, 0, b"".to_string());
+    let proposal = world.create_proposal(Issuer {}, b"".to_string(), key, b"".to_string(), 0, 0);
     owned::new_withdraw(proposal, vector[id1]);
     world.approve_proposal(key);
 
     let mut executable = world.execute_proposal(key);
-    let object1 = world.withdraw<Object, Auth>(&mut executable, receiving_ticket_by_id(id1), Auth {}, 0);
-    owned::destroy_withdraw(&mut executable, Auth {});
-    executable.destroy(Auth {});
+    let object1 = world.withdraw<Object, Issuer>(&mut executable, receiving_ticket_by_id(id1), Issuer {}, 0);
+    owned::destroy_withdraw(&mut executable, Issuer {});
+    executable.destroy(Issuer {});
     assert!(object1.id.to_inner() == id1);
 
     destroy(object1);
@@ -52,17 +52,17 @@ fun borrow_end_to_end() {
     transfer::public_transfer(object1, multisig_address);
 
     world.scenario().next_tx(OWNER);
-    let proposal = world.create_proposal(Auth {}, key, 0, 0, b"".to_string());
+    let proposal = world.create_proposal(Issuer {}, b"".to_string(), key, b"".to_string(), 0, 0);
     owned::new_borrow(proposal, vector[id1]);
     world.approve_proposal(key);
 
     let mut executable = world.execute_proposal(key);
-    let object1 = world.borrow<Object, Auth>(&mut executable, receiving_ticket_by_id(id1), Auth {}, 0);
+    let object1 = world.borrow<Object, Issuer>(&mut executable, receiving_ticket_by_id(id1), Issuer {}, 0);
     assert!(object::id(&object1) == id1);
-    world.put_back<Object, Auth>(&mut executable, object1, Auth {}, 1);
+    world.put_back<Object, Issuer>(&mut executable, object1, Issuer {}, 1);
 
-    owned::destroy_borrow(&mut executable, Auth {});
-    executable.destroy(Auth {});
+    owned::destroy_borrow(&mut executable, Issuer {});
+    executable.destroy(Issuer {});
     world.end();
 }
 
@@ -80,14 +80,14 @@ fun withdraw_error_wrong_object() {
     transfer::public_transfer(object2, multisig_address);
 
     world.scenario().next_tx(OWNER);
-    let proposal = world.create_proposal(Auth {}, key, 0, 0, b"".to_string());
+    let proposal = world.create_proposal(Issuer {}, b"".to_string(), key, b"".to_string(), 0, 0);
     owned::new_withdraw(proposal, vector[id1]);
     world.approve_proposal(key);
 
     let mut executable = world.execute_proposal(key);
-    let object1 = world.withdraw<Object, Auth>(&mut executable, receiving_ticket_by_id(id2), Auth {}, 0);
-    owned::destroy_withdraw(&mut executable, Auth {});
-    executable.destroy(Auth {});
+    let object1 = world.withdraw<Object, Issuer>(&mut executable, receiving_ticket_by_id(id2), Issuer {}, 0);
+    owned::destroy_withdraw(&mut executable, Issuer {});
+    executable.destroy(Issuer {});
     
     destroy(object1);
     world.end();        
@@ -104,13 +104,13 @@ fun withdraw_error_retrieve_all_objects_before() {
     transfer::public_transfer(object1, multisig_address);
 
     world.scenario().next_tx(OWNER);
-    let proposal = world.create_proposal(Auth {}, key, 0, 0, b"".to_string());
+    let proposal = world.create_proposal(Issuer {}, b"".to_string(), key, b"".to_string(), 0, 0);
     owned::new_withdraw(proposal, vector[id1]);
     world.approve_proposal(key);
 
     let mut executable = world.execute_proposal(key);
-    owned::destroy_withdraw(&mut executable, Auth {});
-    executable.destroy(Auth {});
+    owned::destroy_withdraw(&mut executable, Issuer {});
+    executable.destroy(Issuer {});
 
     world.end();
 }
@@ -127,18 +127,18 @@ fun put_back_error_wrong_object() {
     transfer::public_transfer(object1, multisig_address);
 
     world.scenario().next_tx(OWNER);
-    let proposal = world.create_proposal(Auth {}, key, 0, 0, b"".to_string());
+    let proposal = world.create_proposal(Issuer {}, b"".to_string(), key, b"".to_string(), 0, 0);
     owned::new_borrow(proposal, vector[id1]);
     world.approve_proposal(key);
 
     let mut executable = world.execute_proposal(key);
-    let object1 = world.borrow<Object, Auth>(&mut executable, receiving_ticket_by_id(id1), Auth {}, 0);
+    let object1 = world.borrow<Object, Issuer>(&mut executable, receiving_ticket_by_id(id1), Issuer {}, 0);
     assert!(object::id(&object1) == id1);
-    world.put_back<Object, Auth>(&mut executable, object2, Auth {}, 1);
-    world.put_back<Object, Auth>(&mut executable, object1, Auth {}, 1);
+    world.put_back<Object, Issuer>(&mut executable, object2, Issuer {}, 1);
+    world.put_back<Object, Issuer>(&mut executable, object1, Issuer {}, 1);
 
-    owned::destroy_borrow(&mut executable, Auth {});
-    executable.destroy(Auth {});
+    owned::destroy_borrow(&mut executable, Issuer {});
+    executable.destroy(Issuer {});
     world.end();
 }
 
@@ -153,15 +153,15 @@ fun complete_borrow_error_return_all_objects_before() {
     transfer::public_transfer(object1, multisig_address);
 
     world.scenario().next_tx(OWNER);
-    let proposal = world.create_proposal(Auth {}, key, 0, 0, b"".to_string());
+    let proposal = world.create_proposal(Issuer {}, b"".to_string(), key, b"".to_string(), 0, 0);
     owned::new_borrow(proposal, vector[id1]);
     world.approve_proposal(key);
 
     let mut executable = world.execute_proposal(key);
-    let object1 = world.borrow<Object, Auth>(&mut executable, receiving_ticket_by_id(id1), Auth {}, 0);
-    owned::destroy_borrow(&mut executable, Auth {});
+    let object1 = world.borrow<Object, Issuer>(&mut executable, receiving_ticket_by_id(id1), Issuer {}, 0);
+    owned::destroy_borrow(&mut executable, Issuer {});
 
-    executable.destroy(Auth {});
+    executable.destroy(Issuer {});
     destroy(object1);
     world.end();
 }

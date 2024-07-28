@@ -30,8 +30,8 @@ const TIMELOCK_KEY: vector<u8> = b"TimeLock";
 
 // === Structs ===
 
-// delegated witness verifying a proposal is destroyed in the module where it was created
-public struct Auth has copy, drop {}
+// delegated issuer verifying a proposal is destroyed in the module where it was created
+public struct Issuer has copy, drop {}
 
 // [ACTION]
 public struct Upgrade has store {
@@ -150,11 +150,12 @@ public fun propose_upgrade(
     let delay = lock.get_time_delay();
 
     let proposal_mut = multisig.create_proposal(
-        Auth {},
+        Issuer {},
+        b"".to_string(),
         key,
+        description,
         clock.timestamp_ms() + delay,
         expiration_epoch,
-        description,
         ctx
     );
 
@@ -169,9 +170,9 @@ public fun execute_upgrade(
     mut executable: Executable,
     lock: &mut UpgradeLock,
 ): UpgradeTicket {
-    let ticket = upgrade(&mut executable, lock, Auth {}, 0);
-    destroy_upgrade(&mut executable, Auth {});
-    executable.destroy(Auth {});
+    let ticket = upgrade(&mut executable, lock, Issuer {}, 0);
+    destroy_upgrade(&mut executable, Issuer {});
+    executable.destroy(Issuer {});
 
     ticket 
 }    
@@ -199,11 +200,12 @@ public fun propose_restrict(
     let delay = lock.get_time_delay();
 
     let proposal_mut = multisig.create_proposal(
-        Auth {},
+        Issuer {},
+        b"".to_string(),
         key,
+        description,
         clock.timestamp_ms() + delay,
         expiration_epoch,
-        description,
         ctx
     );
     new_restrict(proposal_mut, lock, policy);
@@ -218,9 +220,9 @@ public fun execute_restrict(
     multisig: &mut Multisig,
     lock: UpgradeLock,
 ) {
-    restrict(&mut executable, multisig, lock, Auth {}, 0);
-    destroy_restrict(&mut executable, Auth {});
-    executable.destroy(Auth {});
+    restrict(&mut executable, multisig, lock, Issuer {}, 0);
+    destroy_restrict(&mut executable, Issuer {});
+    executable.destroy(Issuer {});
 }
 
 // [ACTION] Public Functions ===
@@ -229,13 +231,13 @@ public fun new_upgrade(proposal: &mut Proposal, digest: vector<u8>, lock_id: ID)
     proposal.add_action(Upgrade { digest, lock_id });
 }    
 
-public fun upgrade<W: copy + drop>(
+public fun upgrade<I: copy + drop>(
     executable: &mut Executable,
     lock: &mut UpgradeLock,
-    witness: W,
+    issuer: I,
     idx: u64,
 ): UpgradeTicket {
-    let upgrade_mut: &mut Upgrade = executable.action_mut(witness, idx);
+    let upgrade_mut: &mut Upgrade = executable.action_mut(issuer, idx);
     assert!(object::id(lock) == upgrade_mut.lock_id, EWrongUpgradeLock);
 
     let policy = lock.upgrade_cap.policy();
@@ -246,8 +248,8 @@ public fun upgrade<W: copy + drop>(
     ticket
 }    
 
-public fun destroy_upgrade<W: copy + drop>(executable: &mut Executable, witness: W) {
-    let Upgrade { digest, lock_id: _ } = executable.remove_action(witness);
+public fun destroy_upgrade<I: copy + drop>(executable: &mut Executable, issuer: I) {
+    let Upgrade { digest, lock_id: _ } = executable.remove_action(issuer);
     assert!(digest.is_empty(), EUpgradeNotExecuted);
 }
 
@@ -264,16 +266,16 @@ public fun new_restrict(proposal: &mut Proposal, lock: &UpgradeLock, policy: u8)
     proposal.add_action(Restrict { policy, lock_id: object::id(lock) });
 }    
 
-public fun restrict<W: copy + drop>(
+public fun restrict<I: copy + drop>(
     executable: &mut Executable,
     multisig: &mut Multisig,
     mut lock: UpgradeLock,
-    witness: W,
+    issuer: I,
     idx: u64,
 ) {
     multisig.assert_executed(executable);
     
-    let restrict_mut: &mut Restrict = executable.action_mut(witness, idx);
+    let restrict_mut: &mut Restrict = executable.action_mut(issuer, idx);
     assert!(object::id(&lock) == restrict_mut.lock_id, EWrongUpgradeLock);
 
     if (restrict_mut.policy == package::additive_policy()) {
@@ -291,8 +293,8 @@ public fun restrict<W: copy + drop>(
     restrict_mut.policy = 0;
 }
 
-public fun destroy_restrict<W: copy + drop>(executable: &mut Executable, witness: W) {
-    let Restrict { policy, lock_id: _ } = executable.remove_action(witness);
+public fun destroy_restrict<I: copy + drop>(executable: &mut Executable, issuer: I) {
+    let Restrict { policy, lock_id: _ } = executable.remove_action(issuer);
     assert!(policy == 0, ERestrictNotExecuted);
 }
 

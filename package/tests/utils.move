@@ -109,20 +109,22 @@ public fun new_multisig(world: &mut World): Multisig {
     multisig::new(b"kraken2".to_string(), object::id(&world.account), world.scenario.ctx())
 }
 
-public fun create_proposal<W: drop>(
+public fun create_proposal<I: drop>(
     world: &mut World, 
-    witness: W,
+    auth_issuer: I,
+    auth_name: String,
     key: String, 
+    description: String,
     execution_time: u64, // timestamp in ms
     expiration_epoch: u64,
-    description: String
 ): &mut Proposal {
     world.multisig.create_proposal(
-        witness, 
+        auth_issuer, 
+        auth_name,
         key,
+        description, 
         execution_time, 
         expiration_epoch, 
-        description, 
         world.scenario.ctx()
     )
 }
@@ -176,34 +178,34 @@ public fun assert_is_member(
 
 // === Owned ===
 
-public fun withdraw<O: key + store, W: copy + drop>(
+public fun withdraw<O: key + store, I: copy + drop>(
     world: &mut World, 
     executable: &mut Executable,
     receiving: Receiving<O>,
-    witness: W,
+    issuer: I,
     idx: u64
 ): O {
-    owned::withdraw<O, W>(executable, &mut world.multisig, receiving, witness, idx)
+    owned::withdraw<O, I>(executable, &mut world.multisig, receiving, issuer, idx)
 }
 
-public fun borrow<O: key + store, W: copy + drop>(
+public fun borrow<O: key + store, I: copy + drop>(
     world: &mut World, 
     executable: &mut Executable,
     receiving: Receiving<O>,
-    witness: W,
+    issuer: I,
     idx: u64
 ): O {
-    owned::borrow<O, W>(executable, &mut world.multisig, receiving, witness, idx)
+    owned::borrow<O, I>(executable, &mut world.multisig, receiving, issuer, idx)
 }
 
-public fun put_back<O: key + store, W: copy + drop>(
+public fun put_back<O: key + store, I: copy + drop>(
     world: &mut World, 
     executable: &mut Executable,
     returned: O,
-    witness: W,
+    issuer: I,
     idx: u64
 ) {
-    owned::put_back<O, W>(executable, &world.multisig, returned, witness, idx);
+    owned::put_back<O, I>(executable, &world.multisig, returned, issuer, idx);
 }
 
 // === Coin Operations ===

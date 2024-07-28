@@ -25,7 +25,10 @@ use sui::{
     vec_map::{Self, VecMap}, 
     bag::{Self, Bag}
 };
-use kraken::utils;
+use kraken::{
+    utils,
+    auth::{Self, Auth},
+};
 
 // === Aliases ===
 
@@ -36,12 +39,11 @@ use fun utils::map_set_or as VecMap.set_or;
 const ECallerIsNotMember: u64 = 0;
 const EThresholdNotReached: u64 = 1;
 const ECantBeExecutedYet: u64 = 2;
-const ENotIssuerModule: u64 = 3;
-const EHasntExpired: u64 = 4;
-const EWrongVersion: u64 = 5;
-const ENotMultisigExecutable: u64 = 6;
-const EProposalNotFound: u64 = 7;
-const EMemberNotFound: u64 = 8;
+const EHasntExpired: u64 = 3;
+const EWrongVersion: u64 = 4;
+const ENotMultisigExecutable: u64 = 5;
+const EProposalNotFound: u64 = 6;
+const EMemberNotFound: u64 = 7;
 
 // === Constants ===
 
@@ -56,7 +58,7 @@ public struct Multisig has key {
     version: u64,
     // human readable name to differentiate the multisigs
     name: String,
-    // role -> threshold, no role is "" (index == 0)
+    // role -> threshold, no role is "global" (index == 0)
     thresholds: VecMap<String, u64>,
     // members of the multisig
     members: VecMap<address, Member>,
@@ -79,7 +81,7 @@ public struct Member has store {
 public struct Proposal has key, store {
     id: UID,
     // module that issued the proposal and must destroy it
-    module_witness: TypeName,
+    auth: Auth,
     // what this proposal aims to do, for informational purpose
     description: String,
     // the proposal can be deleted from this epoch
@@ -102,7 +104,7 @@ public struct Executable {
     // multisig that executed the proposal
     multisig_addr: address,
     // module that issued the proposal and must destroy it
-    module_witness: TypeName,
+    auth: Auth,
     // index of the next action to destroy, starts at 0
     next_to_destroy: u64,
     // actions to be executed in order
@@ -143,13 +145,14 @@ public fun share(multisig: Multisig) {
 
 // create a new proposal for an action
 // that must be constructed in another module
-public fun create_proposal<W: drop>(
+public fun create_proposal<I: drop>(
     multisig: &mut Multisig, 
-    _: W, // module's auth
+    auth_issuer: I, // module's auth issuer
+    auth_name: String, // module's auth name
     key: String, // proposal key
+    description: String,
     execution_time: u64, // timestamp in ms
     expiration_epoch: u64,
-    description: String,
     ctx: &mut TxContext
 ): &mut Proposal {
     multisig.assert_is_member(ctx);
@@ -157,7 +160,7 @@ public fun create_proposal<W: drop>(
 
     let proposal = Proposal { 
         id: object::new(ctx),
-        module_witness: type_name::get<W>(),
+        auth: auth::construct(auth_issuer, auth_name),
         description,
         execution_time,
         expiration_epoch,
@@ -187,12 +190,13 @@ public fun approve_proposal(
     multisig.assert_version();
     assert!(multisig.proposals.contains(&key), EProposalNotFound);
 
-    let role = multisig.proposal(&key).auth_into_role();
-    let has_role = multisig.member(&ctx.sender()).has_role(&role);
+    let addr = ctx.sender();
+    let role = multisig.proposal(&key).auth().into_role();
+    let has_role = multisig.member(&addr).has_role(&role);
 
     let proposal = multisig.proposals.get_mut(&key);
-    let weight = multisig.members.get(&ctx.sender()).weight;
-    proposal.approved.insert(ctx.sender()); // throws if already approved
+    let weight = multisig.members.get(&addr).weight;
+    proposal.approved.insert(addr); // throws if already approved
     proposal.total_weight = proposal.total_weight + weight;
     if (has_role)
         proposal.role_weight = proposal.role_weight + weight;
@@ -208,7 +212,7 @@ public fun remove_approval(
     multisig.assert_version();
     assert!(multisig.proposals.contains(&key), EProposalNotFound);
 
-    let role = multisig.proposal(&key).auth_into_role();
+    let role = multisig.proposal(&key).auth().into_role();
     let has_role = multisig.member(&ctx.sender()).has_role(&role);
 
     let proposal = multisig.proposals.get_mut(&key);
@@ -232,7 +236,7 @@ public fun execute_proposal(
     let (_, proposal) = multisig.proposals.remove(&key);
     let Proposal { 
         id, 
-        module_witness,
+        auth,
         execution_time,
         actions,
         total_weight,
@@ -241,7 +245,7 @@ public fun execute_proposal(
     } = proposal;
     
     id.delete();
-    let role = module_witness.into_string().to_string();
+    let role = auth.into_role();
     let has_role = multisig.member(&ctx.sender()).has_role(&role);
 
     assert!(clock.timestamp_ms() >= execution_time, ECantBeExecutedYet);
@@ -253,27 +257,27 @@ public fun execute_proposal(
 
     Executable { 
         multisig_addr: multisig.id.uid_to_inner().id_to_address(), 
-        module_witness,
+        auth,
         next_to_destroy: 0,
         actions
     }
 }
 
-public fun action_mut<W: drop, A: store>(
+public fun action_mut<I: drop, A: store>(
     executable: &mut Executable, 
-    _: W,
+    auth_issuer: I,
     idx: u64
 ): &mut A {
-    assert!(executable.module_witness == type_name::get<W>(), ENotIssuerModule);
+    executable.auth.authenticate_module(auth_issuer);
     executable.actions.borrow_mut(idx)
 }
 
 // need to destroy all actions before destroying the executable
-public fun remove_action<W: drop, A: store>(
+public fun remove_action<I: drop, A: store>(
     executable: &mut Executable, 
-    _: W,
+    auth_issuer: I,
 ): A {
-    assert!(executable.module_witness == type_name::get<W>(), ENotIssuerModule);
+    executable.auth.authenticate_module(auth_issuer);
     let next = executable.next_to_destroy;
     executable.next_to_destroy = next + 1;
 
@@ -282,17 +286,17 @@ public fun remove_action<W: drop, A: store>(
 
 // to complete the execution
 public use fun destroy_executable as Executable.destroy;
-public fun destroy_executable<W: drop>(
+public fun destroy_executable<I: drop>(
     executable: Executable, 
-    _: W
+    auth_issuer: I
 ) {
     let Executable { 
-        module_witness, 
+        auth, 
         actions,
         ..
     } = executable;
     
-    assert!(module_witness == type_name::get<W>(), ENotIssuerModule);
+    auth.authenticate_module(auth_issuer);
     actions.destroy_empty();
 }
 
@@ -402,13 +406,9 @@ public fun proposal(multisig: &Multisig, key: &String): &Proposal {
     multisig.proposals.get(key)
 }
 
-public use fun proposal_module_witness as Proposal.module_witness;
-public fun proposal_module_witness(proposal: &Proposal): TypeName {
-    proposal.module_witness
-}
-
-public fun auth_into_role(proposal: &Proposal): String {
-    proposal.module_witness.into_string().to_string()
+public use fun proposal_auth as Proposal.auth;
+public fun proposal_auth(proposal: &Proposal): &Auth {
+    &proposal.auth
 }
 
 public fun description(proposal: &Proposal): String {
@@ -451,9 +451,9 @@ public fun assert_multisig_executed(multisig: &Multisig, executable: &Executable
     assert!(multisig.addr() == executable.multisig_addr, ENotMultisigExecutable);
 }
 
-public use fun executable_module_witness as Executable.module_witness;
-public fun executable_module_witness(executable: &Executable): address {
-    executable.multisig_addr
+public use fun executable_auth as Executable.auth;
+public fun executable_auth(executable: &Executable): &Auth {
+    &executable.auth
 }
 
 public use fun executable_actions_length as Executable.actions_length;

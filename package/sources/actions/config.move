@@ -12,7 +12,8 @@ use std::string::String;
 use sui::vec_map::{Self, VecMap};
 use kraken::{
     multisig::{Multisig, Executable, Proposal},
-    utils
+    auth,
+    utils,
 };
 
 // === Aliases ===
@@ -43,8 +44,8 @@ const EVectorLengthMismatch: u64 = 16;
 
 // === Structs ===
 
-// delegated witness verifying a proposal is destroyed in the module where it was created
-public struct Auth has copy, drop {}
+// delegated issuer verifying a proposal is destroyed in the module where it was created
+public struct Issuer has copy, drop {}
 
 // [ACTION] change the name of the multisig
 public struct Name has store { 
@@ -99,11 +100,12 @@ public fun propose_name(
     ctx: &mut TxContext
 ) {
     let proposal_mut = multisig.create_proposal(
-        Auth {},
+        Issuer {},
+        b"".to_string(),
         key,
+        description,
         execution_time,
         expiration_epoch,
-        description,
         ctx
     );
     new_name(proposal_mut, name);
@@ -116,9 +118,9 @@ public fun execute_name(
     mut executable: Executable,
     multisig: &mut Multisig, 
 ) {
-    name(&mut executable, multisig, Auth {}, 0);
-    destroy_name(&mut executable, Auth {});
-    executable.destroy(Auth {});
+    name(&mut executable, multisig, Issuer {}, 0);
+    destroy_name(&mut executable, Issuer {});
+    executable.destroy(Issuer {});
 }
 
 // step 1: propose to modify multisig rules (everything touching weights)
@@ -162,11 +164,12 @@ public fun propose_modify_rules(
     );
 
     let proposal_mut = multisig.create_proposal(
-        Auth {},
+        Issuer {},
+        b"".to_string(),
         key,
+        description,
         execution_time,
         expiration_epoch,
-        description,
         ctx
     );
     // must execute add members before modify weights in case we add and modify the same member
@@ -185,17 +188,17 @@ public fun execute_modify_rules(
     mut executable: Executable,
     multisig: &mut Multisig, 
 ) {
-    members(&mut executable, multisig, Auth {}, 0);
-    weights(&mut executable, multisig, Auth {}, 1);
-    roles(&mut executable, multisig, Auth {}, 2);
-    thresholds(&mut executable, multisig, Auth {}, 3);
+    members(&mut executable, multisig, Issuer {}, 0);
+    weights(&mut executable, multisig, Issuer {}, 1);
+    roles(&mut executable, multisig, Issuer {}, 2);
+    thresholds(&mut executable, multisig, Issuer {}, 3);
     
-    destroy_members(&mut executable, Auth {});
-    destroy_weights(&mut executable, Auth {});
-    destroy_roles(&mut executable, Auth {});
-    destroy_thresholds(&mut executable, Auth {});
+    destroy_members(&mut executable, Issuer {});
+    destroy_weights(&mut executable, Issuer {});
+    destroy_roles(&mut executable, Issuer {});
+    destroy_thresholds(&mut executable, Issuer {});
     
-    executable.destroy(Auth {});
+    executable.destroy(Issuer {});
 }
 
 // step 1: propose to update the version
@@ -209,11 +212,12 @@ public fun propose_migrate(
     ctx: &mut TxContext
 ) {
     let proposal_mut = multisig.create_proposal(
-        Auth {},
+        Issuer {},
+        b"".to_string(),
         key,
+        description,
         execution_time,
         expiration_epoch,
-        description,
         ctx
     );
     new_migrate(proposal_mut, version);
@@ -227,9 +231,9 @@ public fun execute_migrate(
     mut executable: Executable,
     multisig: &mut Multisig, 
 ) {
-    migrate(&mut executable, multisig, Auth {}, 0);
-    destroy_migrate(&mut executable, Auth {});
-    executable.destroy(Auth {});
+    migrate(&mut executable, multisig, Issuer {}, 0);
+    destroy_migrate(&mut executable, Issuer {});
+    executable.destroy(Issuer {});
 }
 
 // === [ACTION] Public functions ===
@@ -238,24 +242,24 @@ public fun new_name(proposal: &mut Proposal, name: String) {
     proposal.add_action(Name { name });
 }
 
-public fun name<W: copy + drop>(
+public fun name<I: copy + drop>(
     executable: &mut Executable,
     multisig: &mut Multisig, 
-    witness: W,
+    issuer: I,
     idx: u64,
 ) {
     multisig.assert_executed(executable);
-    let name_mut: &mut Name = executable.action_mut(witness, idx);
+    let name_mut: &mut Name = executable.action_mut(issuer, idx);
     assert!(!name_mut.name.is_empty(), ENameAlreadySet);
     multisig.set_name(name_mut.name);
     name_mut.name = b"".to_string(); // reset to confirm execution
 }
     
-public fun destroy_name<W: copy + drop>(
+public fun destroy_name<I: copy + drop>(
     executable: &mut Executable,
-    witness: W,
+    issuer: I,
 ) {
-    let Name { name } = executable.remove_action(witness);
+    let Name { name } = executable.remove_action(issuer);
     assert!(name.is_empty(), ENameNotSet);
 }
 
@@ -269,15 +273,15 @@ public fun new_thresholds(
     proposal.add_action(Thresholds { thresholds: vec_map::from_keys_values(roles, thresholds) });
 }    
 
-public fun thresholds<W: copy + drop>(
+public fun thresholds<I: copy + drop>(
     executable: &mut Executable,
     multisig: &mut Multisig, 
-    witness: W,
+    issuer: I,
     idx: u64,
 ) {
     // threshold modification must be the latest action to be executed to ensure it is reachable
     assert!(idx + 1 == executable.actions_length(), EThresholdNotLastAction);
-    let t_mut: &mut Thresholds = executable.action_mut(witness, idx);
+    let t_mut: &mut Thresholds = executable.action_mut(issuer, idx);
 
     let map_roles_weights = multisig.get_weights_for_roles();
 
@@ -289,11 +293,11 @@ public fun thresholds<W: copy + drop>(
     };
 }
 
-public fun destroy_thresholds<W: copy + drop>(
+public fun destroy_thresholds<I: copy + drop>(
     executable: &mut Executable, 
-    witness: W
+    issuer: I
 ) {
-    let Thresholds { thresholds } = executable.remove_action(witness);
+    let Thresholds { thresholds } = executable.remove_action(issuer);
     assert!(thresholds.is_empty(), EThresholdsNotExecuted);
 }
 
@@ -305,24 +309,24 @@ public fun new_members(
     proposal.add_action(Members { to_remove, to_add });
 }    
 
-public fun members<W: copy + drop>(
+public fun members<I: copy + drop>(
     executable: &mut Executable,
     multisig: &mut Multisig, 
-    witness: W,
+    issuer: I,
     idx: u64,
 ) {
     multisig.assert_executed(executable);
-    let members_mut: &mut Members = executable.action_mut(witness, idx);
+    let members_mut: &mut Members = executable.action_mut(issuer, idx);
 
     multisig.remove_members(&mut members_mut.to_remove);
     multisig.add_members(&mut members_mut.to_add);
 }
 
-public fun destroy_members<W: copy + drop>(
+public fun destroy_members<I: copy + drop>(
     executable: &mut Executable, 
-    witness: W
+    issuer: I
 ) {
-    let Members { to_add, to_remove } = executable.remove_action(witness);
+    let Members { to_add, to_remove } = executable.remove_action(issuer);
     assert!(
         to_remove.is_empty() && to_add.is_empty(),
         EMembersNotExecuted
@@ -337,14 +341,14 @@ public fun new_weights(
     proposal.add_action(Weights { weights: vec_map::from_keys_values(addresses, weights) });
 }    
 
-public fun weights<W: copy + drop>(
+public fun weights<I: copy + drop>(
     executable: &mut Executable,
     multisig: &mut Multisig, 
-    witness: W,
+    issuer: I,
     idx: u64,
 ) {
     multisig.assert_executed(executable);
-    let w_mut: &mut Weights = executable.action_mut(witness, idx);
+    let w_mut: &mut Weights = executable.action_mut(issuer, idx);
 
     while (!w_mut.weights.is_empty()) {
         let idx = w_mut.weights.size() - 1; // cheaper to pop
@@ -354,11 +358,11 @@ public fun weights<W: copy + drop>(
     
 }
 
-public fun destroy_weights<W: copy + drop>(
+public fun destroy_weights<I: copy + drop>(
     executable: &mut Executable, 
-    witness: W
+    issuer: I
 ) {
-    let Weights { weights } = executable.remove_action(witness);
+    let Weights { weights } = executable.remove_action(issuer);
     assert!(weights.is_empty(), EWeightsNotExecuted);
 }
 
@@ -375,14 +379,14 @@ public fun new_roles(
     });
 }
 
-public fun roles<W: copy + drop>(
+public fun roles<I: copy + drop>(
     executable: &mut Executable,
     multisig: &mut Multisig, 
-    witness: W,
+    issuer: I,
     idx: u64,
 ) {
     multisig.assert_executed(executable);
-    let roles_mut: &mut Roles = executable.action_mut(witness, idx);
+    let roles_mut: &mut Roles = executable.action_mut(issuer, idx);
 
     while (!roles_mut.to_add.is_empty()) {
         let idx = roles_mut.to_add.size() - 1;
@@ -397,11 +401,11 @@ public fun roles<W: copy + drop>(
     };
 }
 
-public fun destroy_roles<W: copy + drop>(
+public fun destroy_roles<I: copy + drop>(
     executable: &mut Executable, 
-    witness: W
+    issuer: I
 ) {
-    let Roles { to_add, to_remove } = executable.remove_action(witness);
+    let Roles { to_add, to_remove } = executable.remove_action(issuer);
     assert!(
         to_remove.is_empty() &&
         to_add.is_empty(),
@@ -413,24 +417,24 @@ public fun new_migrate(proposal: &mut Proposal, version: u64) {
     proposal.add_action(Migrate { version });
 }
 
-public fun migrate<W: copy + drop>(
+public fun migrate<I: copy + drop>(
     executable: &mut Executable,
     multisig: &mut Multisig, 
-    witness: W,
+    issuer: I,
     idx: u64,
 ) {
     multisig.assert_executed(executable);
-    let migrate_mut: &mut Migrate = executable.action_mut(witness, idx);
+    let migrate_mut: &mut Migrate = executable.action_mut(issuer, idx);
     assert!(migrate_mut.version != 0, EVersionAlreadyUpdated);
     multisig.set_version(migrate_mut.version);
     migrate_mut.version = 0; // reset to 0 to enforce exactly one execution
 }
     
-public fun destroy_migrate<W: copy + drop>(
+public fun destroy_migrate<I: copy + drop>(
     executable: &mut Executable,
-    witness: W,
+    issuer: I,
 ) {
-    let Migrate { version } = executable.remove_action(witness);
+    let Migrate { version } = executable.remove_action(issuer);
     assert!(version == 0, EMigrateNotExecuted);
 }
 

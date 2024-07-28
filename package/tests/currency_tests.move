@@ -18,7 +18,7 @@ const OWNER: address = @0xBABE;
 
 public struct CURRENCY_TESTS has drop {}
 
-public struct Auth has drop, copy {}
+public struct Issuer has drop, copy {}
 
 #[test]
 fun mint_end_to_end() {
@@ -189,11 +189,12 @@ fun destroy_mint_error_mint_not_executed() {
     world.scenario().next_tx(OWNER);
     let receiving_lock = most_recent_receiving_ticket(&world.multisig().addr().to_id());
     let proposal = world.create_proposal(
-        Auth {},
+        Issuer {},
+        b"".to_string(),
         key, 
-        0, 
-        0, 
         b"description".to_string(), 
+        0, 
+        0, 
     );
     currency::new_mint<SUI>(proposal, 100);
     world.approve_proposal(key);
@@ -201,7 +202,7 @@ fun destroy_mint_error_mint_not_executed() {
     world.scenario().next_tx(OWNER);
     let treasury_lock = world.borrow_treasury_cap<SUI>(receiving_lock);
     let mut executable = world.execute_proposal(key);
-    currency::destroy_mint<SUI, Auth>(&mut executable, Auth {});
+    currency::destroy_mint<SUI, Issuer>(&mut executable, Issuer {});
     currency::put_back_cap(treasury_lock);
 
     destroy(executable);
@@ -222,26 +223,27 @@ fun destroy_burn_error_burn_not_executed() {
     world.lock_treasury_cap(cap);
 
     let proposal = world.create_proposal(
-        Auth {},
+        Issuer {},
+        b"".to_string(),
         key, 
-        0, 
-        0, 
         b"description".to_string(), 
+        0, 
+        0, 
     );
     owned::new_withdraw(proposal, vector[receiving_coin.receiving_object_id()]);
     currency::new_burn<SUI>(proposal, 100);
     world.approve_proposal(key);
 
     let mut executable = world.execute_proposal(key);
-    let coin = owned::withdraw<Coin<SUI>, Auth>(
+    let coin = owned::withdraw<Coin<SUI>, Issuer>(
         &mut executable, 
         world.multisig(), 
         receiving_coin, 
-        Auth {}, 
+        Issuer {}, 
         0
     );
-    owned::destroy_withdraw(&mut executable, Auth {});
-    currency::destroy_burn<SUI, Auth>(&mut executable, Auth {});
+    owned::destroy_withdraw(&mut executable, Issuer {});
+    currency::destroy_burn<SUI, Issuer>(&mut executable, Issuer {});
 
     destroy(coin);
     destroy(executable);

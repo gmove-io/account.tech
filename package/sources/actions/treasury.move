@@ -29,11 +29,8 @@ const EWithdrawNotExecuted: u64 = 5;
 
 // === Structs ===
 
-// delegated witness protecting the proposal flow, role and treasury key
-public struct Auth has copy, drop {
-    // key name 
-    name: String
-}
+// delegated issuer protecting the proposal flow, role and treasury key
+public struct Issuer has copy, drop {}
 
 // [ACTION] propose to open a treasury for the multisig
 public struct Open has store {
@@ -97,11 +94,12 @@ public fun propose_open(
 ) {
     assert!(!treasury_exists(multisig, name), ETreasuryAlreadyExists);
     let proposal_mut = multisig.create_proposal(
-        Auth { name },
+        Issuer {},
+        name,
         key,
+        description,
         execution_time,
         expiration_epoch,
-        description,
         ctx
     );
     new_open(proposal_mut, name);
@@ -116,9 +114,8 @@ public fun execute_open(
     multisig: &mut Multisig,
     ctx: &mut TxContext
 ) {
-    let name = executable.action<Open>(0).name;
-    open(&mut executable, multisig, Auth { name }, 0, ctx);
-    executable.destroy(Auth { name });
+    open(&mut executable, multisig, Issuer {}, 0, ctx);
+    executable.destroy(Issuer {});
 }
 
 // step 1: propose to execute a transfer with multiple coins for different recipients
@@ -141,11 +138,12 @@ public fun propose_batch_transfer(
     });
 
     let proposal_mut = multisig.create_proposal(
-        Auth { name },
+        Issuer {},
+        name,
         key,
+        description,
         execution_time,
         expiration_epoch,
-        description,
         ctx
     );
 
@@ -164,27 +162,17 @@ public fun execute_transfer<C: drop>(
     multisig: &mut Multisig,
     ctx: &mut TxContext
 ) {
-    let name = executable.action<Withdraw>(0).name;
-    transfer<Auth ,C>(executable, multisig, Auth { name }, 0, ctx); // TODO: handle idx
+    transfer<Issuer ,C>(executable, multisig, Issuer {}, 0, ctx); // TODO: handle idx
 }
 
 // step 5: each time a Withdraw is consumed, we destroy it with the Transfer
-public fun confirm_transfer<C: drop>(
-    executable: &mut Executable,
-    multisig: &mut Multisig,
-    ctx: &mut TxContext
-) {
-    let name = executable.action<Withdraw>(0).name;
-    destroy_withdraw(executable, Auth { name });
-    destroy_transfer(executable, Auth { name });
+public fun confirm_transfer(executable: &mut Executable) {
+    destroy_withdraw(executable, Issuer {});
+    destroy_transfer(executable, Issuer {});
 }
 
-public fun confirm_batch_transfer<C: drop>(
-    executable: Executable,
-    ctx: &mut TxContext
-) {
-    let name = executable.action<Withdraw>(0).name;
-    executable.destroy(Auth { name });
+public fun complete_batch_transfer(executable: Executable) {
+    executable.destroy(Issuer {});
 }
 
 // === [ACTION] Public Functions ===
@@ -193,20 +181,20 @@ public fun new_open(proposal: &mut Proposal, name: String) {
     proposal.add_action(Open { name });
 }
 
-public fun open<W: copy + drop>(
+public fun open<I: copy + drop>(
     executable: &mut Executable,
     multisig: &mut Multisig,
-    witness: W,
+    issuer: I,
     idx: u64,
     ctx: &mut TxContext
 ) {
-    let open_mut: &mut Open = executable.action_mut(witness, idx);
+    let open_mut: &mut Open = executable.action_mut(issuer, idx);
     df::add(multisig.uid_mut(), open_mut.name, Treasury { bag: bag::new(ctx) });
     open_mut.name = b"".to_string(); // reset to ensure execution
 }
 
-public fun destroy_open<W: copy + drop>(executable: &mut Executable, witness: W) {
-    let Open { name } = executable.remove_action(witness);
+public fun destroy_open<I: copy + drop>(executable: &mut Executable, issuer: I) {
+    let Open { name } = executable.remove_action(issuer);
     assert!(name.is_empty(), EOpenNotExecuted);
 }
 
@@ -220,14 +208,14 @@ public fun new_withdraw(
     proposal.add_action(Withdraw { name, coin_amounts: vec_map::from_keys_values(coin_types, amounts) });
 }
 
-public fun withdraw<W: copy + drop, C: drop>(
+public fun withdraw<I: copy + drop, C: drop>(
     executable: &mut Executable,
     multisig: &mut Multisig,
-    witness: W,
+    issuer: I,
     idx: u64,
     ctx: &mut TxContext
 ): Coin<C> {
-    let withdraw_mut: &mut Withdraw = executable.action_mut(witness, idx);
+    let withdraw_mut: &mut Withdraw = executable.action_mut(issuer, idx);
     let (coin_type, amount) = withdraw_mut.coin_amounts.remove(&coin_type_string<C>());
     
     let treasury: &mut Treasury = df::borrow_mut(multisig.uid_mut(), withdraw_mut.name);
@@ -236,8 +224,8 @@ public fun withdraw<W: copy + drop, C: drop>(
     coin::take(balance, amount, ctx)
 }
 
-public fun destroy_withdraw<W: copy + drop>(executable: &mut Executable, witness: W) {
-    let Withdraw { name: _, coin_amounts } = executable.remove_action(witness);
+public fun destroy_withdraw<I: copy + drop>(executable: &mut Executable, issuer: I) {
+    let Withdraw { name: _, coin_amounts } = executable.remove_action(issuer);
     assert!(coin_amounts.is_empty(), EWithdrawNotExecuted);
 }
 
@@ -252,21 +240,21 @@ public fun new_transfer(
     proposal.add_action(Transfer { recipient });
 }
 
-public fun transfer<W: copy + drop, C: drop>(
+public fun transfer<I: copy + drop, C: drop>(
     executable: &mut Executable,
     multisig: &mut Multisig,
-    witness: W,
+    issuer: I,
     idx: u64,
     ctx: &mut TxContext
 ) {
-    let coin: Coin<C> = withdraw(executable, multisig, witness, idx, ctx);
-    let transfer_mut: &mut Transfer = executable.action_mut(witness, idx + 1);
+    let coin: Coin<C> = withdraw(executable, multisig, issuer, idx, ctx);
+    let transfer_mut: &mut Transfer = executable.action_mut(issuer, idx + 1);
     transfer::public_transfer(coin, transfer_mut.recipient);
 }
 
-public fun destroy_transfer<W: copy + drop>(executable: &mut Executable, witness: W) {
-    destroy_withdraw(executable, witness); // only possible if all withdrawals/transfers are done
-    let Transfer { .. } = executable.remove_action(witness);
+public fun destroy_transfer<I: copy + drop>(executable: &mut Executable, issuer: I) {
+    destroy_withdraw(executable, issuer); // only possible if all withdrawals/transfers are done
+    let Transfer { .. } = executable.remove_action(issuer);
 }
 
 // === View Functions ===

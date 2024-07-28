@@ -25,8 +25,8 @@ const EPayNotExecuted: u64 = 2;
 
 // === Structs ===
 
-// delegated witness verifying a proposal is destroyed in the module where it was created
-public struct Auth has copy, drop {}
+// delegated issuer verifying a proposal is destroyed in the module where it was created
+public struct Issuer has copy, drop {}
 
 // [ACTION]
 public struct Pay has store {
@@ -69,11 +69,12 @@ public fun propose_pay(
     ctx: &mut TxContext
 ) {
     let proposal_mut = multisig.create_proposal(
-        Auth {},
+        Issuer {},
+        b"".to_string(),
         key,
+        description,
         execution_time,
         expiration_epoch,
-        description,
         ctx
     );
     new_pay(proposal_mut, coin, amount, interval, recipient);
@@ -89,10 +90,10 @@ public fun execute_pay<C: drop>(
     receiving: Receiving<Coin<C>>,
     ctx: &mut TxContext
 ) {
-    pay(&mut executable, multisig, receiving, Auth {}, 0, ctx);
+    pay(&mut executable, multisig, receiving, Issuer {}, 0, ctx);
 
-    destroy_pay(&mut executable, Auth {});
-    executable.destroy(Auth {});
+    destroy_pay(&mut executable, Issuer {});
+    executable.destroy(Issuer {});
 }
 
 // step 5: backend send the coin to the recipient until balance is empty
@@ -156,18 +157,18 @@ public fun new_pay(proposal: &mut Proposal, coin: ID, amount: u64, interval: u64
     proposal.add_action(Pay { amount, interval, recipient });
 }
 
-public fun pay<W: copy + drop, C: drop>(
+public fun pay<I: copy + drop, C: drop>(
     executable: &mut Executable, 
     multisig: &mut Multisig, 
     receiving: Receiving<Coin<C>>,
-    witness: W,
+    issuer: I,
     idx: u64, // index in actions bag
     ctx: &mut TxContext
 ) {
     multisig.assert_executed(executable);
     
-    let coin = owned::withdraw(executable, multisig, receiving, witness, idx);
-    let pay_mut: &mut Pay = executable.action_mut(witness, idx + 1);
+    let coin = owned::withdraw(executable, multisig, receiving, issuer, idx);
+    let pay_mut: &mut Pay = executable.action_mut(issuer, idx + 1);
 
     let stream = Stream<C> { 
         id: object::new(ctx), 
@@ -182,9 +183,9 @@ public fun pay<W: copy + drop, C: drop>(
     pay_mut.amount = 0; // clean to ensure action is executed only once
 }
 
-public fun destroy_pay<W: copy + drop>(executable: &mut Executable, witness: W): address {
-    owned::destroy_withdraw(executable, witness);
-    let Pay { amount, interval: _, recipient } = executable.remove_action(witness);
+public fun destroy_pay<I: copy + drop>(executable: &mut Executable, issuer: I): address {
+    owned::destroy_withdraw(executable, issuer);
+    let Pay { amount, interval: _, recipient } = executable.remove_action(issuer);
     assert!(amount == 0, EPayNotExecuted);
 
     recipient

@@ -28,8 +28,8 @@ const EDeliverAllObjectsBefore: u64 = 6;
 
 // === Structs ===
 
-// delegated witness verifying a proposal is destroyed in the module where it was created
-public struct Auth has copy, drop {}
+// delegated issuer verifying a proposal is destroyed in the module where it was created
+public struct Issuer has copy, drop {}
 
 // [ACTION] 
 public struct Send has store {
@@ -73,11 +73,12 @@ public fun propose_send(
 ) {
     assert!(recipients.length() == objects.length(), EDifferentLength);
     let proposal_mut = multisig.create_proposal(
-        Auth {},
+        Issuer {},
+        b"".to_string(),
         key,
+        description,
         execution_time,
         expiration_epoch,
-        description,
         ctx
     );
     new_send(proposal_mut, objects, recipients);
@@ -92,13 +93,13 @@ public fun execute_send<T: key + store>(
     multisig: &mut Multisig, 
     receiving: Receiving<T>,
 ) {
-    send(executable, multisig, receiving, Auth {}, 0); // send action group starts from 0
+    send(executable, multisig, receiving, Issuer {}, 0); // send action group starts from 0
 }
 
 // step 5: destroy send
 public fun complete_send(mut executable: Executable) {
-    destroy_send(&mut executable, Auth {});
-    executable.destroy(Auth {});
+    destroy_send(&mut executable, Issuer {});
+    executable.destroy(Issuer {});
 }
 
 // step 1: propose to deliver object to a recipient that must claim it
@@ -113,11 +114,12 @@ public fun propose_delivery(
     ctx: &mut TxContext
 ) {
     let proposal_mut = multisig.create_proposal(
-        Auth {},
+        Issuer {},
+        b"".to_string(),
         key,
+        description,
         execution_time,
         expiration_epoch,
-        description,
         ctx
     );
     new_deliver(proposal_mut, objects, recipient);
@@ -141,7 +143,7 @@ public fun execute_deliver<T: key + store>(
     multisig: &mut Multisig,
     receiving: Receiving<T>,
 ) {
-    deliver(delivery, cap, executable, multisig, receiving, Auth {}, 0);
+    deliver(delivery, cap, executable, multisig, receiving, Issuer {}, 0);
 }
 
 // step 6: share the Delivery and destroy the action
@@ -149,8 +151,8 @@ public fun execute_deliver<T: key + store>(
 public fun complete_deliver(delivery: Delivery, cap: DeliveryCap, mut executable: Executable) {
     assert!(cap.delivery_id == object::id(&delivery), EWrongDelivery);
     
-    let recipient = destroy_deliver(&mut executable, Auth {});
-    executable.destroy(Auth {});
+    let recipient = destroy_deliver(&mut executable, Issuer {});
+    executable.destroy(Issuer {});
     
     transfer::transfer(cap, recipient);
     transfer::share_object(delivery);
@@ -208,25 +210,25 @@ public fun new_send(proposal: &mut Proposal, objects: vector<ID>, recipients: ve
     proposal.add_action(Send { transfers: vec_map::from_keys_values(objects, recipients) }); // 2nd action to be executed
 }
 
-public fun send<T: key + store, W: copy + drop>(
+public fun send<T: key + store, I: copy + drop>(
     executable: &mut Executable, 
     multisig: &mut Multisig, 
     receiving: Receiving<T>,
-    witness: W,
+    issuer: I,
     idx: u64, // index in actions bag 
 ) {
     multisig.assert_executed(executable);
     
-    let object = owned::withdraw(executable, multisig, receiving, witness, idx);
-    let send_mut: &mut Send = executable.action_mut(witness, idx + 1);
+    let object = owned::withdraw(executable, multisig, receiving, issuer, idx);
+    let send_mut: &mut Send = executable.action_mut(issuer, idx + 1);
     let (_, recipient) = send_mut.transfers.remove(&object::id(&object));
     // abort if receiving object is not in the map
     transfer::public_transfer(object, recipient);
 }
 
-public fun destroy_send<W: copy + drop>(executable: &mut Executable, witness: W) {
-    owned::destroy_withdraw(executable, witness);
-    let send: Send = executable.remove_action(witness);
+public fun destroy_send<I: copy + drop>(executable: &mut Executable, issuer: I) {
+    owned::destroy_withdraw(executable, issuer);
+    let send: Send = executable.remove_action(issuer);
     let Send { transfers } = send;
     assert!(transfers.is_empty(), ESendAllAssetsBefore);
 }
@@ -236,20 +238,20 @@ public fun new_deliver(proposal: &mut Proposal, objects: vector<ID>, recipient: 
     proposal.add_action(Deliver { to_deposit: objects, recipient });
 }    
 
-public fun deliver<T: key + store, W: copy + drop>(
+public fun deliver<T: key + store, I: copy + drop>(
     delivery: &mut Delivery, 
     cap: &DeliveryCap,
     executable: &mut Executable, 
     multisig: &mut Multisig,
     receiving: Receiving<T>,
-    witness: W,
+    issuer: I,
     idx: u64 // index of first action in bag (withdraw)
 ) {
     multisig.assert_executed(executable);
     assert!(cap.delivery_id == object::id(delivery), EWrongDelivery);
     
-    let object = owned::withdraw(executable, multisig, receiving, witness, idx);
-    let deliver_mut: &mut Deliver = executable.action_mut(witness, idx + 1);
+    let object = owned::withdraw(executable, multisig, receiving, issuer, idx);
+    let deliver_mut: &mut Deliver = executable.action_mut(issuer, idx + 1);
     let (_, index) = deliver_mut.to_deposit.index_of(&object::id(&object));
     deliver_mut.to_deposit.swap_remove(index); // we don't care about the order
 
@@ -257,9 +259,9 @@ public fun deliver<T: key + store, W: copy + drop>(
     delivery.objects.add(index, object);
 }
 
-public fun destroy_deliver<W: copy + drop>(executable: &mut Executable, witness: W): address {
-    owned::destroy_withdraw(executable, witness);
-    let Deliver { to_deposit, recipient } = executable.remove_action(witness);
+public fun destroy_deliver<I: copy + drop>(executable: &mut Executable, issuer: I): address {
+    owned::destroy_withdraw(executable, issuer);
+    let Deliver { to_deposit, recipient } = executable.remove_action(issuer);
     assert!(to_deposit.is_empty(), EDeliverAllObjectsBefore);
     recipient
 }

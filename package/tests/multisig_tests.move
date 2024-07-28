@@ -1,12 +1,10 @@
 #[test_only]
 module kraken::multisig_tests;
 
-use std::{
-    type_name,
-};
 use sui::test_utils::destroy;
 use kraken::{
     multisig,
+    auth,
     test_utils::start_world
 };
 
@@ -14,9 +12,9 @@ const OWNER: address = @0xBABE;
 const ALICE: address = @0xa11e7;
 const BOB: address = @0x10;
 
-public struct Auth has drop {}
+public struct Issuer has drop {}
 
-public struct Auth2 has drop {}
+public struct Issuer2 has drop {}
 
 public struct Action has store {
     value: u64
@@ -44,18 +42,19 @@ fun create_proposal() {
     let mut world = start_world();
 
     let proposal = world.create_proposal(
-        Auth {},
+        Issuer {},
+        b"".to_string(),
         b"key".to_string(),
+        b"proposal".to_string(),
         5,
         2,
-        b"proposal".to_string(),
     );
 
     proposal.add_action(Action { value: 1 });
     proposal.add_action(Action { value: 2 });   
 
+    proposal.auth().authenticate_module(Issuer {});
     assert!(proposal.approved() == vector[]);
-    assert!(proposal.module_witness() == type_name::get<Auth>());
     assert!(proposal.description() == b"proposal".to_string());
     assert!(proposal.expiration_epoch() == 2);
     assert!(proposal.execution_time() == 5);
@@ -76,7 +75,7 @@ fun approve_proposal() {
     world.multisig().modify_weight(ALICE, 2);
     world.multisig().modify_weight(BOB, 3);
 
-    let proposal = world.create_proposal(Auth {}, key, 0, 0, b"".to_string());
+    let proposal = world.create_proposal(Issuer {}, b"".to_string(), key, b"".to_string(), 0, 0);
     proposal.add_action(Action { value: 1 });
     proposal.add_action(Action { value: 2 });   
 
@@ -104,7 +103,7 @@ fun remove_approval() {
     world.multisig().modify_weight(ALICE, 2);
     world.multisig().modify_weight(BOB, 3);
 
-    let proposal = world.create_proposal(Auth {}, key, 0, 0, b"".to_string());
+    let proposal = world.create_proposal(Issuer {}, b"".to_string(), key, b"".to_string(), 0, 0);
     proposal.add_action(Action { value: 1 });
     proposal.add_action(Action { value: 2 });   
 
@@ -131,7 +130,7 @@ fun delete_proposal() {
     let mut world = start_world();
     let key = b"key".to_string();
 
-    world.create_proposal(Auth {}, key, 0, 0, b"".to_string());
+    world.create_proposal(Issuer {}, b"".to_string(), key, b"".to_string(), 0, 0);
     assert!(world.multisig().proposals_length() == 1);
 
     let actions = world.delete_proposal(key);
@@ -217,7 +216,7 @@ fun execute_proposal_error_threshold_not_reached() {
     world.multisig().modify_weight(ALICE, 1);
     world.multisig().modify_weight(BOB, 3);
 
-    world.create_proposal(Auth {}, key, 0, 0, b"".to_string());
+    world.create_proposal(Issuer {}, b"".to_string(), key, b"".to_string(), 0, 0);
     let executable = world.execute_proposal(key);
 
     destroy(executable);
@@ -233,7 +232,7 @@ fun execute_proposal_error_cant_be_executed_yet() {
     world.multisig().modify_weight(ALICE, 2);
     world.multisig().modify_weight(BOB, 3);
 
-    world.create_proposal(Auth {}, key, 5, 0, b"".to_string());
+    world.create_proposal(Issuer {}, b"".to_string(), key, b"".to_string(), 5, 0);
     world.approve_proposal(key);
     let executable = world.execute_proposal(key);
 
@@ -241,7 +240,7 @@ fun execute_proposal_error_cant_be_executed_yet() {
     world.end();
 }      
 
-#[test, expected_failure(abort_code = multisig::ENotIssuerModule)]
+#[test, expected_failure(abort_code = auth::EWrongIssuer)]
 fun action_mut_error_not_issuer_module() {
     let mut world = start_world();
     let key = b"key".to_string();
@@ -250,12 +249,12 @@ fun action_mut_error_not_issuer_module() {
     world.multisig().modify_weight(ALICE, 2);
     world.multisig().modify_weight(BOB, 3);
 
-    let proposal = world.create_proposal(Auth {}, key, 0, 0, b"".to_string());
+    let proposal = world.create_proposal(Issuer {}, b"".to_string(), key, b"".to_string(), 0, 0);
     proposal.add_action(Action { value: 1 });
     world.approve_proposal(key);
 
     let mut executable = world.execute_proposal(key);
-    executable.action_mut<Auth2, Action>(Auth2 {}, 0);
+    executable.action_mut<Issuer2, Action>(Issuer2 {}, 0);
 
     destroy(executable);
     world.end();
@@ -266,7 +265,7 @@ fun delete_proposal_error_hasnt_expired() {
     let mut world = start_world();
     let key = b"key".to_string();
 
-    world.create_proposal(Auth {}, key, 0, 2, b"".to_string());
+    world.create_proposal(Issuer {}, b"".to_string(), key, b"".to_string(), 0, 2);
     assert!(world.multisig().proposals_length() == 1);
 
     let actions = world.delete_proposal(key);
@@ -295,7 +294,7 @@ fun assert_multisig_executed_error_not_multisig_executable() {
     world.multisig().modify_weight(ALICE, 2);
     world.multisig().modify_weight(BOB, 3);
 
-    let proposal = world.create_proposal(Auth {}, key, 0, 0, b"".to_string());
+    let proposal = world.create_proposal(Issuer {}, b"".to_string(), key, b"".to_string(), 0, 0);
     proposal.add_action(Action { value: 1 });
     world.approve_proposal(key);
 

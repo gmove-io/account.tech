@@ -27,8 +27,8 @@ const EBurnNotExecuted: u64 = 4;
 
 // === Structs ===    
 
-// delegated witness verifying a proposal is destroyed in the module where it was created
-public struct Auth has copy, drop {}
+// delegated issuer verifying a proposal is destroyed in the module where it was created
+public struct Issuer has copy, drop {}
 
 // Wrapper restricting access to a TreasuryCap
 // doesn't have store because non-transferrable
@@ -103,11 +103,12 @@ public fun propose_mint<C: drop>(
     ctx: &mut TxContext
 ) {
     let proposal_mut = multisig.create_proposal(
-        Auth {}, 
+        Issuer {}, 
+        b"".to_string(),
         key, 
+        description, 
         execution_time, 
         expiration_epoch, 
-        description, 
         ctx
     );
     new_mint<C>(proposal_mut, amount);
@@ -122,10 +123,10 @@ public fun execute_mint<C: drop>(
     lock: &mut TreasuryLock<C>,
     ctx: &mut TxContext
 ) {
-    let coin = mint<C, Auth>(&mut executable, lock, Auth {}, 0, ctx);
+    let coin = mint<C, Issuer>(&mut executable, lock, Issuer {}, 0, ctx);
     transfer::public_transfer(coin, executable.multisig_addr());
-    destroy_mint<C, Auth>(&mut executable, Auth {});
-    executable.destroy(Auth {});
+    destroy_mint<C, Issuer>(&mut executable, Issuer {});
+    executable.destroy(Issuer {});
 }
 
 // step 1: propose to burn an amount of a coin owned by the multisig
@@ -140,11 +141,12 @@ public fun propose_burn<C: drop>(
     ctx: &mut TxContext
 ) {
     let proposal_mut = multisig.create_proposal(
-        Auth {}, 
+        Issuer {}, 
+        b"".to_string(),
         key, 
+        description, 
         execution_time, 
         expiration_epoch, 
-        description, 
         ctx
     );
     owned::new_withdraw(proposal_mut, vector[coin_id]);
@@ -161,11 +163,11 @@ public fun execute_burn<C: drop>(
     receiving: Receiving<Coin<C>>,
     lock: &mut TreasuryLock<C>,
 ) {
-    let coin = owned::withdraw(&mut executable, multisig, receiving, Auth {}, 0);
-    burn<C, Auth>(&mut executable, lock, coin, Auth {}, 1);
-    owned::destroy_withdraw(&mut executable, Auth {});
-    destroy_burn<C, Auth>(&mut executable, Auth {});
-    executable.destroy(Auth {});
+    let coin = owned::withdraw(&mut executable, multisig, receiving, Issuer {}, 0);
+    burn<C, Issuer>(&mut executable, lock, coin, Issuer {}, 1);
+    owned::destroy_withdraw(&mut executable, Issuer {});
+    destroy_burn<C, Issuer>(&mut executable, Issuer {});
+    executable.destroy(Issuer {});
 }
 
 // step 1: propose to transfer nfts to another kiosk
@@ -182,11 +184,12 @@ public fun propose_update(
     ctx: &mut TxContext
 ) {
     let proposal_mut = multisig.create_proposal(
-        Auth {},
+        Issuer {},
+        b"".to_string(),
         key,
+        description,
         execution_time,
         expiration_epoch,
-        description,
         ctx
     );
     new_update(proposal_mut, name, symbol, description_md, icon_url);
@@ -201,13 +204,13 @@ public fun execute_update<C: drop>(
     lock: &TreasuryLock<C>,
     metadata: &mut CoinMetadata<C>,
 ) {
-    update(executable, lock, metadata, Auth {}, 0);
+    update(executable, lock, metadata, Issuer {}, 0);
 }
 
 // step 5: destroy the executable, must `put_back_cap()`
 public fun complete_update(mut executable: Executable) {
-    destroy_update(&mut executable, Auth {});
-    executable.destroy(Auth {});
+    destroy_update(&mut executable, Issuer {});
+    executable.destroy(Issuer {});
 }
 
 // === [ACTION] Public functions ===
@@ -216,21 +219,21 @@ public fun new_mint<C: drop>(proposal: &mut Proposal, amount: u64) {
     proposal.add_action(Mint<C> { amount });
 }
 
-public fun mint<C: drop, W: drop>(
+public fun mint<C: drop, I: drop>(
     executable: &mut Executable, 
     lock: &mut TreasuryLock<C>, 
-    witness: W, 
+    issuer: I, 
     idx: u64,
     ctx: &mut TxContext
 ): Coin<C> {
-    let mint_mut: &mut Mint<C> = executable.action_mut(witness, idx);
+    let mint_mut: &mut Mint<C> = executable.action_mut(issuer, idx);
     let coin = lock.treasury_cap.mint(mint_mut.amount, ctx);
     mint_mut.amount = 0; // reset to ensure it has been executed
     coin
 }
 
-public fun destroy_mint<C: drop, W: drop>(executable: &mut Executable, witness: W) {
-    let Mint<C> { amount } = executable.remove_action(witness);
+public fun destroy_mint<C: drop, I: drop>(executable: &mut Executable, issuer: I) {
+    let Mint<C> { amount } = executable.remove_action(issuer);
     assert!(amount == 0, EMintNotExecuted);
 }
 
@@ -238,21 +241,21 @@ public fun new_burn<C: drop>(proposal: &mut Proposal, amount: u64) {
     proposal.add_action(Burn<C> { amount });
 }
 
-public fun burn<C: drop, W: copy + drop>(
+public fun burn<C: drop, I: copy + drop>(
     executable: &mut Executable, 
     lock: &mut TreasuryLock<C>, 
     coin: Coin<C>,
-    witness: W, 
+    issuer: I, 
     idx: u64,
 ) {
-    let burn_mut: &mut Burn<C> = executable.action_mut(witness, idx);
+    let burn_mut: &mut Burn<C> = executable.action_mut(issuer, idx);
     assert!(burn_mut.amount == coin.value(), EWrongValue);
     lock.treasury_cap.burn(coin);
     burn_mut.amount = 0; // reset to ensure it has been executed
 }
 
-public fun destroy_burn<C: drop, W: copy + drop>(executable: &mut Executable, witness: W) {
-    let Burn<C> { amount } = executable.remove_action(witness);
+public fun destroy_burn<C: drop, I: copy + drop>(executable: &mut Executable, issuer: I) {
+    let Burn<C> { amount } = executable.remove_action(issuer);
     assert!(amount == 0, EBurnNotExecuted);
 }
 
@@ -267,14 +270,14 @@ public fun new_update(
     proposal.add_action(Update { name, symbol, description, icon_url });
 }
 
-public fun update<C: drop, W: copy + drop>(
+public fun update<C: drop, I: copy + drop>(
     executable: &mut Executable,
     lock: &TreasuryLock<C>,
     metadata: &mut CoinMetadata<C>,
-    witness: W,
+    issuer: I,
     idx: u64,
 ) {
-    let update_mut: &mut Update = executable.action_mut(witness, idx);
+    let update_mut: &mut Update = executable.action_mut(issuer, idx);
     if (update_mut.name.is_some()) {
         lock.treasury_cap.update_name(metadata, update_mut.name.extract());
     };
@@ -290,8 +293,8 @@ public fun update<C: drop, W: copy + drop>(
     // all fields are set to none now
 }
 
-public fun destroy_update<W: copy + drop>(executable: &mut Executable, witness: W) {
-    let Update { name, symbol, description, icon_url } = executable.remove_action(witness);
+public fun destroy_update<I: copy + drop>(executable: &mut Executable, issuer: I) {
+    let Update { name, symbol, description, icon_url } = executable.remove_action(issuer);
     //@dev Future guard - impossible to trigger now
     assert!(name.is_none() && symbol.is_none() && description.is_none() && icon_url.is_none(), EUpdateNotExecuted);
 }
