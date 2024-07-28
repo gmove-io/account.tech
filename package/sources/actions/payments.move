@@ -190,6 +190,8 @@ public fun destroy_pay<W: copy + drop>(executable: &mut Executable, witness: W):
     recipient
 }
 
+// === View Functions ===
+
 public fun balance<C: drop>(self: &Stream<C>): u64 {
     self.balance.value()
 }

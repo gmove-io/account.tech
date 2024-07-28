@@ -461,6 +461,11 @@ public fun executable_actions_length(executable: &Executable): u64 {
     executable.actions.length()
 }
 
+public use fun executable_action as Executable.action;
+public fun executable_action<A: store>(executable: &Executable, idx: u64): &A {
+    executable.actions.borrow(idx)
+}
+
 // === Package functions ===
 
 // callable only in config.move, if the proposal has been accepted
@@ -565,6 +570,10 @@ public(package) fun unregister_account_id(multisig: &mut Multisig, ctx: &TxConte
 
 public(package) fun uid_mut(multisig: &mut Multisig): &mut UID {
     &mut multisig.id
+}
+
+public(package) fun uid(multisig: &Multisig): &UID {
+    &multisig.id
 }
 
 // === Test functions ===

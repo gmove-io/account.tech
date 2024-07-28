@@ -304,11 +304,3 @@ fun get_time_delay(lock: &UpgradeLock): u64 {
         0
     }
 }
-
-// === Test Functions ===
-
-#[test_only]
-public fun upgrade_cap(lock: &UpgradeLock): &UpgradeCap {
-    &lock.upgrade_cap
-}
-
