@@ -36,7 +36,7 @@ public struct Issuer has copy, drop {}
 
 // Wrapper restricting access to a TreasuryCap
 // doesn't have store because non-transferrable
-public struct TreasuryLock<phantom C: drop> has key {
+public struct CurrencyLock<phantom C: drop> has key {
     id: UID,
     // multisig owning the lock
     multisig_addr: address,
@@ -71,7 +71,7 @@ public fun lock_cap<C: drop>(
     ctx: &mut TxContext
 ) {
     multisig.assert_is_member(ctx);
-    let treasury_lock = TreasuryLock { 
+    let treasury_lock = CurrencyLock { 
         id: object::new(ctx), 
         multisig_addr: multisig.addr(),
         treasury_cap 
@@ -83,14 +83,14 @@ public fun lock_cap<C: drop>(
 // borrow the lock that can only be put back in the multisig because no store
 public fun borrow_cap<C: drop>(
     multisig: &mut Multisig, 
-    treasury_lock: Receiving<TreasuryLock<C>>,
+    treasury_lock: Receiving<CurrencyLock<C>>,
     ctx: &mut TxContext
-): TreasuryLock<C> {
+): CurrencyLock<C> {
     multisig.assert_is_member(ctx);
     transfer::receive(multisig.uid_mut(), treasury_lock)
 }
 
-public fun put_back_cap<C: drop>(treasury_lock: TreasuryLock<C>) {
+public fun put_back_cap<C: drop>(treasury_lock: CurrencyLock<C>) {
     let addr = treasury_lock.multisig_addr;
     transfer::transfer(treasury_lock, addr);
 }
@@ -125,7 +125,7 @@ public fun propose_mint<C: drop>(
 // step 4: mint the coins and send them to the multisig
 public fun execute_mint<C: drop>(
     mut executable: Executable,
-    lock: &mut TreasuryLock<C>,
+    lock: &mut CurrencyLock<C>,
     ctx: &mut TxContext
 ) {
     let coin = mint<C, Issuer>(&mut executable, lock, Issuer {}, 0, ctx);
@@ -166,7 +166,7 @@ public fun execute_burn<C: drop>(
     mut executable: Executable,
     multisig: &mut Multisig,
     receiving: Receiving<Coin<C>>,
-    lock: &mut TreasuryLock<C>,
+    lock: &mut CurrencyLock<C>,
 ) {
     let coin = owned::withdraw(&mut executable, multisig, receiving, Issuer {}, 0);
     burn<C, Issuer>(&mut executable, lock, coin, Issuer {}, 1);
@@ -206,7 +206,7 @@ public fun propose_update<C: drop>(
 // step 4: update the CoinMetadata
 public fun execute_update<C: drop>(
     executable: &mut Executable,
-    lock: &TreasuryLock<C>,
+    lock: &CurrencyLock<C>,
     metadata: &mut CoinMetadata<C>,
 ) {
     update(executable, lock, metadata, Issuer {}, 0);
@@ -226,7 +226,7 @@ public fun new_mint<C: drop>(proposal: &mut Proposal, amount: u64) {
 
 public fun mint<C: drop, I: drop>(
     executable: &mut Executable, 
-    lock: &mut TreasuryLock<C>, 
+    lock: &mut CurrencyLock<C>, 
     issuer: I, 
     idx: u64,
     ctx: &mut TxContext
@@ -248,7 +248,7 @@ public fun new_burn<C: drop>(proposal: &mut Proposal, amount: u64) {
 
 public fun burn<C: drop, I: copy + drop>(
     executable: &mut Executable, 
-    lock: &mut TreasuryLock<C>, 
+    lock: &mut CurrencyLock<C>, 
     coin: Coin<C>,
     issuer: I, 
     idx: u64,
@@ -277,7 +277,7 @@ public fun new_update<C: drop>(
 
 public fun update<C: drop, I: copy + drop>(
     executable: &mut Executable,
-    lock: &TreasuryLock<C>,
+    lock: &CurrencyLock<C>,
     metadata: &mut CoinMetadata<C>,
     issuer: I,
     idx: u64,

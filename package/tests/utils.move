@@ -10,7 +10,7 @@ use sui::{
     clock::{Self, Clock},
     coin::{Coin, TreasuryCap},
     kiosk::{Kiosk, KioskOwnerCap},
-    transfer_policy::TransferPolicy,
+    transfer_policy::{TransferPolicy, TransferRequest},
     test_scenario::{Self as ts, Scenario, receiving_ticket_by_id, most_recent_id_for_address},
 };
 use kraken::{
@@ -18,7 +18,7 @@ use kraken::{
     config,
     coin_operations,
     payments::{Self, Stream},
-    currency::{Self, TreasuryLock},
+    currency::{Self, CurrencyLock},
     account::{Self, Account, Invite},
     upgrade_policies::{Self, UpgradeLock},
     transfers::{Self, DeliveryCap, Delivery},
@@ -440,7 +440,7 @@ public fun place<T: key + store>(
     sender_cap: &KioskOwnerCap, 
     nft_id: ID,
     policy: &mut TransferPolicy<T>,
-) {
+): TransferRequest<T> {
     k_kiosk::place(
         &mut world.multisig,
         &mut world.kiosk,
@@ -480,7 +480,7 @@ public fun execute_take<T: key + store>(
     recipient_kiosk: &mut Kiosk, 
     recipient_cap: &KioskOwnerCap, 
     policy: &mut TransferPolicy<T>
-) {
+): TransferRequest<T> {
     k_kiosk::execute_take(
         executable,
         &mut world.kiosk,
@@ -489,7 +489,7 @@ public fun execute_take<T: key + store>(
         recipient_cap,
         policy,
         world.scenario.ctx()
-    );
+    )
 }
 
 public fun propose_list(
@@ -623,10 +623,10 @@ public fun lock_treasury_cap<C: drop>(world: &mut World, cap: TreasuryCap<C>) {
     currency::lock_cap(&world.multisig, cap, world.scenario.ctx());
 }
 
-public fun borrow_treasury_cap<C: drop>(
+public fun borrow_currency_lock<C: drop>(
     world: &mut World, 
-    treasury_lock: Receiving<TreasuryLock<C>>
-): TreasuryLock<C> {
+    treasury_lock: Receiving<CurrencyLock<C>>
+): CurrencyLock<C> {
     currency::borrow_cap(&mut world.multisig, treasury_lock, world.scenario.ctx())
 }
 

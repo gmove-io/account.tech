@@ -14,7 +14,7 @@ use sui::{
     transfer::Receiving,
     sui::SUI,
     kiosk::{Self, Kiosk, KioskOwnerCap},
-    transfer_policy::TransferPolicy,
+    transfer_policy::{TransferPolicy, TransferRequest},
     vec_map::{Self, VecMap},
 };
 use kiosk::{kiosk_lock_rule, royalty_rule};
@@ -112,7 +112,7 @@ public fun place<O: key + store>(
     nft_id: ID,
     policy: &mut TransferPolicy<O>,
     ctx: &mut TxContext
-) {
+): TransferRequest<O> {
     multisig.assert_is_member(ctx);
 
     sender_kiosk.list<O>(sender_cap, nft_id, 0);
@@ -129,7 +129,8 @@ public fun place<O: key + store>(
         royalty_rule::pay(policy, &mut request, coin::zero<SUI>(ctx));
     }; 
 
-    policy.confirm_request(request);
+    // the request can be filled with arbitrary rules and must be confirmed afterwards
+    request
 }
 
 // members can delist nfts
@@ -200,8 +201,8 @@ public fun execute_take<O: key + store>(
     recipient_cap: &KioskOwnerCap, 
     policy: &mut TransferPolicy<O>,
     ctx: &mut TxContext
-) {
-    take(executable, multisig_kiosk, lock, recipient_kiosk, recipient_cap, policy, Issuer {}, 0, ctx);
+): TransferRequest<O> {
+    take(executable, multisig_kiosk, lock, recipient_kiosk, recipient_cap, policy, Issuer {}, 0, ctx)
 }
 
 // step 5: destroy the executable, must `put_back_cap()`
@@ -273,7 +274,7 @@ public fun take<O: key + store, I: copy + drop>(
     issuer: I,
     idx: u64,
     ctx: &mut TxContext
-) {
+): TransferRequest<O> {
     let take_mut: &mut Take = executable.action_mut(issuer, idx);
     assert!(take_mut.name == lock.name, EWrongKiosk);
     assert!(take_mut.recipient == ctx.sender(), EWrongReceiver);
@@ -293,7 +294,8 @@ public fun take<O: key + store, I: copy + drop>(
         royalty_rule::pay(policy, &mut request, coin::zero<SUI>(ctx));
     }; 
 
-    policy.confirm_request(request);
+    // the request can be filled with arbitrary rules and must be confirmed afterwards
+    request
 }
 
 public fun destroy_take<I: copy + drop>(executable: &mut Executable, issuer: I): address {
