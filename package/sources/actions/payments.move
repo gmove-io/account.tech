@@ -90,7 +90,7 @@ public fun execute_pay<C: drop>(
     receiving: Receiving<Coin<C>>,
     ctx: &mut TxContext
 ) {
-    pay(&mut executable, multisig, receiving, Issuer {}, 0, ctx);
+    pay(&mut executable, multisig, receiving, Issuer {}, ctx);
 
     destroy_pay(&mut executable, Issuer {});
     executable.destroy(Issuer {});
@@ -162,13 +162,10 @@ public fun pay<I: copy + drop, C: drop>(
     multisig: &mut Multisig, 
     receiving: Receiving<Coin<C>>,
     issuer: I,
-    idx: u64, // index in actions bag
     ctx: &mut TxContext
-) {
-    multisig.assert_executed(executable);
-    
-    let coin = owned::withdraw(executable, multisig, receiving, issuer, idx);
-    let pay_mut: &mut Pay = executable.action_mut(issuer, idx + 1);
+) {    
+    let coin = owned::withdraw(executable, multisig, receiving, issuer);
+    let pay_mut: &mut Pay = executable.action_mut(issuer, multisig.addr());
 
     let stream = Stream<C> { 
         id: object::new(ctx), 

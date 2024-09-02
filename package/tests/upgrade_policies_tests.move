@@ -39,7 +39,7 @@ fun upgrade_end_to_end() {
     world.approve_proposal(key);
 
     let executable = world.execute_proposal(key);
-    let ticket = upgrade_policies::execute_upgrade(executable, &mut lock);
+    let ticket = upgrade_policies::execute_upgrade(executable, world.multisig(), &mut lock);
     let receipt = ticket.test_upgrade();
     upgrade_policies::confirm_upgrade(&mut lock, receipt);
     lock.put_back_lock();

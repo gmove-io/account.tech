@@ -40,6 +40,7 @@ fun new_multisig() {
 #[test]
 fun create_proposal() {
     let mut world = start_world();
+    let addr = world.multisig().addr();
 
     let proposal = world.create_proposal(
         Issuer {},
@@ -53,7 +54,8 @@ fun create_proposal() {
     proposal.add_action(Action { value: 1 });
     proposal.add_action(Action { value: 2 });   
 
-    proposal.auth().authenticate_module(Issuer {});
+    proposal.auth().assert_is_issuer(Issuer {});
+    proposal.auth().assert_is_multisig(addr);
     assert!(proposal.approved() == vector[]);
     assert!(proposal.description() == b"proposal".to_string());
     assert!(proposal.expiration_epoch() == 2);
@@ -254,7 +256,7 @@ fun action_mut_error_not_issuer_module() {
     world.approve_proposal(key);
 
     let mut executable = world.execute_proposal(key);
-    executable.action_mut<Issuer2, Action>(Issuer2 {}, 0);
+    executable.action_mut<Issuer2, Action>(Issuer2 {}, world.multisig().addr());
 
     destroy(executable);
     world.end();
@@ -285,7 +287,7 @@ fun assert_version_error_wrong_version() {
     world.end();
 }
 
-#[test, expected_failure(abort_code = multisig::ENotMultisigExecutable)]
+#[test, expected_failure(abort_code = auth::EWrongMultisig)]
 fun assert_multisig_executed_error_not_multisig_executable() {
     let mut world = start_world();
     let key = b"key".to_string();
@@ -299,10 +301,11 @@ fun assert_multisig_executed_error_not_multisig_executable() {
     world.approve_proposal(key);
 
     let uid = object::new(world.scenario().ctx());
-    let multisig = multisig::new(b"krakenV3".to_string(), uid.uid_to_inner(), world.scenario().ctx());
-    let executable = world.execute_proposal(key);
-    multisig.assert_executed(&executable);
+    let mut executable = world.execute_proposal(key);
     
+    let multisig = multisig::new(b"krakenV3".to_string(), uid.uid_to_inner(), world.scenario().ctx());
+    let _ = executable.action_mut<Issuer, Action>(Issuer {}, multisig.addr());
+
     uid.delete();
     destroy(multisig);
     destroy(executable);

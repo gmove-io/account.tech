@@ -36,7 +36,7 @@ fun mint_end_to_end() {
 
     let mut currency_lock = world.borrow_currency_lock<SUI>(receiving_lock);
     let executable = world.execute_proposal(key);
-    currency::execute_mint(executable, &mut currency_lock, world.scenario().ctx());
+    world.execute_mint(executable, &mut currency_lock);
     currency::put_back_cap(currency_lock);
 
     world.scenario().next_tx(OWNER);
@@ -102,7 +102,7 @@ fun update_metadata_end_to_end() {
 
     let mut executable = world.execute_proposal(key);
     let currency_lock = world.borrow_currency_lock<CURRENCY_TESTS>(receiving_lock);
-    currency::execute_update(&mut executable,&currency_lock, &mut coin_metadata);
+    currency::execute_update(&mut executable, world.multisig(), &currency_lock, &mut coin_metadata);
     currency::put_back_cap(currency_lock);
     currency::complete_update(executable);
 
@@ -144,7 +144,7 @@ fun update_error_no_change() {
 
     let mut executable = world.execute_proposal(key);
     let currency_lock = world.borrow_currency_lock<CURRENCY_TESTS>(receiving_lock);
-    currency::execute_update(&mut executable,&currency_lock, &mut coin_metadata);
+    currency::execute_update(&mut executable, world.multisig(), &currency_lock, &mut coin_metadata);
     currency::put_back_cap(currency_lock);
     currency::complete_update(executable);
 
@@ -240,7 +240,6 @@ fun destroy_burn_error_burn_not_executed() {
         world.multisig(), 
         receiving_coin, 
         Issuer {}, 
-        0
     );
     owned::destroy_withdraw(&mut executable, Issuer {});
     currency::destroy_burn<SUI, Issuer>(&mut executable, Issuer {});

@@ -183,9 +183,8 @@ public fun withdraw<O: key + store, I: copy + drop>(
     executable: &mut Executable,
     receiving: Receiving<O>,
     issuer: I,
-    idx: u64
 ): O {
-    owned::withdraw<O, I>(executable, &mut world.multisig, receiving, issuer, idx)
+    owned::withdraw<O, I>(executable, &mut world.multisig, receiving, issuer)
 }
 
 public fun borrow<O: key + store, I: copy + drop>(
@@ -193,9 +192,8 @@ public fun borrow<O: key + store, I: copy + drop>(
     executable: &mut Executable,
     receiving: Receiving<O>,
     issuer: I,
-    idx: u64
 ): O {
-    owned::borrow<O, I>(executable, &mut world.multisig, receiving, issuer, idx)
+    owned::borrow<O, I>(executable, &mut world.multisig, receiving, issuer)
 }
 
 public fun put_back<O: key + store, I: copy + drop>(
@@ -203,9 +201,8 @@ public fun put_back<O: key + store, I: copy + drop>(
     executable: &mut Executable,
     returned: O,
     issuer: I,
-    idx: u64
 ) {
-    owned::put_back<O, I>(executable, &world.multisig, returned, issuer, idx);
+    owned::put_back<O, I>(executable, &world.multisig, returned, issuer);
 }
 
 // === Coin Operations ===
@@ -483,6 +480,7 @@ public fun execute_take<T: key + store>(
 ): TransferRequest<T> {
     k_kiosk::execute_take(
         executable,
+        &world.multisig,
         &mut world.kiosk,
         lock,
         recipient_kiosk,
@@ -517,7 +515,7 @@ public fun execute_list<T: key + store>(
     executable: &mut Executable,
     lock: &KioskOwnerLock,
 ) {
-    k_kiosk::execute_list<T>(executable, &mut world.kiosk, lock);
+    k_kiosk::execute_list<T>(executable, &world.multisig, &mut world.kiosk, lock);
 }
 
 // === Payments ===
@@ -644,6 +642,14 @@ public fun propose_mint<C: drop>(
         amount,
         world.scenario.ctx()
     );
+}
+
+public fun execute_mint<C: drop>(
+    world: &mut World,
+    executable: Executable,
+    currency_lock: &mut CurrencyLock<C>
+) {
+    currency::execute_mint<C>(executable, &world.multisig, currency_lock, world.scenario.ctx());
 }
 
 public fun propose_burn<C: drop>(

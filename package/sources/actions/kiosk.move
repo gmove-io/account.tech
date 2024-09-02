@@ -195,6 +195,7 @@ public fun propose_take(
 // step 4: the recipient (anyone) must loop over this function to take the nfts in any of his Kiosks
 public fun execute_take<O: key + store>(
     executable: &mut Executable,
+    multisig: &Multisig,
     multisig_kiosk: &mut Kiosk, 
     lock: &KioskOwnerLock,
     recipient_kiosk: &mut Kiosk, 
@@ -202,7 +203,7 @@ public fun execute_take<O: key + store>(
     policy: &mut TransferPolicy<O>,
     ctx: &mut TxContext
 ): TransferRequest<O> {
-    take(executable, multisig_kiosk, lock, recipient_kiosk, recipient_cap, policy, Issuer {}, 0, ctx)
+    take(executable, multisig, multisig_kiosk, lock, recipient_kiosk, recipient_cap, policy, Issuer {}, ctx)
 }
 
 // step 5: destroy the executable, must `put_back_cap()`
@@ -241,10 +242,11 @@ public fun propose_list(
 // step 4: list last nft in action
 public fun execute_list<O: key + store>(
     executable: &mut Executable,
+    multisig: &Multisig,
     kiosk: &mut Kiosk,
     lock: &KioskOwnerLock,
 ) {
-    list<O, Issuer>(executable, kiosk, lock, Issuer {}, 0);
+    list<O, Issuer>(executable, multisig, kiosk, lock, Issuer {});
 }
 
 // step 5: destroy the executable, must `put_back_cap()`
@@ -266,16 +268,16 @@ public fun new_take(
 
 public fun take<O: key + store, I: copy + drop>(
     executable: &mut Executable,
+    multisig: &Multisig,
     multisig_kiosk: &mut Kiosk, 
     lock: &KioskOwnerLock,
     recipient_kiosk: &mut Kiosk, 
     recipient_cap: &KioskOwnerCap, 
     policy: &mut TransferPolicy<O>,
     issuer: I,
-    idx: u64,
     ctx: &mut TxContext
 ): TransferRequest<O> {
-    let take_mut: &mut Take = executable.action_mut(issuer, idx);
+    let take_mut: &mut Take = executable.action_mut(issuer, multisig.addr());
     assert!(take_mut.name == lock.name, EWrongKiosk);
     assert!(take_mut.recipient == ctx.sender(), EWrongReceiver);
 
@@ -316,12 +318,12 @@ public fun new_list(
 
 public fun list<O: key + store, I: copy + drop>(
     executable: &mut Executable,
+    multisig: &Multisig,
     kiosk: &mut Kiosk,
     lock: &KioskOwnerLock,
     issuer: I,
-    idx: u64,
 ) {
-    let list_mut: &mut List = executable.action_mut(issuer, idx);
+    let list_mut: &mut List = executable.action_mut(issuer, multisig.addr());
     assert!(list_mut.name == lock.name, EWrongKiosk);
     let (nft_id, price) = list_mut.nfts_prices_map.remove_entry_by_idx(0);
     kiosk.list<O>(&lock.kiosk_owner_cap, nft_id, price);

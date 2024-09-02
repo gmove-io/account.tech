@@ -40,14 +40,14 @@ public struct Open has store {
 }
 
 // [ACTION] action to be used with specific proposals making good use of the returned coins, similar as owned::withdraw
-public struct Withdraw has store {
+public struct Spend has store {
     // name of the treasury to withdraw from
     name: String,
     // coin types to amounts
     coins_amounts_map: VecMap<String, u64>,
 }
 
-// [ACTION] used in combination with Withdraw to transfer the coins to a recipient
+// [ACTION] used in combination with Spend to transfer the coins to a recipient
 public struct Transfer has store {
     // recipient
     recipient: address,
@@ -122,7 +122,7 @@ public fun execute_open(
     multisig: &mut Multisig,
     ctx: &mut TxContext
 ) {
-    open(&mut executable, multisig, Issuer {}, 0, ctx);
+    open(&mut executable, multisig, Issuer {}, ctx);
     executable.destroy(Issuer {});
 }
 
@@ -155,7 +155,7 @@ public fun propose_batch_transfer(
         ctx
     );
 
-    // push Withdraw/Transfer as many times as there are recipients
+    // push Spend/Transfer as many times as there are recipients
     recipients.do!(|recipient| {
         new_transfer(proposal_mut, name, coin_types, amounts, recipient);
     });
@@ -170,12 +170,11 @@ public fun execute_transfer<C: drop>(
     multisig: &mut Multisig,
     ctx: &mut TxContext
 ) {
-    transfer<Issuer ,C>(executable, multisig, Issuer {}, 0, ctx); // TODO: handle idx
+    transfer<Issuer ,C>(executable, multisig, Issuer {}, ctx);
 }
 
-// step 5: each time a Withdraw is consumed, we destroy it with the Transfer
+// step 5: each time a Spend is consumed, we destroy it with the Transfer
 public fun confirm_transfer(executable: &mut Executable) {
-    destroy_withdraw(executable, Issuer {});
     destroy_transfer(executable, Issuer {});
 }
 
@@ -193,10 +192,9 @@ public fun open<I: copy + drop>(
     executable: &mut Executable,
     multisig: &mut Multisig,
     issuer: I,
-    idx: u64,
     ctx: &mut TxContext
 ) {
-    let open_mut: &mut Open = executable.action_mut(issuer, idx);
+    let open_mut: &mut Open = executable.action_mut(issuer, multisig.addr());
     df::add(multisig.uid_mut(), open_mut.name, Treasury { bag: bag::new(ctx) });
     open_mut.name = b"".to_string(); // reset to ensure execution
 }
@@ -206,24 +204,23 @@ public fun destroy_open<I: copy + drop>(executable: &mut Executable, issuer: I) 
     assert!(name.is_empty(), EOpenNotExecuted);
 }
 
-public fun new_withdraw(
+public fun new_spend(
     proposal: &mut Proposal,
     name: String,
     coin_types: vector<String>,
     amounts: vector<u64>
 ) {
     assert!(coin_types.length() == amounts.length(), EWrongLength);
-    proposal.add_action(Withdraw { name, coins_amounts_map: vec_map::from_keys_values(coin_types, amounts) });
+    proposal.add_action(Spend { name, coins_amounts_map: vec_map::from_keys_values(coin_types, amounts) });
 }
 
-public fun withdraw<I: copy + drop, C: drop>(
+public fun spend<I: copy + drop, C: drop>(
     executable: &mut Executable,
     multisig: &mut Multisig,
     issuer: I,
-    idx: u64,
     ctx: &mut TxContext
 ): Coin<C> {
-    let withdraw_mut: &mut Withdraw = executable.action_mut(issuer, idx);
+    let withdraw_mut: &mut Spend = executable.action_mut(issuer, multisig.addr());
     let (coin_type, amount) = withdraw_mut.coins_amounts_map.remove(&coin_type_string<C>());
     
     let treasury: &mut Treasury = df::borrow_mut(multisig.uid_mut(), withdraw_mut.name);
@@ -238,8 +235,8 @@ public fun withdraw<I: copy + drop, C: drop>(
     coin
 }
 
-public fun destroy_withdraw<I: copy + drop>(executable: &mut Executable, issuer: I) {
-    let Withdraw { name: _, coins_amounts_map } = executable.remove_action(issuer);
+public fun destroy_spend<I: copy + drop>(executable: &mut Executable, issuer: I) {
+    let Spend { name: _, coins_amounts_map } = executable.remove_action(issuer);
     assert!(coins_amounts_map.is_empty(), EWithdrawNotExecuted);
 }
 
@@ -250,7 +247,7 @@ public fun new_transfer(
     amounts: vector<u64>,
     recipient: address
 ) {
-    new_withdraw(proposal, name, coin_types, amounts);
+    new_spend(proposal, name, coin_types, amounts);
     proposal.add_action(Transfer { recipient });
 }
 
@@ -258,16 +255,15 @@ public fun transfer<I: copy + drop, C: drop>(
     executable: &mut Executable,
     multisig: &mut Multisig,
     issuer: I,
-    idx: u64,
     ctx: &mut TxContext
 ) {
-    let coin: Coin<C> = withdraw(executable, multisig, issuer, idx, ctx);
-    let transfer_mut: &mut Transfer = executable.action_mut(issuer, idx + 1);
+    let coin: Coin<C> = spend(executable, multisig, issuer, ctx);
+    let transfer_mut: &mut Transfer = executable.action_mut(issuer, multisig.addr());
     transfer::public_transfer(coin, transfer_mut.recipient);
 }
 
 public fun destroy_transfer<I: copy + drop>(executable: &mut Executable, issuer: I) {
-    destroy_withdraw(executable, issuer); // only possible if all withdrawals/transfers are done
+    destroy_spend(executable, issuer); // only possible if all withdrawals/transfers are done
     let Transfer { .. } = executable.remove_action(issuer);
 }
 

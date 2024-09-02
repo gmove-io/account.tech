@@ -168,9 +168,10 @@ public fun propose_upgrade(
 // step 4: destroy Upgrade and return the UpgradeTicket for upgrading
 public fun execute_upgrade(
     mut executable: Executable,
+    multisig: &Multisig,
     lock: &mut UpgradeLock,
 ): UpgradeTicket {
-    let ticket = upgrade(&mut executable, lock, Issuer {}, 0);
+    let ticket = upgrade(&mut executable, multisig, lock, Issuer {});
     destroy_upgrade(&mut executable, Issuer {});
     executable.destroy(Issuer {});
 
@@ -220,7 +221,7 @@ public fun execute_restrict(
     multisig: &mut Multisig,
     lock: UpgradeLock,
 ) {
-    restrict(&mut executable, multisig, lock, Issuer {}, 0);
+    restrict(&mut executable, multisig, lock, Issuer {});
     destroy_restrict(&mut executable, Issuer {});
     executable.destroy(Issuer {});
 }
@@ -233,11 +234,11 @@ public fun new_upgrade(proposal: &mut Proposal, digest: vector<u8>, lock_id: ID)
 
 public fun upgrade<I: copy + drop>(
     executable: &mut Executable,
+    multisig: &Multisig,
     lock: &mut UpgradeLock,
     issuer: I,
-    idx: u64,
 ): UpgradeTicket {
-    let upgrade_mut: &mut Upgrade = executable.action_mut(issuer, idx);
+    let upgrade_mut: &mut Upgrade = executable.action_mut(issuer, multisig.addr());
     assert!(object::id(lock) == upgrade_mut.lock_id, EWrongUpgradeLock);
 
     let policy = lock.upgrade_cap.policy();
@@ -271,11 +272,8 @@ public fun restrict<I: copy + drop>(
     multisig: &mut Multisig,
     mut lock: UpgradeLock,
     issuer: I,
-    idx: u64,
 ) {
-    multisig.assert_executed(executable);
-    
-    let restrict_mut: &mut Restrict = executable.action_mut(issuer, idx);
+    let restrict_mut: &mut Restrict = executable.action_mut(issuer, multisig.addr());
     assert!(object::id(&lock) == restrict_mut.lock_id, EWrongUpgradeLock);
 
     if (restrict_mut.policy == package::additive_policy()) {

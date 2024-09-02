@@ -1,7 +1,7 @@
 /// This is the core module managing Multisig and Proposals.
 /// It provides the apis to create, approve and execute proposals with actions.
 /// 
-/// Here is the flow:
+/// The flow is as follows:
 ///   1. A proposal is created by pushing actions into it. 
 ///      Actions are stacked from last to first, they must be executed then destroyed from last to first.
 ///   2. When the threshold is reached, a proposal can be executed. 
@@ -38,9 +38,8 @@ const EThresholdNotReached: u64 = 1;
 const ECantBeExecutedYet: u64 = 2;
 const EHasntExpired: u64 = 3;
 const EWrongVersion: u64 = 4;
-const ENotMultisigExecutable: u64 = 5;
-const EProposalNotFound: u64 = 6;
-const EMemberNotFound: u64 = 7;
+const EProposalNotFound: u64 = 5;
+const EMemberNotFound: u64 = 6;
 
 // === Constants ===
 
@@ -98,8 +97,6 @@ public struct Proposal has key, store {
 
 // hot potato ensuring the action in the proposal is executed as it can't be stored
 public struct Executable {
-    // multisig that executed the proposal
-    multisig_addr: address,
     // module that issued the proposal and must destroy it
     auth: Auth,
     // index of the next action to destroy, starts at 0
@@ -157,7 +154,7 @@ public fun create_proposal<I: drop>(
 
     let proposal = Proposal { 
         id: object::new(ctx),
-        auth: auth::construct(auth_issuer, auth_name),
+        auth: auth::construct(auth_issuer, auth_name, multisig.addr()),
         description,
         execution_time,
         expiration_epoch,
@@ -253,7 +250,6 @@ public fun execute_proposal(
     );
 
     Executable { 
-        multisig_addr: multisig.id.uid_to_inner().id_to_address(), 
         auth,
         next_to_destroy: 0,
         actions
@@ -263,9 +259,12 @@ public fun execute_proposal(
 public fun action_mut<I: drop, A: store>(
     executable: &mut Executable, 
     auth_issuer: I,
-    idx: u64
+    multisig_addr: address,
 ): &mut A {
-    executable.auth.authenticate_module(auth_issuer);
+    executable.auth.assert_is_issuer(auth_issuer);
+    executable.auth.assert_is_multisig(multisig_addr);
+
+    let idx = executable.action_index<A>();
     executable.actions.borrow_mut(idx)
 }
 
@@ -274,7 +273,8 @@ public fun remove_action<I: drop, A: store>(
     executable: &mut Executable, 
     auth_issuer: I,
 ): A {
-    executable.auth.authenticate_module(auth_issuer);
+    executable.auth.assert_is_issuer(auth_issuer);
+
     let next = executable.next_to_destroy;
     executable.next_to_destroy = next + 1;
 
@@ -293,7 +293,7 @@ public fun destroy_executable<I: drop>(
         ..
     } = executable;
     
-    auth.authenticate_module(auth_issuer);
+    auth.assert_is_issuer(auth_issuer);
     actions.destroy_empty();
 }
 
@@ -438,16 +438,6 @@ public fun approved(proposal: &Proposal): vector<address> {
 }
 
 // Executable accessors
-public use fun executable_multisig_addr as Executable.multisig_addr;
-public fun executable_multisig_addr(executable: &Executable): address {
-    executable.multisig_addr
-}
-
-public use fun assert_multisig_executed as Multisig.assert_executed;
-public fun assert_multisig_executed(multisig: &Multisig, executable: &Executable) {
-    assert!(multisig.addr() == executable.multisig_addr, ENotMultisigExecutable);
-}
-
 public use fun executable_auth as Executable.auth;
 public fun executable_auth(executable: &Executable): &Auth {
     &executable.auth
@@ -461,6 +451,22 @@ public fun executable_actions_length(executable: &Executable): u64 {
 public use fun executable_action as Executable.action;
 public fun executable_action<A: store>(executable: &Executable, idx: u64): &A {
     executable.actions.borrow(idx)
+}
+
+public use fun executable_action_index as Executable.action_index;
+public fun executable_action_index<A: store>(executable: &Executable): u64 {
+    let length = executable.actions.length();
+    let mut idx = executable.next_to_destroy;
+
+    loop {
+        if (
+            idx == length || // returns length if action not found
+            executable.actions.contains_with_type<u64, A>(idx)
+        ) break idx;
+        idx = idx + 1;
+    };
+
+    idx
 }
 
 // === Package functions ===

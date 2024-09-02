@@ -32,7 +32,7 @@ fun withdraw_end_to_end() {
     world.approve_proposal(key);
 
     let mut executable = world.execute_proposal(key);
-    let object1 = world.withdraw<Object, Issuer>(&mut executable, receiving_ticket_by_id(id1), Issuer {}, 0);
+    let object1 = world.withdraw<Object, Issuer>(&mut executable, receiving_ticket_by_id(id1), Issuer {});
     owned::destroy_withdraw(&mut executable, Issuer {});
     executable.destroy(Issuer {});
     assert!(object1.id.to_inner() == id1);
@@ -57,9 +57,9 @@ fun borrow_end_to_end() {
     world.approve_proposal(key);
 
     let mut executable = world.execute_proposal(key);
-    let object1 = world.borrow<Object, Issuer>(&mut executable, receiving_ticket_by_id(id1), Issuer {}, 0);
+    let object1 = world.borrow<Object, Issuer>(&mut executable, receiving_ticket_by_id(id1), Issuer {});
     assert!(object::id(&object1) == id1);
-    world.put_back<Object, Issuer>(&mut executable, object1, Issuer {}, 1);
+    world.put_back<Object, Issuer>(&mut executable, object1, Issuer {});
 
     owned::destroy_borrow(&mut executable, Issuer {});
     executable.destroy(Issuer {});
@@ -85,7 +85,7 @@ fun withdraw_error_wrong_object() {
     world.approve_proposal(key);
 
     let mut executable = world.execute_proposal(key);
-    let object1 = world.withdraw<Object, Issuer>(&mut executable, receiving_ticket_by_id(id2), Issuer {}, 0);
+    let object1 = world.withdraw<Object, Issuer>(&mut executable, receiving_ticket_by_id(id2), Issuer {});
     owned::destroy_withdraw(&mut executable, Issuer {});
     executable.destroy(Issuer {});
     
@@ -132,10 +132,10 @@ fun put_back_error_wrong_object() {
     world.approve_proposal(key);
 
     let mut executable = world.execute_proposal(key);
-    let object1 = world.borrow<Object, Issuer>(&mut executable, receiving_ticket_by_id(id1), Issuer {}, 0);
+    let object1 = world.borrow<Object, Issuer>(&mut executable, receiving_ticket_by_id(id1), Issuer {});
     assert!(object::id(&object1) == id1);
-    world.put_back<Object, Issuer>(&mut executable, object2, Issuer {}, 1);
-    world.put_back<Object, Issuer>(&mut executable, object1, Issuer {}, 1);
+    world.put_back<Object, Issuer>(&mut executable, object2, Issuer {});
+    world.put_back<Object, Issuer>(&mut executable, object1, Issuer {});
 
     owned::destroy_borrow(&mut executable, Issuer {});
     executable.destroy(Issuer {});
@@ -158,7 +158,7 @@ fun complete_borrow_error_return_all_objects_before() {
     world.approve_proposal(key);
 
     let mut executable = world.execute_proposal(key);
-    let object1 = world.borrow<Object, Issuer>(&mut executable, receiving_ticket_by_id(id1), Issuer {}, 0);
+    let object1 = world.borrow<Object, Issuer>(&mut executable, receiving_ticket_by_id(id1), Issuer {});
     owned::destroy_borrow(&mut executable, Issuer {});
 
     executable.destroy(Issuer {});

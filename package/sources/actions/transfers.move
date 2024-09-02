@@ -93,7 +93,7 @@ public fun execute_send<T: key + store>(
     multisig: &mut Multisig, 
     receiving: Receiving<T>,
 ) {
-    send(executable, multisig, receiving, Issuer {}, 0); // send action group starts from 0
+    send(executable, multisig, receiving, Issuer {});
 }
 
 // step 5: destroy send
@@ -143,7 +143,7 @@ public fun execute_deliver<T: key + store>(
     multisig: &mut Multisig,
     receiving: Receiving<T>,
 ) {
-    deliver(delivery, cap, executable, multisig, receiving, Issuer {}, 0);
+    deliver(delivery, cap, executable, multisig, receiving, Issuer {});
 }
 
 // step 6: share the Delivery and destroy the action
@@ -215,12 +215,9 @@ public fun send<T: key + store, I: copy + drop>(
     multisig: &mut Multisig, 
     receiving: Receiving<T>,
     issuer: I,
-    idx: u64, // index in actions bag 
 ) {
-    multisig.assert_executed(executable);
-    
-    let object = owned::withdraw(executable, multisig, receiving, issuer, idx);
-    let send_mut: &mut Send = executable.action_mut(issuer, idx + 1);
+    let object = owned::withdraw(executable, multisig, receiving, issuer);
+    let send_mut: &mut Send = executable.action_mut(issuer, multisig.addr());
     let (_, recipient) = send_mut.objects_recipients_map.remove(&object::id(&object));
     // abort if receiving object is not in the map
     transfer::public_transfer(object, recipient);
@@ -245,13 +242,11 @@ public fun deliver<T: key + store, I: copy + drop>(
     multisig: &mut Multisig,
     receiving: Receiving<T>,
     issuer: I,
-    idx: u64 // index of first action in bag (withdraw)
 ) {
-    multisig.assert_executed(executable);
     assert!(cap.delivery_id == object::id(delivery), EWrongDelivery);
     
-    let object = owned::withdraw(executable, multisig, receiving, issuer, idx);
-    let deliver_mut: &mut Deliver = executable.action_mut(issuer, idx + 1);
+    let object = owned::withdraw(executable, multisig, receiving, issuer);
+    let deliver_mut: &mut Deliver = executable.action_mut(issuer, multisig.addr());
     let (_, index) = deliver_mut.to_deposit.index_of(&object::id(&object));
     deliver_mut.to_deposit.swap_remove(index); // we don't care about the order
 

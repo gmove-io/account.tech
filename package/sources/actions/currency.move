@@ -125,11 +125,12 @@ public fun propose_mint<C: drop>(
 // step 4: mint the coins and send them to the multisig
 public fun execute_mint<C: drop>(
     mut executable: Executable,
+    multisig: &Multisig,
     lock: &mut CurrencyLock<C>,
     ctx: &mut TxContext
 ) {
-    let coin = mint<C, Issuer>(&mut executable, lock, Issuer {}, 0, ctx);
-    transfer::public_transfer(coin, executable.multisig_addr());
+    let coin = mint<C, Issuer>(&mut executable, multisig, lock, Issuer {}, ctx);
+    transfer::public_transfer(coin, multisig.addr());
     destroy_mint<C, Issuer>(&mut executable, Issuer {});
     executable.destroy(Issuer {});
 }
@@ -168,8 +169,8 @@ public fun execute_burn<C: drop>(
     receiving: Receiving<Coin<C>>,
     lock: &mut CurrencyLock<C>,
 ) {
-    let coin = owned::withdraw(&mut executable, multisig, receiving, Issuer {}, 0);
-    burn<C, Issuer>(&mut executable, lock, coin, Issuer {}, 1);
+    let coin = owned::withdraw(&mut executable, multisig, receiving, Issuer {});
+    burn<C, Issuer>(&mut executable, multisig, lock, coin, Issuer {});
     owned::destroy_withdraw(&mut executable, Issuer {});
     destroy_burn<C, Issuer>(&mut executable, Issuer {});
     executable.destroy(Issuer {});
@@ -206,10 +207,11 @@ public fun propose_update<C: drop>(
 // step 4: update the CoinMetadata
 public fun execute_update<C: drop>(
     executable: &mut Executable,
+    multisig: &Multisig,
     lock: &CurrencyLock<C>,
     metadata: &mut CoinMetadata<C>,
 ) {
-    update(executable, lock, metadata, Issuer {}, 0);
+    update(executable, multisig, lock, metadata, Issuer {});
 }
 
 // step 5: destroy the executable, must `put_back_cap()`
@@ -226,12 +228,12 @@ public fun new_mint<C: drop>(proposal: &mut Proposal, amount: u64) {
 
 public fun mint<C: drop, I: drop>(
     executable: &mut Executable, 
+    multisig: &Multisig,
     lock: &mut CurrencyLock<C>, 
     issuer: I, 
-    idx: u64,
     ctx: &mut TxContext
 ): Coin<C> {
-    let mint_mut: &mut Mint<C> = executable.action_mut(issuer, idx);
+    let mint_mut: &mut Mint<C> = executable.action_mut(issuer, multisig.addr());
     let coin = lock.treasury_cap.mint(mint_mut.amount, ctx);
     mint_mut.amount = 0; // reset to ensure it has been executed
     coin
@@ -248,12 +250,12 @@ public fun new_burn<C: drop>(proposal: &mut Proposal, amount: u64) {
 
 public fun burn<C: drop, I: copy + drop>(
     executable: &mut Executable, 
+    multisig: &Multisig,
     lock: &mut CurrencyLock<C>, 
     coin: Coin<C>,
     issuer: I, 
-    idx: u64,
 ) {
-    let burn_mut: &mut Burn<C> = executable.action_mut(issuer, idx);
+    let burn_mut: &mut Burn<C> = executable.action_mut(issuer, multisig.addr());
     assert!(burn_mut.amount == coin.value(), EWrongValue);
     lock.treasury_cap.burn(coin);
     burn_mut.amount = 0; // reset to ensure it has been executed
@@ -277,12 +279,12 @@ public fun new_update<C: drop>(
 
 public fun update<C: drop, I: copy + drop>(
     executable: &mut Executable,
+    multisig: &Multisig,
     lock: &CurrencyLock<C>,
     metadata: &mut CoinMetadata<C>,
     issuer: I,
-    idx: u64,
 ) {
-    let update_mut: &mut Update = executable.action_mut(issuer, idx);
+    let update_mut: &mut Update = executable.action_mut(issuer, multisig.addr());
     assert!(update_mut.coin_type == type_to_name<C>(), EWrongCoinType);
 
     if (update_mut.name.is_some()) {

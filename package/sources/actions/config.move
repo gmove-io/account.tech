@@ -12,7 +12,6 @@ use std::string::String;
 use sui::vec_map::{Self, VecMap};
 use kraken::{
     multisig::{Multisig, Executable, Proposal},
-    auth,
     utils,
 };
 
@@ -118,7 +117,7 @@ public fun execute_name(
     mut executable: Executable,
     multisig: &mut Multisig, 
 ) {
-    name(&mut executable, multisig, Issuer {}, 0);
+    name(&mut executable, multisig, Issuer {});
     destroy_name(&mut executable, Issuer {});
     executable.destroy(Issuer {});
 }
@@ -188,10 +187,10 @@ public fun execute_modify_rules(
     mut executable: Executable,
     multisig: &mut Multisig, 
 ) {
-    members(&mut executable, multisig, Issuer {}, 0);
-    weights(&mut executable, multisig, Issuer {}, 1);
-    roles(&mut executable, multisig, Issuer {}, 2);
-    thresholds(&mut executable, multisig, Issuer {}, 3);
+    members(&mut executable, multisig, Issuer {});
+    weights(&mut executable, multisig, Issuer {});
+    roles(&mut executable, multisig, Issuer {});
+    thresholds(&mut executable, multisig, Issuer {});
     
     destroy_members(&mut executable, Issuer {});
     destroy_weights(&mut executable, Issuer {});
@@ -231,7 +230,7 @@ public fun execute_migrate(
     mut executable: Executable,
     multisig: &mut Multisig, 
 ) {
-    migrate(&mut executable, multisig, Issuer {}, 0);
+    migrate(&mut executable, multisig, Issuer {});
     destroy_migrate(&mut executable, Issuer {});
     executable.destroy(Issuer {});
 }
@@ -246,10 +245,8 @@ public fun name<I: copy + drop>(
     executable: &mut Executable,
     multisig: &mut Multisig, 
     issuer: I,
-    idx: u64,
 ) {
-    multisig.assert_executed(executable);
-    let name_mut: &mut Name = executable.action_mut(issuer, idx);
+    let name_mut: &mut Name = executable.action_mut(issuer, multisig.addr());
     assert!(!name_mut.name.is_empty(), ENameAlreadySet);
     multisig.set_name(name_mut.name);
     name_mut.name = b"".to_string(); // reset to confirm execution
@@ -277,11 +274,10 @@ public fun thresholds<I: copy + drop>(
     executable: &mut Executable,
     multisig: &mut Multisig, 
     issuer: I,
-    idx: u64,
 ) {
     // threshold modification must be the latest action to be executed to ensure it is reachable
-    assert!(idx + 1 == executable.actions_length(), EThresholdNotLastAction);
-    let t_mut: &mut Thresholds = executable.action_mut(issuer, idx);
+    assert!(executable.action_index<Thresholds>() + 1 == executable.actions_length(), EThresholdNotLastAction);
+    let t_mut: &mut Thresholds = executable.action_mut(issuer, multisig.addr());
 
     let roles_weights_map = multisig.get_weights_for_roles();
 
@@ -313,10 +309,8 @@ public fun members<I: copy + drop>(
     executable: &mut Executable,
     multisig: &mut Multisig, 
     issuer: I,
-    idx: u64,
 ) {
-    multisig.assert_executed(executable);
-    let members_mut: &mut Members = executable.action_mut(issuer, idx);
+    let members_mut: &mut Members = executable.action_mut(issuer, multisig.addr());
 
     multisig.remove_members(&mut members_mut.to_remove);
     multisig.add_members(&mut members_mut.to_add);
@@ -345,10 +339,8 @@ public fun weights<I: copy + drop>(
     executable: &mut Executable,
     multisig: &mut Multisig, 
     issuer: I,
-    idx: u64,
 ) {
-    multisig.assert_executed(executable);
-    let w_mut: &mut Weights = executable.action_mut(issuer, idx);
+    let w_mut: &mut Weights = executable.action_mut(issuer, multisig.addr());
 
     while (!w_mut.addresses_weights_map.is_empty()) {
         let idx = w_mut.addresses_weights_map.size() - 1; // cheaper to pop
@@ -383,10 +375,8 @@ public fun roles<I: copy + drop>(
     executable: &mut Executable,
     multisig: &mut Multisig, 
     issuer: I,
-    idx: u64,
 ) {
-    multisig.assert_executed(executable);
-    let roles_mut: &mut Roles = executable.action_mut(issuer, idx);
+    let roles_mut: &mut Roles = executable.action_mut(issuer, multisig.addr());
 
     while (!roles_mut.to_add_map.is_empty()) {
         let idx = roles_mut.to_add_map.size() - 1;
@@ -421,10 +411,8 @@ public fun migrate<I: copy + drop>(
     executable: &mut Executable,
     multisig: &mut Multisig, 
     issuer: I,
-    idx: u64,
 ) {
-    multisig.assert_executed(executable);
-    let migrate_mut: &mut Migrate = executable.action_mut(issuer, idx);
+    let migrate_mut: &mut Migrate = executable.action_mut(issuer, multisig.addr());
     assert!(migrate_mut.version != 0, EVersionAlreadyUpdated);
     multisig.set_version(migrate_mut.version);
     migrate_mut.version = 0; // reset to 0 to enforce exactly one execution
