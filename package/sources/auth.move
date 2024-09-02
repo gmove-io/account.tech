@@ -62,6 +62,16 @@ public fun into_role(auth: &Auth): String {
     auth_to_role
 }
 
+// === View Functions ===
+
+public fun issuer(auth: &Auth): String {
+    auth.issuer
+}
+
+public fun name(auth: &Auth): String {
+    auth.name
+}
+
 public fun multisig_addr(auth: &Auth): address {
     auth.multisig_addr
 }

@@ -53,6 +53,8 @@ public struct Transfer has store {
     recipient: address,
 }
 
+public struct TreasuryKey has copy, drop, store { name: String }
+
 // multisig's dynamic field holding a budget with different coin types, key is name
 public struct Treasury has store {
     // heterogeneous array of Balances, String -> Balance<C>
@@ -70,7 +72,7 @@ public fun deposit<C: drop>(
     multisig.assert_is_member(ctx);
     assert!(treasury_exists(multisig, name), ETreasuryDoesntExist);
 
-    let treasury: &mut Treasury = df::borrow_mut(multisig.uid_mut(), name);
+    let treasury: &mut Treasury = multisig.borrow_managed_asset_mut(TreasuryKey { name });
     let coin_type = coin_type_string<C>();
 
     if (treasury.coin_type_exists(coin_type)) {
@@ -83,7 +85,7 @@ public fun deposit<C: drop>(
 
 public fun close(multisig: &mut Multisig, name: String, ctx: &mut TxContext) {
     multisig.assert_is_member(ctx);
-    let Treasury { bag } = df::remove(multisig.uid_mut(), name);
+    let Treasury { bag } = multisig.remove_managed_asset(TreasuryKey { name });
     assert!(bag.is_empty(), ETreasuryNotEmpty);
     bag.destroy_empty();
 }
@@ -195,7 +197,7 @@ public fun open<I: copy + drop>(
     ctx: &mut TxContext
 ) {
     let open_mut: &mut Open = executable.action_mut(issuer, multisig.addr());
-    df::add(multisig.uid_mut(), open_mut.name, Treasury { bag: bag::new(ctx) });
+    multisig.add_managed_asset(TreasuryKey { name: open_mut.name }, Treasury { bag: bag::new(ctx) });
     open_mut.name = b"".to_string(); // reset to ensure execution
 }
 
@@ -223,7 +225,7 @@ public fun spend<I: copy + drop, C: drop>(
     let withdraw_mut: &mut Spend = executable.action_mut(issuer, multisig.addr());
     let (coin_type, amount) = withdraw_mut.coins_amounts_map.remove(&coin_type_string<C>());
     
-    let treasury: &mut Treasury = df::borrow_mut(multisig.uid_mut(), withdraw_mut.name);
+    let treasury: &mut Treasury = multisig.borrow_managed_asset_mut(TreasuryKey { name: withdraw_mut.name });
     let balance: &mut Balance<C> = treasury.bag.borrow_mut(coin_type);
     let coin = coin::take(balance, amount, ctx);
 
@@ -236,7 +238,7 @@ public fun spend<I: copy + drop, C: drop>(
 }
 
 public fun destroy_spend<I: copy + drop>(executable: &mut Executable, issuer: I) {
-    let Spend { name: _, coins_amounts_map } = executable.remove_action(issuer);
+    let Spend { coins_amounts_map, .. } = executable.remove_action(issuer);
     assert!(coins_amounts_map.is_empty(), EWithdrawNotExecuted);
 }
 
@@ -270,11 +272,11 @@ public fun destroy_transfer<I: copy + drop>(executable: &mut Executable, issuer:
 // === View Functions ===
 
 public fun treasury_exists(multisig: &Multisig, name: String): bool {
-    df::exists_(multisig.uid(), name)
+    df::exists_(multisig.uid(), TreasuryKey { name })
 }
 
 public fun treasury(multisig: &Multisig, name: String): &Treasury {
-    df::borrow(multisig.uid(), name)
+    df::borrow(multisig.uid(), TreasuryKey { name })
 }
 
 public fun coin_type_string<C: drop>(): String {

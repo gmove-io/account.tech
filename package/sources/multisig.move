@@ -20,7 +20,8 @@ use sui::{
     clock::Clock, 
     vec_set::{Self, VecSet}, 
     vec_map::{Self, VecMap}, 
-    bag::{Self, Bag}
+    bag::{Self, Bag},
+    dynamic_field as df,
 };
 use kraken::{
     utils,
@@ -470,6 +471,36 @@ public fun executable_action_index<A: store>(executable: &Executable): u64 {
 }
 
 // === Package functions ===
+
+// managed assets
+public(package) fun add_managed_asset<K: copy + drop + store, A: store>(
+    multisig: &mut Multisig, 
+    key: K, 
+    asset: A
+) {
+    df::add(&mut multisig.id, key, asset);
+}
+
+public(package) fun borrow_managed_asset<K: copy + drop + store, A: store>(
+    multisig: &Multisig, 
+    key: K, 
+): &A {
+    df::borrow(&multisig.id, key)
+}
+
+public(package) fun borrow_managed_asset_mut<K: copy + drop + store, A: store>(
+    multisig: &mut Multisig, 
+    key: K, 
+): &mut A {
+    df::borrow_mut(&mut multisig.id, key)
+}
+
+public(package) fun remove_managed_asset<K: copy + drop + store, A: store>(
+    multisig: &mut Multisig, 
+    key: K, 
+): A {
+    df::remove(&mut multisig.id, key)
+}
 
 // callable only in config.move, if the proposal has been accepted
 public(package) fun set_version(multisig: &mut Multisig, version: u64) {

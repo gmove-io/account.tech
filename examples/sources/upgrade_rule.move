@@ -13,11 +13,12 @@ module examples::upgrade_rule {
     // === Constants ===
 
     const MS_IN_DAY: u64 = 24 * 60 * 60 * 1000;
-    const WEEKEND_UPGRADE_KEY: vector<u8> = b"WeekendUpgrade";
 
     // === Structs ===
 
     public struct Auth has copy, drop {}
+
+    public struct WeekendKey has copy, drop, store {}
 
     // timelock config for the UpgradeLock
     public struct WeekendUpgrade has store {}
@@ -26,14 +27,14 @@ module examples::upgrade_rule {
 
     // lock a cap with a timelock rule
     public fun lock_cap_with_weekend_upgrade(
-        multisig: &Multisig,
-        label: String,
+        multisig: &mut Multisig,
+        name: String,
         upgrade_cap: UpgradeCap,
         ctx: &mut TxContext
     ) {
-        let mut lock = upgrade_policies::lock_cap(multisig, label, upgrade_cap, ctx);
-        lock.add_rule(WEEKEND_UPGRADE_KEY, WeekendUpgrade {});
-        lock.put_back_cap();
+        let mut lock = upgrade_policies::new_lock(upgrade_cap, ctx);
+        lock.add_rule(WeekendKey {}, WeekendUpgrade {});
+        lock.lock_cap(multisig, name, ctx);
     }
 
     // === [PROPOSAL] Public Functions ===
@@ -50,20 +51,21 @@ module examples::upgrade_rule {
         ctx: &mut TxContext
     ) {
         // if there's a rule we enforce it
-        if (lock.has_rule(WEEKEND_UPGRADE_KEY)) {
+        if (lock.has_rule(WeekendKey {})) {
             assert!(weekend(execution_time));
         };
 
         let proposal_mut = multisig.create_proposal(
             Auth {},
             key,
+            b"".to_string(),
+            description,
             execution_time,
             expiration_epoch,
-            description,
             ctx
         );
 
-        upgrade_policies::new_upgrade(proposal_mut, digest, object::id(lock));
+        upgrade_policies::new_upgrade(proposal_mut, digest);
     }
 
     // step 2: multiple members have to approve the proposal (multisig::approve_proposal)

@@ -113,14 +113,7 @@ public fun disburse<C: drop>(stream: &mut Stream<C>, ctx: &mut TxContext) {
 
 // step 6: destroy the stream when balance is empty
 public fun destroy_empty_stream<C: drop>(stream: Stream<C>) {
-    let Stream { 
-        id, 
-        balance, 
-        amount: _, 
-        interval: _, 
-        last_epoch: _, 
-        recipient: _ 
-    } = stream;
+    let Stream { id, balance, .. } = stream;
     
     assert!(balance.value() == 0, ECompletePaymentBefore);
     balance.destroy_zero();
@@ -134,14 +127,7 @@ public fun cancel_payment_stream<C: drop>(
     ctx: &mut TxContext
 ) {
     multisig.assert_is_member(ctx);
-    let Stream { 
-        id, 
-        balance, 
-        amount: _, 
-        interval: _, 
-        last_epoch: _, 
-        recipient: _ 
-    } = stream;
+    let Stream { id, balance, .. } = stream;
     id.delete();
 
     transfer::public_transfer(
@@ -182,7 +168,7 @@ public fun pay<I: copy + drop, C: drop>(
 
 public fun destroy_pay<I: copy + drop>(executable: &mut Executable, issuer: I): address {
     owned::destroy_withdraw(executable, issuer);
-    let Pay { amount, interval: _, recipient } = executable.remove_action(issuer);
+    let Pay { amount, recipient, .. } = executable.remove_action(issuer);
     assert!(amount == 0, EPayNotExecuted);
 
     recipient

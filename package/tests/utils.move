@@ -11,18 +11,18 @@ use sui::{
     coin::{Coin, TreasuryCap},
     kiosk::{Kiosk, KioskOwnerCap},
     transfer_policy::{TransferPolicy, TransferRequest},
-    test_scenario::{Self as ts, Scenario, receiving_ticket_by_id, most_recent_id_for_address},
+    test_scenario::{Self as ts, Scenario, most_recent_id_for_address},
 };
 use kraken::{
     owned,
     config,
     coin_operations,
     payments::{Self, Stream},
-    currency::{Self, CurrencyLock},
+    currency,
     account::{Self, Account, Invite},
     upgrade_policies::{Self, UpgradeLock},
     transfers::{Self, DeliveryCap, Delivery},
-    kiosk::{Self as k_kiosk, KioskOwnerLock},
+    kiosk as k_kiosk,
     multisig::{Self, Multisig, Proposal, Executable},
 };
 
@@ -35,7 +35,6 @@ public struct World {
     account: Account,
     multisig: Multisig,
     kiosk: Kiosk,
-    kiosk_owner_lock_id: ID
 }
 
 // === Utils ===
@@ -48,14 +47,13 @@ public fun start_world(): World {
     let account = scenario.take_from_sender<Account>();
     // initialize Clock, Multisig and Kiosk
     let clock = clock::create_for_testing(scenario.ctx());
-    let multisig = multisig::new(b"kraken".to_string(), object::id(&account), scenario.ctx());
-    k_kiosk::new(&multisig, b"".to_string(), scenario.ctx());
+    let mut multisig = multisig::new(b"kraken".to_string(), object::id(&account), scenario.ctx());
+    k_kiosk::new(&mut multisig, b"kiosk".to_string(), scenario.ctx());
 
     scenario.next_tx(OWNER);
-    let kiosk_owner_lock_id = most_recent_id_for_address<KioskOwnerLock>(multisig.addr()).extract();
     let kiosk = scenario.take_shared<Kiosk>();
 
-    World { scenario, clock, account, multisig, kiosk, kiosk_owner_lock_id }
+    World { scenario, clock, account, multisig, kiosk }
 }
 
 public fun end(world: World) {
@@ -65,7 +63,7 @@ public fun end(world: World) {
         multisig, 
         account, 
         kiosk,
-        kiosk_owner_lock_id: _ 
+        ..
     } = world;
 
     destroy(clock);
@@ -422,28 +420,20 @@ public fun propose_migrate(
 
 // === Kiosk ===
 
-public fun borrow_lock(world: &mut World): KioskOwnerLock {
-    k_kiosk::borrow_lock(
-        &mut world.multisig, 
-        receiving_ticket_by_id(world.kiosk_owner_lock_id), 
-        world.scenario.ctx()
-    )
-}
-
 public fun place<T: key + store>(
     world: &mut World, 
-    lock: &KioskOwnerLock,
     sender_kiosk: &mut Kiosk, 
     sender_cap: &KioskOwnerCap, 
+    name: String,
     nft_id: ID,
     policy: &mut TransferPolicy<T>,
 ): TransferRequest<T> {
     k_kiosk::place(
         &mut world.multisig,
         &mut world.kiosk,
-        lock,
         sender_kiosk,
         sender_cap,
+        name,
         nft_id,
         policy,
         world.scenario.ctx()
@@ -473,16 +463,14 @@ public fun propose_take(
 public fun execute_take<T: key + store>(
     world: &mut World, 
     executable: &mut Executable,
-    lock: &KioskOwnerLock,
     recipient_kiosk: &mut Kiosk, 
     recipient_cap: &KioskOwnerCap, 
     policy: &mut TransferPolicy<T>
 ): TransferRequest<T> {
     k_kiosk::execute_take(
         executable,
-        &world.multisig,
+        &mut world.multisig,
         &mut world.kiosk,
-        lock,
         recipient_kiosk,
         recipient_cap,
         policy,
@@ -513,9 +501,8 @@ public fun propose_list(
 public fun execute_list<T: key + store>(
     world: &mut World,
     executable: &mut Executable,
-    lock: &KioskOwnerLock,
 ) {
-    k_kiosk::execute_list<T>(executable, &world.multisig, &mut world.kiosk, lock);
+    k_kiosk::execute_list<T>(executable, &mut world.multisig, &mut world.kiosk);
 }
 
 // === Payments ===
@@ -618,14 +605,7 @@ public fun retrieve<T: key + store>(
 // === Currency ===
 
 public fun lock_treasury_cap<C: drop>(world: &mut World, cap: TreasuryCap<C>) {
-    currency::lock_cap(&world.multisig, cap, world.scenario.ctx());
-}
-
-public fun borrow_currency_lock<C: drop>(
-    world: &mut World, 
-    treasury_lock: Receiving<CurrencyLock<C>>
-): CurrencyLock<C> {
-    currency::borrow_cap(&mut world.multisig, treasury_lock, world.scenario.ctx())
+    currency::lock_cap(&mut world.multisig, cap, world.scenario.ctx());
 }
 
 public fun propose_mint<C: drop>(
@@ -647,9 +627,8 @@ public fun propose_mint<C: drop>(
 public fun execute_mint<C: drop>(
     world: &mut World,
     executable: Executable,
-    currency_lock: &mut CurrencyLock<C>
 ) {
-    currency::execute_mint<C>(executable, &world.multisig, currency_lock, world.scenario.ctx());
+    currency::execute_mint<C>(executable, &mut world.multisig, world.scenario.ctx());
 }
 
 public fun propose_burn<C: drop>(
@@ -696,17 +675,10 @@ public fun propose_update<C: drop>(
 
 public fun lock_cap(
     world: &mut World,
+    upgrade_lock: UpgradeLock,
     label: String,
-    upgrade_cap: UpgradeCap
-): UpgradeLock {
-    upgrade_policies::lock_cap(&world.multisig, label, upgrade_cap, world.scenario.ctx())    
-}
-
-public fun borrow_upgrade_lock(
-    world: &mut World, 
-    lock: Receiving<UpgradeLock>
-): UpgradeLock {
-    upgrade_policies::borrow_lock(&mut world.multisig, lock, world.scenario.ctx())
+) {
+    upgrade_lock.lock_cap(&mut world.multisig, label, world.scenario.ctx());
 }
 
 public fun lock_cap_with_timelock(
@@ -715,22 +687,22 @@ public fun lock_cap_with_timelock(
     delay_ms: u64,
     upgrade_cap: UpgradeCap
 ) {
-    upgrade_policies::lock_cap_with_timelock(&world.multisig, label, delay_ms, upgrade_cap, world.scenario.ctx());
+    upgrade_policies::lock_cap_with_timelock(&mut world.multisig, label, delay_ms, upgrade_cap, world.scenario.ctx());
 }
 
 public fun propose_upgrade(
     world: &mut World, 
     key: String,
+    name: String,
     digest: vector<u8>,
-    lock: &UpgradeLock
 ) {
     upgrade_policies::propose_upgrade(
         &mut world.multisig, 
         key, 
         b"".to_string(), 
         0, 
+        name,
         digest, 
-        lock, 
         &world.clock, 
         world.scenario.ctx()
     ); 
@@ -739,16 +711,16 @@ public fun propose_upgrade(
 public fun propose_restrict(
     world: &mut World, 
     key: String,
+    name: String,
     policy: u8,
-    lock: &UpgradeLock
 ) {
     upgrade_policies::propose_restrict(
         &mut world.multisig, 
         key, 
         b"".to_string(),
         0, 
+        name, 
         policy, 
-        lock, 
         &world.clock, 
         world.scenario.ctx()
     );

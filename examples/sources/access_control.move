@@ -57,10 +57,11 @@ public fun propose_update_fee(
     assert!(fee <= MAX_FEE);
     let proposal_mut = multisig.create_proposal(
         Auth {}, 
+        b"".to_string(),
         key,
+        description,
         execution_time,
         expiration_epoch,
-        description,
         ctx
     );
     proposal_mut.add_action(UpdateFee { fee });
@@ -72,14 +73,12 @@ public fun propose_update_fee(
 // function guarded by a Multisig action
 public fun execute_update_fee(
     mut executable: Executable,
-    multisig: &mut Multisig,
+    multisig: &Multisig,
     protocol: &mut Protocol,
 ) {
-    multisig.assert_executed(&executable);
-    // here index is 0 because there is only one action in the proposal
-    let update_fee_mut: &mut UpdateFee = executable.action_mut(Auth {},  0);
+    let update_fee_mut: &mut UpdateFee = executable.action_mut(Auth {}, multisig.addr());
     protocol.fee = update_fee_mut.fee;
 
-    let UpdateFee { fee: _ } = executable.remove_action(Auth {}); 
+    let UpdateFee { .. } = executable.remove_action(Auth {}); 
     executable.destroy(Auth {}); 
 }

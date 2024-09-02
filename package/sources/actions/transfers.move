@@ -180,9 +180,9 @@ public fun retrieve<T: key + store>(
 
 // step 8: destroy the delivery
 public fun confirm_delivery(delivery: Delivery, cap: DeliveryCap) {
-    let DeliveryCap { id, delivery_id: _ } = cap;
+    let DeliveryCap { id, .. } = cap;
     id.delete();
-    let Delivery { id, multisig_id: _, objects } = delivery;
+    let Delivery { id, objects, .. } = delivery;
     id.delete();
     assert!(objects.is_empty(), EDeliveryNotEmpty);
     objects.destroy_empty();

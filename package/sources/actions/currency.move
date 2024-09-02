@@ -13,7 +13,7 @@ use std::{
 };
 use sui::{
     transfer::Receiving,
-    coin::{Coin, TreasuryCap, CoinMetadata}
+    coin::{Coin, TreasuryCap, CoinMetadata},
 };
 use kraken::{
     multisig::{Multisig, Executable, Proposal},
@@ -34,12 +34,11 @@ const EWrongCoinType: u64 = 5;
 // delegated issuer verifying a proposal is destroyed in the module where it was created
 public struct Issuer has copy, drop {}
 
+// df key for the CurrencyLock
+public struct CurrencyKey<phantom C: drop> has copy, drop, store {}
+
 // Wrapper restricting access to a TreasuryCap
-// doesn't have store because non-transferrable
-public struct CurrencyLock<phantom C: drop> has key {
-    id: UID,
-    // multisig owning the lock
-    multisig_addr: address,
+public struct CurrencyLock<phantom C: drop> has store {
     // the cap to lock
     treasury_cap: TreasuryCap<C>,
 }
@@ -66,33 +65,26 @@ public struct Update has store {
 // === [MEMBER] Public functions ===
 
 public fun lock_cap<C: drop>(
-    multisig: &Multisig,
+    multisig: &mut Multisig,
     treasury_cap: TreasuryCap<C>,
     ctx: &mut TxContext
 ) {
     multisig.assert_is_member(ctx);
-    let treasury_lock = CurrencyLock { 
-        id: object::new(ctx), 
-        multisig_addr: multisig.addr(),
-        treasury_cap 
-    };
+    let treasury_lock = CurrencyLock { treasury_cap };
 
-    transfer::transfer(treasury_lock, multisig.addr());
+    multisig.add_managed_asset(CurrencyKey<C> {}, treasury_lock);
 }
 
-// borrow the lock that can only be put back in the multisig because no store
-public fun borrow_cap<C: drop>(
-    multisig: &mut Multisig, 
-    treasury_lock: Receiving<CurrencyLock<C>>,
-    ctx: &mut TxContext
-): CurrencyLock<C> {
-    multisig.assert_is_member(ctx);
-    transfer::receive(multisig.uid_mut(), treasury_lock)
+public fun borrow_lock<C: drop>(multisig: &Multisig): &CurrencyLock<C> {
+    multisig.borrow_managed_asset(CurrencyKey<C> {})
 }
 
-public fun put_back_cap<C: drop>(treasury_lock: CurrencyLock<C>) {
-    let addr = treasury_lock.multisig_addr;
-    transfer::transfer(treasury_lock, addr);
+public fun borrow_lock_mut<C: drop>(multisig: &mut Multisig): &mut CurrencyLock<C> {
+    multisig.borrow_managed_asset_mut(CurrencyKey<C> {})
+}
+
+public fun supply<C: drop>(lock: &CurrencyLock<C>): u64 {
+    lock.treasury_cap.total_supply()
 }
 
 // === [PROPOSAL] Public functions ===
@@ -125,11 +117,10 @@ public fun propose_mint<C: drop>(
 // step 4: mint the coins and send them to the multisig
 public fun execute_mint<C: drop>(
     mut executable: Executable,
-    multisig: &Multisig,
-    lock: &mut CurrencyLock<C>,
+    multisig: &mut Multisig,
     ctx: &mut TxContext
 ) {
-    let coin = mint<C, Issuer>(&mut executable, multisig, lock, Issuer {}, ctx);
+    let coin = mint<C, Issuer>(&mut executable, multisig, Issuer {}, ctx);
     transfer::public_transfer(coin, multisig.addr());
     destroy_mint<C, Issuer>(&mut executable, Issuer {});
     executable.destroy(Issuer {});
@@ -167,10 +158,9 @@ public fun execute_burn<C: drop>(
     mut executable: Executable,
     multisig: &mut Multisig,
     receiving: Receiving<Coin<C>>,
-    lock: &mut CurrencyLock<C>,
 ) {
     let coin = owned::withdraw(&mut executable, multisig, receiving, Issuer {});
-    burn<C, Issuer>(&mut executable, multisig, lock, coin, Issuer {});
+    burn<C, Issuer>(&mut executable, multisig, coin, Issuer {});
     owned::destroy_withdraw(&mut executable, Issuer {});
     destroy_burn<C, Issuer>(&mut executable, Issuer {});
     executable.destroy(Issuer {});
@@ -207,11 +197,10 @@ public fun propose_update<C: drop>(
 // step 4: update the CoinMetadata
 public fun execute_update<C: drop>(
     executable: &mut Executable,
-    multisig: &Multisig,
-    lock: &CurrencyLock<C>,
+    multisig: &mut Multisig,
     metadata: &mut CoinMetadata<C>,
 ) {
-    update(executable, multisig, lock, metadata, Issuer {});
+    update(executable, multisig, metadata, Issuer {});
 }
 
 // step 5: destroy the executable, must `put_back_cap()`
@@ -228,13 +217,13 @@ public fun new_mint<C: drop>(proposal: &mut Proposal, amount: u64) {
 
 public fun mint<C: drop, I: drop>(
     executable: &mut Executable, 
-    multisig: &Multisig,
-    lock: &mut CurrencyLock<C>, 
+    multisig: &mut Multisig,
     issuer: I, 
     ctx: &mut TxContext
 ): Coin<C> {
     let mint_mut: &mut Mint<C> = executable.action_mut(issuer, multisig.addr());
-    let coin = lock.treasury_cap.mint(mint_mut.amount, ctx);
+    let lock_mut = borrow_lock_mut<C>(multisig);
+    let coin = lock_mut.treasury_cap.mint(mint_mut.amount, ctx);
     mint_mut.amount = 0; // reset to ensure it has been executed
     coin
 }
@@ -250,14 +239,14 @@ public fun new_burn<C: drop>(proposal: &mut Proposal, amount: u64) {
 
 public fun burn<C: drop, I: copy + drop>(
     executable: &mut Executable, 
-    multisig: &Multisig,
-    lock: &mut CurrencyLock<C>, 
+    multisig: &mut Multisig,
     coin: Coin<C>,
     issuer: I, 
 ) {
     let burn_mut: &mut Burn<C> = executable.action_mut(issuer, multisig.addr());
+    let lock_mut = borrow_lock_mut<C>(multisig);
     assert!(burn_mut.amount == coin.value(), EWrongValue);
-    lock.treasury_cap.burn(coin);
+    lock_mut.treasury_cap.burn(coin);
     burn_mut.amount = 0; // reset to ensure it has been executed
 }
 
@@ -279,31 +268,31 @@ public fun new_update<C: drop>(
 
 public fun update<C: drop, I: copy + drop>(
     executable: &mut Executable,
-    multisig: &Multisig,
-    lock: &CurrencyLock<C>,
+    multisig: &mut Multisig,
     metadata: &mut CoinMetadata<C>,
     issuer: I,
 ) {
     let update_mut: &mut Update = executable.action_mut(issuer, multisig.addr());
+    let lock_mut = borrow_lock_mut<C>(multisig);
     assert!(update_mut.coin_type == type_to_name<C>(), EWrongCoinType);
 
     if (update_mut.name.is_some()) {
-        lock.treasury_cap.update_name(metadata, update_mut.name.extract());
+        lock_mut.treasury_cap.update_name(metadata, update_mut.name.extract());
     };
     if (update_mut.symbol.is_some()) {
-        lock.treasury_cap.update_symbol(metadata, string::to_ascii(update_mut.symbol.extract()));
+        lock_mut.treasury_cap.update_symbol(metadata, string::to_ascii(update_mut.symbol.extract()));
     };
     if (update_mut.description.is_some()) {
-        lock.treasury_cap.update_description(metadata, update_mut.description.extract());
+        lock_mut.treasury_cap.update_description(metadata, update_mut.description.extract());
     };
     if (update_mut.icon_url.is_some()) {
-        lock.treasury_cap.update_icon_url(metadata, string::to_ascii(update_mut.icon_url.extract()));
+        lock_mut.treasury_cap.update_icon_url(metadata, string::to_ascii(update_mut.icon_url.extract()));
     };
     // all fields are set to none now
 }
 
 public fun destroy_update<I: copy + drop>(executable: &mut Executable, issuer: I) {
-    let Update { coin_type: _, name, symbol, description, icon_url } = executable.remove_action(issuer);
+    let Update { name, symbol, description, icon_url, .. } = executable.remove_action(issuer);
     assert!(name.is_none() && symbol.is_none() && description.is_none() && icon_url.is_none(), EUpdateNotExecuted);
 }
 

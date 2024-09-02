@@ -9,7 +9,7 @@ module examples::upgrade_and_restrict;
 use std::string::String;
 use sui::package::UpgradeTicket;
 use kraken::{
-    upgrade_policies::{Self, UpgradeLock},
+    upgrade_policies,
     multisig::{Multisig, Executable},
 };
 
@@ -33,23 +33,27 @@ public fun propose_upgrade(
     execution_time: u64,
     expiration_epoch: u64,
     description: String,
+    name: String,
     digest: vector<u8>,
-    lock: &UpgradeLock,
     policy: u8,
     ctx: &mut TxContext
 ) {
+    let lock = upgrade_policies::borrow_lock(multisig, name);
+    let current_policy = lock.upgrade_cap().policy();
+
     let proposal_mut = multisig.create_proposal(
         Auth {},
+        b"".to_string(),
         key,
+        description,
         execution_time,
         expiration_epoch,
-        description,
         ctx
     );
     // first we would like to upgrade
-    upgrade_policies::new_upgrade(proposal_mut, digest, object::id(lock));
+    upgrade_policies::new_upgrade(proposal_mut, digest);
     // then we would like to restrict the policy
-    upgrade_policies::new_restrict(proposal_mut, lock, policy);
+    upgrade_policies::new_restrict(proposal_mut, current_policy, policy);
 }
 
 // step 2: multiple members have to approve the proposal (multisig::approve_proposal)
@@ -58,10 +62,10 @@ public fun propose_upgrade(
 // step 4: destroy Upgrade and return the UpgradeTicket for upgrading
 public fun execute_upgrade(
     executable: &mut Executable,
-    lock: &mut UpgradeLock,
+    multisig: &mut Multisig,
 ): UpgradeTicket {
     // here the index is 0 because it's the first action in the proposal
-    upgrade_policies::upgrade(executable, lock, Auth {}, 0) 
+    upgrade_policies::upgrade(executable, multisig, Auth {}) 
 } 
 
 // step 5: consume the receipt to commit the upgrade (kraken::upgrade_policies::confirm_upgrade)
@@ -70,10 +74,9 @@ public fun execute_upgrade(
 public fun execute_restrict(
     executable: &mut Executable,
     multisig: &mut Multisig,
-    lock: UpgradeLock,
 ) {
     // here the index is 1 because it's the second action in the proposal
-    upgrade_policies::restrict(executable, multisig, lock, Auth {}, 1);
+    upgrade_policies::restrict(executable, multisig, Auth {});
 }
 
 // step 7: destroy all the actions and the executable

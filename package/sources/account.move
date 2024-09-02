@@ -72,7 +72,7 @@ public fun leave_multisig(account: &mut Account, multisig: &mut Multisig, ctx: &
 
 // must leave all multisigs before, for consistency
 public fun destroy(account: Account) {
-    let Account { id, username: _, profile_picture: _, multisig_ids } = account;
+    let Account { id, multisig_ids, .. } = account;
     assert!(multisig_ids.is_empty(), EMustLeaveAllMultisigs);
     id.delete();
 }
@@ -100,7 +100,7 @@ public fun accept_invite(account: &mut Account, multisig: &mut Multisig, invite:
 
 // delete the invite object
 public fun refuse_invite(invite: Invite) {
-    let Invite { id, multisig_id: _ } = invite;
+    let Invite { id, .. } = invite;
     id.delete();
 }
 

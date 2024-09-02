@@ -17,6 +17,7 @@ use kraken::{
 
 const OWNER: address = @0xBABE;
 const ALICE: address = @0xA11CE;
+const NAME: vector<u8> = b"kiosk";
 
 public struct NFT has key, store {
     id: UID
@@ -26,7 +27,6 @@ public struct NFT has key, store {
 fun place_in_kiosk() {
     let mut world = start_world();
 
-    let kiosk_owner_lock = world.borrow_lock();
     let (mut sender_kiosk, sender_cap) = kiosk::new(world.scenario().ctx());
     
     let nft = new_nft(world.scenario().ctx());
@@ -40,12 +40,11 @@ fun place_in_kiosk() {
     assert!(sender_kiosk.has_item(nft_id));
     assert!(!world.kiosk().has_item(nft_id));
 
-    let request = world.place(&kiosk_owner_lock, &mut sender_kiosk, &sender_cap, nft_id, &mut policy);
+    let request = world.place(&mut sender_kiosk, &sender_cap, NAME.to_string(), nft_id, &mut policy);
     policy.confirm_request(request);
     assert!(!sender_kiosk.has_item(nft_id));
     assert!(world.kiosk().has_item(nft_id));
     
-    k_kiosk::put_back_lock(kiosk_owner_lock);
     destroy(policy);
     destroy(policy_cap);
     destroy(sender_kiosk);
@@ -57,7 +56,6 @@ fun place_in_kiosk() {
 fun test_propose_take() {
     let mut world = start_world();
 
-    let kiosk_owner_lock = world.borrow_lock();
     let (mut sender_kiosk, sender_cap) = kiosk::new(world.scenario().ctx());
 
     let nft = new_nft(world.scenario().ctx());
@@ -72,9 +70,9 @@ fun test_propose_take() {
     sender_kiosk.place(&sender_cap, nft);
     sender_kiosk.place(&sender_cap, nft2);
 
-    let request = world.place(&kiosk_owner_lock, &mut sender_kiosk, &sender_cap, nft_id, &mut policy); 
+    let request = world.place(&mut sender_kiosk, &sender_cap, NAME.to_string(), nft_id, &mut policy); 
     policy.confirm_request(request);
-    let request2 = world.place(&kiosk_owner_lock, &mut sender_kiosk, &sender_cap, nft_id2, &mut policy);        
+    let request2 = world.place(&mut sender_kiosk, &sender_cap, NAME.to_string(), nft_id2, &mut policy);        
     policy.confirm_request(request2);
 
     world.scenario().next_tx(OWNER);
@@ -82,13 +80,12 @@ fun test_propose_take() {
     assert!(world.kiosk().has_item(nft_id2));
 
     let key = b"take proposal".to_string();
-    world.propose_take(key, b"".to_string(), vector[nft_id2], OWNER);
+    world.propose_take(key, NAME.to_string(), vector[nft_id2], OWNER);
     world.approve_proposal(key);
 
     let mut executable = world.execute_proposal(key);
     let request = world.execute_take(
         &mut executable,
-        &kiosk_owner_lock,
         &mut sender_kiosk,
         &sender_cap,
         &mut policy
@@ -100,7 +97,6 @@ fun test_propose_take() {
     assert!(!world.kiosk().has_item(nft_id2));
     assert!(sender_kiosk.has_item(nft_id2));
 
-    destroy(kiosk_owner_lock);
     destroy(policy);
     destroy(policy_cap);
     destroy(sender_kiosk);
@@ -112,7 +108,6 @@ fun test_propose_take() {
 fun list_end_to_end() {
     let mut world = start_world();
 
-    let kiosk_owner_lock = world.borrow_lock();
     let (mut sender_kiosk, sender_cap) = kiosk::new(world.scenario().ctx());
 
     let nft = new_nft(world.scenario().ctx());
@@ -123,23 +118,22 @@ fun list_end_to_end() {
     kiosk_lock_rule::add(&mut policy, &policy_cap);
 
     sender_kiosk.place(&sender_cap, nft);
-    let request = world.place(&kiosk_owner_lock, &mut sender_kiosk, &sender_cap, nft_id, &mut policy);
+    let request = world.place(&mut sender_kiosk, &sender_cap, NAME.to_string(), nft_id, &mut policy);
     policy.confirm_request(request);
 
     world.scenario().next_tx(OWNER);
     assert!(!world.kiosk().is_listed(nft_id));
 
     let key = b"list proposal".to_string();
-    world.propose_list(key, b"".to_string(), vector[nft_id], vector[777]);
+    world.propose_list(key, NAME.to_string(), vector[nft_id], vector[777]);
     world.approve_proposal(key);
 
     let mut executable = world.execute_proposal(key);
-    world.execute_list<NFT>(&mut executable, &kiosk_owner_lock);
+    world.execute_list<NFT>(&mut executable);
     k_kiosk::complete_list(executable);
 
     assert!(world.kiosk().is_listed(nft_id));
     
-    destroy(kiosk_owner_lock);        
     destroy(policy);
     destroy(policy_cap);
     destroy(sender_kiosk);
@@ -151,7 +145,6 @@ fun list_end_to_end() {
 fun take_error_wrong_receiver() {
     let mut world = start_world();
 
-    let kiosk_owner_lock = world.borrow_lock();
     let (mut sender_kiosk, sender_cap) = kiosk::new(world.scenario().ctx());
 
     let nft = new_nft(world.scenario().ctx());
@@ -162,18 +155,17 @@ fun take_error_wrong_receiver() {
     kiosk_lock_rule::add(&mut policy, &policy_cap);
 
     sender_kiosk.place(&sender_cap, nft);
-    let request = world.place(&kiosk_owner_lock, &mut sender_kiosk, &sender_cap, nft_id, &mut policy);
+    let request = world.place(&mut sender_kiosk, &sender_cap, NAME.to_string(), nft_id, &mut policy);
     policy.confirm_request(request);
 
     world.scenario().next_tx(OWNER);
     let key = b"take proposal".to_string();
-    world.propose_take(key, b"".to_string(), vector[nft_id], ALICE);
+    world.propose_take(key, NAME.to_string(), vector[nft_id], ALICE);
     world.approve_proposal(key);
 
     let mut executable = world.execute_proposal(key);
     let request = world.execute_take(
         &mut executable,
-        &kiosk_owner_lock,
         &mut sender_kiosk,
         &sender_cap,
         &mut policy
@@ -183,7 +175,6 @@ fun take_error_wrong_receiver() {
 
     assert!(sender_kiosk.has_item(nft_id));
 
-    destroy(kiosk_owner_lock);
     destroy(policy);
     destroy(policy_cap);
     destroy(sender_kiosk);
@@ -195,7 +186,6 @@ fun take_error_wrong_receiver() {
 fun destroy_take_error_tranfer_all_nfts_before() {
     let mut world = start_world();
 
-    let kiosk_owner_lock = world.borrow_lock();
     let (mut sender_kiosk, sender_cap) = kiosk::new(world.scenario().ctx());
 
     let nft = new_nft(world.scenario().ctx());
@@ -206,18 +196,17 @@ fun destroy_take_error_tranfer_all_nfts_before() {
     kiosk_lock_rule::add(&mut policy, &policy_cap);
 
     sender_kiosk.place(&sender_cap, nft);
-    let request = world.place(&kiosk_owner_lock, &mut sender_kiosk, &sender_cap, nft_id, &mut policy); 
+    let request = world.place(&mut sender_kiosk, &sender_cap, NAME.to_string(), nft_id, &mut policy); 
     policy.confirm_request(request);
 
     world.scenario().next_tx(OWNER);
     let key = b"take proposal".to_string();
-    world.propose_take(key, b"".to_string(), vector[nft_id], OWNER);
+    world.propose_take(key, NAME.to_string(), vector[nft_id], OWNER);
     world.approve_proposal(key);
 
     let executable = world.execute_proposal(key);
     k_kiosk::complete_take(executable);
 
-    destroy(kiosk_owner_lock);
     destroy(policy);
     destroy(policy_cap);
     destroy(sender_kiosk);
@@ -229,7 +218,6 @@ fun destroy_take_error_tranfer_all_nfts_before() {
 fun new_list_error_wrong_nfts_prices() {
     let mut world = start_world();
 
-    let kiosk_owner_lock = world.borrow_lock();
     let (mut sender_kiosk, sender_cap) = kiosk::new(world.scenario().ctx());
 
     let nft = new_nft(world.scenario().ctx());
@@ -240,19 +228,18 @@ fun new_list_error_wrong_nfts_prices() {
     kiosk_lock_rule::add(&mut policy, &policy_cap);
 
     sender_kiosk.place(&sender_cap, nft);
-    let request = world.place(&kiosk_owner_lock, &mut sender_kiosk, &sender_cap, nft_id, &mut policy);
+    let request = world.place(&mut sender_kiosk, &sender_cap, NAME.to_string(), nft_id, &mut policy);
     policy.confirm_request(request);
 
     world.scenario().next_tx(OWNER);
     let key = b"list proposal".to_string();
-    world.propose_list(key, b"".to_string(), vector[nft_id], vector[777, 888]);
+    world.propose_list(key, NAME.to_string(), vector[nft_id], vector[777, 888]);
     world.approve_proposal(key);
 
     let mut executable = world.execute_proposal(key);
-    world.execute_list<NFT>(&mut executable, &kiosk_owner_lock);
+    world.execute_list<NFT>(&mut executable);
     k_kiosk::complete_list(executable);
     
-    destroy(kiosk_owner_lock);        
     destroy(policy);
     destroy(policy_cap);
     destroy(sender_kiosk);
@@ -264,7 +251,6 @@ fun new_list_error_wrong_nfts_prices() {
 fun destroy_list_error_list_all_nfts_before() {
     let mut world = start_world();
 
-    let kiosk_owner_lock = world.borrow_lock();
     let (mut sender_kiosk, sender_cap) = kiosk::new(world.scenario().ctx());
 
     let nft = new_nft(world.scenario().ctx());
@@ -278,20 +264,19 @@ fun destroy_list_error_list_all_nfts_before() {
 
     sender_kiosk.place(&sender_cap, nft);
     sender_kiosk.place(&sender_cap, nft2);
-    let request = world.place(&kiosk_owner_lock, &mut sender_kiosk, &sender_cap, nft_id, &mut policy);
+    let request = world.place(&mut sender_kiosk, &sender_cap, NAME.to_string(), nft_id, &mut policy);
     policy.confirm_request(request);
-    let request2 = world.place(&kiosk_owner_lock, &mut sender_kiosk, &sender_cap, nft_id2, &mut policy);
+    let request2 = world.place(&mut sender_kiosk, &sender_cap, NAME.to_string(), nft_id2, &mut policy);
     policy.confirm_request(request2);
 
     world.scenario().next_tx(OWNER);
     let key = b"list proposal".to_string();
-    world.propose_list(key, b"".to_string(), vector[nft_id, nft_id2], vector[777, 993]);
+    world.propose_list(key, NAME.to_string(), vector[nft_id, nft_id2], vector[777, 993]);
     world.approve_proposal(key);
 
     let executable = world.execute_proposal(key);
     k_kiosk::complete_list(executable);
     
-    destroy(kiosk_owner_lock);        
     destroy(policy);
     destroy(policy_cap);
     destroy(sender_kiosk);

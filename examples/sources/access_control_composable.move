@@ -57,10 +57,11 @@ public fun propose_update_fee(
     assert!(fee <= MAX_FEE);
     let proposal_mut = multisig.create_proposal(
         Auth {},
+        b"".to_string(),
         key,
+        description,
         execution_time,
         expiration_epoch,
-        description,
         ctx
     );
     new_update_fee(proposal_mut, fee);
@@ -72,11 +73,10 @@ public fun propose_update_fee(
 // function guarded by a Multisig action
 public fun execute_update_fee(
     mut executable: Executable,
-    multisig: &mut Multisig,
+    multisig: &Multisig,
     protocol: &mut Protocol,
 ) {
-    // here index is 0 because there is only one action in the proposal
-    update_fee(protocol, &mut executable, multisig, Auth {}, 0);
+    update_fee(protocol, &mut executable, multisig, Auth {});
     destroy_update_fee(&mut executable, Auth {});
     executable.destroy(Auth {});
 }
@@ -95,10 +95,8 @@ public fun update_fee<W: drop>(
     executable: &mut Executable,
     multisig: &Multisig,
     witness: W,
-    idx: u64,
 ) {
-    multisig.assert_executed(executable);
-    let update_fee_mut: &mut UpdateFee = executable.action_mut(witness, idx);
+    let update_fee_mut: &mut UpdateFee = executable.action_mut(witness, multisig.addr());
     protocol.fee = update_fee_mut.fee;
     update_fee_mut.fee = MAX_FEE + 1; // set to > max to enforce exactly one execution
 }
@@ -108,5 +106,5 @@ public fun destroy_update_fee<W: drop>(
     witness: W,
 ) {
     let UpdateFee { fee } = executable.remove_action(witness);
-    assert!(fee == MAX_FEE + 1);
+    assert!(fee == MAX_FEE + 1); // verify exactly one execution
 }
