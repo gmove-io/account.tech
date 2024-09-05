@@ -5,20 +5,19 @@
 /// Invited users can accept or refuse the invite, to add the multisig id to their account or not.
 /// This avoid the need for an indexer as all data can be easily found on-chain.
 
-module kraken::account;
+module kraken_multisig::account;
 
 // === Imports ===
 
 use std::string::String;
 use sui::vec_set::{Self, VecSet};
-use kraken::multisig::Multisig;
+use kraken_multisig::multisig::Multisig;
 
 // === Errors ===
 
 const ENotMember: u64 = 0;
-const EWrongAccount: u64 = 1;
+const EWrongMultisig: u64 = 1;
 const EMustLeaveAllMultisigs: u64 = 2;
-const EWrongMultisig: u64 = 3;
 
 // === Struct ===
 
@@ -58,16 +57,14 @@ public fun new(username: String, profile_picture: String, ctx: &mut TxContext) {
 
 // fill account_id in Multisig, insert multisig_id in Account, abort if already joined
 public fun join_multisig(account: &mut Account, multisig: &mut Multisig, ctx: &TxContext) {
-    multisig.assert_is_member(ctx);
-    multisig.register_account_id(object::id(account), ctx);
+    multisig.member_mut(ctx).register_account_id(object::id(account));
     account.multisig_ids.insert(object::id(multisig)); 
 }
 
 // extract and verify account_id in Multisig, remove multisig_id from account, abort if not member
 public fun leave_multisig(account: &mut Account, multisig: &mut Multisig, ctx: &TxContext) {
-    multisig.assert_is_member(ctx);
-    assert!(object::id(account) == multisig.unregister_account_id(ctx), EWrongAccount);
-    account.multisig_ids.remove(&object::id(multisig));
+    let id = multisig.member_mut(ctx).unregister_account_id();
+    account.multisig_ids.remove(&id);
 }
 
 // must leave all multisigs before, for consistency

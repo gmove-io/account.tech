@@ -1,8 +1,8 @@
 #[test_only]
-module kraken::multisig_tests;
+module kraken_multisig::multisig_tests;
 
 use sui::test_utils::destroy;
-use kraken::{
+use kraken_multisig::{
     multisig,
     auth,
     test_utils::start_world

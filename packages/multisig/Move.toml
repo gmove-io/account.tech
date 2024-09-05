@@ -1,0 +1,11 @@
+[package]
+name = "KrakenMultisig"
+edition = "2024.alpha"
+license = "MIT" 
+authors = ["Thouny (thouny@tuta.io)", "Jose (jose@interestprotocol.com)"]
+
+[dependencies]
+Sui = { git = "https://github.com/MystenLabs/sui.git", subdir = "crates/sui-framework/packages/sui-framework", rev = "testnet", override = true }
+
+[addresses]
+kraken_multisig = "0x0"

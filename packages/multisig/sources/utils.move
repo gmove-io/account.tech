@@ -1,4 +1,4 @@
-module kraken::utils;
+module kraken_multisig::utils;
 
 // === vector ===
 

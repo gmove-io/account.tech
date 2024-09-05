@@ -7,26 +7,29 @@
 /// A role is defined as a TypeName + an optional name
 /// -> package_id::module_name::struct_name::name or package_id::module_name::struct_name
 
-module kraken::auth;
+module kraken_multisig::auth;
 
 // === Imports ===
 
 use std::{
     string::String,
-    type_name,
+    type_name::{Self, TypeName},
 };
+use kraken_multisig::deps::Deps;
 
 // === Errors ===
 
 const EWrongIssuer: u64 = 0;
 const EWrongMultisig: u64 = 1;
+const EWrongVersion: u64 = 2;
+const ENotCoreDep: u64 = 3;
 
 // === Structs ===
 
 // protected type ensuring provenance
 public struct Auth has store, drop {
     // type_name of the witness that instantiated the auth
-    issuer: String,
+    issuer: TypeName,
     // name of the auth (can be empty)
     name: String,
     // address of the multisig that created the auth
@@ -37,14 +40,29 @@ public struct Auth has store, drop {
 
 // construct an auth from an Issuer, an (optional) name and a multisig id
 public fun construct<I: drop>(_: I, name: String, multisig_addr: address): Auth {
-    let issuer = type_name::get<I>().into_string().to_string();
+    let issuer = type_name::get<I>();
     Auth { issuer, name, multisig_addr }
 }
 
 // to be used by modules to execute an action
 public fun assert_is_issuer<I: drop>(auth: &Auth, _: I) {
-    let issuer = type_name::get<I>().into_string().to_string();
+    let issuer = type_name::get<I>();
     assert!(auth.issuer == issuer, EWrongIssuer);
+}
+
+public fun assert_version(auth: &Auth, deps: &Deps, version: u64) {
+    let issuer_package = auth.issuer.get_address().to_string();
+    assert!(deps.version(issuer_package) == version, EWrongVersion);
+}
+
+/// Assert that the auth has been issued from kraken (multisig or actions) packages
+public fun assert_core_dep<I: drop>(deps: &Deps, _: I) {
+    let issuer_package = type_name::get<I>().get_address().to_string();
+    assert!(
+        deps.get_idx(issuer_package) == 0 ||
+        deps.get_idx(issuer_package) == 1, 
+        ENotCoreDep
+    );
 }
 
 // verify that the action is executed for the multisig that approved it
@@ -54,7 +72,7 @@ public fun assert_is_multisig(auth: &Auth, multisig_addr: address) {
 
 // role is package::module::struct::name or package::module::struct
 public fun into_role(auth: &Auth): String {
-    let mut auth_to_role = auth.issuer;
+    let mut auth_to_role = auth.issuer.into_string().to_string();
     if (!auth.name.is_empty()) {
         auth_to_role.append_utf8(b"::");  
         auth_to_role.append(auth.name);
@@ -64,7 +82,7 @@ public fun into_role(auth: &Auth): String {
 
 // === View Functions ===
 
-public fun issuer(auth: &Auth): String {
+public fun issuer(auth: &Auth): TypeName {
     auth.issuer
 }
 

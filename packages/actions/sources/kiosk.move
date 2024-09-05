@@ -4,7 +4,7 @@
 /// Nfts can be listed for sale in the kiosk, and then purchased by anyone.
 /// The multisig can withdraw the profits from the kiosk.
 
-module kraken::kiosk;
+module kraken_actions::kiosk;
 
 // === Imports ===
 
@@ -17,7 +17,7 @@ use sui::{
     vec_map::{Self, VecMap},
 };
 use kiosk::{kiosk_lock_rule, royalty_rule};
-use kraken::multisig::{Multisig, Executable, Proposal};
+use kraken_multisig::multisig::{Multisig, Executable, Proposal};
 
 // === Errors ===
 

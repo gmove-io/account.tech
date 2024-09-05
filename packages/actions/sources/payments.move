@@ -2,7 +2,7 @@
 /// A payment has an amount to be paid at each interval, until the balance is empty.
 /// It can be cancelled by multisig members.
 
-module kraken::payments;
+module kraken_actions::payments;
 
 // === Imports ===
 
@@ -12,10 +12,8 @@ use sui::{
     balance::Balance,
     coin::{Self, Coin}
 };
-use kraken::{
-    multisig::{Multisig, Executable, Proposal},
-    owned
-};
+use kraken_multisig::multisig::{Multisig, Executable, Proposal};
+use kraken_actions::owned;
 
 // === Errors ===
 

@@ -2,7 +2,7 @@
 /// Any member can merge and split without approvals.
 /// Used to prepare a Proposal with coins having the exact amount needed.
 
-module kraken::coin_operations;
+module kraken_multisig::coin_operations;
 
 // === Imports ===
 
@@ -10,7 +10,11 @@ use sui::{
     coin::{Self, Coin},
     transfer::Receiving
 };
-use kraken::multisig::Multisig;
+use kraken_multisig::multisig::Multisig;
+
+// === Structs ===
+
+public struct Issuer has copy, drop {}
 
 // === [MEMBER] Public functions ===
 
@@ -28,7 +32,7 @@ public fun merge_and_split<T: drop>(
     let mut coins = vector::empty();
     while (!to_merge.is_empty()) {
         let item = to_merge.pop_back();
-        let coin = transfer::public_receive(multisig.uid_mut(), item);
+        let coin = multisig.receive(item, Issuer {});
         coins.push_back(coin);
     };
     to_merge.destroy_empty();

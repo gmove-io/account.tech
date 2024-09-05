@@ -3,7 +3,7 @@
 /// Upon locking, the user can define an optional timelock corresponding to the minimum delay between an upgrade proposal and its execution.
 /// The multisig can decide to make the policy more restrictive or destroy the Cap, to make the package immutable.
 
-module kraken::upgrade_policies;
+module kraken_actions::upgrade_policies;
 
 // === Imports ===
 
@@ -13,7 +13,7 @@ use sui::{
     clock::Clock,
     dynamic_field as df
 };
-use kraken::multisig::{Multisig, Executable, Proposal};
+use kraken_multisig::multisig::{Multisig, Executable, Proposal};
 
 // === Error ===
 

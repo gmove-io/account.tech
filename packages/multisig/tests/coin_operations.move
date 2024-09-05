@@ -1,5 +1,5 @@
 #[test_only]
-module kraken::coin_operations_tests;
+module kraken_multisig::coin_operations_tests;
 
 use sui::{
     sui::SUI,
@@ -7,7 +7,7 @@ use sui::{
     test_utils::destroy,
     test_scenario::most_recent_receiving_ticket
 };
-use kraken::test_utils::start_world;
+use kraken_multisig::test_utils::start_world;
 
 const OWNER: address = @0xBABE;
 

@@ -4,13 +4,13 @@
 /// The new total weight must be lower than the threshold.
 /// Teams can choose to use any version of the package and must explicitly migrate to the new version.
 
-module kraken::config;
+module kraken_actions::config;
 
 // === Imports ===
 
 use std::string::String;
 use sui::vec_map::{Self, VecMap};
-use kraken::{
+use kraken_multisig::{
     multisig::{Multisig, Executable, Proposal},
     utils,
 };

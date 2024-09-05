@@ -5,12 +5,12 @@
 /// This is automatically handled by the borrow functions.
 /// Caution: borrowed Coins can be emptied, only withdraw the amount you need (merge and split coins before if necessary)
 
-module kraken::owned;
+module kraken_actions::owned;
 
 // === Imports ===
 
 use sui::transfer::Receiving;
-use kraken::multisig::{Multisig, Executable, Proposal};
+use kraken_multisig::multisig::{Multisig, Executable, Proposal};
 
 // === Errors ===
 
@@ -48,7 +48,7 @@ public fun withdraw<T: key + store, I: copy + drop>(
     let (_, index) = withdraw_mut.objects.index_of(&transfer::receiving_object_id(&receiving));
     let id = withdraw_mut.objects.remove(index);
 
-    let received = transfer::public_receive(multisig.uid_mut(), receiving);
+    let received = multisig.receive(receiving);
     let received_id = object::id(&received);
     assert!(received_id == id, EWrongObject);
 

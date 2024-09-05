@@ -2,7 +2,7 @@
 /// Objects can also be delivered to a single address, meaning that the recipient must claim the objects.
 /// If the delivery is not confirmed, the Multisig can retrieve the objects.
 
-module kraken::transfers;
+module kraken_actions::transfers;
 
 // === Imports ===
 
@@ -12,10 +12,8 @@ use sui::{
     transfer::Receiving,
     vec_map::{Self, VecMap}
 };
-use kraken::{
-    multisig::{Multisig, Executable, Proposal},
-    owned,
-};
+use kraken_multisig::multisig::{Multisig, Executable, Proposal};
+use kraken_actions::owned;
 
 // === Errors ===
 

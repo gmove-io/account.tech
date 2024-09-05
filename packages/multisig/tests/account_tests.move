@@ -1,8 +1,8 @@
 #[test_only]
-module kraken::account_tests;
+module kraken_multisig::account_tests;
 
 use sui::test_utils::destroy;
-use kraken::{
+use kraken_multisig::{
     multisig,
     test_utils::start_world,
     account::{Self, Account, Invite}

@@ -3,7 +3,7 @@
 /// Members can propose to mint a Coin that will be sent to the Multisig and burn one of its coin.
 /// It uses a Withdraw action. The Coin could be merged beforehand.
 
-module kraken::currency;
+module kraken_actions::currency;
 
 // === Imports ===
 
@@ -15,10 +15,8 @@ use sui::{
     transfer::Receiving,
     coin::{Coin, TreasuryCap, CoinMetadata},
 };
-use kraken::{
-    multisig::{Multisig, Executable, Proposal},
-    owned
-};
+use kraken_multisig::multisig::{Multisig, Executable, Proposal};
+use kraken_actions::owned;
 
 // === Errors ===
 

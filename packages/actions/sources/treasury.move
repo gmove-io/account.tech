@@ -1,7 +1,7 @@
 /// Members can set multiple treasuries with different budgets and manager.
 /// This allows for a more flexible and granular way to manage funds.
 
-module kraken::treasury;
+module kraken_actions::treasury;
 
 // === Imports ===
 
@@ -13,10 +13,9 @@ use sui::{
     bag::{Self, Bag},
     balance::Balance,
     coin::{Self, Coin},
-    dynamic_field as df,
     vec_map::{Self, VecMap},
 };
-use kraken::multisig::{Multisig, Proposal, Executable};
+use kraken_multisig::multisig::{Multisig, Proposal, Executable};
 
 // === Errors ===
 
@@ -272,11 +271,11 @@ public fun destroy_transfer<I: copy + drop>(executable: &mut Executable, issuer:
 // === View Functions ===
 
 public fun treasury_exists(multisig: &Multisig, name: String): bool {
-    df::exists_(multisig.uid(), TreasuryKey { name })
+    multisig.has_managed_asset(TreasuryKey { name })
 }
 
 public fun treasury(multisig: &Multisig, name: String): &Treasury {
-    df::borrow(multisig.uid(), TreasuryKey { name })
+    multisig.borrow_managed_asset(TreasuryKey { name })
 }
 
 public fun coin_type_string<C: drop>(): String {
