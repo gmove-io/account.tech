@@ -2,6 +2,7 @@ module kraken_multisig::deps;
 use std::string::String;
 
 public use fun kraken_multisig::auth::assert_core_dep as Deps.assert_core_dep;
+public use fun kraken_multisig::auth::assert_dep as Deps.assert_dep;
 public use fun kraken_multisig::auth::assert_version as Deps.assert_version;
 
 // === Errors ===
@@ -80,6 +81,10 @@ public fun get_version(deps: &Deps, package: address): u64 {
 
 public fun get_idx(deps: &Deps, package: address): u64 {
     deps.inner.find_index!(|dep| dep.package == package).destroy_some()
+}
+
+public fun contains(deps: &Deps, package: String): bool {
+    deps.inner.any!(|dep| dep.package.to_string() == package)
 }
 
 // === Package functions ===

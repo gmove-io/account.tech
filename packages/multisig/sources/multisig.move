@@ -218,38 +218,7 @@ public fun assert_is_member(multisig: &Multisig, ctx: &TxContext) {
     assert!(multisig.members.is_member(ctx.sender()), ECallerIsNotMember);
 }
 
-public fun get_weights_for_roles(multisig: &Multisig): VecMap<String, u64> {
-    let mut members_weights_map: VecMap<address, u64> = vec_map::empty();
-    multisig.members.addresses().do!(|addr| {
-        members_weights_map.insert(addr, multisig.member(addr).weight());
-    });
-    
-    let mut roles_weights_map: VecMap<String, u64> = vec_map::empty();
-    multisig.members.addresses().do!(|addr| {
-        let weight = members_weights_map[&addr];
-        multisig.member(addr).roles().do!(|role| {
-            if (roles_weights_map.contains(&role)) {
-                roles_weights_map.insert(role, weight);
-            } else {
-                *roles_weights_map.get_mut(&role) = weight;
-            }
-        });
-    });
-
-    roles_weights_map
-}
-
 // === Deps-only functions ===
-
-// owned objects
-public fun receive<T: key + store, I: copy + drop>(
-    multisig: &mut Multisig, 
-    issuer: I,
-    receiving: Receiving<T>,
-): T {
-    multisig.deps.assert_core_dep(issuer);
-    transfer::public_receive(&mut multisig.id, receiving)
-}
 
 // managed assets
 public fun add_managed_asset<K: copy + drop + store, A: store, I: copy + drop>(
@@ -258,8 +227,35 @@ public fun add_managed_asset<K: copy + drop + store, A: store, I: copy + drop>(
     key: K, 
     asset: A,
 ) {
-    multisig.deps.assert_core_dep(issuer);
+    multisig.deps.assert_dep(issuer);
     df::add(&mut multisig.id, key, asset);
+}
+
+public fun borrow_managed_asset<K: copy + drop + store, A: store, I: copy + drop>(
+    multisig: &Multisig, 
+    issuer: I,
+    key: K, 
+): &A {
+    multisig.deps.assert_dep(issuer);
+    df::borrow(&multisig.id, key)
+}
+
+public fun borrow_managed_asset_mut<K: copy + drop + store, A: store, I: copy + drop>(
+    multisig: &mut Multisig, 
+    issuer: I,
+    key: K, 
+): &mut A {
+    multisig.deps.assert_dep(issuer);
+    df::borrow_mut(&mut multisig.id, key)
+}
+
+public fun remove_managed_asset<K: copy + drop + store, A: store, I: copy + drop>(
+    multisig: &mut Multisig, 
+    issuer: I,
+    key: K, 
+): A {
+    multisig.deps.assert_dep(issuer);
+    df::remove(&mut multisig.id, key)
 }
 
 public fun has_managed_asset<K: copy + drop + store>(
@@ -269,31 +265,16 @@ public fun has_managed_asset<K: copy + drop + store>(
     df::exists_(&multisig.id, key)
 }
 
-public fun borrow_managed_asset<K: copy + drop + store, A: store, I: copy + drop>(
-    multisig: &Multisig, 
-    issuer: I,
-    key: K, 
-): &A {
-    multisig.deps.assert_core_dep(issuer);
-    df::borrow(&multisig.id, key)
-}
+// === Core Deps only functions ===
 
-public fun borrow_managed_asset_mut<K: copy + drop + store, A: store, I: copy + drop>(
+// owned objects
+public fun receive<T: key + store, I: copy + drop>(
     multisig: &mut Multisig, 
     issuer: I,
-    key: K, 
-): &mut A {
+    receiving: Receiving<T>,
+): T {
     multisig.deps.assert_core_dep(issuer);
-    df::borrow_mut(&mut multisig.id, key)
-}
-
-public fun remove_managed_asset<K: copy + drop + store, A: store, I: copy + drop>(
-    multisig: &mut Multisig, 
-    issuer: I,
-    key: K, 
-): A {
-    multisig.deps.assert_core_dep(issuer);
-    df::remove(&mut multisig.id, key)
+    transfer::public_receive(&mut multisig.id, receiving)
 }
 
 // fields

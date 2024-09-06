@@ -25,6 +25,7 @@ const EWrongIssuer: u64 = 0;
 const EWrongMultisig: u64 = 1;
 const EWrongVersion: u64 = 2;
 const ENotCoreDep: u64 = 3;
+const ENotDep: u64 = 4;
 
 // === Structs ===
 
@@ -55,6 +56,12 @@ public fun assert_is_issuer<I: drop>(auth: &Auth, _: I) {
 public fun assert_version(deps: &Deps, auth: &Auth, version: u64) {
     let issuer_package = auth.issuer.get_address().to_string();
     assert!(deps.get_package_version_from_string(issuer_package) == version, EWrongVersion);
+}
+
+/// Assert that the auth has been issued from kraken (multisig or actions) packages
+public fun assert_dep<I: copy + drop>(deps: &Deps, _: I) {
+    let issuer_package = type_name::get<I>().get_address().to_string();
+    assert!(deps.contains(issuer_package), ENotDep);
 }
 
 /// Assert that the auth has been issued from kraken (multisig or actions) packages
