@@ -12,7 +12,11 @@ use sui::{
     balance::Balance,
     coin::{Self, Coin}
 };
-use kraken_multisig::multisig::{Multisig, Executable, Proposal};
+use kraken_multisig::{
+    multisig::Multisig,
+    proposal::Proposal,
+    executable::Executable
+};
 use kraken_actions::owned;
 
 // === Errors ===

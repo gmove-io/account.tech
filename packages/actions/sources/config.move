@@ -9,18 +9,17 @@ module kraken_actions::config;
 // === Imports ===
 
 use std::string::String;
-use sui::vec_map::{Self, VecMap};
-use kraken_multisig::{
-    multisig::{Multisig, Executable, Proposal},
-    utils,
+use sui::{
+    vec_map::{Self, VecMap},
 };
-
-// === Aliases ===
-
-use fun utils::contains_any as vector.contains_any;
-use fun utils::map_append as VecMap.append;
-use fun utils::map_remove_keys as VecMap.remove_keys;
-use fun utils::map_set_or as VecMap.set_or;
+use kraken_multisig::{
+    multisig::Multisig,
+    proposal::Proposal,
+    executable::Executable,
+    deps,
+    members,
+    thresholds::{Self, Thresholds},
+};
 
 // === Errors ===
 
@@ -28,62 +27,20 @@ const EThresholdTooHigh: u64 = 0;
 const ENotMember: u64 = 1;
 const EAlreadyMember: u64 = 2;
 const EThresholdNull: u64 = 3;
-const EMigrateNotExecuted: u64 = 4;
-const EVersionAlreadyUpdated: u64 = 5;
-const ENameAlreadySet: u64 = 6;
-const ENameNotSet: u64 = 7;
-const EMembersNotExecuted: u64 = 8;
-const EWeightsNotExecuted: u64 = 9;
-const ERolesNotExecuted: u64 = 10;
-const EThresholdNotLastAction: u64 = 11;
-const ERoleAlreadyAttributed: u64 = 13;
-const ERoleNotAttributed: u64 = 14;
-const EThresholdsNotExecuted: u64 = 15;
-const EVectorLengthMismatch: u64 = 16;
+const EMembersNotSameLength: u64 = 4;
+const EThresholdNotLastAction: u64 = 5;
+const ERoleAlreadyAttributed: u64 = 6;
+const ERoleNotAttributed: u64 = 7;
+const EVectorLengthMismatch: u64 = 8;
 
 // === Structs ===
 
 // delegated issuer verifying a proposal is destroyed in the module where it was created
 public struct Issuer has copy, drop {}
 
-// [ACTION] change the name of the multisig
-public struct Name has store { 
-    // new name
-    name: String,
-}
-
-// [ACTION] add or remove members (with weight = 1)
-public struct Members has store {
-    // addresses to add
-    to_add: vector<address>,
-    // addresses to remove
-    to_remove: vector<address>,
-}
-
-// [ACTION] modify weights per member
-public struct Weights has store { 
-    // addresses to modify with new weights
-    addresses_weights_map: VecMap<address, u64>,
-}
-
-// [ACTION] add or remove roles from chosen members
-public struct Roles has store { 
-    // roles to add to each address
-    to_add_map: VecMap<address, vector<String>>,
-    // roles to remove from each address
-    to_remove_map: VecMap<address, vector<String>>,
-}
-
-// [ACTION] set the thresholds for roles
-public struct Thresholds has store {
-    // new thresholds for roles, has to be <= total weight (per role)
-    roles_thresholds_map: VecMap<String, u64>,
-}
-
-// [ACTION] update the version of the multisig
-public struct Migrate has store { 
-    // the new version
-    version: u64,
+// [ACTION] wrap a multisig field into a generic action
+public struct Config<T> has store {
+    inner: T,
 }
 
 // === [PROPOSAL] Public functions ===
@@ -107,7 +64,7 @@ public fun propose_name(
         expiration_epoch,
         ctx
     );
-    new_name(proposal_mut, name);
+    new_config_name(proposal_mut, name);
 }
 
 // step 2: multiple members have to approve the proposal (multisig::approve_proposal)
@@ -117,14 +74,11 @@ public fun execute_name(
     mut executable: Executable,
     multisig: &mut Multisig, 
 ) {
-    name(&mut executable, multisig, Issuer {});
-    destroy_name(&mut executable, Issuer {});
+    config_name(&mut executable, multisig, Issuer {});
     executable.destroy(Issuer {});
 }
 
 // step 1: propose to modify multisig rules (everything touching weights)
-// all vectors can be empty (if to_modify || weights are empty, the other one must be too)
-// a member can be added and modified in the same proposal
 // threshold has to be valid (reachable and different from 0 for global)
 public fun propose_modify_rules(
     multisig: &mut Multisig, 
@@ -133,35 +87,16 @@ public fun propose_modify_rules(
     execution_time: u64,
     expiration_epoch: u64,
     // members 
-    members_to_add: vector<address>, 
-    members_to_remove: vector<address>,
-    // weights
-    members_to_modify: vector<address>,
-    weights_to_modify: vector<u64>,
-    // roles 
-    addresses_add_roles: vector<address>,
-    roles_to_add: vector<vector<String>>,
-    addresses_remove_roles: vector<address>,
-    roles_to_remove: vector<vector<String>>,
+    addresses: vector<address>,
+    weights: vector<u64>,
+    roles: vector<vector<String>>,
     // thresholds 
-    roles_for_thresholds: vector<String>, 
-    thresholds_to_set: vector<u64>, 
+    global: u64,
+    role_names: vector<String>,
+    role_thresholds: vector<u64>,
     ctx: &mut TxContext
 ) {
-    verify_new_rules(
-        multisig, 
-        members_to_add,
-        members_to_remove,
-        members_to_modify,
-        weights_to_modify,
-        addresses_add_roles,
-        roles_to_add,
-        addresses_remove_roles,
-        roles_to_remove,
-        roles_for_thresholds,
-        thresholds_to_set,
-    );
-
+    // verify new rules are valid
     let proposal_mut = multisig.create_proposal(
         Issuer {},
         b"".to_string(),
@@ -171,13 +106,9 @@ public fun propose_modify_rules(
         expiration_epoch,
         ctx
     );
-    // must execute add members before modify weights in case we add and modify the same member
-    new_members(proposal_mut, members_to_add, members_to_remove);
-    new_weights(proposal_mut, members_to_modify, weights_to_modify);
-    // must be given after members addition
-    new_roles(proposal_mut, addresses_add_roles, roles_to_add, addresses_remove_roles, roles_to_remove);
-    // must always be called last or execution will fail
-    new_thresholds(proposal_mut, roles_for_thresholds, thresholds_to_set); 
+    // must modify members before modifying thresholds to ensure they are reachable
+    new_config_members(proposal_mut, addresses, weights, roles);
+    new_config_thresholds(proposal_mut, global, role_names, role_thresholds);
 }
 
 // step 2: multiple members have to approve the proposal (multisig::approve_proposal)
@@ -187,27 +118,21 @@ public fun execute_modify_rules(
     mut executable: Executable,
     multisig: &mut Multisig, 
 ) {
-    members(&mut executable, multisig, Issuer {});
-    weights(&mut executable, multisig, Issuer {});
-    roles(&mut executable, multisig, Issuer {});
-    thresholds(&mut executable, multisig, Issuer {});
-    
-    destroy_members(&mut executable, Issuer {});
-    destroy_weights(&mut executable, Issuer {});
-    destroy_roles(&mut executable, Issuer {});
-    destroy_thresholds(&mut executable, Issuer {});
-    
+    config_members(&mut executable, multisig, Issuer {});
+    config_thresholds(&mut executable, multisig, Issuer {});
     executable.destroy(Issuer {});
 }
 
 // step 1: propose to update the version
-public fun propose_migrate(
+public fun propose_deps(
     multisig: &mut Multisig, 
     key: String,
     description: String,
     execution_time: u64,
     expiration_epoch: u64,
-    version: u64,
+    packages: vector<address>,
+    versions: vector<u64>,
+    names: vector<String>,
     ctx: &mut TxContext
 ) {
     let proposal_mut = multisig.create_proposal(
@@ -219,212 +144,232 @@ public fun propose_migrate(
         expiration_epoch,
         ctx
     );
-    new_migrate(proposal_mut, version);
+    new_config_deps(proposal_mut, packages, versions, names);
 }
 
 // step 2: multiple members have to approve the proposal (multisig::approve_proposal)
 // step 3: execute the proposal and return the action (multisig::execute_proposal)
 
 // step 4: execute the action and modify Multisig object
-public fun execute_migrate(
+public fun execute_deps(
     mut executable: Executable,
     multisig: &mut Multisig, 
 ) {
-    migrate(&mut executable, multisig, Issuer {});
-    destroy_migrate(&mut executable, Issuer {});
+    config_deps(&mut executable, multisig, Issuer {});
     executable.destroy(Issuer {});
 }
 
 // === [ACTION] Public functions ===
 
-public fun new_name(proposal: &mut Proposal, name: String) {
-    proposal.add_action(Name { name });
+public fun new_config_name(proposal: &mut Proposal, name: String) {
+    proposal.add_action(Config { inner: name });
 }
 
-public fun name<I: copy + drop>(
+public fun config_name<I: copy + drop>(
     executable: &mut Executable,
     multisig: &mut Multisig, 
     issuer: I,
 ) {
-    let name_mut: &mut Name = executable.action_mut(issuer, multisig.addr());
-    assert!(!name_mut.name.is_empty(), ENameAlreadySet);
-    multisig.set_name(name_mut.name);
-    name_mut.name = b"".to_string(); // reset to confirm execution
-}
-    
-public fun destroy_name<I: copy + drop>(
-    executable: &mut Executable,
-    issuer: I,
-) {
-    let Name { name } = executable.remove_action(issuer);
-    assert!(name.is_empty(), ENameNotSet);
+    let Config { inner } = executable.remove_action(issuer);
+    *multisig.name_mut(executable, issuer) = inner;
 }
 
-public fun new_thresholds(
+public fun new_config_members(
     proposal: &mut Proposal,
-    roles: vector<String>,
-    thresholds: vector<u64>, 
+    mut addresses: vector<address>,
+    mut weights: vector<u64>, 
+    mut roles: vector<vector<String>>, 
 ) { 
-    let (exists_, idx) = roles.index_of(&b"global".to_string());
-    if (exists_) assert!(thresholds[idx] != 0, EThresholdNull);
-    proposal.add_action(Thresholds { roles_thresholds_map: vec_map::from_keys_values(roles, thresholds) });
+    assert!(
+        addresses.length() == weights.length() && 
+        addresses.length() == roles.length(), 
+        EMembersNotSameLength
+    );
+
+    let members = members::new();
+    addresses.zip_do!(weights, |addr, weight| {
+        members.add(members::new_member(addr, weight, option::none(), roles.remove(0)));
+    });
+    
+    proposal.add_action(Config { inner: members });
 }    
 
-public fun thresholds<I: copy + drop>(
+public fun config_members<I: copy + drop>(
+    executable: &mut Executable,
+    multisig: &mut Multisig, 
+    issuer: I,
+) {
+    let Config { inner } = executable.remove_action(issuer);
+    *multisig.members_mut(executable, issuer) = inner;
+}
+
+public fun new_config_thresholds(
+    proposal: &mut Proposal,
+    global: u64,
+    mut role_names: vector<String>,
+    mut role_thresholds: vector<u64>, 
+) { 
+    assert!(global != 0, EThresholdNull);
+    let thresholds = thresholds::new(global);
+
+    role_names.zip_do!(role_thresholds, |role, threshold| {
+        thresholds.add(role, threshold);
+    });
+
+    proposal.add_action(Config { inner: thresholds });
+}    
+
+public fun config_thresholds<I: copy + drop>(
     executable: &mut Executable,
     multisig: &mut Multisig, 
     issuer: I,
 ) {
     // threshold modification must be the latest action to be executed to ensure it is reachable
-    assert!(executable.action_index<Thresholds>() + 1 == executable.actions_length(), EThresholdNotLastAction);
-    let t_mut: &mut Thresholds = executable.action_mut(issuer, multisig.addr());
-
-    let roles_weights_map = multisig.get_weights_for_roles();
-
-    while (!t_mut.roles_thresholds_map.is_empty()) {
-        let idx = t_mut.roles_thresholds_map.size() - 1; // cheaper to pop
-        let (role, threshold) = t_mut.roles_thresholds_map.remove_entry_by_idx(idx);
-        assert!(*roles_weights_map.get(&role) >= threshold, EThresholdTooHigh);
-        multisig.set_threshold(role, threshold);
-    };
-}
-
-public fun destroy_thresholds<I: copy + drop>(
-    executable: &mut Executable, 
-    issuer: I
-) {
-    let Thresholds { roles_thresholds_map } = executable.remove_action(issuer);
-    assert!(roles_thresholds_map.is_empty(), EThresholdsNotExecuted);
-}
-
-public fun new_members(
-    proposal: &mut Proposal,
-    to_add: vector<address>,
-    to_remove: vector<address>, 
-) { 
-    proposal.add_action(Members { to_remove, to_add });
-}    
-
-public fun members<I: copy + drop>(
-    executable: &mut Executable,
-    multisig: &mut Multisig, 
-    issuer: I,
-) {
-    let members_mut: &mut Members = executable.action_mut(issuer, multisig.addr());
-
-    multisig.remove_members(&mut members_mut.to_remove);
-    multisig.add_members(&mut members_mut.to_add);
-}
-
-public fun destroy_members<I: copy + drop>(
-    executable: &mut Executable, 
-    issuer: I
-) {
-    let Members { to_add, to_remove } = executable.remove_action(issuer);
-    assert!(
-        to_remove.is_empty() && to_add.is_empty(),
-        EMembersNotExecuted
-    );
-}
-
-public fun new_weights(
-    proposal: &mut Proposal,
-    addresses: vector<address>, 
-    weights: vector<u64>,
-) { 
-    proposal.add_action(Weights { addresses_weights_map: vec_map::from_keys_values(addresses, weights) });
-}    
-
-public fun weights<I: copy + drop>(
-    executable: &mut Executable,
-    multisig: &mut Multisig, 
-    issuer: I,
-) {
-    let w_mut: &mut Weights = executable.action_mut(issuer, multisig.addr());
-
-    while (!w_mut.addresses_weights_map.is_empty()) {
-        let idx = w_mut.addresses_weights_map.size() - 1; // cheaper to pop
-        let (addr, weight) = w_mut.addresses_weights_map.remove_entry_by_idx(idx);
-        multisig.modify_weight(addr, weight);
-    };
+    assert!(executable.action_index<Config<Thresholds>>() + 1 == executable.actions_length(), EThresholdNotLastAction);
     
+    let Config { inner } = executable.remove_action(issuer);
+    *multisig.thresholds_mut(executable, issuer) = inner;
+    // TODO: verify that the new thresholds are reachable
+
 }
 
-public fun destroy_weights<I: copy + drop>(
-    executable: &mut Executable, 
-    issuer: I
-) {
-    let Weights { addresses_weights_map } = executable.remove_action(issuer);
-    assert!(addresses_weights_map.is_empty(), EWeightsNotExecuted);
-}
+// public fun destroy_thresholds<I: copy + drop>(
+//     executable: &mut Executable, 
+//     issuer: I
+// ) {
+//     let Adjust { thresholds } = executable.remove_action(issuer);
+//     assert!(thresholds.is_empty(), EThresholdsNotExecuted);
+// }
 
-public fun new_roles(
-    proposal: &mut Proposal,
-    addr_to_add: vector<address>, 
-    roles_to_add: vector<vector<String>>, 
-    addr_to_remove: vector<address>,
-    roles_to_remove: vector<vector<String>>,
-) { 
-    proposal.add_action(Roles { 
-        to_add_map: vec_map::from_keys_values(addr_to_add, roles_to_add), 
-        to_remove_map: vec_map::from_keys_values(addr_to_remove, roles_to_remove) 
-    });
-}
+// public fun destroy_members<I: copy + drop>(
+//     executable: &mut Executable, 
+//     issuer: I
+// ) {
+//     let Members { to_add, to_remove } = executable.remove_action(issuer);
+//     assert!(
+//         to_remove.is_empty() && to_add.is_empty(),
+//         EMembersNotExecuted
+//     );
+// }
 
-public fun roles<I: copy + drop>(
-    executable: &mut Executable,
-    multisig: &mut Multisig, 
-    issuer: I,
-) {
-    let roles_mut: &mut Roles = executable.action_mut(issuer, multisig.addr());
+// public fun new_weights(
+//     proposal: &mut Proposal,
+//     addresses: vector<address>, 
+//     weights: vector<u64>,
+// ) { 
+//     proposal.add_action(Weights { addresses_weights_map: vec_map::from_keys_values(addresses, weights) });
+// }    
 
-    while (!roles_mut.to_add_map.is_empty()) {
-        let idx = roles_mut.to_add_map.size() - 1;
-        let (addr, roles) = roles_mut.to_add_map.remove_entry_by_idx(idx);
-        multisig.add_roles(addr, roles);
-    };
+// public fun weights<I: copy + drop>(
+//     executable: &mut Executable,
+//     multisig: &mut Multisig, 
+//     issuer: I,
+// ) {
+//     let w_mut: &mut Weights = executable.action_mut(issuer, multisig.addr());
 
-    while (!roles_mut.to_remove_map.is_empty()) {
-        let idx = roles_mut.to_remove_map.size() - 1;
-        let (addr, roles) = roles_mut.to_remove_map.remove_entry_by_idx(idx);
-        multisig.remove_roles(addr, roles);
-    };
-}
-
-public fun destroy_roles<I: copy + drop>(
-    executable: &mut Executable, 
-    issuer: I
-) {
-    let Roles { to_add_map, to_remove_map } = executable.remove_action(issuer);
-    assert!(
-        to_remove_map.is_empty() &&
-        to_add_map.is_empty(),
-        ERolesNotExecuted
-    );
-}
-
-public fun new_migrate(proposal: &mut Proposal, version: u64) {
-    proposal.add_action(Migrate { version });
-}
-
-public fun migrate<I: copy + drop>(
-    executable: &mut Executable,
-    multisig: &mut Multisig, 
-    issuer: I,
-) {
-    let migrate_mut: &mut Migrate = executable.action_mut(issuer, multisig.addr());
-    assert!(migrate_mut.version != 0, EVersionAlreadyUpdated);
-    multisig.set_version(migrate_mut.version);
-    migrate_mut.version = 0; // reset to 0 to enforce exactly one execution
-}
+//     while (!w_mut.addresses_weights_map.is_empty()) {
+//         let idx = w_mut.addresses_weights_map.size() - 1; // cheaper to pop
+//         let (addr, weight) = w_mut.addresses_weights_map.remove_entry_by_idx(idx);
+//         multisig.member_mut(addr, issuer).set_weight(weight);
+//     };
     
-public fun destroy_migrate<I: copy + drop>(
+// }
+
+// public fun destroy_weights<I: copy + drop>(
+//     executable: &mut Executable, 
+//     issuer: I
+// ) {
+//     let Weights { addresses_weights_map } = executable.remove_action(issuer);
+//     assert!(addresses_weights_map.is_empty(), EWeightsNotExecuted);
+// }
+
+// public fun new_roles(
+//     proposal: &mut Proposal,
+//     addr_to_add: vector<address>, 
+//     roles_to_add: vector<vector<String>>, 
+//     addr_to_remove: vector<address>,
+//     roles_to_remove: vector<vector<String>>,
+// ) { 
+//     proposal.add_action(Roles { 
+//         to_add: vec_map::from_keys_values(addr_to_add, roles_to_add), 
+//         to_remove: vec_map::from_keys_values(addr_to_remove, roles_to_remove) 
+//     });
+// }
+
+// public fun roles<I: copy + drop>(
+//     executable: &mut Executable,
+//     multisig: &mut Multisig, 
+//     issuer: I,
+// ) {
+//     let roles_mut: &mut Roles = executable.action_mut(issuer, multisig.addr());
+
+//     while (!roles_mut.to_add.is_empty()) {
+//         let idx = roles_mut.to_add.size() - 1;
+//         let (addr, roles) = roles_mut.to_add.remove_entry_by_idx(idx);
+//         multisig.member_mut(addr, issuer).add_roles(roles);
+//     };
+
+//     while (!roles_mut.to_remove.is_empty()) {
+//         let idx = roles_mut.to_remove.size() - 1;
+//         let (addr, roles) = roles_mut.to_remove.remove_entry_by_idx(idx);
+//         multisig.member_mut(addr, issuer).remove_roles(roles);
+//     };
+// }
+
+// public fun destroy_roles<I: copy + drop>(
+//     executable: &mut Executable,
+//     issuer: I
+// ) {
+//     let Roles { to_add, to_remove } = executable.remove_action(issuer);
+//     assert!(
+//         to_remove.is_empty() &&
+//         to_add.is_empty(),
+//         ERolesNotExecuted
+//     );
+// }
+
+public fun new_config_deps(
+    proposal: &mut Proposal,
+    packages: vector<address>,
+    versions: vector<u64>,
+    names: vector<String>,
+) {
+    let deps = deps::from_vecs(packages, versions, names);
+    proposal.add_action(Config { inner: deps });
+}
+
+public fun config_deps<I: copy + drop>(
     executable: &mut Executable,
+    multisig: &mut Multisig, 
     issuer: I,
 ) {
-    let Migrate { version } = executable.remove_action(issuer);
-    assert!(version == 0, EMigrateNotExecuted);
+    let Config { inner } = executable.remove_action(issuer);
+    *multisig.deps_mut(executable, issuer) = inner;
 }
+
+// public fun new_migrate(proposal: &mut Proposal, packages: vector<address>, versions: vector<u64>) {
+//     proposal.add_action(Migrate { to_update: vec_map::from_keys_values(packages, versions) });
+// }
+
+// public fun migrate<I: copy + drop>(
+//     executable: &mut Executable,
+//     multisig: &mut Multisig, 
+//     issuer: I,
+// ) {
+//     let migrate_mut: &mut Migrate = executable.action_mut(issuer, multisig.addr());
+//     assert!(!migrate_mut.to_update.is_empty(), EVersionsAlreadyUpdated);
+    
+//     let (package, version) = migrate_mut.to_update.pop();
+//     multisig.deps_mut(issuer).update(package, version);
+// }
+    
+// public fun destroy_migrate<I: copy + drop>(
+//     executable: &mut Executable,
+//     issuer: I,
+// ) {
+//     let Migrate { to_update } = executable.remove_action(issuer);
+//     assert!(to_update.is_empty(), EMigrateNotExecuted);
+// }
 
 public fun verify_new_rules(
     multisig: &Multisig,
@@ -526,5 +471,10 @@ public fun verify_new_rules(
         if (weight.is_some())
             assert!(threshold <= weight.extract(), EThresholdTooHigh);
     };
+}
+
+fun unwrap_config<T>(config: Config<T>): T {
+    let Config { inner } = config;
+    inner
 }
 

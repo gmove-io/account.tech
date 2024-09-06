@@ -32,7 +32,7 @@ public fun merge_and_split<T: drop>(
     let mut coins = vector::empty();
     while (!to_merge.is_empty()) {
         let item = to_merge.pop_back();
-        let coin = multisig.receive(item, Issuer {});
+        let coin = multisig.receive(Issuer {}, item);
         coins.push_back(coin);
     };
     to_merge.destroy_empty();

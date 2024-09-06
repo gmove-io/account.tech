@@ -13,7 +13,9 @@ use sui::{
 use kraken_multisig::{
     coin_operations,
     account::{Self, Account, Invite},
-    multisig::{Self, Multisig, Proposal, Executable},
+    multisig::{Self, Multisig},
+    proposal::{Self, Proposal},
+    executable::Executable,
 };
 
 const OWNER: address = @0xBABE;
@@ -36,7 +38,14 @@ public fun start_world(): World {
     let account = scenario.take_from_sender<Account>();
     // initialize Clock, Multisig and Kiosk
     let clock = clock::create_for_testing(scenario.ctx());
-    let multisig = multisig::new(b"kraken".to_string(), object::id(&account), scenario.ctx());
+    let multisig = multisig::new(
+        b"kraken".to_string(), 
+        object::id(&account), 
+        vector[@kraken_multisig, @0xCAFE],
+        vector[1, 1],
+        vector[b"KrakenMultisig".to_string(), b"KrakenActions".to_string()],
+        scenario.ctx()
+    );
 
     scenario.next_tx(OWNER);
 
@@ -84,7 +93,14 @@ public fun role(module_name: vector<u8>): String {
 // === Multisig ===
 
 public fun new_multisig(world: &mut World): Multisig {
-    multisig::new(b"kraken2".to_string(), object::id(&world.account), world.scenario.ctx())
+    multisig::new(
+        b"kraken2".to_string(), 
+        object::id(&world.account), 
+        vector[@kraken_multisig, @0xCAFE],
+        vector[1, 1],
+        vector[b"KrakenMultisig".to_string(), b"KrakenActions".to_string()],
+        world.scenario.ctx()
+    )
 }
 
 public fun create_proposal<I: drop>(
@@ -121,32 +137,20 @@ public fun remove_approval(
     world.multisig.remove_approval(key, world.scenario.ctx());
 }
 
-public fun delete_proposal(
-    world: &mut World, 
-    key: String
-): Bag {
-    world.multisig.delete_proposal(key, world.scenario.ctx())
-}
+// TODO:
+// public fun delete_proposal(
+//     world: &mut World, 
+//     key: String
+// ): Bag {
+//     world.multisig.proposal(key).delete(world.scenario.ctx())
+// }
 
 public fun execute_proposal(
     world: &mut World, 
     key: String, 
 ): Executable {
-    world.multisig.execute_proposal(key, &world.clock, world.scenario.ctx())
+    world.multisig.execute_proposal(key, &world.clock)
 }
-
-public fun register_account_id(
-    world: &mut World, 
-    id: ID,
-) {
-    world.multisig.register_account_id(id, world.scenario.ctx());
-}     
-
-public fun unregister_account_id(
-    world: &mut World, 
-) {
-    world.multisig.unregister_account_id(world.scenario.ctx());
-}  
 
 public fun assert_is_member(
     world: &mut World, 

@@ -23,22 +23,17 @@ use sui::{
     dynamic_field as df,
 };
 use kraken_multisig::{
-    utils,
     auth,
     deps::{Self, Deps},
-    member::{Self, Member},
+    thresholds::{Self, Thresholds},
+    members::{Self, Members, Member},
     proposal::{Self, Proposal},
     executable::{Self, Executable},
 };
 
-// === Aliases ===
-
-use fun utils::map_set_or as VecMap.set_or;
-
 // === Errors ===
 
 const ECallerIsNotMember: u64 = 0;
-const EThresholdNotReached: u64 = 1;
 const ECantBeExecutedYet: u64 = 2;
 const EHasntExpired: u64 = 3;
 const EMemberNotFound: u64 = 4;
@@ -53,15 +48,15 @@ const VERSION: u64 = 1;
 // shared object 
 public struct Multisig has key {
     id: UID,
-    // versions of the packages this multisig is using
+    // ids and versions of the packages this multisig is using
     // idx 0: kraken_multisig, idx 1: kraken_actions
     deps: Deps,
     // human readable name to differentiate the multisigs
     name: String,
-    // role -> threshold, no role is "global" (index == 0)
-    thresholds: VecMap<String, u64>,
     // members of the multisig
-    members: VecMap<address, Member>,
+    members: Members,
+    // manage global threshold and role -> threshold
+    thresholds: Thresholds,
     // open proposals, key should be a unique descriptive name
     proposals: VecMap<String, Proposal>,
 }
@@ -73,20 +68,19 @@ public struct Multisig has key {
 public fun new(
     name: String, 
     account_id: ID, 
-    dep_packages: vector<String>,
+    dep_packages: vector<address>,
     dep_versions: vector<u64>,
+    dep_names: vector<String>,
     ctx: &mut TxContext
 ): Multisig {
-    let members = vec_map::from_keys_values(
-        vector[ctx.sender()], 
-        vector[member::new(1, option::some(account_id), vector[b"global".to_string()])]
-    );      
+    let mut members = members::new();
+    members.add(members::new_member(ctx.sender(), 1, option::some(account_id), vector[]));
     
     Multisig { 
         id: object::new(ctx),
-        deps: deps::from_keys_values(dep_packages, dep_versions),
+        deps: deps::from_vecs(dep_packages, dep_versions, dep_names),
         name,
-        thresholds: vec_map::from_keys_values(vector[b"global".to_string()], vector[1]),
+        thresholds: thresholds::new(1),
         members,
         proposals: vec_map::empty(),
     }
@@ -104,7 +98,7 @@ public fun share(multisig: Multisig) {
 // that must be constructed in another module
 public fun create_proposal<I: drop>(
     multisig: &mut Multisig, 
-    auth_issuer: I, // module's auth issuer
+    issuer: I, // module's auth issuer
     auth_name: String, // module's auth name
     key: String, // proposal key
     description: String,
@@ -113,8 +107,8 @@ public fun create_proposal<I: drop>(
     ctx: &mut TxContext
 ): &mut Proposal {
     multisig.assert_is_member(ctx);
-    let auth = auth::construct(auth_issuer, auth_name, multisig.addr());
-    auth.assert_version(&multisig.deps, VERSION);
+    let auth = auth::construct(issuer, auth_name, multisig.addr());
+    multisig.deps.assert_version(&auth, VERSION);
 
     let proposal = proposal::new(
         auth,
@@ -138,8 +132,8 @@ public fun approve_proposal(
     assert!(multisig.proposals.contains(&key), EProposalNotFound);
 
     let proposal = multisig.proposals.get_mut(&key);
-    proposal.auth().assert_version(&multisig.deps, VERSION);
-    let member = multisig.member(&ctx.sender()); // protected - enforce being member
+    multisig.deps.assert_version(proposal.auth(), VERSION);
+    let member = multisig.members.get(ctx.sender()); 
     proposal.approve(member, ctx);
 }
 
@@ -152,8 +146,8 @@ public fun remove_approval(
     assert!(multisig.proposals.contains(&key), EProposalNotFound);
 
     let proposal = multisig.proposals.get_mut(&key);
-    proposal.auth().assert_version(&multisig.deps, VERSION);
-    let member = multisig.member(&ctx.sender()); // protected - enforce being member
+    multisig.deps.assert_version(proposal.auth(), VERSION);
+    let member = multisig.members.get(ctx.sender()); 
     proposal.disapprove(member, ctx);
 }
 
@@ -167,18 +161,28 @@ public fun execute_proposal(
 
     let (_, proposal) = multisig.proposals.remove(&key);
     assert!(clock.timestamp_ms() >= proposal.execution_time(), ECantBeExecutedYet);
+    multisig.thresholds.assert_reached(&proposal);
 
     let (auth, actions) = proposal.destroy();
-    let role = auth.into_role();
-    auth.assert_version(&multisig.deps, VERSION);
-    assert!(
-        proposal.total_weight() >= multisig.threshold(b"global".to_string()) ||
-        proposal.role_weight() >= multisig.threshold(role), 
-        EThresholdNotReached
-    );
+    multisig.deps.assert_version(&auth, VERSION);
 
     executable::new(auth, actions)
 }
+
+// TODO: manage actions in bag (drop?)
+// removes a proposal if it has expired
+// public fun delete_proposal(
+//     multisig: &mut Multisig, 
+//     key: String, 
+//     ctx: &mut TxContext
+// ): Bag {
+//     let (_, proposal) = multisig.proposals.remove(&key);
+//     assert!(proposal.expiration_epoch() <= ctx.epoch(), EHasntExpired);
+//     let (auth, actions) = proposal.destroy();
+//     multisig.deps.assert_version(&auth, VERSION);
+
+//     actions
+// }
 
 // === View functions ===
 
@@ -194,58 +198,45 @@ public fun name(multisig: &Multisig): String {
     multisig.name
 }
 
-public fun thresholds(multisig: &Multisig): VecMap<String, u64> {
-    multisig.thresholds
+public fun members(multisig: &Multisig): &Members {
+    &multisig.members
 }
 
-public fun threshold(multisig: &Multisig, role: String): u64 {
-    *multisig.thresholds.get(&role)
-}
-
-public fun get_weights_for_roles(multisig: &Multisig): VecMap<String, u64> {
-    let mut members_weights_map: VecMap<address, u64> = vec_map::empty();
-    multisig.member_addresses().do!(|addr| {
-        members_weights_map.insert(addr, multisig.member(&addr).weight());
-    });
-    
-    let mut roles_weights_map: VecMap<String, u64> = vec_map::empty();
-    multisig.member_addresses().do!(|addr| {
-        let weight = members_weights_map[&addr];
-        multisig.member(&addr).roles().do!(|role| {
-            roles_weights_map.set_or!(role, weight, |current| {
-                *current = *current + weight;
-            });
-        });
-    });
-
-    roles_weights_map
-}
-
-public fun member_addresses(multisig: &Multisig): vector<address> {
-    multisig.members.keys()
-}
-
-public fun is_member(multisig: &Multisig, addr: &address): bool {
-    multisig.members.contains(addr)
-}
-
-public fun assert_is_member(multisig: &Multisig, ctx: &TxContext) {
-    assert!(multisig.members.contains(&ctx.sender()), ECallerIsNotMember);
-}
-
-public fun member(multisig: &Multisig, addr: &address): &Member {
+public fun member(multisig: &Multisig, addr: address): &Member {
     multisig.members.get(addr)
 }
 
-// the caller must be member to return a reference to his Member
-public fun member_mut(multisig: &mut Multisig, ctx: &TxContext): &mut Member {
-    let addr = ctx.sender();
-    assert!(multisig.members.contains(&addr), EMemberNotFound);
-    multisig.members.get_mut(&addr)
+public fun thresholds(multisig: &Multisig): &Thresholds {
+    &multisig.thresholds
 }
 
 public fun proposal(multisig: &Multisig, key: &String): &Proposal {
     multisig.proposals.get(key)
+}
+
+public fun assert_is_member(multisig: &Multisig, ctx: &TxContext) {
+    assert!(multisig.members.is_member(ctx.sender()), ECallerIsNotMember);
+}
+
+public fun get_weights_for_roles(multisig: &Multisig): VecMap<String, u64> {
+    let mut members_weights_map: VecMap<address, u64> = vec_map::empty();
+    multisig.members.addresses().do!(|addr| {
+        members_weights_map.insert(addr, multisig.member(addr).weight());
+    });
+    
+    let mut roles_weights_map: VecMap<String, u64> = vec_map::empty();
+    multisig.members.addresses().do!(|addr| {
+        let weight = members_weights_map[&addr];
+        multisig.member(addr).roles().do!(|role| {
+            if (roles_weights_map.contains(&role)) {
+                roles_weights_map.insert(role, weight);
+            } else {
+                *roles_weights_map.get_mut(&role) = weight;
+            }
+        });
+    });
+
+    roles_weights_map
 }
 
 // === Deps-only functions ===
@@ -253,8 +244,8 @@ public fun proposal(multisig: &Multisig, key: &String): &Proposal {
 // owned objects
 public fun receive<T: key + store, I: copy + drop>(
     multisig: &mut Multisig, 
-    receiving: Receiving<T>,
     issuer: I,
+    receiving: Receiving<T>,
 ): T {
     multisig.deps.assert_core_dep(issuer);
     transfer::public_receive(&mut multisig.id, receiving)
@@ -263,9 +254,9 @@ public fun receive<T: key + store, I: copy + drop>(
 // managed assets
 public fun add_managed_asset<K: copy + drop + store, A: store, I: copy + drop>(
     multisig: &mut Multisig, 
+    issuer: I,
     key: K, 
     asset: A,
-    issuer: I,
 ) {
     multisig.deps.assert_core_dep(issuer);
     df::add(&mut multisig.id, key, asset);
@@ -280,8 +271,8 @@ public fun has_managed_asset<K: copy + drop + store>(
 
 public fun borrow_managed_asset<K: copy + drop + store, A: store, I: copy + drop>(
     multisig: &Multisig, 
-    key: K, 
     issuer: I,
+    key: K, 
 ): &A {
     multisig.deps.assert_core_dep(issuer);
     df::borrow(&multisig.id, key)
@@ -289,8 +280,8 @@ public fun borrow_managed_asset<K: copy + drop + store, A: store, I: copy + drop
 
 public fun borrow_managed_asset_mut<K: copy + drop + store, A: store, I: copy + drop>(
     multisig: &mut Multisig, 
-    key: K, 
     issuer: I,
+    key: K, 
 ): &mut A {
     multisig.deps.assert_core_dep(issuer);
     df::borrow_mut(&mut multisig.id, key)
@@ -298,101 +289,66 @@ public fun borrow_managed_asset_mut<K: copy + drop + store, A: store, I: copy + 
 
 public fun remove_managed_asset<K: copy + drop + store, A: store, I: copy + drop>(
     multisig: &mut Multisig, 
-    key: K, 
     issuer: I,
+    key: K, 
 ): A {
     multisig.deps.assert_core_dep(issuer);
     df::remove(&mut multisig.id, key)
 }
 
-// callable only in config.move, if the proposal has been accepted
-public fun set_name<I: copy + drop>(
+// fields
+public fun deps_mut<I: copy + drop>(
     multisig: &mut Multisig, 
-    name: String, 
-    issuer: I
-) {
-    multisig.deps.assert_core_dep(issuer);
-    multisig.name = name;
-}
-
-// callable only in config.move, if the proposal has been accepted
-public fun set_threshold<I: copy + drop>(
-    multisig: &mut Multisig, 
-    role: String, 
-    threshold: u64,
+    executable: &Executable,
     issuer: I,
-) {
+): &mut Deps {
+    executable.auth().assert_is_issuer(issuer);
+    executable.auth().assert_is_multisig(multisig.addr());
     multisig.deps.assert_core_dep(issuer);
-    multisig.thresholds.set_or!(role, threshold, |current| {
-        *current = threshold;
-    });
+    &mut multisig.deps
 }
 
-// callable only in config.move, if the proposal has been accepted
-public fun add_members<I: copy + drop>(
+public fun name_mut<I: copy + drop>(
     multisig: &mut Multisig, 
-    addresses: &mut vector<address>, 
+    executable: &Executable,
     issuer: I,
-) {
+): &mut String {
+    executable.auth().assert_is_issuer(issuer);
+    executable.auth().assert_is_multisig(multisig.addr());
     multisig.deps.assert_core_dep(issuer);
-    while (addresses.length() > 0) {
-        let addr = addresses.pop_back();
-        multisig.members.insert(
-            addr, 
-            member::new(
-                1, 
-                option::none(), 
-                vector[b"global".to_string()]
-            )
-        );
-    };
+    &mut multisig.name
 }
 
-// callable only in config.move, if the proposal has been accepted
-public fun remove_members<I: copy + drop>(
+public fun thresholds_mut<I: copy + drop>(
     multisig: &mut Multisig, 
-    addresses: &mut vector<address>,
+    executable: &Executable,
     issuer: I,
-) {
+): &mut Thresholds {
+    executable.auth().assert_is_issuer(issuer);
+    executable.auth().assert_is_multisig(multisig.addr());
     multisig.deps.assert_core_dep(issuer);
-    while (addresses.length() > 0) {
-        let addr = addresses.pop_back();
-        let (_, member) = multisig.members.remove(&addr);
-        member.delete();
-    };
+    &mut multisig.thresholds
 }
 
-// callable only in config.move, if the proposal has been accepted
-public fun modify_weight<I: copy + drop>(
+public fun members_mut<I: copy + drop>(
+    multisig: &mut Multisig, 
+    executable: &Executable,
+    issuer: I,
+): &mut Members {
+    executable.auth().assert_is_issuer(issuer);
+    executable.auth().assert_is_multisig(multisig.addr());
+    multisig.deps.assert_core_dep(issuer);
+    &mut multisig.members
+}
+
+// === Package functions ===
+
+// only accessible from account module
+public(package) fun member_mut(
     multisig: &mut Multisig, 
     addr: address,
-    weight: u64,
-    issuer: I,
-) {
-    multisig.deps.assert_core_dep(issuer);
-    multisig.members[&addr].modify_weight(weight);
-}
-
-// callable only in config.move, if the proposal has been accepted
-public fun add_roles<I: copy + drop>(
-    multisig: &mut Multisig, 
-    addr: address, 
-    mut roles: vector<String>,
-    issuer: I,
-) {
-    multisig.deps.assert_core_dep(issuer);
-    multisig.members.get_mut(&addr).add_roles(roles);
-}
-
-// callable only in config.move, if the proposal has been accepted
-public fun remove_roles<I: copy + drop>(
-    multisig: &mut Multisig, 
-    addr: address,
-    mut roles: vector<String>,
-    issuer: I,
-) {
-    multisig.deps.assert_core_dep(issuer);
-    multisig.members.get_mut(&addr).remove_roles(roles);
+): &mut Member {
+    multisig.members.get_mut(addr)
 }
 
 // === Test functions ===

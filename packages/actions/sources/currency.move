@@ -15,7 +15,11 @@ use sui::{
     transfer::Receiving,
     coin::{Coin, TreasuryCap, CoinMetadata},
 };
-use kraken_multisig::multisig::{Multisig, Executable, Proposal};
+use kraken_multisig::{
+    multisig::Multisig,
+    proposal::Proposal,
+    executable::Executable
+};
 use kraken_actions::owned;
 
 // === Errors ===
@@ -70,15 +74,15 @@ public fun lock_cap<C: drop>(
     multisig.assert_is_member(ctx);
     let treasury_lock = CurrencyLock { treasury_cap };
 
-    multisig.add_managed_asset(CurrencyKey<C> {}, treasury_lock);
+    multisig.add_managed_asset(Issuer {}, CurrencyKey<C> {}, treasury_lock);
 }
 
 public fun borrow_lock<C: drop>(multisig: &Multisig): &CurrencyLock<C> {
-    multisig.borrow_managed_asset(CurrencyKey<C> {})
+    multisig.borrow_managed_asset(Issuer {}, CurrencyKey<C> {})
 }
 
 public fun borrow_lock_mut<C: drop>(multisig: &mut Multisig): &mut CurrencyLock<C> {
-    multisig.borrow_managed_asset_mut(CurrencyKey<C> {})
+    multisig.borrow_managed_asset_mut(Issuer {}, CurrencyKey<C> {})
 }
 
 public fun supply<C: drop>(lock: &CurrencyLock<C>): u64 {

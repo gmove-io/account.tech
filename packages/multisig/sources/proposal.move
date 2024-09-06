@@ -22,7 +22,7 @@ use sui::{
 };
 use kraken_multisig::{
     auth::Auth,
-    member::Member,
+    members::Member,
 };
 
 // === Errors ===
@@ -67,6 +67,14 @@ public struct Executable {
 
 // === Multisig-only functions ===
 
+// insert action to the proposal bag, safe because proposal_mut is only accessible upon creation
+public fun add_action<A: store>(proposal: &mut Proposal, action: A) {
+    let idx = proposal.actions.length();
+    proposal.actions.add(idx, action);
+}
+
+// === Package functions ===
+
 // create a new proposal for an action
 // that must be constructed in another module
 public(package) fun new(
@@ -89,12 +97,6 @@ public(package) fun new(
     }
 }
 
-// insert action to the proposal bag, safe because proposal_mut is only accessible upon creation
-public fun add_action<A: store>(proposal: &mut Proposal, action: A) {
-    let idx = proposal.actions.length();
-    proposal.actions.add(idx, action);
-}
-
 // increase the global threshold and the role threshold if the signer has one
 public(package) fun approve(
     proposal: &mut Proposal, 
@@ -103,7 +105,7 @@ public(package) fun approve(
 ) {
     assert!(!proposal.has_approved(ctx.sender()), EAlreadyApproved);
     let role = proposal.auth().into_role();
-    let has_role = member.has_role(&role);
+    let has_role = member.has_role(role);
 
     let weight = member.weight();
     proposal.approved.insert(ctx.sender()); // throws if already approved
@@ -120,7 +122,7 @@ public(package) fun disapprove(
 ) {
     assert!(proposal.has_approved(ctx.sender()), ENotApproved);
     let role = proposal.auth().into_role();
-    let has_role = member.has_role(&role);
+    let has_role = member.has_role(role);
 
     let weight = member.weight();
     proposal.approved.remove(&ctx.sender()); // throws if already approved

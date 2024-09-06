@@ -21,6 +21,8 @@ const EMustLeaveAllMultisigs: u64 = 2;
 
 // === Struct ===
 
+public struct Issuer has copy, drop {}
+
 // non-transferable user account for tracking multisigs
 public struct Account has key {
     id: UID,
@@ -57,13 +59,13 @@ public fun new(username: String, profile_picture: String, ctx: &mut TxContext) {
 
 // fill account_id in Multisig, insert multisig_id in Account, abort if already joined
 public fun join_multisig(account: &mut Account, multisig: &mut Multisig, ctx: &TxContext) {
-    multisig.member_mut(ctx).register_account_id(object::id(account));
+    multisig.member_mut(ctx.sender()).register_account_id(object::id(account));
     account.multisig_ids.insert(object::id(multisig)); 
 }
 
 // extract and verify account_id in Multisig, remove multisig_id from account, abort if not member
 public fun leave_multisig(account: &mut Account, multisig: &mut Multisig, ctx: &TxContext) {
-    let id = multisig.member_mut(ctx).unregister_account_id();
+    let id = multisig.member_mut(ctx.sender()).unregister_account_id();
     account.multisig_ids.remove(&id);
 }
 
@@ -79,7 +81,7 @@ public fun send_invite(multisig: &Multisig, recipient: address, ctx: &mut TxCont
     // user inviting must be member
     multisig.assert_is_member(ctx);
     // invited user must be member
-    assert!(multisig.is_member(&recipient), ENotMember);
+    assert!(multisig.members().is_member(recipient), ENotMember);
     let invite = Invite { 
         id: object::new(ctx), 
         multisig_id: object::id(multisig) 

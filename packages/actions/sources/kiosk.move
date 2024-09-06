@@ -17,7 +17,11 @@ use sui::{
     vec_map::{Self, VecMap},
 };
 use kiosk::{kiosk_lock_rule, royalty_rule};
-use kraken_multisig::multisig::{Multisig, Executable, Proposal};
+use kraken_multisig::{
+    multisig::Multisig,
+    proposal::Proposal,
+    executable::Executable
+};
 
 // === Errors ===
 
@@ -66,17 +70,17 @@ public fun new(multisig: &mut Multisig, name: String, ctx: &mut TxContext) {
     kiosk.set_owner_custom(&kiosk_owner_cap, multisig.addr());
 
     let kiosk_owner_lock = KioskOwnerLock { kiosk_owner_cap };
-    multisig.add_managed_asset(KioskOwnerKey { name }, kiosk_owner_lock);
+    multisig.add_managed_asset(Issuer {}, KioskOwnerKey { name }, kiosk_owner_lock);
 
     transfer::public_share_object(kiosk);
 }
 
 public fun borrow_lock(multisig: &Multisig, name: String): &KioskOwnerLock {
-    multisig.borrow_managed_asset(KioskOwnerKey { name })
+    multisig.borrow_managed_asset(Issuer {}, KioskOwnerKey { name })
 }
 
 public fun borrow_lock_mut(multisig: &mut Multisig, name: String): &mut KioskOwnerLock {
-    multisig.borrow_managed_asset_mut(KioskOwnerKey { name })
+    multisig.borrow_managed_asset_mut(Issuer {}, KioskOwnerKey { name })
 }
 
 // deposit from another Kiosk, no need for proposal

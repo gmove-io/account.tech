@@ -15,7 +15,9 @@ use std::{
     string::String,
     type_name::{Self, TypeName},
 };
-use kraken_multisig::deps::Deps;
+use kraken_multisig::{
+    deps::Deps,
+};
 
 // === Errors ===
 
@@ -50,17 +52,17 @@ public fun assert_is_issuer<I: drop>(auth: &Auth, _: I) {
     assert!(auth.issuer == issuer, EWrongIssuer);
 }
 
-public fun assert_version(auth: &Auth, deps: &Deps, version: u64) {
+public fun assert_version(deps: &Deps, auth: &Auth, version: u64) {
     let issuer_package = auth.issuer.get_address().to_string();
-    assert!(deps.version(issuer_package) == version, EWrongVersion);
+    assert!(deps.get_package_version_from_string(issuer_package) == version, EWrongVersion);
 }
 
 /// Assert that the auth has been issued from kraken (multisig or actions) packages
-public fun assert_core_dep<I: drop>(deps: &Deps, _: I) {
+public fun assert_core_dep<I: copy + drop>(deps: &Deps, _: I) {
     let issuer_package = type_name::get<I>().get_address().to_string();
     assert!(
-        deps.get_idx(issuer_package) == 0 ||
-        deps.get_idx(issuer_package) == 1, 
+        deps.get_package_idx_from_string(issuer_package) == 0 ||
+        deps.get_package_idx_from_string(issuer_package) == 1, 
         ENotCoreDep
     );
 }

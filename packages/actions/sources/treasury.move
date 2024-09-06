@@ -15,7 +15,11 @@ use sui::{
     coin::{Self, Coin},
     vec_map::{Self, VecMap},
 };
-use kraken_multisig::multisig::{Multisig, Proposal, Executable};
+use kraken_multisig::{
+    multisig::Multisig,
+    proposal::Proposal,
+    executable::Executable
+};
 
 // === Errors ===
 
@@ -60,7 +64,29 @@ public struct Treasury has store {
     bag: Bag
 }
 
+// === View Functions ===
+
+public fun coin_type_string<C: drop>(): String {
+    type_name::get<C>().into_string().to_string()
+}
+
+public fun coin_type_exists(treasury: &Treasury, coin_type: String): bool {
+    treasury.bag.contains(coin_type)
+}
+
+public fun coin_type_value<C: drop>(treasury: &Treasury, coin_type: String): u64 {
+    treasury.bag.borrow<String, Balance<C>>(coin_type).value()
+}
+
 // === [MEMBER] Public Functions ===
+
+public fun treasury_exists(multisig: &Multisig, name: String): bool {
+    multisig.has_managed_asset(TreasuryKey { name })
+}
+
+public fun treasury(multisig: &Multisig, name: String): &Treasury {
+    multisig.borrow_managed_asset(Issuer {}, TreasuryKey { name })
+}
 
 public fun deposit<C: drop>(
     multisig: &mut Multisig,
@@ -71,7 +97,8 @@ public fun deposit<C: drop>(
     multisig.assert_is_member(ctx);
     assert!(treasury_exists(multisig, name), ETreasuryDoesntExist);
 
-    let treasury: &mut Treasury = multisig.borrow_managed_asset_mut(TreasuryKey { name });
+    let treasury: &mut Treasury = 
+        multisig.borrow_managed_asset_mut(Issuer {}, TreasuryKey { name });
     let coin_type = coin_type_string<C>();
 
     if (treasury.coin_type_exists(coin_type)) {
@@ -84,7 +111,8 @@ public fun deposit<C: drop>(
 
 public fun close(multisig: &mut Multisig, name: String, ctx: &mut TxContext) {
     multisig.assert_is_member(ctx);
-    let Treasury { bag } = multisig.remove_managed_asset(TreasuryKey { name });
+    let Treasury { bag } = 
+        multisig.remove_managed_asset(Issuer {}, TreasuryKey { name });
     assert!(bag.is_empty(), ETreasuryNotEmpty);
     bag.destroy_empty();
 }
@@ -196,7 +224,7 @@ public fun open<I: copy + drop>(
     ctx: &mut TxContext
 ) {
     let open_mut: &mut Open = executable.action_mut(issuer, multisig.addr());
-    multisig.add_managed_asset(TreasuryKey { name: open_mut.name }, Treasury { bag: bag::new(ctx) });
+    multisig.add_managed_asset(Issuer {}, TreasuryKey { name: open_mut.name }, Treasury { bag: bag::new(ctx) });
     open_mut.name = b"".to_string(); // reset to ensure execution
 }
 
@@ -224,7 +252,7 @@ public fun spend<I: copy + drop, C: drop>(
     let withdraw_mut: &mut Spend = executable.action_mut(issuer, multisig.addr());
     let (coin_type, amount) = withdraw_mut.coins_amounts_map.remove(&coin_type_string<C>());
     
-    let treasury: &mut Treasury = multisig.borrow_managed_asset_mut(TreasuryKey { name: withdraw_mut.name });
+    let treasury: &mut Treasury = multisig.borrow_managed_asset_mut(Issuer {}, TreasuryKey { name: withdraw_mut.name });
     let balance: &mut Balance<C> = treasury.bag.borrow_mut(coin_type);
     let coin = coin::take(balance, amount, ctx);
 
@@ -266,26 +294,4 @@ public fun transfer<I: copy + drop, C: drop>(
 public fun destroy_transfer<I: copy + drop>(executable: &mut Executable, issuer: I) {
     destroy_spend(executable, issuer); // only possible if all withdrawals/transfers are done
     let Transfer { .. } = executable.remove_action(issuer);
-}
-
-// === View Functions ===
-
-public fun treasury_exists(multisig: &Multisig, name: String): bool {
-    multisig.has_managed_asset(TreasuryKey { name })
-}
-
-public fun treasury(multisig: &Multisig, name: String): &Treasury {
-    multisig.borrow_managed_asset(TreasuryKey { name })
-}
-
-public fun coin_type_string<C: drop>(): String {
-    type_name::get<C>().into_string().to_string()
-}
-
-public fun coin_type_exists(treasury: &Treasury, coin_type: String): bool {
-    treasury.bag.contains(coin_type)
-}
-
-public fun coin_type_value<C: drop>(treasury: &Treasury, coin_type: String): u64 {
-    treasury.bag.borrow<String, Balance<C>>(coin_type).value()
 }

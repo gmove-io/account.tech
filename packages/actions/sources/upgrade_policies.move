@@ -13,7 +13,11 @@ use sui::{
     clock::Clock,
     dynamic_field as df
 };
-use kraken_multisig::multisig::{Multisig, Executable, Proposal};
+use kraken_multisig::{
+    multisig::Multisig,
+    proposal::Proposal,
+    executable::Executable
+};
 
 // === Error ===
 
@@ -95,7 +99,7 @@ public fun lock_cap(
     ctx: &mut TxContext
 ) {
     multisig.assert_is_member(ctx);
-    multisig.add_managed_asset(UpgradeKey { name }, lock);
+    multisig.add_managed_asset(Issuer {}, UpgradeKey { name }, lock);
 }
 
 // lock a cap with a timelock rule
@@ -112,11 +116,11 @@ public fun lock_cap_with_timelock(
 }
 
 public fun borrow_lock(multisig: &Multisig, name: String): &UpgradeLock {
-    multisig.borrow_managed_asset(UpgradeKey { name })
+    multisig.borrow_managed_asset(Issuer {}, UpgradeKey { name })
 }
 
 public fun borrow_lock_mut(multisig: &mut Multisig, name: String): &mut UpgradeLock {
-    multisig.borrow_managed_asset_mut(UpgradeKey { name })
+    multisig.borrow_managed_asset_mut(Issuer {}, UpgradeKey { name })
 }
 
 public fun upgrade_cap(lock: &UpgradeLock): &UpgradeCap {
@@ -269,13 +273,13 @@ public fun restrict<I: copy + drop>(
     let restrict_mut: &mut Restrict = executable.action_mut(issuer, multisig.addr());
 
     if (restrict_mut.policy == package::additive_policy()) {
-        let lock_mut: &mut UpgradeLock = multisig.borrow_managed_asset_mut(UpgradeKey { name });
+        let lock_mut: &mut UpgradeLock = multisig.borrow_managed_asset_mut(Issuer {}, UpgradeKey { name });
         lock_mut.upgrade_cap.only_additive_upgrades();
     } else if (restrict_mut.policy == package::dep_only_policy()) {
-        let lock_mut: &mut UpgradeLock = multisig.borrow_managed_asset_mut(UpgradeKey { name });
+        let lock_mut: &mut UpgradeLock = multisig.borrow_managed_asset_mut(Issuer {}, UpgradeKey { name });
         lock_mut.upgrade_cap.only_dep_upgrades();
     } else {
-        let lock: UpgradeLock = multisig.remove_managed_asset(UpgradeKey { name });
+        let lock: UpgradeLock = multisig.remove_managed_asset(Issuer {}, UpgradeKey { name });
         let UpgradeLock { id, upgrade_cap } = lock;
         package::make_immutable(upgrade_cap);
         id.delete();
