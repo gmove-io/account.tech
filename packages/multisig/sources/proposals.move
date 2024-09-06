@@ -29,6 +29,7 @@ use kraken_multisig::{
 
 const EAlreadyApproved: u64 = 0;
 const ENotApproved: u64 = 1;
+const EProposalNotFound: u64 = 2;
 
 // === Structs ===
 
@@ -62,6 +63,10 @@ public struct Proposal has store {
 
 // === View functions ===
 
+public fun length(proposals: &Proposals): u64 {
+    proposals.inner.length()
+}
+
 public fun get_idx(proposals: &Proposals, name: String): u64 {
     proposals.inner.find_index!(|proposal| proposal.name == name).destroy_some()
 }
@@ -71,6 +76,7 @@ public fun contains(proposals: &Proposals, name: String): bool {
 }
 
 public fun get(proposals: &Proposals, name: String): &Proposal {
+    assert!(proposals.contains(name), EProposalNotFound);
     let idx = proposals.get_idx(name);
     &proposals.inner[idx]
 }
@@ -149,6 +155,7 @@ public(package) fun new_proposal(
 }
 
 public(package) fun get_mut(proposals: &mut Proposals, name: String): &mut Proposal {
+    assert!(proposals.contains(name), EProposalNotFound);
     let idx = proposals.get_idx(name);
     &mut proposals.inner[idx]
 }

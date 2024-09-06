@@ -65,8 +65,8 @@ public fun join_multisig(account: &mut Account, multisig: &mut Multisig, ctx: &T
 
 // extract and verify account_id in Multisig, remove multisig_id from account, abort if not member
 public fun leave_multisig(account: &mut Account, multisig: &mut Multisig, ctx: &TxContext) {
-    let id = multisig.member_mut(ctx.sender()).unregister_account_id();
-    account.multisig_ids.remove(&id);
+    multisig.member_mut(ctx.sender()).unregister_account_id();
+    account.multisig_ids.remove(&object::id(multisig));
 }
 
 // must leave all multisigs before, for consistency

@@ -4,6 +4,7 @@ module kraken_multisig::account_tests;
 use sui::test_utils::destroy;
 use kraken_multisig::{
     multisig,
+    members,
     test_utils::start_world,
     account::{Self, Account, Invite}
 };
@@ -19,7 +20,14 @@ fun join_multisig() {
 
     world.scenario().next_tx(OWNER);
     let mut user_account = world.scenario().take_from_address<Account>(OWNER);
-    let mut multisig2 = multisig::new(b"Multisig2".to_string(), object::id(&user_account), world.scenario().ctx());
+    let mut multisig2 = multisig::new(
+        b"Multisig2".to_string(), 
+        object::id(&user_account), 
+        vector[@kraken_multisig, @0xCAFE], 
+        vector[1, 1], 
+        vector[b"KrakenMultisig".to_string(), b"KrakenActions".to_string()], 
+        world.scenario().ctx()
+    );
     assert!(user_account.username() == b"Sam".to_string());
     assert!(user_account.profile_picture() == b"Sam.png".to_string());
     assert!(user_account.multisig_ids() == vector[]);
@@ -42,7 +50,8 @@ fun leave_multisig() {
 
     world.scenario().next_tx(ALICE);
     let mut user_account = world.scenario().take_from_address<Account>(ALICE);
-    world.multisig().add_members(&mut vector[ALICE]);
+    let member = members::new_member(ALICE, 1, option::none(), vector[]);
+    world.multisig().members_mut_for_testing().add(member);
     
     world.join_multisig(&mut user_account);
     assert!(user_account.multisig_ids() == vector[object::id(world.multisig())]);
@@ -63,7 +72,8 @@ fun accept_invite() {
 
     world.scenario().next_tx(ALICE);
     let mut user_account = world.scenario().take_from_address<Account>(ALICE);
-    world.multisig().add_members(&mut vector[ALICE]);
+    let member = members::new_member(ALICE, 1, option::none(), vector[]);
+    world.multisig().members_mut_for_testing().add(member);
     assert!(user_account.multisig_ids() == vector[]);
     world.send_invite(ALICE);
 
@@ -86,7 +96,8 @@ fun refuse_invite() {
 
     world.scenario().next_tx(ALICE);
     let user_account = world.scenario().take_from_address<Account>(ALICE);
-    world.multisig().add_members(&mut vector[ALICE]);
+    let member = members::new_member(ALICE, 1, option::none(), vector[]);
+    world.multisig().members_mut_for_testing().add(member);
     assert!(user_account.multisig_ids() == vector[]);
     world.send_invite(ALICE);
 

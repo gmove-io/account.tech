@@ -19,7 +19,6 @@ use std::string::String;
 use sui::{
     transfer::Receiving,
     clock::Clock, 
-    vec_map::{Self, VecMap}, 
     dynamic_field as df,
 };
 use kraken_multisig::{
@@ -33,11 +32,8 @@ use kraken_multisig::{
 
 // === Errors ===
 
-const ECallerIsNotMember: u64 = 0;
-const ECantBeExecutedYet: u64 = 2;
-const EHasntExpired: u64 = 3;
-const EMemberNotFound: u64 = 4;
-const EProposalNotFound: u64 = 5;
+const ECantBeExecutedYet: u64 = 0;
+const ECallerIsNotMember: u64 = 1;
 
 // === Constants ===
 
@@ -130,7 +126,6 @@ public fun approve_proposal(
     ctx: &mut TxContext
 ) {
     multisig.assert_is_member(ctx);
-    assert!(multisig.proposals.contains(key), EProposalNotFound);
 
     let proposal = multisig.proposals.get_mut(key);
     multisig.deps.assert_version(proposal.auth(), VERSION);
@@ -144,8 +139,6 @@ public fun remove_approval(
     key: String, 
     ctx: &mut TxContext
 ) {
-    assert!(multisig.proposals.contains(key), EProposalNotFound);
-
     let proposal = multisig.proposals.get_mut(key);
     multisig.deps.assert_version(proposal.auth(), VERSION);
     let member = multisig.members.get(ctx.sender()); 
@@ -332,4 +325,35 @@ public(package) fun member_mut(
 ): &mut Member {
     multisig.members.get_mut(addr)
 }
+
+// === Test functions ===
+
+#[test_only]
+public fun deps_mut_for_testing(
+    multisig: &mut Multisig, 
+): &mut Deps {
+    &mut multisig.deps
+}
+
+#[test_only]
+public fun name_mut_for_testing(
+    multisig: &mut Multisig, 
+): &mut String {
+    &mut multisig.name
+}
+
+#[test_only]
+public fun thresholds_mut_for_testing(
+    multisig: &mut Multisig, 
+): &mut Thresholds {
+    &mut multisig.thresholds
+}
+
+#[test_only]
+public fun members_mut_for_testing(
+    multisig: &mut Multisig, 
+): &mut Members {
+    &mut multisig.members
+}
+
 

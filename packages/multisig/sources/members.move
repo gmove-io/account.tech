@@ -18,6 +18,10 @@ module kraken_multisig::members;
 use std::string::String;
 use sui::vec_set::{Self, VecSet};
 
+// === Errors ===
+
+const EMemberNotFound: u64 = 0;
+
 // === Structs ===
 
 public struct Members has store, drop {
@@ -63,41 +67,6 @@ public fun add(
     members.inner.push_back(member);
 }
 
-public fun remove(
-    members: &mut Members,
-    addr: address,
-) {
-    let idx = members.inner.find_index!(|member| member.addr == addr).destroy_some();
-    members.inner.remove(idx);
-}
-
-public fun set_weight(
-    member: &mut Member,
-    weight: u64,
-) {
-    member.weight = weight;
-}
-
-public fun add_roles(
-    member: &mut Member,
-    mut roles: vector<String>,
-) {
-    while (!roles.is_empty()) {
-        let role = roles.pop_back();
-        member.roles.insert(role);
-    };
-}
-
-public fun remove_roles(
-    member: &mut Member,
-    mut roles: vector<String>,
-) {
-    while (!roles.is_empty()) {
-        let role = roles.pop_back();
-        member.roles.remove(&role);
-    };
-}
-
 public fun register_account_id(
     member: &mut Member,
     id: ID,
@@ -121,12 +90,18 @@ public fun addresses(members: &Members): vector<address> {
     members.inner.map_ref!(|member| member.addr)
 }
 
+public fun get_idx(members: &Members, addr: address): u64 {
+    let opt = members.inner.find_index!(|member| member.addr == addr);
+    assert!(opt.is_some(), EMemberNotFound);
+    opt.destroy_some()
+}
+
 public fun is_member(members: &Members, addr: address): bool {
     members.inner.any!(|member| member.addr == addr)
 }
 
 public fun get(members: &Members, addr: address): &Member {
-    let idx = members.inner.find_index!(|member| member.addr == addr).destroy_some();
+    let idx = members.get_idx(addr);
     &members.inner[idx]
 }
 
@@ -150,6 +125,47 @@ public fun has_role(member: &Member, role: String): bool {
 // === Package functions ===
 
 public(package) fun get_mut(members: &mut Members, addr: address): &mut Member {
-    let idx = members.inner.find_index!(|member| member.addr == addr).destroy_some();
+    let idx = members.get_idx(addr);
     &mut members.inner[idx]
+}
+
+// === Test functions ===
+
+#[test_only]
+public fun remove(
+    members: &mut Members,
+    addr: address,
+) {
+    let idx = members.get_idx(addr);
+    members.inner.remove(idx);
+}
+
+#[test_only]
+public fun set_weight(
+    member: &mut Member,
+    weight: u64,
+) {
+    member.weight = weight;
+}
+
+#[test_only]
+public fun add_roles(
+    member: &mut Member,
+    mut roles: vector<String>,
+) {
+    while (!roles.is_empty()) {
+        let role = roles.pop_back();
+        member.roles.insert(role);
+    };
+}
+
+#[test_only]
+public fun remove_roles(
+    member: &mut Member,
+    mut roles: vector<String>,
+) {
+    while (!roles.is_empty()) {
+        let role = roles.pop_back();
+        member.roles.remove(&role);
+    };
 }

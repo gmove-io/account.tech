@@ -3,7 +3,6 @@ module kraken_multisig::test_utils;
 
 use std::string::String;
 use sui::{
-    bag::Bag,
     test_utils::destroy,
     transfer::Receiving,
     clock::{Self, Clock},
@@ -14,7 +13,7 @@ use kraken_multisig::{
     coin_operations,
     account::{Self, Account, Invite},
     multisig::{Self, Multisig},
-    proposal::{Self, Proposal},
+    proposals::Proposal,
     executable::Executable,
 };
 
@@ -192,7 +191,7 @@ public fun send_invite(
 }    
 
 public fun accept_invite(
-    world: &mut World, 
+    world: &mut World,
     account: &mut Account,
     invite: Invite
 ) {
