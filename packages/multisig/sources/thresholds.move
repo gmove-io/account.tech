@@ -1,6 +1,6 @@
 module kraken_multisig::thresholds;
 use std::string::String;
-use kraken_multisig::proposal::Proposal;
+use kraken_multisig::proposals::Proposal;
 
 // === Errors ===
 

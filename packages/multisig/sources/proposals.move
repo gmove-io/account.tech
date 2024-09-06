@@ -11,7 +11,7 @@
 ///      by passing the same witness that was used for instanciation. 
 ///      This prevents the actions or the proposal to be stored instead of executed.
 
-module kraken_multisig::proposal;
+module kraken_multisig::proposals;
 
 // === Imports ===
 
@@ -32,12 +32,17 @@ const ENotApproved: u64 = 1;
 
 // === Structs ===
 
+public struct Proposals has store {
+    inner: vector<Proposal>
+}
+
 // proposal owning a single action requested to be executed
 // can be executed if length(approved) >= multisig.threshold
-public struct Proposal has key, store {
-    id: UID,
+public struct Proposal has store {
     // module that issued the proposal and must destroy it
     auth: Auth,
+    // name of the proposal, serves as a key, should be unique
+    name: String,
     // what this proposal aims to do, for informational purpose
     description: String,
     // the proposal can be deleted from this epoch
@@ -55,95 +60,20 @@ public struct Proposal has key, store {
     approved: VecSet<address>,
 }
 
-// hot potato ensuring the action in the proposal is executed as it can't be stored
-public struct Executable {
-    // module that issued the proposal and must destroy it
-    auth: Auth,
-    // index of the next action to destroy, starts at 0
-    next_to_destroy: u64,
-    // actions to be executed in order
-    actions: Bag,
-}
-
-// === Multisig-only functions ===
-
-// insert action to the proposal bag, safe because proposal_mut is only accessible upon creation
-public fun add_action<A: store>(proposal: &mut Proposal, action: A) {
-    let idx = proposal.actions.length();
-    proposal.actions.add(idx, action);
-}
-
-// === Package functions ===
-
-// create a new proposal for an action
-// that must be constructed in another module
-public(package) fun new(
-    auth: Auth,
-    description: String,
-    execution_time: u64, // timestamp in ms
-    expiration_epoch: u64,
-    ctx: &mut TxContext
-): Proposal {
-    Proposal { 
-        id: object::new(ctx),
-        auth,
-        description,
-        execution_time,
-        expiration_epoch,
-        actions: bag::new(ctx),
-        total_weight: 0,
-        role_weight: 0,
-        approved: vec_set::empty(), 
-    }
-}
-
-// increase the global threshold and the role threshold if the signer has one
-public(package) fun approve(
-    proposal: &mut Proposal, 
-    member: &Member, 
-    ctx: &mut TxContext
-) {
-    assert!(!proposal.has_approved(ctx.sender()), EAlreadyApproved);
-    let role = proposal.auth().into_role();
-    let has_role = member.has_role(role);
-
-    let weight = member.weight();
-    proposal.approved.insert(ctx.sender()); // throws if already approved
-    proposal.total_weight = proposal.total_weight + weight;
-    if (has_role)
-        proposal.role_weight = proposal.role_weight + weight;
-}
-
-// the signer removes his agreement
-public(package) fun disapprove(
-    proposal: &mut Proposal, 
-    member: &Member, 
-    ctx: &mut TxContext
-) {
-    assert!(proposal.has_approved(ctx.sender()), ENotApproved);
-    let role = proposal.auth().into_role();
-    let has_role = member.has_role(role);
-
-    let weight = member.weight();
-    proposal.approved.remove(&ctx.sender()); // throws if already approved
-    proposal.total_weight = proposal.total_weight - weight;
-    if (has_role)
-        proposal.role_weight = proposal.role_weight - weight;
-}
-
-public(package) fun destroy(proposal: Proposal): (Auth, Bag) {
-    let Proposal { 
-        id, 
-        auth,
-        actions,
-        ..
-    } = proposal;
-    id.delete();
-
-    (auth, actions)
-}
-
 // === View functions ===
+
+public fun get_idx(proposals: &Proposals, name: String): u64 {
+    proposals.inner.find_index!(|proposal| proposal.name == name).destroy_some()
+}
+
+public fun contains(proposals: &Proposals, name: String): bool {
+    proposals.inner.any!(|proposal| proposal.name == name)
+}
+
+public fun get(proposals: &Proposals, name: String): &Proposal {
+    let idx = proposals.get_idx(name);
+    &proposals.inner[idx]
+}
 
 public fun auth(proposal: &Proposal): &Auth {
     &proposal.auth
@@ -180,3 +110,96 @@ public fun approved(proposal: &Proposal): vector<address> {
 public fun has_approved(proposal: &Proposal, addr: address): bool {
     proposal.approved.contains(&addr)
 }
+
+// === Multisig-only functions ===
+
+// insert action to the proposal bag, safe because proposal_mut is only accessible upon creation
+public fun add_action<A: store>(proposal: &mut Proposal, action: A) {
+    let idx = proposal.actions.length();
+    proposal.actions.add(idx, action);
+}
+
+// === Package functions ===
+
+public(package) fun new(): Proposals {
+    Proposals { inner: vector[] }
+}
+
+// create a new proposal for an action
+// that must be constructed in another module
+public(package) fun new_proposal(
+    auth: Auth,
+    name: String,
+    description: String,
+    execution_time: u64, // timestamp in ms
+    expiration_epoch: u64,
+    ctx: &mut TxContext
+): Proposal {
+    Proposal { 
+        auth,
+        name,
+        description,
+        execution_time,
+        expiration_epoch,
+        actions: bag::new(ctx),
+        total_weight: 0,
+        role_weight: 0,
+        approved: vec_set::empty(), 
+    }
+}
+
+public(package) fun get_mut(proposals: &mut Proposals, name: String): &mut Proposal {
+    let idx = proposals.get_idx(name);
+    &mut proposals.inner[idx]
+}
+
+public(package) fun add(
+    proposals: &mut Proposals,
+    proposal: Proposal,
+) {
+    proposals.inner.push_back(proposal);
+}
+
+public(package) fun remove(
+    proposals: &mut Proposals,
+    name: String,
+): (Auth, Bag) {
+    let idx = proposals.get_idx(name);
+    let Proposal { auth, actions, .. } = proposals.inner.remove(idx);
+    (auth, actions)
+}
+
+// increase the global threshold and the role threshold if the signer has one
+public(package) fun approve(
+    proposal: &mut Proposal, 
+    member: &Member, 
+    ctx: &mut TxContext
+) {
+    assert!(!proposal.has_approved(ctx.sender()), EAlreadyApproved);
+    let role = proposal.auth().into_role();
+    let has_role = member.has_role(role);
+
+    let weight = member.weight();
+    proposal.approved.insert(ctx.sender()); // throws if already approved
+    proposal.total_weight = proposal.total_weight + weight;
+    if (has_role)
+        proposal.role_weight = proposal.role_weight + weight;
+}
+
+// the signer removes his agreement
+public(package) fun disapprove(
+    proposal: &mut Proposal, 
+    member: &Member, 
+    ctx: &mut TxContext
+) {
+    assert!(proposal.has_approved(ctx.sender()), ENotApproved);
+    let role = proposal.auth().into_role();
+    let has_role = member.has_role(role);
+
+    let weight = member.weight();
+    proposal.approved.remove(&ctx.sender()); // throws if already approved
+    proposal.total_weight = proposal.total_weight - weight;
+    if (has_role)
+        proposal.role_weight = proposal.role_weight - weight;
+}
+

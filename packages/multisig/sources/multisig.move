@@ -27,7 +27,7 @@ use kraken_multisig::{
     deps::{Self, Deps},
     thresholds::{Self, Thresholds},
     members::{Self, Members, Member},
-    proposal::{Self, Proposal},
+    proposals::{Self, Proposals, Proposal},
     executable::{Self, Executable},
 };
 
@@ -58,7 +58,7 @@ public struct Multisig has key {
     // manage global threshold and role -> threshold
     thresholds: Thresholds,
     // open proposals, key should be a unique descriptive name
-    proposals: VecMap<String, Proposal>,
+    proposals: Proposals,
 }
 
 // === Public mutative functions ===
@@ -82,7 +82,7 @@ public fun new(
         name,
         thresholds: thresholds::new(1),
         members,
-        proposals: vec_map::empty(),
+        proposals: proposals::new(),
     }
 }
 
@@ -110,16 +110,17 @@ public fun create_proposal<I: drop>(
     let auth = auth::construct(issuer, auth_name, multisig.addr());
     multisig.deps.assert_version(&auth, VERSION);
 
-    let proposal = proposal::new(
+    let proposal = proposals::new_proposal(
         auth,
+        key,
         description,
         execution_time,
         expiration_epoch,
         ctx
     );
 
-    multisig.proposals.insert(key, proposal);
-    multisig.proposals.get_mut(&key)
+    multisig.proposals.add(proposal);
+    multisig.proposals.get_mut(key)
 }
 
 // increase the global threshold and the role threshold if the signer has one
@@ -129,9 +130,9 @@ public fun approve_proposal(
     ctx: &mut TxContext
 ) {
     multisig.assert_is_member(ctx);
-    assert!(multisig.proposals.contains(&key), EProposalNotFound);
+    assert!(multisig.proposals.contains(key), EProposalNotFound);
 
-    let proposal = multisig.proposals.get_mut(&key);
+    let proposal = multisig.proposals.get_mut(key);
     multisig.deps.assert_version(proposal.auth(), VERSION);
     let member = multisig.members.get(ctx.sender()); 
     proposal.approve(member, ctx);
@@ -143,9 +144,9 @@ public fun remove_approval(
     key: String, 
     ctx: &mut TxContext
 ) {
-    assert!(multisig.proposals.contains(&key), EProposalNotFound);
+    assert!(multisig.proposals.contains(key), EProposalNotFound);
 
-    let proposal = multisig.proposals.get_mut(&key);
+    let proposal = multisig.proposals.get_mut(key);
     multisig.deps.assert_version(proposal.auth(), VERSION);
     let member = multisig.members.get(ctx.sender()); 
     proposal.disapprove(member, ctx);
@@ -159,11 +160,11 @@ public fun execute_proposal(
 ): Executable {
     // multisig.assert_is_member(ctx); remove to be able to automate it
 
-    let (_, proposal) = multisig.proposals.remove(&key);
+    let proposal = multisig.proposals.get(key);
     assert!(clock.timestamp_ms() >= proposal.execution_time(), ECantBeExecutedYet);
-    multisig.thresholds.assert_reached(&proposal);
+    multisig.thresholds.assert_reached(proposal);
 
-    let (auth, actions) = proposal.destroy();
+    let (auth, actions) = multisig.proposals.remove(key);
     multisig.deps.assert_version(&auth, VERSION);
 
     executable::new(auth, actions)
@@ -210,8 +211,8 @@ public fun thresholds(multisig: &Multisig): &Thresholds {
     &multisig.thresholds
 }
 
-public fun proposal(multisig: &Multisig, key: &String): &Proposal {
-    multisig.proposals.get(key)
+public fun proposals(multisig: &Multisig): &Proposals {
+    &multisig.proposals
 }
 
 public fun assert_is_member(multisig: &Multisig, ctx: &TxContext) {
@@ -330,12 +331,5 @@ public(package) fun member_mut(
     addr: address,
 ): &mut Member {
     multisig.members.get_mut(addr)
-}
-
-// === Test functions ===
-
-#[test_only]
-public fun proposals_length(multisig: &Multisig): u64 {
-    multisig.proposals.size()
 }
 
