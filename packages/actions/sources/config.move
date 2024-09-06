@@ -14,7 +14,7 @@ use sui::{
 };
 use kraken_multisig::{
     multisig::Multisig,
-    proposal::Proposal,
+    proposals::Proposal,
     executable::Executable,
     deps,
     members,
@@ -184,7 +184,7 @@ public fun new_config_members(
         EMembersNotSameLength
     );
 
-    let members = members::new();
+    let mut members = members::new();
     addresses.zip_do!(weights, |addr, weight| {
         members.add(members::new_member(addr, weight, option::none(), roles.remove(0)));
     });
@@ -209,8 +209,8 @@ public fun new_config_thresholds(
 ) { 
     assert!(role_names.length() == role_thresholds.length(), ERolesNotSameLength);
     assert!(global != 0, EThresholdNull);
-    let thresholds = thresholds::new(global);
 
+    let mut thresholds = thresholds::new(global);
     role_names.zip_do!(role_thresholds, |role, threshold| {
         thresholds.add(role, threshold);
     });

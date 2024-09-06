@@ -12,7 +12,7 @@ module kraken_actions::owned;
 use sui::transfer::Receiving;
 use kraken_multisig::{
     multisig::Multisig,
-    proposal::Proposal,
+    proposals::Proposal,
     executable::Executable
 };
 

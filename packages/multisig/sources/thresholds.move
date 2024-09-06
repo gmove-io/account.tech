@@ -26,13 +26,13 @@ public fun new(global: u64): Thresholds {
     Thresholds { global, roles: vector[] }
 }
 
+public fun add(roles: &mut Thresholds, name: String, threshold: u64) {
+    roles.roles.push_back(Role { name, threshold });
+}
+
 // protected because &mut Deps accessible only from KrakenMultisig and KrakenActions
 // public fun set_global(roles: &mut Thresholds, global: u64) {
 //     roles.global = global;
-// }
-
-// public fun add(roles: &mut Thresholds, name: String, threshold: u64) {
-//     roles.roles.push_back(Role { name, threshold });
 // }
 
 // public fun set_role(roles: &mut Thresholds, name: String, threshold: u64) {

@@ -17,7 +17,7 @@ use sui::{
 };
 use kraken_multisig::{
     multisig::Multisig,
-    proposal::Proposal,
+    proposals::Proposal,
     executable::Executable
 };
 use kraken_actions::owned;

@@ -19,7 +19,7 @@ use sui::{
 use kiosk::{kiosk_lock_rule, royalty_rule};
 use kraken_multisig::{
     multisig::Multisig,
-    proposal::Proposal,
+    proposals::Proposal,
     executable::Executable
 };
 
