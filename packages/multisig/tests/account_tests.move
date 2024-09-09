@@ -5,7 +5,7 @@ use sui::test_utils::destroy;
 use kraken_multisig::{
     multisig,
     members,
-    test_utils::start_world,
+    multisig_test_utils::start_world,
     account::{Self, Account, Invite}
 };
 

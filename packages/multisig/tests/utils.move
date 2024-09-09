@@ -1,5 +1,5 @@
 #[test_only]
-module kraken_multisig::test_utils;
+module kraken_multisig::multisig_test_utils;
 
 use std::string::String;
 use sui::{

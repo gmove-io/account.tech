@@ -1,188 +1,278 @@
-// #[test_only]
-// module kraken_actions::config_tests;
+#[test_only]
+module kraken_actions::config_tests;
 
-// use kraken_actions::{
-//     config,
-//     test_utils::{Self, start_world},
-// };
+use kraken_actions::{
+    config,
+    actions_test_utils::{Self, start_world},
+};
 
-// const OWNER: address = @0xBABE;
-// const ALICE: address = @0xA11CE;
-// const BOB: address = @0xB0B;
+const OWNER: address = @0xBABE;
+const ALICE: address = @0xA11CE;
+const BOB: address = @0xB0B;
 
-// #[test]
-// fun name_end_to_end() {
-//     let mut world = start_world();
-//     let key = b"name proposal".to_string();
+#[test]
+fun test_config_name_end_to_end() {
+    let mut world = start_world();
+    let key = b"name proposal".to_string();
 
-//     world.propose_name(
-//         key,
-//         b"new name".to_string(),
-//     );
-//     world.approve_proposal(key);
-//     let executable = world.execute_proposal(key);    
-//     config::execute_name(executable, world.multisig());
+    world.propose_config_name(
+        key,
+        b"new name".to_string(),
+    );
+    world.approve_proposal(key);
+    let executable = world.execute_proposal(key);    
+    config::execute_config_name(executable, world.multisig());
 
-//     assert!(world.multisig().name() == b"new name".to_string());
-//     world.end();     
-// }
+    assert!(world.multisig().name() == b"new name".to_string());
+    world.end();     
+}
 
-// #[test]
-// #[allow(implicit_const_copy)]
-// fun modify_rules_end_to_end() {
-//     let mut world = start_world();
-//     let sender = world.scenario().ctx().sender();
-//     let multisig = world.multisig();
-//     let key = b"modify proposal".to_string();
+#[test]
+#[allow(implicit_const_copy)]
+fun test_config_rules_end_to_end() {
+    let mut world = start_world();
+    let sender = world.scenario().ctx().sender();
+    let multisig = world.multisig();
+    let key = b"rules proposal".to_string();
 
-//     assert!(multisig.name() == b"kraken".to_string());
-//     assert!(multisig.threshold(b"global".to_string()) == 1);
-//     assert!(multisig.member_addresses() == vector[sender]);
-//     assert!(multisig.proposals_length() == 0);
-//     assert!(*multisig.get_weights_for_roles().get(&b"global".to_string()) == 1);
+    assert!(multisig.name() == b"Kraken".to_string());
+    assert!(multisig.thresholds().get_global_threshold() == 1);
+    assert!(multisig.members().addresses() == vector[sender]);
+    assert!(multisig.member(sender).weight() == 1);
+    assert!(multisig.proposals().length() == 0);
 
-//     let role = test_utils::role(b"config");
-//     world.propose_modify_rules(
-//         key,
-//         vector[ALICE, BOB],
-//         vector[OWNER],
-//         vector[ALICE],
-//         vector[2],
-//         vector[ALICE, BOB],
-//         vector[vector[role], vector[role]],
-//         vector[ALICE],
-//         vector[vector[role]],
-//         vector[b"global".to_string(), role],
-//         vector[3, 1],
-//     );
-//     world.approve_proposal(key);
+    let role = actions_test_utils::role(b"config");
+    world.propose_config_rules(
+        key,
+        vector[ALICE, BOB], // removes OWNER
+        vector[2, 1],
+        vector[vector[], vector[role]],
+        3,
+        vector[role],
+        vector[1],
+    );
+    world.approve_proposal(key);
 
-//     let executable = world.execute_proposal(key);
-//     config::execute_modify_rules(executable, world.multisig());
+    let executable = world.execute_proposal(key);
+    config::execute_config_rules(executable, world.multisig());
 
-//     let multisig = world.multisig();
+    let multisig = world.multisig();
 
-//     assert!(multisig.member_addresses() == vector[BOB, ALICE]);
-//     assert!(multisig.member(&ALICE).weight() == 2);
-//     assert!(multisig.member(&BOB).weight() == 1);
-//     assert!(multisig.member(&ALICE).roles() == vector[b"global".to_string()]);
-//     assert!(multisig.member(&BOB).roles() == vector[b"global".to_string(), role]);
+    assert!(multisig.members().addresses() == vector[ALICE, BOB]);
+    assert!(multisig.member(ALICE).weight() == 2);
+    assert!(multisig.member(BOB).weight() == 1);
+    assert!(multisig.member(ALICE).roles() == vector[]);
+    assert!(multisig.member(BOB).roles() == vector[role]);
 
-//     assert!(multisig.threshold(b"global".to_string()) == 3);
-//     assert!(multisig.threshold(role) == 1);
-//     assert!(*multisig.get_weights_for_roles().get(&b"global".to_string()) == 3); 
-//     assert!(*multisig.get_weights_for_roles().get(&role) == 1); 
+    assert!(multisig.thresholds().get_global_threshold() == 3);
+    assert!(multisig.thresholds().get_role_threshold(role) == 1);
 
-//     world.end();        
-// }
+    world.end();        
+}
 
-// // TODO: add others
+#[test]
+fun test_config_deps_end_to_end() {
+    let mut world = start_world();
 
-// #[test]
-// fun migrate_end_to_end() {
-//     let mut world = start_world();
+    let key = b"deps proposal".to_string();
 
-//     let key = b"migrate proposal".to_string();
+    assert!(world.multisig().deps().get_idx(@kraken_multisig) == 0);
+    assert!(world.multisig().deps().get_idx(@0xCAFE) == 1);
+    assert!(world.multisig().deps().get_version(@kraken_multisig) == 1);
+    assert!(world.multisig().deps().get_version(@0xCAFE) == 1);
 
-//     assert!(world.multisig().version() == 1);
+    world.propose_config_deps(
+        key, 
+        vector[@kraken_multisig, @0xCAFE, @0xAAA],
+        vector[2, 3, 1],
+        vector[b"KrakenMultisig".to_string(), b"KrakenActions".to_string(), b"External".to_string()],
+    );
+    world.approve_proposal(key);
+    let executable = world.execute_proposal(key);    
+    config::execute_config_deps(executable, world.multisig());
 
-//     world.propose_migrate(key, 2);
-//     world.approve_proposal(key);
+    assert!(world.multisig().deps().get_idx(@kraken_multisig) == 0);
+    assert!(world.multisig().deps().get_idx(@0xCAFE) == 1);
+    assert!(world.multisig().deps().get_idx(@0xAAA) == 2);
+    assert!(world.multisig().deps().get_version(@kraken_multisig) == 2);
+    assert!(world.multisig().deps().get_version(@0xCAFE) == 3);
+    assert!(world.multisig().deps().get_version(@0xAAA) == 1);
 
-//     let executable = world.execute_proposal(key);    
-//     config::execute_migrate(executable, world.multisig());
+    world.end();     
+}
 
-//     assert!(world.multisig().version() == 2);
+#[test]
+fun test_verify_config_no_error_no_member_has_role() {
+    let mut world = start_world();
+    let key = b"rules proposal".to_string();
+    let role = actions_test_utils::role(b"config");
 
-//     world.end();     
-// }
+    world.propose_config_rules(
+        key,
+        vector[OWNER],
+        vector[1],
+        vector[vector[]],
+        1,
+        vector[role],
+        vector[1],
+    );
+    world.approve_proposal(key);
+    let executable = world.execute_proposal(key);
+    config::execute_config_rules(executable, world.multisig());
 
-// #[test, expected_failure(abort_code = config::EAlreadyMember)]
-// fun verify_new_config_error_added_already_member() {
-//     let mut world = start_world();
-//     let key = b"modify proposal".to_string();
+    world.end();         
+}
 
-//     world.propose_members(
-//         key,
-//         vector[OWNER],
-//         vector[],
-//     );
-//     world.approve_proposal(key);
+#[test, expected_failure(abort_code = config::EThresholdNull)]
+fun test_verify_config_error_global_threshold_null() {
+    let mut world = start_world();
+    let key = b"rules proposal".to_string();
 
-//     let executable = world.execute_proposal(key);
-//     config::execute_modify_rules(executable, world.multisig());
+    world.propose_config_rules(
+        key,
+        vector[OWNER],
+        vector[1],
+        vector[vector[]],
+        0,
+        vector[],
+        vector[],
+    );
+    world.approve_proposal(key);
+    let executable = world.execute_proposal(key);
+    config::execute_config_rules(executable, world.multisig());
 
-//     world.end();         
-// }   
+    world.end();         
+}
 
-// #[test, expected_failure(abort_code = config::ENotMember)]
-// fun verify_new_config_error_removed_not_member() {
-//     let mut world = start_world();
-//     let key = b"modify proposal".to_string();
+#[test, expected_failure(abort_code = config::EThresholdTooHigh)]
+fun test_verify_config_error_global_threshold_too_high() {
+    let mut world = start_world();
+    let key = b"rules proposal".to_string();
+    let role = actions_test_utils::role(b"config");
 
-//     world.propose_members(
-//         key,
-//         vector[],
-//         vector[ALICE],
-//     );
-//     world.approve_proposal(key);
+    world.propose_config_rules(
+        key,
+        vector[OWNER],
+        vector[1],
+        vector[vector[]],
+        4,
+        vector[role],
+        vector[1],
+    );
+    world.approve_proposal(key);
+    let executable = world.execute_proposal(key);
+    config::execute_config_rules(executable, world.multisig());
 
-//     let executable = world.execute_proposal(key);
-//     config::execute_modify_rules(executable, world.multisig());
+    world.end();         
+}
 
-//     world.end();         
-// }
+#[test, expected_failure(abort_code = config::EThresholdTooHigh)]
+fun test_verify_config_error_role_threshold_too_high() {
+    let mut world = start_world();
+    let key = b"rules proposal".to_string();
+    let role = actions_test_utils::role(b"config");
 
-// #[test, expected_failure(abort_code = config::ENotMember)]
-// fun verify_new_config_error_modified_not_member() {
-//     let mut world = start_world();
-//     let key = b"modify proposal".to_string();
+    world.propose_config_rules(
+        key,
+        vector[OWNER],
+        vector[1],
+        vector[vector[role]],
+        1,
+        vector[role],
+        vector[2],
+    );
+    world.approve_proposal(key);
+    let executable = world.execute_proposal(key);
+    config::execute_config_rules(executable, world.multisig());
 
-//     world.propose_weights(
-//         key,
-//         vector[ALICE],
-//         vector[2],
-//     );
-//     world.approve_proposal(key);
+    world.end();         
+}
 
-//     let executable = world.execute_proposal(key);
-//     config::execute_modify_rules(executable, world.multisig());
+#[test, expected_failure(abort_code = config::ERoleDoesntExist)]
+fun test_verify_config_error_threshold_too_high() {
+    let mut world = start_world();
+    let key = b"rules proposal".to_string();
+    let role = actions_test_utils::role(b"config");
 
-//     world.end();         
-// }
+    world.propose_config_rules(
+        key,
+        vector[OWNER],
+        vector[1],
+        vector[vector[role]],
+        1,
+        vector[],
+        vector[],
+    );
+    world.approve_proposal(key);
+    let executable = world.execute_proposal(key);
+    config::execute_config_rules(executable, world.multisig());
 
-// #[test, expected_failure(abort_code = config::EThresholdTooHigh)]
-// fun verify_new_config_error_threshold_too_high() {
-//     let mut world = start_world();
-//     let key = b"modify proposal".to_string();
+    world.end();         
+}
 
-//     world.propose_thresholds(
-//         key,
-//         vector[b"global".to_string()],
-//         vector[4],
-//     );
-//     world.approve_proposal(key);
-    
-//     let executable = world.execute_proposal(key);
-//     config::execute_modify_rules(executable, world.multisig());
+#[test, expected_failure(abort_code = config::EMembersNotSameLength)]
+fun test_verify_config_error_members_not_same_length() {
+    let mut world = start_world();
+    let key = b"rules proposal".to_string();
+    let role = actions_test_utils::role(b"config");
 
-//     world.end();         
-// }
+    world.propose_config_rules(
+        key,
+        vector[OWNER, ALICE],
+        vector[1],
+        vector[vector[role]],
+        1,
+        vector[],
+        vector[],
+    );
+    world.approve_proposal(key);
+    let executable = world.execute_proposal(key);
+    config::execute_config_rules(executable, world.multisig());
 
-// #[test, expected_failure(abort_code = config::EThresholdNull)]
-// fun verify_new_config_error_threshold_null() {
-//     let mut world = start_world();
-//     let key = b"modify proposal".to_string();
+    world.end();         
+}
 
-//     world.propose_thresholds(
-//         key,
-//         vector[b"global".to_string()],
-//         vector[0],
-//     );
-//     world.approve_proposal(key);
+#[test, expected_failure(abort_code = config::EMembersNotSameLength)]
+fun test_verify_config_error_members_not_same_length_2() {
+    let mut world = start_world();
+    let key = b"rules proposal".to_string();
+    let role = actions_test_utils::role(b"config");
 
-//     let executable = world.execute_proposal(key);
-//     config::execute_modify_rules(executable, world.multisig());
+    world.propose_config_rules(
+        key,
+        vector[OWNER, ALICE],
+        vector[1, 2],
+        vector[vector[role]],
+        1,
+        vector[],
+        vector[],
+    );
+    world.approve_proposal(key);
+    let executable = world.execute_proposal(key);
+    config::execute_config_rules(executable, world.multisig());
 
-//     world.end();         
-// }  
+    world.end();         
+}
+
+#[test, expected_failure(abort_code = config::ERolesNotSameLength)]
+fun test_verify_config_error_roles_not_same_length() {
+    let mut world = start_world();
+    let key = b"rules proposal".to_string();
+    let role = actions_test_utils::role(b"config");
+
+    world.propose_config_rules(
+        key,
+        vector[OWNER],
+        vector[1],
+        vector[vector[]],
+        1,
+        vector[role],
+        vector[],
+    );
+    world.approve_proposal(key);
+    let executable = world.execute_proposal(key);
+    config::execute_config_rules(executable, world.multisig());
+
+    world.end();         
+}
+

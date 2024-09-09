@@ -43,7 +43,7 @@ public struct Config<T> has store {
 // === [PROPOSAL] Public functions ===
 
 // step 1: propose to change the name
-public fun propose_name(
+public fun propose_config_name(
     multisig: &mut Multisig, 
     key: String,
     description: String,
@@ -67,7 +67,7 @@ public fun propose_name(
 // step 2: multiple members have to approve the proposal (multisig::approve_proposal)
 
 // step 3: execute the action and modify Multisig object
-public fun execute_name(
+public fun execute_config_name(
     mut executable: Executable,
     multisig: &mut Multisig, 
 ) {
@@ -77,7 +77,7 @@ public fun execute_name(
 
 // step 1: propose to modify multisig rules (everything touching weights)
 // threshold has to be valid (reachable and different from 0 for global)
-public fun propose_modify_rules(
+public fun propose_config_rules(
     multisig: &mut Multisig, 
     key: String,
     description: String,
@@ -93,7 +93,7 @@ public fun propose_modify_rules(
     role_thresholds: vector<u64>,
     ctx: &mut TxContext
 ) {
-    verify_new_rules(weights, roles, global, role_names, role_thresholds);
+    verify_new_rules(addresses, weights, roles, global, role_names, role_thresholds);
     // verify new rules are valid
     let proposal_mut = multisig.create_proposal(
         Issuer {},
@@ -112,7 +112,7 @@ public fun propose_modify_rules(
 // step 2: multiple members have to approve the proposal (multisig::approve_proposal)
 
 // step 3: execute the action and modify Multisig object
-public fun execute_modify_rules(
+public fun execute_config_rules(
     mut executable: Executable,
     multisig: &mut Multisig, 
 ) {
@@ -122,7 +122,7 @@ public fun execute_modify_rules(
 }
 
 // step 1: propose to update the version
-public fun propose_deps(
+public fun propose_config_deps(
     multisig: &mut Multisig, 
     key: String,
     description: String,
@@ -149,7 +149,7 @@ public fun propose_deps(
 // step 3: execute the proposal and return the action (multisig::execute_proposal)
 
 // step 4: execute the action and modify Multisig object
-public fun execute_deps(
+public fun execute_config_deps(
     mut executable: Executable,
     multisig: &mut Multisig, 
 ) {
@@ -174,9 +174,9 @@ public fun config_name<I: copy + drop>(
 
 public fun new_config_members(
     proposal: &mut Proposal,
-    mut addresses: vector<address>,
-    mut weights: vector<u64>, 
-    mut roles: vector<vector<String>>, 
+    addresses: vector<address>,
+    weights: vector<u64>, 
+    mut roles: vector<vector<String>>, // inner vectors can be empty
 ) { 
     assert!(
         addresses.length() == weights.length() && 
@@ -204,8 +204,8 @@ public fun config_members<I: copy + drop>(
 public fun new_config_thresholds(
     proposal: &mut Proposal,
     global: u64,
-    mut role_names: vector<String>,
-    mut role_thresholds: vector<u64>, 
+    role_names: vector<String>,
+    role_thresholds: vector<u64>, 
 ) { 
     assert!(role_names.length() == role_thresholds.length(), ERolesNotSameLength);
     assert!(global != 0, EThresholdNull);
@@ -224,7 +224,10 @@ public fun config_thresholds<I: copy + drop>(
     issuer: I,
 ) {
     // threshold modification must be the latest action to be executed to ensure it is reachable
-    assert!(executable.action_index<Config<Thresholds>>() + 1 == executable.actions_length(), EThresholdNotLastAction);
+    assert!(
+        executable.action_index<Config<Thresholds>>() + 1 - executable.next_to_destroy() == executable.actions_length(), 
+        EThresholdNotLastAction
+    );
     
     let Config { inner } = executable.remove_action(issuer);
     *multisig.thresholds_mut(executable, issuer) = inner;
@@ -253,23 +256,27 @@ public fun config_deps<I: copy + drop>(
 
 fun verify_new_rules(
     // members 
-    mut weights: vector<u64>,
-    mut roles: vector<vector<String>>,
+    addresses: vector<address>,
+    weights: vector<u64>,
+    roles: vector<vector<String>>,
     // thresholds 
     global: u64,
     role_names: vector<String>,
     role_thresholds: vector<u64>,
 ) {
-    let total_weight = weights.fold!(0, |acc, weight| acc + weight);
+    let total_weight = weights.fold!(0, |acc, weight| acc + weight);    
+    assert!(addresses.length() == weights.length() && addresses.length() == roles.length(), EMembersNotSameLength);
+    assert!(role_names.length() == role_thresholds.length(), ERolesNotSameLength);
     assert!(total_weight >= global, EThresholdTooHigh);
+    assert!(global != 0, EThresholdNull);
 
     let mut weights_for_role: VecMap<String, u64> = vec_map::empty();
     weights.zip_do!(roles, |weight, roles_for_addr| {
         roles_for_addr.do!(|role| {
             if (weights_for_role.contains(&role)) {
-                weights_for_role.insert(role, weight);
-            } else {
                 *weights_for_role.get_mut(&role) = weight;
+            } else {
+                weights_for_role.insert(role, weight);
             }
         });
     });

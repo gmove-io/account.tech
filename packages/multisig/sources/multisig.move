@@ -208,6 +208,10 @@ public fun proposals(multisig: &Multisig): &Proposals {
     &multisig.proposals
 }
 
+public fun proposal(multisig: &Multisig, key: String): &Proposal {
+    multisig.proposals.get(key)
+}
+
 public fun assert_is_member(multisig: &Multisig, ctx: &TxContext) {
     assert!(multisig.members.is_member(ctx.sender()), ECallerIsNotMember);
 }
@@ -354,6 +358,14 @@ public fun members_mut_for_testing(
     multisig: &mut Multisig, 
 ): &mut Members {
     &mut multisig.members
+}
+
+#[test_only]
+public fun member_mut_for_testing(
+    multisig: &mut Multisig, 
+    addr: address,
+): &mut Member {
+    multisig.members.get_mut(addr)
 }
 
 

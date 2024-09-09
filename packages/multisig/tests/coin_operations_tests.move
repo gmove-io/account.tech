@@ -7,7 +7,7 @@ use sui::{
     test_utils::destroy,
     test_scenario::most_recent_receiving_ticket
 };
-use kraken_multisig::test_utils::start_world;
+use kraken_multisig::multisig_test_utils::start_world;
 
 const OWNER: address = @0xBABE;
 

@@ -7,7 +7,7 @@ use kraken_multisig::{
     auth,
     members,
     thresholds,
-    test_utils::start_world
+    multisig_test_utils::start_world
 };
 
 const OWNER: address = @0xBABE;

@@ -87,6 +87,10 @@ public fun auth(executable: &Executable): &Auth {
     &executable.auth
 }
 
+public fun next_to_destroy(executable: &Executable): u64 {
+    executable.next_to_destroy
+}
+
 public fun actions_length(executable: &Executable): u64 {
     executable.actions.length()
 }

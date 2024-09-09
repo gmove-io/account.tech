@@ -27,7 +27,7 @@ public struct Dep has copy, store, drop {
 // === Public functions ===
 
 public fun from_vecs(
-    mut packages: vector<address>, 
+    packages: vector<address>, 
     mut versions: vector<u64>,
     mut names: vector<String>
 ): Deps {
@@ -46,9 +46,8 @@ public fun from_vecs(
         ENotKrakenMultisig
     );
 
-    versions.reverse();
     let inner = packages.map!(|package| {
-        Dep { package, version: versions.pop_back(), name: names.pop_back() }
+        Dep { package, version: versions.remove(0), name: names.remove(0) }
     });
 
     Deps { inner }

@@ -64,7 +64,7 @@ fun split<T: drop>(
 ): vector<ID> {
     let mut ids = vector::empty();
     while (!amounts.is_empty()) {
-        let split = coin.split(amounts.pop_back(), ctx);
+        let split = coin.split(amounts.remove(0), ctx);
         ids.push_back(object::id(&split));
         transfer::public_transfer(split, multisig.addr());
     };

@@ -151,21 +151,19 @@ public fun set_weight(
 #[test_only]
 public fun add_roles(
     member: &mut Member,
-    mut roles: vector<String>,
+    roles: vector<String>,
 ) {
-    while (!roles.is_empty()) {
-        let role = roles.pop_back();
+    roles.do!(|role| {
         member.roles.insert(role);
-    };
+    });
 }
 
 #[test_only]
 public fun remove_roles(
     member: &mut Member,
-    mut roles: vector<String>,
+    roles: vector<String>,
 ) {
-    while (!roles.is_empty()) {
-        let role = roles.pop_back();
+    roles.do!(|role| {
         member.roles.remove(&role);
-    };
+    });
 }

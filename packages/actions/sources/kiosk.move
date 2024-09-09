@@ -264,7 +264,7 @@ public fun take<O: key + store, I: copy + drop>(
     let lock_mut = borrow_lock_mut(multisig, name);
     assert!(take_mut.recipient == ctx.sender(), EWrongReceiver);
 
-    let nft_id = take_mut.nft_ids.pop_back();
+    let nft_id = take_mut.nft_ids.remove(0);
     multisig_kiosk.list<O>(&lock_mut.kiosk_owner_cap, nft_id, 0);
     let (nft, mut request) = multisig_kiosk.purchase<O>(nft_id, coin::zero<SUI>(ctx));
 
