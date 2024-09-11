@@ -61,14 +61,7 @@ fun test_assert_multisig_executed_error_not_multisig_executable() {
     let uid = object::new(world.scenario().ctx());
     let mut executable = world.execute_proposal(key);
     
-    let multisig = multisig::new(
-        b"Multisig2".to_string(), 
-        uid.uid_to_inner(), 
-        vector[@kraken_multisig, @0xCAFE], 
-        vector[1, 1], 
-        vector[b"KrakenMultisig".to_string(), b"KrakenActions".to_string()], 
-        world.scenario().ctx()
-    );
+    let multisig = world.new_multisig();
     let _ = executable.action_mut<Issuer, Action>(Issuer {}, multisig.addr());
 
     uid.delete();

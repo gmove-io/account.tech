@@ -28,6 +28,7 @@ use kraken_actions::{
     treasury,
     kiosk as k_kiosk,
 };
+use kraken_extensions::extensions::{Self, Extensions, AdminCap};
 
 const OWNER: address = @0xBABE;
 
@@ -38,24 +39,32 @@ public struct World {
     account: Account,
     multisig: Multisig,
     kiosk: Kiosk,
+    extensions: Extensions,
+    cap: AdminCap,
 }
 
 // === Utils ===
 
 public fun start_world(): World {
     let mut scenario = ts::begin(OWNER);
+    extensions::init_for_testing(scenario.ctx());
     account::new(b"sam".to_string(), b"move_god.png".to_string(), scenario.ctx());
 
     scenario.next_tx(OWNER);
     let account = scenario.take_from_sender<Account>();
-    // initialize Clock, Multisig and Kiosk
+    let cap = scenario.take_from_sender<AdminCap>();
+    let mut extensions = scenario.take_shared<Extensions>();
+
+    // initialize Clock, Multisig, Extensions
     let clock = clock::create_for_testing(scenario.ctx());
+    extensions::init_core_deps(&cap, &mut extensions, vector[@kraken_multisig, @0xCAFE]);
     let mut multisig = multisig::new(
+        &extensions,
         b"Kraken".to_string(), 
         object::id(&account), 
-        vector[@kraken_multisig, @0xCAFE], // both are 0x0 otherwise 
-        vector[1, 1], 
-        vector[b"KrakenMultisig".to_string(), b"KrakenActions".to_string()], 
+        vector[b"KrakenMultisig".to_string(), b"KrakenActions".to_string()],
+        vector[@kraken_multisig, @0xCAFE],
+        vector[1, 1],
         scenario.ctx()
     );
     k_kiosk::new(&mut multisig, b"kiosk".to_string(), scenario.ctx());
@@ -63,7 +72,7 @@ public fun start_world(): World {
     scenario.next_tx(OWNER);
     let kiosk = scenario.take_shared<Kiosk>();
 
-    World { scenario, clock, account, multisig, kiosk }
+    World { scenario, clock, account, multisig, kiosk, extensions, cap }
 }
 
 public fun end(world: World) {
@@ -73,13 +82,16 @@ public fun end(world: World) {
         multisig, 
         account, 
         kiosk,
-        ..
+        extensions,
+        cap
     } = world;
 
     destroy(clock);
-    destroy(kiosk);
     destroy(account);
     destroy(multisig);
+    destroy(kiosk);
+    destroy(extensions);
+    destroy(cap);
     scenario.end();
 }
 
@@ -115,11 +127,12 @@ public fun role(module_name: vector<u8>): String {
 
 public fun new_multisig(world: &mut World): Multisig {
     multisig::new(
-        b"Kraken2".to_string(), 
+        &world.extensions,
+        b"kraken2".to_string(), 
         object::id(&world.account), 
-        vector[@kraken_multisig, @kraken_actions], 
-        vector[1, 1], 
-        vector[b"KrakenMultisig".to_string(), b"KrakenActions".to_string()], 
+        vector[b"KrakenMultisig".to_string(), b"KrakenActions".to_string()],
+        vector[@kraken_multisig, @0xCAFE],
+        vector[1, 1],
         world.scenario.ctx()
     )
 }
@@ -205,9 +218,9 @@ public fun propose_config_rules(
 public fun propose_config_deps(
     world: &mut World, 
     key: String,
+    names: vector<String>,
     packages: vector<address>,
     versions: vector<u64>,
-    names: vector<String>,
 ) {
     config::propose_config_deps(
         &mut world.multisig,
@@ -215,9 +228,10 @@ public fun propose_config_deps(
         b"".to_string(), 
         0, 
         0, 
+        &world.extensions,
+        names,
         packages,
         versions,
-        names,
         world.scenario.ctx()
     );
 }

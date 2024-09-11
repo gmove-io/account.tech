@@ -29,6 +29,7 @@ use kraken_multisig::{
     proposals::{Self, Proposals, Proposal},
     executable::{Self, Executable},
 };
+use kraken_extensions::extensions::Extensions;
 
 // === Errors ===
 
@@ -62,19 +63,27 @@ public struct Multisig has key {
 // init and share a new Multisig object
 // creator is added by default with weight and threshold of 1
 public fun new(
+    extensions: &Extensions,
     name: String, 
     account_id: ID, 
-    dep_packages: vector<address>,
-    dep_versions: vector<u64>,
     dep_names: vector<String>,
+    dep_packages: vector<address>,
+    mut dep_versions: vector<u64>,
     ctx: &mut TxContext
 ): Multisig {
     let mut members = members::new();
     members.add(members::new_member(ctx.sender(), 1, option::some(account_id), vector[]));
     
+    let mut deps = deps::new(extensions);
+    dep_names.zip_do!(dep_packages, |name, package| {
+        let version = dep_versions.remove(0);
+        let dep = deps::new_dep(extensions, name, package, version);
+        deps.add(dep);
+    });
+
     Multisig { 
         id: object::new(ctx),
-        deps: deps::from_vecs(dep_packages, dep_versions, dep_names),
+        deps,
         name,
         thresholds: thresholds::new(1),
         members,

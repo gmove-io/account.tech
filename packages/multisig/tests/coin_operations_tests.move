@@ -23,7 +23,7 @@ fun test_merge_and_split_2_coins() {
     let receiving_to_split = most_recent_receiving_ticket<Coin<SUI>>(&multisig_address.to_id());
     let split_coin_ids = world.merge_and_split<SUI>(
         vector[receiving_to_split],
-        vector[30, 40] // LIFO
+        vector[40, 30]
     );
 
     world.scenario().next_tx(OWNER);
@@ -60,7 +60,7 @@ fun test_merge_2_coins_and_split() {
     
     let merge_coin_id = world.merge_and_split<SUI>(
         vector[receiving1, receiving2],
-        vector[100] // LIFO
+        vector[100]
     );
 
     world.scenario().next_tx(OWNER);

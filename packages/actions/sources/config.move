@@ -20,6 +20,7 @@ use kraken_multisig::{
     members,
     thresholds::{Self, Thresholds},
 };
+use kraken_extensions::extensions::Extensions;
 
 // === Errors ===
 
@@ -128,9 +129,10 @@ public fun propose_config_deps(
     description: String,
     execution_time: u64,
     expiration_epoch: u64,
+    extensions: &Extensions,
+    names: vector<String>,
     packages: vector<address>,
     versions: vector<u64>,
-    names: vector<String>,
     ctx: &mut TxContext
 ) {
     let proposal_mut = multisig.create_proposal(
@@ -142,7 +144,7 @@ public fun propose_config_deps(
         expiration_epoch,
         ctx
     );
-    new_config_deps(proposal_mut, packages, versions, names);
+    new_config_deps(proposal_mut, extensions, names, packages, versions);
 }
 
 // step 2: multiple members have to approve the proposal (multisig::approve_proposal)
@@ -220,7 +222,7 @@ public fun new_config_thresholds(
 
 public fun config_thresholds<I: copy + drop>(
     executable: &mut Executable,
-    multisig: &mut Multisig, 
+    multisig: &mut Multisig,
     issuer: I,
 ) {
     // threshold modification must be the latest action to be executed to ensure it is reachable
@@ -235,11 +237,17 @@ public fun config_thresholds<I: copy + drop>(
 
 public fun new_config_deps(
     proposal: &mut Proposal,
-    packages: vector<address>,
-    versions: vector<u64>,
+    extensions: &Extensions,
     names: vector<String>,
-) {
-    let deps = deps::from_vecs(packages, versions, names);
+    packages: vector<address>,
+    mut versions: vector<u64>,
+) {    
+    let mut deps = deps::new(extensions);
+    names.zip_do!(packages, |name, package| {
+        let version = versions.remove(0);
+        let dep = deps::new_dep(extensions, name, package, version);
+        deps.add(dep);
+    });
     proposal.add_action(Config { inner: deps });
 }
 

@@ -1,5 +1,7 @@
 module kraken_multisig::deps;
+
 use std::string::String;
+use kraken_extensions::extensions::Extensions;
 
 public use fun kraken_multisig::auth::assert_core_dep as Deps.assert_core_dep;
 public use fun kraken_multisig::auth::assert_dep as Deps.assert_dep;
@@ -8,9 +10,6 @@ public use fun kraken_multisig::auth::assert_version as Deps.assert_version;
 // === Errors ===
 
 const EDepNotFound: u64 = 0;
-const EInvalidDeps: u64 = 1;
-const ENotCoreDeps: u64 = 2;
-const ENotKrakenMultisig: u64 = 3;
 
 // === Structs ===
 
@@ -19,42 +18,31 @@ public struct Deps has store, drop {
 }
 
 public struct Dep has copy, store, drop {
+    name: String,
     package: address,
     version: u64,
-    name: String,
 }
 
 // === Public functions ===
 
-public fun from_vecs(
-    packages: vector<address>, 
-    mut versions: vector<u64>,
-    mut names: vector<String>
-): Deps {
-    assert!(
-        packages.length() == versions.length() && 
-        packages.length() == names.length(), 
-        EInvalidDeps
-    );
-    assert!(
-        names[0] == b"KrakenMultisig".to_string() && 
-        names[1] == b"KrakenActions".to_string(),
-        ENotCoreDeps
-    );
-    assert!(
-        packages[0] == @kraken_multisig,
-        ENotKrakenMultisig
-    );
+public fun new(extensions: &Extensions): Deps {
+    let (packages, versions) = extensions.get_latest_core_deps();
+    let mut inner = vector[];
 
-    let inner = packages.map!(|package| {
-        Dep { package, version: versions.remove(0), name: names.remove(0) }
-    });
+    inner.push_back(new_dep(extensions, b"KrakenMultisig".to_string(), packages[0], versions[0]));
+    inner.push_back(new_dep(extensions, b"KrakenActions".to_string(), packages[1], versions[1]));
 
     Deps { inner }
 }
 
 // protected because &mut Deps accessible only from KrakenMultisig and KrakenActions
-public fun new_dep(package: address, version: u64, name: String): Dep {
+public fun new_dep(
+    extensions: &Extensions,
+    name: String,
+    package: address, 
+    version: u64, 
+): Dep {
+    extensions.assert_extension_exists(name, package, version);
     Dep { package, version, name }
 }
 

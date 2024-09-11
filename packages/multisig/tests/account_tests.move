@@ -20,14 +20,7 @@ fun test_join_multisig() {
 
     world.scenario().next_tx(OWNER);
     let mut user_account = world.scenario().take_from_address<Account>(OWNER);
-    let mut multisig2 = multisig::new(
-        b"Multisig2".to_string(), 
-        object::id(&user_account), 
-        vector[@kraken_multisig, @0xCAFE], 
-        vector[1, 1], 
-        vector[b"KrakenMultisig".to_string(), b"KrakenActions".to_string()], 
-        world.scenario().ctx()
-    );
+    let mut multisig2 = world.new_multisig();
     assert!(user_account.username() == b"Sam".to_string());
     assert!(user_account.profile_picture() == b"Sam.png".to_string());
     assert!(user_account.multisig_ids() == vector[]);
