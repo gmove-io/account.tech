@@ -95,17 +95,18 @@ public fun actions_length(executable: &Executable): u64 {
     executable.actions.length()
 }
 
-public fun action<A: store>(executable: &Executable, idx: u64): &A {
+public fun action<A: store>(executable: &Executable): &A {
+    let idx = executable.action_index<A>();
     executable.actions.borrow(idx)
 }
 
 public fun action_index<A: store>(executable: &Executable): u64 {
-    let length = executable.actions.length();
     let mut idx = executable.next_to_destroy;
+    let last_idx = idx + executable.actions.length();
 
     loop {
         if (
-            idx == length || // returns length if action not found
+            idx == last_idx || // returns length if action not found
             executable.actions.contains_with_type<u64, A>(idx)
         ) break idx;
         idx = idx + 1;

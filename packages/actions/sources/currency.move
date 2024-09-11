@@ -235,6 +235,11 @@ public fun destroy_mint<C: drop, I: drop>(executable: &mut Executable, issuer: I
     assert!(amount == 0, EMintNotExecuted);
 }
 
+public fun mint_is_executed<C: drop>(executable: &Executable): bool {
+    let mint: &Mint<C> = executable.action();
+    mint.amount == 0
+}
+
 public fun new_burn<C: drop>(proposal: &mut Proposal, amount: u64) {
     proposal.add_action(Burn<C> { amount });
 }

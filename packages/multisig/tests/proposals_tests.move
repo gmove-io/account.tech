@@ -23,7 +23,7 @@ public struct Action has store {
 }
 
 #[test, expected_failure(abort_code = proposals::EProposalNotFound)]
-fun approve_proposal_error_proposal_not_found() {
+fun test_approve_proposal_error_proposal_not_found() {
     let mut world = start_world();
 
     world.approve_proposal(b"does not exist".to_string());

@@ -1,32 +1,25 @@
 #[test_only]
 module kraken_actions::payments_tests;
 
+use std::type_name;
 use sui::{
-    transfer::Receiving,
     sui::SUI,
-    coin::{Coin, mint_for_testing},
+    coin::{Coin, mint_for_testing, create_treasury_cap_for_testing},
     test_scenario::most_recent_receiving_ticket,
 };
 use kraken_actions::{
     payments::{Self, Stream},
-    actions_test_utils::{start_world, World}
+    actions_test_utils::{start_world, World},
 };
 
 const OWNER: address = @0xBABE;
 const ALICE: address = @0xa11e7;
 
 #[test]
-fun pay_end_to_end() {
+fun test_pay_owned_end_to_end() {
     let mut world = start_world();
-    let key = b"pay proposal".to_string();
 
-    let receiving_coin = mint_transfer_and_return_receiving(&mut world);
-
-    world.propose_pay(key, receiving_coin.receiving_object_id(), 10, 2, ALICE);
-    world.approve_proposal(key);
-
-    let executable = world.execute_proposal(key);
-    world.execute_pay<SUI>(executable, receiving_coin);
+    pay_owned(&mut world);
 
     world.scenario().next_tx(OWNER);
     let mut stream = world.scenario().take_shared<Stream<SUI>>();      
@@ -67,17 +60,119 @@ fun pay_end_to_end() {
 }
 
 #[test]
-fun cancel_payment_stream() {
+fun test_pay_treasury_end_to_end() {
+    let mut world = start_world();
+    let key = b"pay proposal".to_string();
+    let name = b"treasury".to_string();
+    let coin_type = type_name::get<SUI>().into_string().to_string();
+
+    // open treasury and deposit coin
+    world.propose_open(key, name);
+    world.approve_proposal(key);
+    let executable = world.execute_proposal(key);
+    world.execute_open(executable);
+    world.deposit<SUI>(name, 20);
+
+    world.propose_pay_treasury(key, name, coin_type, 20, 10, 2, ALICE);
+    world.approve_proposal(key);
+    let executable = world.execute_proposal(key);
+    world.execute_pay<SUI>(executable, option::none());
+
+    world.scenario().next_tx(OWNER);
+    let mut stream = world.scenario().take_shared<Stream<SUI>>();      
+
+    assert!(stream.balance() == 20);
+    assert!(stream.amount() == 10);
+    assert!(stream.interval() == 2);
+    assert!(stream.last_epoch() == 0);
+    assert!(stream.recipient() == ALICE);
+
+    world.scenario().next_tx(OWNER);
+    world.scenario().next_epoch(OWNER);
+    world.scenario().next_epoch(OWNER);
+    world.scenario().next_epoch(OWNER);
+
+    stream.disburse(world.scenario().ctx());
+
+    assert!(stream.balance() == 10);
+    assert!(stream.amount() == 10);
+    assert!(stream.interval() == 2);
+    assert!(stream.last_epoch() == 3);
+    assert!(stream.recipient() == ALICE);    
+
+    world.scenario().next_epoch(OWNER);
+    world.scenario().next_epoch(OWNER);
+    world.scenario().next_epoch(OWNER);
+
+    stream.disburse(world.scenario().ctx());
+
+    assert!(stream.balance() == 0);
+    assert!(stream.amount() == 10);
+    assert!(stream.interval() == 2);
+    assert!(stream.last_epoch() == 6);
+    assert!(stream.recipient() == ALICE);
+
+    stream.destroy_empty_stream();
+    world.end();
+}
+
+#[test]
+fun test_pay_minted_end_to_end() {
     let mut world = start_world();
     let key = b"pay proposal".to_string();
 
-    let receiving_coin = mint_transfer_and_return_receiving(&mut world);
+    // create treasury cap and lock it
+    let cap = create_treasury_cap_for_testing<SUI>(world.scenario().ctx());
+    world.lock_treasury_cap<SUI>(cap);
 
-    world.propose_pay(key, receiving_coin.receiving_object_id(), 10, 2, ALICE);
+    world.propose_pay_minted<SUI>(key, 20, 10, 2, ALICE);
     world.approve_proposal(key);
-
     let executable = world.execute_proposal(key);
-    world.execute_pay<SUI>(executable, receiving_coin);
+    world.execute_pay<SUI>(executable, option::none());
+
+    world.scenario().next_tx(OWNER);
+    let mut stream = world.scenario().take_shared<Stream<SUI>>();      
+
+    assert!(stream.balance() == 20);
+    assert!(stream.amount() == 10);
+    assert!(stream.interval() == 2);
+    assert!(stream.last_epoch() == 0);
+    assert!(stream.recipient() == ALICE);
+
+    world.scenario().next_tx(OWNER);
+    world.scenario().next_epoch(OWNER);
+    world.scenario().next_epoch(OWNER);
+    world.scenario().next_epoch(OWNER);
+
+    stream.disburse(world.scenario().ctx());
+
+    assert!(stream.balance() == 10);
+    assert!(stream.amount() == 10);
+    assert!(stream.interval() == 2);
+    assert!(stream.last_epoch() == 3);
+    assert!(stream.recipient() == ALICE);    
+
+    world.scenario().next_epoch(OWNER);
+    world.scenario().next_epoch(OWNER);
+    world.scenario().next_epoch(OWNER);
+
+    stream.disburse(world.scenario().ctx());
+
+    assert!(stream.balance() == 0);
+    assert!(stream.amount() == 10);
+    assert!(stream.interval() == 2);
+    assert!(stream.last_epoch() == 6);
+    assert!(stream.recipient() == ALICE);
+
+    stream.destroy_empty_stream();
+    world.end();
+}
+
+#[test]
+fun test_cancel_payment_stream() {
+    let mut world = start_world();
+    
+    pay_owned(&mut world);
 
     world.scenario().next_tx(OWNER);
     let stream = world.scenario().take_shared<Stream<SUI>>();      
@@ -87,17 +182,10 @@ fun cancel_payment_stream() {
 }  
 
 #[test, expected_failure(abort_code = payments::ECompletePaymentBefore)]
-fun destroy_empty_stream_error_complete_payment_before() {
+fun test_destroy_empty_stream_error_complete_payment_before() {
     let mut world = start_world();
-    let key = b"pay proposal".to_string();
-
-    let receiving_coin = mint_transfer_and_return_receiving(&mut world);
-
-    world.propose_pay(key, receiving_coin.receiving_object_id(), 10, 2, ALICE);
-    world.approve_proposal(key);
-
-    let executable = world.execute_proposal(key);
-    world.execute_pay<SUI>(executable, receiving_coin);
+    
+    pay_owned(&mut world);
 
     world.scenario().next_tx(OWNER);
     let mut stream = world.scenario().take_shared<Stream<SUI>>();      
@@ -114,17 +202,10 @@ fun destroy_empty_stream_error_complete_payment_before() {
 } 
 
 #[test, expected_failure(abort_code = payments::EPayTooEarly)]
-fun disburse_error_pay_too_early() {
+fun test_disburse_error_pay_too_early() {
     let mut world = start_world();
-    let key = b"pay proposal".to_string();
-
-    let receiving_coin = mint_transfer_and_return_receiving(&mut world);
-
-    world.propose_pay(key, receiving_coin.receiving_object_id(), 10, 2, ALICE);
-    world.approve_proposal(key);
-
-    let executable = world.execute_proposal(key);
-    world.execute_pay<SUI>(executable, receiving_coin);
+    
+    pay_owned(&mut world);
 
     world.scenario().next_tx(OWNER);
     let mut stream = world.scenario().take_shared<Stream<SUI>>();      
@@ -139,10 +220,19 @@ fun disburse_error_pay_too_early() {
     world.end();
 }         
 
-fun mint_transfer_and_return_receiving(world: &mut World): Receiving<Coin<SUI>> {
+// helper functions
+
+fun pay_owned(world: &mut World) {
+    let key = b"pay proposal".to_string();
     let coin = mint_for_testing<SUI>(20, world.scenario().ctx());
     let multisig_address = world.multisig().addr();
     transfer::public_transfer(coin, multisig_address);
+
     world.scenario().next_tx(OWNER);
-    most_recent_receiving_ticket<Coin<SUI>>(&multisig_address.to_id())
+    let receiving_coin = most_recent_receiving_ticket<Coin<SUI>>(&multisig_address.to_id());
+    
+    world.propose_pay_owned(key, receiving_coin.receiving_object_id(), 10, 2, ALICE);
+    world.approve_proposal(key);
+    let executable = world.execute_proposal(key);
+    world.execute_pay<SUI>(executable, option::some(receiving_coin));
 }

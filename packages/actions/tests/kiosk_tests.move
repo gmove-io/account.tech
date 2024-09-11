@@ -24,7 +24,7 @@ public struct NFT has key, store {
 }
 
 #[test]
-fun place_in_kiosk() {
+fun test_place_in_kiosk() {
     let mut world = start_world();
 
     let (mut sender_kiosk, sender_cap) = kiosk::new(world.scenario().ctx());
@@ -53,7 +53,7 @@ fun place_in_kiosk() {
 }   
 
 #[test]
-fun test_propose_take() {
+fun test_test_propose_take() {
     let mut world = start_world();
 
     let (mut sender_kiosk, sender_cap) = kiosk::new(world.scenario().ctx());
@@ -105,7 +105,7 @@ fun test_propose_take() {
 }   
 
 #[test]
-fun list_end_to_end() {
+fun test_list_end_to_end() {
     let mut world = start_world();
 
     let (mut sender_kiosk, sender_cap) = kiosk::new(world.scenario().ctx());
@@ -142,7 +142,7 @@ fun list_end_to_end() {
 }
 
 #[test, expected_failure(abort_code = k_kiosk::EWrongReceiver)]
-fun take_error_wrong_receiver() {
+fun test_take_error_wrong_receiver() {
     let mut world = start_world();
 
     let (mut sender_kiosk, sender_cap) = kiosk::new(world.scenario().ctx());
@@ -183,7 +183,7 @@ fun take_error_wrong_receiver() {
 }   
 
 #[test, expected_failure(abort_code = k_kiosk::ETransferAllNftsBefore)]
-fun destroy_take_error_tranfer_all_nfts_before() {
+fun test_destroy_take_error_tranfer_all_nfts_before() {
     let mut world = start_world();
 
     let (mut sender_kiosk, sender_cap) = kiosk::new(world.scenario().ctx());
@@ -215,7 +215,7 @@ fun destroy_take_error_tranfer_all_nfts_before() {
 }   
 
 #[test, expected_failure(abort_code = k_kiosk::EWrongNftsPrices)]
-fun new_list_error_wrong_nfts_prices() {
+fun test_new_list_error_wrong_nfts_prices() {
     let mut world = start_world();
 
     let (mut sender_kiosk, sender_cap) = kiosk::new(world.scenario().ctx());
@@ -248,7 +248,7 @@ fun new_list_error_wrong_nfts_prices() {
 }
 
 #[test, expected_failure(abort_code = k_kiosk::EListAllNftsBefore)]
-fun destroy_list_error_list_all_nfts_before() {
+fun test_destroy_list_error_list_all_nfts_before() {
     let mut world = start_world();
 
     let (mut sender_kiosk, sender_cap) = kiosk::new(world.scenario().ctx());

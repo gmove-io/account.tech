@@ -17,7 +17,7 @@ public struct Object has key, store { id: UID }
 public struct Issuer has drop, copy {}
 
 #[test]
-fun withdraw_end_to_end() {
+fun test_withdraw_end_to_end() {
     let mut world = start_world();
     let key = b"owned tests".to_string();
 
@@ -42,7 +42,7 @@ fun withdraw_end_to_end() {
 }
 
 #[test]
-fun borrow_end_to_end() {
+fun test_borrow_end_to_end() {
     let mut world = start_world();
 
     let key = b"owned tests".to_string();
@@ -67,7 +67,7 @@ fun borrow_end_to_end() {
 }
 
 #[test, expected_failure(abort_code = owned::EWrongObject)]
-fun withdraw_error_wrong_object() {
+fun test_withdraw_error_wrong_object() {
     let mut world = start_world();
     let key = b"owned tests".to_string();
 
@@ -94,7 +94,7 @@ fun withdraw_error_wrong_object() {
 }
 
 #[test, expected_failure(abort_code = owned::ERetrieveAllObjectsBefore)]
-fun withdraw_error_retrieve_all_objects_before() {
+fun test_withdraw_error_retrieve_all_objects_before() {
     let mut world = start_world();
     let key = b"owned tests".to_string();
 
@@ -116,7 +116,7 @@ fun withdraw_error_retrieve_all_objects_before() {
 }
 
 #[test, expected_failure(abort_code = owned::EWrongObject)]
-fun put_back_error_wrong_object() {
+fun test_put_back_error_wrong_object() {
     let mut world = start_world();
     let key = b"owned tests".to_string();
 
@@ -143,7 +143,7 @@ fun put_back_error_wrong_object() {
 }
 
 #[test, expected_failure(abort_code = owned::EReturnAllObjectsBefore)]
-fun complete_borrow_error_return_all_objects_before() {
+fun test_complete_borrow_error_return_all_objects_before() {
     let mut world = start_world();
     let key = b"owned tests".to_string();
 

@@ -22,7 +22,7 @@ public struct Action has store {
 }
 
 #[test, allow(implicit_const_copy)]
-fun members_end_to_end() {
+fun test_members_end_to_end() {
     let mut world = start_world();
 
     assert!(!world.multisig().members().is_member(ALICE));

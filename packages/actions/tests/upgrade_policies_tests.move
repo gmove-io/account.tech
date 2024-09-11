@@ -14,7 +14,7 @@ public struct Rule has store {
 }
 
 #[test]
-fun upgrade_end_to_end() {
+fun test_upgrade_end_to_end() {
     let mut world = start_world();
     let key = b"upgrade proposal".to_string();
     let name = b"lock".to_string();
@@ -44,7 +44,7 @@ fun upgrade_end_to_end() {
 }    
 
 #[test]
-fun restrict_end_to_end() {
+fun test_restrict_end_to_end() {
     let mut world = start_world();
     let key = b"restrict proposal".to_string();
     let name = b"lock".to_string();
@@ -68,7 +68,7 @@ fun restrict_end_to_end() {
 }  
 
 #[test, expected_failure(abort_code = upgrade_policies::EPolicyShouldRestrict)]
-fun restrict_error_policy_should_restrict() {
+fun test_restrict_error_policy_should_restrict() {
     let mut world = start_world();
     let key = b"restrict proposal".to_string();
     let name = b"lock".to_string();
@@ -91,7 +91,7 @@ fun restrict_error_policy_should_restrict() {
 }  
 
 #[test, expected_failure(abort_code = upgrade_policies::EInvalidPolicy)]
-fun restrict_error_invalid_policy() {
+fun test_restrict_error_invalid_policy() {
     let mut world = start_world();
     let key = b"restrict proposal".to_string();
     let name = b"lock".to_string();

@@ -87,7 +87,9 @@ public(package) fun get_package_version_from_string(deps: &Deps, package: String
 }
 
 public(package) fun get_package_idx_from_string(deps: &Deps, package: String): u64 {
-    deps.inner.find_index!(|dep| dep.package.to_string() == package).destroy_some()
+    let opt = deps.inner.find_index!(|dep| dep.package.to_string() == package);
+    assert!(opt.is_some(), EDepNotFound);
+    opt.destroy_some()
 }
 
 // === Test functions ===

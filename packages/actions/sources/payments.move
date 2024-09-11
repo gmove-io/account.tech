@@ -17,13 +17,20 @@ use kraken_multisig::{
     proposals::Proposal,
     executable::Executable
 };
-use kraken_actions::owned;
+use kraken_actions::{
+    owned::{Self, Withdraw},
+    treasury::{Self, Spend},
+    currency::{Self, Mint}
+};
 
 // === Errors ===
 
 const ECompletePaymentBefore: u64 = 0;
 const EPayTooEarly: u64 = 1;
 const EPayNotExecuted: u64 = 2;
+const EReceivingShouldBeSome: u64 = 3;
+const EWrongStream: u64 = 4;
+const EInvalidExecutable: u64 = 5;
 
 // === Structs ===
 
@@ -40,7 +47,14 @@ public struct Pay has store {
     recipient: address,
 }
 
-// balance for a payment is locked and sent automatically from backend
+// cap enabling bearer to claim the payment
+public struct ClaimCap has key {
+    id: UID,
+    // id of the stream to claim
+    stream_id: ID,
+}
+
+// balance for a payment is locked and sent automatically from backend or claimed manually by the recipient
 public struct Stream<phantom C: drop> has key {
     id: UID,
     // remaining balance to be sent
@@ -58,7 +72,7 @@ public struct Stream<phantom C: drop> has key {
 // === [PROPOSAL] Public Functions ===
 
 // step 1: propose to create a Stream with a specific amount to be paid at each interval
-public fun propose_pay(
+public fun propose_pay_owned(
     multisig: &mut Multisig, 
     key: String,
     description: String,
@@ -79,7 +93,59 @@ public fun propose_pay(
         expiration_epoch,
         ctx
     );
-    new_pay(proposal_mut, coin, amount, interval, recipient);
+    new_pay_owned(proposal_mut, coin, amount, interval, recipient);
+}
+
+// step 1(bis): propose to create a Stream with a specific amount to be paid at each interval
+public fun propose_pay_treasury(
+    multisig: &mut Multisig, 
+    key: String,
+    description: String,
+    execution_time: u64,
+    expiration_epoch: u64,
+    treasury_name: String, 
+    coin_type: String, 
+    coin_amount: u64, 
+    amount: u64, // amount to be paid at each interval
+    interval: u64, // number of epochs between each payment
+    recipient: address,
+    ctx: &mut TxContext
+) {
+    let proposal_mut = multisig.create_proposal(
+        Issuer {},
+        b"".to_string(),
+        key,
+        description,
+        execution_time,
+        expiration_epoch,
+        ctx
+    );
+    new_pay_treasury(proposal_mut, treasury_name, coin_type, coin_amount, amount, interval, recipient);
+}
+
+// step 1(bis): propose to create a Stream with a specific amount to be paid at each interval
+public fun propose_pay_minted<C: drop>(
+    multisig: &mut Multisig, 
+    key: String,
+    description: String,
+    execution_time: u64,
+    expiration_epoch: u64,
+    coin_amount: u64,
+    amount: u64, // amount to be paid at each interval
+    interval: u64, // number of epochs between each payment
+    recipient: address,
+    ctx: &mut TxContext
+) {
+    let proposal_mut = multisig.create_proposal(
+        Issuer {},
+        b"".to_string(),
+        key,
+        description,
+        execution_time,
+        expiration_epoch,
+        ctx
+    );
+    new_pay_minted<C>(proposal_mut, coin_amount, amount, interval, recipient);
 }
 
 // step 2: multiple members have to approve the proposal (multisig::approve_proposal)
@@ -89,16 +155,23 @@ public fun propose_pay(
 public fun execute_pay<C: drop>(
     mut executable: Executable, 
     multisig: &mut Multisig, 
-    receiving: Receiving<Coin<C>>,
+    receiving: Option<Receiving<Coin<C>>>,
     ctx: &mut TxContext
 ) {
-    pay(&mut executable, multisig, receiving, Issuer {}, ctx);
+    let coin = access_coin(&mut executable, multisig, receiving, Issuer {}, ctx);
+    pay<C, Issuer>(&mut executable, multisig, coin, Issuer {}, ctx);
 
-    destroy_pay(&mut executable, Issuer {});
+    destroy_pay<C, Issuer>(&mut executable, Issuer {});
     executable.destroy(Issuer {});
 }
 
-// step 5: backend send the coin to the recipient until balance is empty
+// step 5: bearer of ClaimCap can claim the payment
+public fun claim<C: drop>(stream: &mut Stream<C>, cap: &ClaimCap, ctx: &mut TxContext) {
+    assert!(cap.stream_id == stream.id.to_inner(), EWrongStream);
+    stream.disburse(ctx);
+}
+
+// step 5(bis): backend send the coin to the recipient until balance is empty
 public fun disburse<C: drop>(stream: &mut Stream<C>, ctx: &mut TxContext) {
     assert!(ctx.epoch() > stream.last_epoch + stream.interval, EPayTooEarly);
 
@@ -140,19 +213,48 @@ public fun cancel_payment_stream<C: drop>(
 
 // === [ACTION] Public Functions ===
 
-public fun new_pay(proposal: &mut Proposal, coin: ID, amount: u64, interval: u64, recipient: address) {
-    owned::new_withdraw(proposal, vector[coin]);
+public fun new_pay_owned(
+    proposal: &mut Proposal, 
+    coin_id: ID, 
+    amount: u64,
+    interval: u64,
+    recipient: address,
+) {
+    owned::new_withdraw(proposal, vector[coin_id]);
     proposal.add_action(Pay { amount, interval, recipient });
 }
 
-public fun pay<I: copy + drop, C: drop>(
+public fun new_pay_treasury(
+    proposal: &mut Proposal, 
+    treasury_name: String, 
+    coin_type: String, 
+    coin_amount: u64, 
+    amount: u64,
+    interval: u64, 
+    recipient: address
+) {
+    treasury::new_spend(proposal, treasury_name, vector[coin_type], vector[coin_amount]);
+    proposal.add_action(Pay { amount, interval, recipient });
+}
+
+public fun new_pay_minted<C: drop>(
+    proposal: &mut Proposal, 
+    coin_amount: u64,
+    amount: u64, 
+    interval: u64, 
+    recipient: address
+) {
+    currency::new_mint<C>(proposal, coin_amount);
+    proposal.add_action(Pay { amount, interval, recipient });
+}
+
+public fun pay<C: drop, I: copy + drop>(
     executable: &mut Executable, 
     multisig: &mut Multisig, 
-    receiving: Receiving<Coin<C>>,
+    coin: Coin<C>,
     issuer: I,
     ctx: &mut TxContext
 ) {    
-    let coin = owned::withdraw(executable, multisig, receiving, issuer);
     let pay_mut: &mut Pay = executable.action_mut(issuer, multisig.addr());
 
     let stream = Stream<C> { 
@@ -165,11 +267,23 @@ public fun pay<I: copy + drop, C: drop>(
     };
     transfer::share_object(stream);
 
-    pay_mut.amount = 0; // clean to ensure action is executed only once
+    pay_mut.amount = 0; // reset to ensure action is executed only once
 }
 
-public fun destroy_pay<I: copy + drop>(executable: &mut Executable, issuer: I): address {
-    owned::destroy_withdraw(executable, issuer);
+public fun destroy_pay<C: drop, I: copy + drop>(executable: &mut Executable, issuer: I): address {
+    if (is_withdraw<C>(executable)) {
+        if (owned::withdraw_is_executed(executable))
+            owned::destroy_withdraw(executable, issuer);
+    } else if (is_spend<C>(executable)) {
+        if (treasury::spend_is_executed(executable))
+            treasury::destroy_spend(executable, issuer);
+    } else if (is_mint<C>(executable)) {
+        if (currency::mint_is_executed<C>(executable))
+            currency::destroy_mint<C, I>(executable, issuer);
+    } else {
+        abort EInvalidExecutable
+    };    
+
     let Pay { amount, recipient, .. } = executable.remove_action(issuer);
     assert!(amount == 0, EPayNotExecuted);
 
@@ -196,5 +310,42 @@ public fun last_epoch<C: drop>(self: &Stream<C>): u64 {
 
 public fun recipient<C: drop>(self: &Stream<C>): address {
     self.recipient
+}
+
+// === Private functions ===
+
+// retrieve an object from the Multisig owned or managed assets 
+fun access_coin<C: drop, I: copy + drop>(
+    executable: &mut Executable, 
+    multisig: &mut Multisig,
+    receiving: Option<Receiving<Coin<C>>>,
+    issuer: I,
+    ctx: &mut TxContext
+): Coin<C> {
+    if (is_withdraw<C>(executable)) {
+        assert!(receiving.is_some(), EReceivingShouldBeSome);
+        owned::withdraw(executable, multisig, receiving.destroy_some(), issuer)
+    } else if (is_spend<C>(executable)) {
+        treasury::spend(executable, multisig, issuer, ctx)
+    } else if (is_mint<C>(executable)) {
+        currency::mint(executable, multisig, issuer, ctx)
+    } else {
+        abort EInvalidExecutable
+    }
+}
+
+fun is_withdraw<C: drop>(executable: &Executable): bool {
+    executable.action_index<Withdraw>() < executable.action_index<Spend>() &&
+    executable.action_index<Withdraw>() < executable.action_index<Mint<C>>()
+}
+
+fun is_spend<C: drop>(executable: &Executable): bool {
+    executable.action_index<Spend>() < executable.action_index<Withdraw>() &&
+    executable.action_index<Spend>() < executable.action_index<Mint<C>>()
+}
+
+fun is_mint<C: drop>(executable: &Executable): bool {
+    executable.action_index<Mint<C>>() < executable.action_index<Withdraw>() &&
+    executable.action_index<Mint<C>>() < executable.action_index<Spend>()
 }
 

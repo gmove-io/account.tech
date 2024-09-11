@@ -49,8 +49,8 @@ public fun withdraw<T: key + store, I: copy + drop>(
     issuer: I,
 ): T {
     let withdraw_mut: &mut Withdraw = executable.action_mut(issuer, multisig.addr());
-    let (_, index) = withdraw_mut.objects.index_of(&transfer::receiving_object_id(&receiving));
-    let id = withdraw_mut.objects.remove(index);
+    let (_, idx) = withdraw_mut.objects.index_of(&transfer::receiving_object_id(&receiving));
+    let id = withdraw_mut.objects.remove(idx);
 
     let received = multisig.receive(issuer, receiving);
     let received_id = object::id(&received);
@@ -62,6 +62,11 @@ public fun withdraw<T: key + store, I: copy + drop>(
 public fun destroy_withdraw<I: drop>(executable: &mut Executable, issuer: I) {
     let Withdraw { objects } = executable.remove_action(issuer);
     assert!(objects.is_empty(), ERetrieveAllObjectsBefore);
+}
+
+public fun withdraw_is_executed(executable: &Executable): bool {
+    let withdraw: &Withdraw = executable.action();
+    withdraw.objects.is_empty()
 }
 
 public fun new_borrow(proposal: &mut Proposal, objects: vector<ID>) {
@@ -85,10 +90,10 @@ public fun put_back<T: key + store, I: copy + drop>(
     issuer: I,
 ) {
     let borrow_mut: &mut Return = executable.action_mut(issuer, multisig.addr());
-    let (exists_, index) = borrow_mut.to_return.index_of(&object::id(&returned));
+    let (exists_, idx) = borrow_mut.to_return.index_of(&object::id(&returned));
     assert!(exists_, EWrongObject);
 
-    borrow_mut.to_return.remove(index);
+    borrow_mut.to_return.remove(idx);
     transfer::public_transfer(returned, multisig.addr());
 }
 

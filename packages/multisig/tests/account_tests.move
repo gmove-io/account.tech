@@ -13,7 +13,7 @@ const OWNER: address = @0xBABE;
 const ALICE: address = @0xA11CE;
 
 #[test]
-fun join_multisig() {
+fun test_join_multisig() {
     let mut world = start_world();
 
     account::new(b"Sam".to_string(), b"Sam.png".to_string(), world.scenario().ctx());
@@ -42,7 +42,7 @@ fun join_multisig() {
 }
 
 #[test]
-fun leave_multisig() {
+fun test_leave_multisig() {
     let mut world = start_world();
 
     world.scenario().next_tx(ALICE);
@@ -64,7 +64,7 @@ fun leave_multisig() {
 }
 
 #[test]
-fun accept_invite() {
+fun test_accept_invite() {
     let mut world = start_world();
 
     world.scenario().next_tx(ALICE);
@@ -88,7 +88,7 @@ fun accept_invite() {
 }
 
 #[test]
-fun refuse_invite() {
+fun test_refuse_invite() {
     let mut world = start_world();
 
     world.scenario().next_tx(ALICE);

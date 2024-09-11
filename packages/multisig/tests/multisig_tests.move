@@ -24,7 +24,7 @@ public struct Action has store {
 // test expiration & execution time
 
 #[test]
-fun new_multisig() {
+fun test_new_multisig() {
     let mut world = start_world();
 
     let sender = world.scenario().ctx().sender();
@@ -39,7 +39,7 @@ fun new_multisig() {
 } 
 
 #[test]
-fun create_proposal() {
+fun test_create_proposal() {
     let mut world = start_world();
     let addr = world.multisig().addr();
 
@@ -68,7 +68,7 @@ fun create_proposal() {
 }
 
 #[test]
-fun approve_proposal() {
+fun test_approve_proposal() {
     let mut world = start_world();
     let key = b"key".to_string();
 
@@ -98,7 +98,7 @@ fun approve_proposal() {
 }
 
 #[test]
-fun remove_approval() {
+fun test_remove_approval() {
     let mut world = start_world();
     let key = b"key".to_string();
 
@@ -149,7 +149,7 @@ fun remove_approval() {
 // }
 
 #[test, expected_failure(abort_code = multisig::ECallerIsNotMember)]
-fun assert_is_member_error_caller_is_not_member() {
+fun test_assert_is_member_error_caller_is_not_member() {
     let mut world = start_world();
 
     world.scenario().next_tx(ALICE);
@@ -159,7 +159,7 @@ fun assert_is_member_error_caller_is_not_member() {
 }    
 
 #[test, expected_failure(abort_code = multisig::ECantBeExecutedYet)]
-fun execute_proposal_error_cant_be_executed_yet() {
+fun test_execute_proposal_error_cant_be_executed_yet() {
     let mut world = start_world();
     let key = b"key".to_string();
 

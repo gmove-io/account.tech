@@ -21,7 +21,7 @@ public struct CURRENCY_TESTS has drop {}
 public struct Issuer has drop, copy {}
 
 #[test]
-fun mint_end_to_end() {
+fun test_mint_end_to_end() {
     let mut world = start_world();
     let addr = world.multisig().addr();
     let key = b"mint proposal".to_string();
@@ -45,7 +45,7 @@ fun mint_end_to_end() {
 }
 
 #[test]
-fun burn_end_to_end() {
+fun test_burn_end_to_end() {
     let mut world = start_world();
     let key = b"burn proposal".to_string();
 
@@ -68,7 +68,7 @@ fun burn_end_to_end() {
 }
 
 #[test]
-fun update_metadata_end_to_end() {
+fun test_update_metadata_end_to_end() {
     let mut world = start_world();
     let key = b"update proposal".to_string();
 
@@ -107,7 +107,7 @@ fun update_metadata_end_to_end() {
 }
 
 #[test, expected_failure(abort_code = currency::ENoChange)]
-fun update_error_no_change() {
+fun test_update_error_no_change() {
     let mut world = start_world();
     let key = b"update proposal".to_string();
 
@@ -141,7 +141,7 @@ fun update_error_no_change() {
 }
 
 #[test, expected_failure(abort_code = currency::EWrongValue)]
-fun burn_error_wrong_value() {
+fun test_burn_error_wrong_value() {
     let mut world = start_world();
     let key = b"burn proposal".to_string();
 
@@ -164,7 +164,7 @@ fun burn_error_wrong_value() {
 }
 
 #[test, expected_failure(abort_code = currency::EMintNotExecuted)]
-fun destroy_mint_error_mint_not_executed() {
+fun test_destroy_mint_error_mint_not_executed() {
     let mut world = start_world();
     let key = b"mint proposal".to_string();
 
@@ -192,7 +192,7 @@ fun destroy_mint_error_mint_not_executed() {
 }
 
 #[test, expected_failure(abort_code = currency::EBurnNotExecuted)]
-fun destroy_burn_error_burn_not_executed() {
+fun test_destroy_burn_error_burn_not_executed() {
     let mut world = start_world();
     let key = b"burn proposal".to_string();
 

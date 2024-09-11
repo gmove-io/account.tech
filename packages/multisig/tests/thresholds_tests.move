@@ -23,7 +23,7 @@ public struct Action has store {
 }
 
 #[test, expected_failure(abort_code = thresholds::EThresholdNotReached)]
-fun execute_proposal_error_threshold_not_reached() {
+fun test_execute_proposal_error_threshold_not_reached() {
     let mut world = start_world();
     let key = b"key".to_string();
 

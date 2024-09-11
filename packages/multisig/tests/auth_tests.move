@@ -23,7 +23,7 @@ public struct Action has store {
 
 
 #[test, expected_failure(abort_code = auth::EWrongIssuer)]
-fun action_mut_error_not_issuer_module() {
+fun test_action_mut_error_not_issuer_module() {
     let mut world = start_world();
     let key = b"key".to_string();
 
@@ -44,7 +44,7 @@ fun action_mut_error_not_issuer_module() {
 }  
 
 #[test, expected_failure(abort_code = auth::EWrongMultisig)]
-fun assert_multisig_executed_error_not_multisig_executable() {
+fun test_assert_multisig_executed_error_not_multisig_executable() {
     let mut world = start_world();
     let key = b"key".to_string();
 

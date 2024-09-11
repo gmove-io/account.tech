@@ -30,6 +30,7 @@ use kraken_multisig::{
 const EAlreadyApproved: u64 = 0;
 const ENotApproved: u64 = 1;
 const EProposalNotFound: u64 = 2;
+const EProposalKeyAlreadyExists: u64 = 3;
 
 // === Structs ===
 
@@ -164,6 +165,7 @@ public(package) fun add(
     proposals: &mut Proposals,
     proposal: Proposal,
 ) {
+    assert!(!proposals.contains(proposal.name), EProposalKeyAlreadyExists);
     proposals.inner.push_back(proposal);
 }
 
@@ -180,7 +182,7 @@ public(package) fun remove(
 public(package) fun approve(
     proposal: &mut Proposal, 
     member: &Member, 
-    ctx: &mut TxContext
+    ctx: &TxContext
 ) {
     assert!(!proposal.has_approved(ctx.sender()), EAlreadyApproved);
     let role = proposal.auth().into_role();
@@ -197,7 +199,7 @@ public(package) fun approve(
 public(package) fun disapprove(
     proposal: &mut Proposal, 
     member: &Member, 
-    ctx: &mut TxContext
+    ctx: &TxContext
 ) {
     assert!(proposal.has_approved(ctx.sender()), ENotApproved);
     let role = proposal.auth().into_role();

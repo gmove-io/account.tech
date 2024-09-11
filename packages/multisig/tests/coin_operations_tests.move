@@ -12,7 +12,7 @@ use kraken_multisig::multisig_test_utils::start_world;
 const OWNER: address = @0xBABE;
 
 #[test]
-fun merge_and_split_2_coins() {
+fun test_merge_and_split_2_coins() {
     let mut world = start_world();
 
     let coin_to_split = coin::mint_for_testing<SUI>(100, world.scenario().ctx());
@@ -44,7 +44,7 @@ fun merge_and_split_2_coins() {
 }  
 
 #[test]
-fun merge_2_coins_and_split() {
+fun test_merge_2_coins_and_split() {
     let mut world = start_world();
     let multisig_address = world.multisig().addr();
 
