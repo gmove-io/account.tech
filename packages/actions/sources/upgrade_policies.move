@@ -182,7 +182,9 @@ public fun execute_upgrade(
     upgrade(executable, multisig, Issuer {})
 }    
 
-// step 5: consume the receipt to commit the upgrade
+// step 5: consume the ticket to upgrade  
+
+// step 6: consume the receipt to commit the upgrade
 public fun confirm_upgrade(
     mut executable: Executable,
     multisig: &mut Multisig,

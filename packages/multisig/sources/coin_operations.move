@@ -22,7 +22,7 @@ public struct Issuer has copy, drop {}
 // returns the IDs to use in a following proposal, sorted by "to_split" amounts
 public fun merge_and_split<T: drop>(
     multisig: &mut Multisig, 
-    mut to_merge: vector<Receiving<Coin<T>>>, // there can be only one coin if we just want to split
+    to_merge: vector<Receiving<Coin<T>>>, // there can be only one coin if we just want to split
     to_split: vector<u64>, // there can be no amount if we just want to merge
     ctx: &mut TxContext
 ): vector<ID> { 
@@ -30,12 +30,10 @@ public fun merge_and_split<T: drop>(
 
     // receive all coins
     let mut coins = vector::empty();
-    while (!to_merge.is_empty()) {
-        let item = to_merge.pop_back();
+    to_merge.do!(|item| {
         let coin = multisig.receive(Issuer {}, item);
         coins.push_back(coin);
-    };
-    to_merge.destroy_empty();
+    });
 
     let coin = merge(coins, ctx);
     let ids = split(multisig, coin, to_split, ctx);
@@ -44,14 +42,13 @@ public fun merge_and_split<T: drop>(
 }
 
 fun merge<T: drop>(
-    mut coins: vector<Coin<T>>, 
+    coins: vector<Coin<T>>, 
     ctx: &mut TxContext
 ): Coin<T> {
     let mut merged = coin::zero<T>(ctx);
-    while (!coins.is_empty()) {
-        merged.join(coins.pop_back());
-    };
-    coins.destroy_empty();
+    coins.do!(|coin| {
+        merged.join(coin);
+    });
 
     merged
 }
@@ -59,15 +56,15 @@ fun merge<T: drop>(
 fun split<T: drop>(
     multisig: &Multisig, 
     mut coin: Coin<T>,
-    mut amounts: vector<u64>, 
+    amounts: vector<u64>, 
     ctx: &mut TxContext
 ): vector<ID> {
-    let mut ids = vector::empty();
-    while (!amounts.is_empty()) {
-        let split = coin.split(amounts.remove(0), ctx);
-        ids.push_back(object::id(&split));
+    let ids = amounts.map!(|amount| {
+        let split = coin.split(amount, ctx);
+        let id = object::id(&split);
         transfer::public_transfer(split, multisig.addr());
-    };
+        id
+    });
     transfer::public_transfer(coin, multisig.addr());
 
     ids
