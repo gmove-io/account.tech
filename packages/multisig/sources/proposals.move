@@ -19,6 +19,7 @@ use std::string::String;
 use sui::{
     vec_set::{Self, VecSet}, 
     bag::{Self, Bag},
+    event,
 };
 use kraken_multisig::{
     auth::Auth,
@@ -31,6 +32,29 @@ const EAlreadyApproved: u64 = 0;
 const ENotApproved: u64 = 1;
 const EProposalNotFound: u64 = 2;
 const EProposalKeyAlreadyExists: u64 = 3;
+
+// === Events ===
+
+public struct Created has copy, drop, store {
+    auth_issuer: String,
+    auth_name: String,
+    name: String,
+    description: String,
+}
+
+public struct Approved has copy, drop, store {
+    auth_issuer: String,
+    auth_name: String,
+    name: String,
+    description: String,
+}
+
+public struct Executed has copy, drop, store {
+    auth_issuer: String,
+    auth_name: String,
+    name: String,
+    description: String,
+}
 
 // === Structs ===
 
@@ -166,6 +190,14 @@ public(package) fun add(
     proposal: Proposal,
 ) {
     assert!(!proposals.contains(proposal.name), EProposalKeyAlreadyExists);
+
+    event::emit(Created {
+        auth_issuer: proposal.auth.issuer().into_string().to_string(),
+        auth_name: proposal.auth.name(),
+        name: proposal.name,
+        description: proposal.description,
+    });
+
     proposals.inner.push_back(proposal);
 }
 
@@ -174,7 +206,15 @@ public(package) fun remove(
     name: String,
 ): (Auth, Bag) {
     let idx = proposals.get_idx(name);
-    let Proposal { auth, actions, .. } = proposals.inner.remove(idx);
+    let Proposal { auth, actions, description, .. } = proposals.inner.remove(idx);
+
+    event::emit(Executed {
+        auth_issuer: auth.issuer().into_string().to_string(),
+        auth_name: auth.name(),
+        name,
+        description,
+    });
+
     (auth, actions)
 }
 
@@ -185,6 +225,14 @@ public(package) fun approve(
     ctx: &TxContext
 ) {
     assert!(!proposal.has_approved(ctx.sender()), EAlreadyApproved);
+    
+    event::emit(Approved {
+        auth_issuer: proposal.auth.issuer().into_string().to_string(),
+        auth_name: proposal.auth.name(),
+        name: proposal.name,
+        description: proposal.description,
+    });
+
     let role = proposal.auth().into_role();
     let has_role = member.has_role(role);
 

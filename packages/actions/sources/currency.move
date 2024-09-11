@@ -14,6 +14,7 @@ use std::{
 use sui::{
     transfer::Receiving,
     coin::{Coin, TreasuryCap, CoinMetadata},
+    event,
 };
 use kraken_multisig::{
     multisig::Multisig,
@@ -30,6 +31,18 @@ const EWrongValue: u64 = 2;
 const EMintNotExecuted: u64 = 3;
 const EBurnNotExecuted: u64 = 4;
 const EWrongCoinType: u64 = 5;
+
+// === Events ===
+
+public struct Minted has copy, drop, store {
+    coin_type: String,
+    amount: u64,
+}
+
+public struct Burned has copy, drop, store {
+    coin_type: String,
+    amount: u64,
+}
 
 // === Structs ===    
 
@@ -224,6 +237,12 @@ public fun mint<C: drop, I: drop>(
     ctx: &mut TxContext
 ): Coin<C> {
     let mint_mut: &mut Mint<C> = executable.action_mut(issuer, multisig.addr());
+    
+    event::emit(Minted {
+        coin_type: type_to_name<C>(),
+        amount: mint_mut.amount,
+    });
+    
     let lock_mut = borrow_lock_mut<C>(multisig);
     let coin = lock_mut.treasury_cap.mint(mint_mut.amount, ctx);
     mint_mut.amount = 0; // reset to ensure it has been executed
@@ -251,6 +270,12 @@ public fun burn<C: drop, I: copy + drop>(
     issuer: I, 
 ) {
     let burn_mut: &mut Burn<C> = executable.action_mut(issuer, multisig.addr());
+    
+    event::emit(Burned {
+        coin_type: type_to_name<C>(),
+        amount: burn_mut.amount,
+    });
+    
     let lock_mut = borrow_lock_mut<C>(multisig);
     assert!(burn_mut.amount == coin.value(), EWrongValue);
     lock_mut.treasury_cap.burn(coin);

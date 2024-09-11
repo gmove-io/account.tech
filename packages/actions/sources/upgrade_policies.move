@@ -11,7 +11,8 @@ use std::string::String;
 use sui::{
     package::{Self, UpgradeCap, UpgradeTicket, UpgradeReceipt},
     clock::Clock,
-    dynamic_field as df
+    dynamic_field as df,
+    event,
 };
 use kraken_multisig::{
     multisig::Multisig,
@@ -25,6 +26,18 @@ const EPolicyShouldRestrict: u64 = 1;
 const EInvalidPolicy: u64 = 2;
 const EUpgradeNotExecuted: u64 = 3;
 const ERestrictNotExecuted: u64 = 4;
+
+// === Events ===
+
+public struct Upgraded has copy, drop, store {
+    package_id: ID,
+    digest: vector<u8>,
+}
+
+public struct Restricted has copy, drop, store {
+    package_id: ID,
+    policy: u8,
+}
 
 // === Structs ===
 
@@ -239,6 +252,11 @@ public fun upgrade<I: copy + drop>(
     let upgrade_mut: &mut Upgrade = executable.action_mut(issuer, multisig.addr());
     let lock_mut = borrow_lock_mut(multisig, name);
 
+    event::emit(Upgraded {
+        package_id: lock_mut.upgrade_cap.package(),
+        digest: upgrade_mut.digest,
+    });
+
     let policy = lock_mut.upgrade_cap.policy();
     let ticket = lock_mut.upgrade_cap.authorize_upgrade(policy, upgrade_mut.digest);
     // consume digest to ensure this function has been called exactly once
@@ -272,18 +290,27 @@ public fun restrict<I: copy + drop>(
     let name = executable.auth().name();
     let restrict_mut: &mut Restrict = executable.action_mut(issuer, multisig.addr());
 
-    if (restrict_mut.policy == package::additive_policy()) {
+    let (package_id, policy) = if (restrict_mut.policy == package::additive_policy()) {
         let lock_mut: &mut UpgradeLock = multisig.borrow_managed_asset_mut(Issuer {}, UpgradeKey { name });
         lock_mut.upgrade_cap.only_additive_upgrades();
+        (lock_mut.upgrade_cap.package(), restrict_mut.policy)
     } else if (restrict_mut.policy == package::dep_only_policy()) {
         let lock_mut: &mut UpgradeLock = multisig.borrow_managed_asset_mut(Issuer {}, UpgradeKey { name });
         lock_mut.upgrade_cap.only_dep_upgrades();
+        (lock_mut.upgrade_cap.package(), restrict_mut.policy)
     } else {
         let lock: UpgradeLock = multisig.remove_managed_asset(Issuer {}, UpgradeKey { name });
+        let (package_id, policy) = (lock.upgrade_cap.package(), restrict_mut.policy);
         let UpgradeLock { id, upgrade_cap } = lock;
         package::make_immutable(upgrade_cap);
         id.delete();
+        (package_id, policy)
     };
+
+    event::emit(Restricted {
+        package_id,
+        policy,
+    });
     // consume policy to ensure this function has been called exactly once
     restrict_mut.policy = 0;
 }

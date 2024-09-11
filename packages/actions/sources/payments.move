@@ -10,7 +10,8 @@ use std::string::String;
 use sui::{
     transfer::Receiving,
     balance::Balance,
-    coin::{Self, Coin}
+    coin::{Self, Coin},
+    event,
 };
 use kraken_multisig::{
     multisig::Multisig,
@@ -31,6 +32,15 @@ const EPayNotExecuted: u64 = 2;
 const EReceivingShouldBeSome: u64 = 3;
 const EWrongStream: u64 = 4;
 const EInvalidExecutable: u64 = 5;
+
+// === Events ===
+
+public struct StreamCreated has copy, drop, store {
+    stream_id: ID,
+    amount: u64,
+    interval: u64,
+    recipient: address,
+}
 
 // === Structs ===
 
@@ -265,8 +275,15 @@ public fun pay<C: drop, I: copy + drop>(
         last_epoch: 0,
         recipient: pay_mut.recipient
     };
-    transfer::share_object(stream);
 
+    event::emit(StreamCreated {
+        stream_id: stream.id.to_inner(),
+        amount: stream.amount,
+        interval: stream.interval,
+        recipient: stream.recipient
+    });
+
+    transfer::share_object(stream);
     pay_mut.amount = 0; // reset to ensure action is executed only once
 }
 

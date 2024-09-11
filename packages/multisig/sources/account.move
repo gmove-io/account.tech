@@ -59,7 +59,7 @@ public fun new(username: String, profile_picture: String, ctx: &mut TxContext) {
 
 // fill account_id in Multisig, insert multisig_id in Account, abort if already joined
 public fun join_multisig(account: &mut Account, multisig: &mut Multisig, ctx: &TxContext) {
-    multisig.member_mut(ctx.sender()).register_account_id(object::id(account));
+    multisig.member_mut(ctx.sender()).register_account_id(account.id.to_inner());
     account.multisig_ids.insert(object::id(multisig)); 
 }
 
