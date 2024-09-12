@@ -1,5 +1,5 @@
-import { TransactionBlock } from '@mysten/sui.js/transactions';
-import { OwnedObjectRef } from '@mysten/sui.js/client';
+import { Transaction } from '@mysten/sui/transactions';
+import { OwnedObjectRef } from '@mysten/sui/client';
 import * as fs from "fs";
 import { client, keypair, IObjectInfo, getId } from './utils.js';
 
@@ -8,21 +8,24 @@ import { client, keypair, IObjectInfo, getId } from './utils.js';
 	
 	const { execSync } = require('child_process');
 	const { modules, dependencies } = JSON.parse(
-	execSync(`${process.env.CLI_PATH!} move build --dump-bytecode-as-base64 --path ${process.env.PACKAGE_PATH!}`, {
-		encoding: 'utf-8',
-	}),
+		execSync(
+			`${process.env.CLI_PATH!} move build --dump-bytecode-as-base64 --path ${process.env.MULTISIG_PATH!}`,
+			{ encoding: 'utf-8' }
+		)
 	);
 
 	console.log("publishing...")
 
 	try {		
-		const tx = new TransactionBlock();
+		const tx = new Transaction();
+		tx.setGasBudget(1000000000);
+
 		const [upgradeCap] = tx.publish({ modules,dependencies });
 		tx.transferObjects([upgradeCap], keypair.getPublicKey().toSuiAddress());
 		
-		const result = await client.signAndExecuteTransactionBlock({
+		const result = await client.signAndExecuteTransaction({
 			signer: keypair,
-			transactionBlock: tx,
+			transaction: tx,
 			options: {
 				showEffects: true,
 			},
@@ -51,8 +54,9 @@ import { client, keypair, IObjectInfo, getId } from './utils.js';
         const objects: IObjectInfo[] = [];
         createdObjects.forEach((item) => {
             if (item.data?.type === "package") {
+				console.log("\n\nSuccessfully deployed at: " + item.data?.objectId);
 				objects.push({
-					type: "package_id",
+					type: "multisig-package",
 					id: item.data?.objectId,
 				});
             } else if (!item.data!.type!.startsWith("0x2::")) {
@@ -68,11 +72,19 @@ import { client, keypair, IObjectInfo, getId } from './utils.js';
             }
         });
 
-		fs.writeFileSync('./created.json', JSON.stringify(objects, null, 2));
+		fs.writeFileSync('./src/data/multisig-created.json', JSON.stringify(objects, null, 2));
 		
 	} catch (e) {
 		console.log(e);
 	} finally {
-        console.log("\n\nSuccessfully deployed at: " + getId("package"));
-	}
+		execSync(
+			`${process.env.CLI_PATH!} move manage-package --environment "$(sui client active-env)" \
+				--network-id "$(sui client chain-identifier)" \
+				--original-id ${getId("multisig-package")} \
+				--latest-id ${getId("multisig-package")} \
+				--version-number '1' \
+				--path ${process.env.MULTISIG_PATH!}`,
+			{ encoding: 'utf-8' }
+		)
+	};
 })()

@@ -15,9 +15,9 @@ KrakenExtensions = { local = "../extensions" }
 # Kiosk = { local = "../../kraken-sdk/test/packages/kiosk" } # for tests on localnet
 
 [addresses]
-kraken_actions = "0x0"
-kraken_multisig = "0x0"
-kraken_extensions = "0x0"
+kraken_actions = "0x884d0d1f8918d2945f488a6b892c504da15b67e398f4d511012ede044645ed7b"
+kraken_multisig = "0x4708153b0fb608912ee529addf987d17c1b9a60339d1844cb2a6680b19759ff0"
+kraken_extensions = "0xe756e0a7e94636cef926f3433a606f18bec42664d257ba4ea76593a5558aa47d"
 kiosk = "0xbd8fc1947cf119350184107a3087e2dc27efefa0dd82e25a1f699069fe81a585"
 # kiosk = "0x434b5bd8f6a7b05fede0ff46c6e511d71ea326ed38056e3bcd681d2d7c2a7879" # main
 

@@ -9,5 +9,5 @@ Sui = { git = "https://github.com/MystenLabs/sui.git", subdir = "crates/sui-fram
 KrakenExtensions = { local = "../extensions" }
 
 [addresses]
-kraken_multisig = "0x0"
-kraken_extensions = "0x0"
+kraken_multisig = "0x4708153b0fb608912ee529addf987d17c1b9a60339d1844cb2a6680b19759ff0"
+kraken_extensions = "0xe756e0a7e94636cef926f3433a606f18bec42664d257ba4ea76593a5558aa47d"

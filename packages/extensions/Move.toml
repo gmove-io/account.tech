@@ -8,4 +8,4 @@ authors = ["Thouny (thouny@tuta.io)", "Jose (jose@interestprotocol.com)"]
 Sui = { git = "https://github.com/MystenLabs/sui.git", subdir = "crates/sui-framework/packages/sui-framework", rev = "testnet", override = true }
 
 [addresses]
-kraken_extensions = "0x0"
+kraken_extensions = "0xe756e0a7e94636cef926f3433a606f18bec42664d257ba4ea76593a5558aa47d"

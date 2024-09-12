@@ -12,12 +12,12 @@ use sui::{
     coin::Coin,
 };
 use kraken_multisig::{
-    currency::{Self, Mint},
     multisig::Multisig,
     proposals::Proposal,
     executable::Executable
 };
 use kraken_actions::{
+    currency::{Self, Mint},
     owned::{Self, Withdraw},
     treasury::{Self, Spend},
 };
