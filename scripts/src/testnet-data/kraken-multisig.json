@@ -1,0 +1,10 @@
+[
+  {
+    "type": "KrakenMultisig",
+    "id": "0xb1e5559c3a13e645f822992a870c21a068f5e2e6fa94fa30da41677e4249097c"
+  },
+  {
+    "type": "package::UpgradeCap",
+    "id": "0xee7565e5181920ee4bcbedaeb45778d8b25c5ab90210d1cc640d00cb27314b09"
+  }
+]

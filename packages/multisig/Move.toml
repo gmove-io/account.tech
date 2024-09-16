@@ -1,13 +1,32 @@
 [package]
 name = "KrakenMultisig"
 edition = "2024.alpha"
-license = "MIT" 
-authors = ["Thouny (thouny@tuta.io)", "Jose (jose@interestprotocol.com)"]
+license = "MIT"
+authors = [
+  "Thouny (thouny@tuta.io)",
+  "Jose (jose@interestprotocol.com)"
+]
 
-[dependencies]
-Sui = { git = "https://github.com/MystenLabs/sui.git", subdir = "crates/sui-framework/packages/sui-framework", rev = "testnet", override = true }
-KrakenExtensions = { local = "../extensions" }
+[dependencies.Sui]
+git = "https://github.com/MystenLabs/sui.git"
+subdir = "crates/sui-framework/packages/sui-framework"
+rev = "framework/mainnet"
+
+[dependencies.KrakenExtensions]
+local = "../extensions"
+
+[dev-dependencies.Sui]
+git = "https://github.com/MystenLabs/sui.git"
+subdir = "crates/sui-framework/packages/sui-framework"
+rev = "testnet"
+
+[dev-dependencies.KrakenExtensions]
+local = "../extensions"
 
 [addresses]
-kraken_multisig = "0x4708153b0fb608912ee529addf987d17c1b9a60339d1844cb2a6680b19759ff0"
-kraken_extensions = "0xe756e0a7e94636cef926f3433a606f18bec42664d257ba4ea76593a5558aa47d"
+kraken_multisig = "_"
+kraken_extensions = "_"
+
+[dev-addresses]
+kraken_multisig = "0xb1e5559c3a13e645f822992a870c21a068f5e2e6fa94fa30da41677e4249097c"
+kraken_extensions = "0x6a044e64112bd8ccfbe05b6efdf5cb187751b2637cd5b2eb46fee5da83b851be"

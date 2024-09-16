@@ -9,7 +9,7 @@ import { client, keypair, IObjectInfo, getId } from './utils.js';
 	const { execSync } = require('child_process');
 	const { modules, dependencies } = JSON.parse(
 		execSync(
-			`${process.env.CLI_PATH!} move build --dump-bytecode-as-base64 --path ${process.env.MULTISIG_PATH!}`,
+			`${process.env.CLI_PATH!} move build --dump-bytecode-as-base64 --path ${process.env.MULTISIG_PATH!} ${process.env.NETWORK === "testnet" && "--test"}`,
 			{ encoding: 'utf-8' }
 		)
 	);

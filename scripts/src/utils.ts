@@ -12,26 +12,27 @@ dotenv.config();
 
 export const keypair = Ed25519Keypair.fromSecretKey(Uint8Array.from(Buffer.from(process.env.KEY!, "base64")).slice(1));
 
-export const client = new SuiClient({ url: "https://sui-testnet-endpoint.blockvision.org" });
+export const client = new SuiClient({ url: getFullnodeUrl(process.env.NETWORK as "mainnet" | "testnet" | "devnet" | "localnet") });
 
-export const getId = (type: string): string => {
-    const extensionsData = fs.readFileSync('./src/data/extensions-created.json', 'utf8');
-    const extensionsParsed: IObjectInfo[] = JSON.parse(extensionsData);
-    const actionsData = fs.readFileSync('./src/data/actions-created.json', 'utf8');
-    const actionsParsed: IObjectInfo[] = JSON.parse(actionsData);
-    const multisigData = fs.readFileSync('./src/data/multisig-created.json', 'utf8');
-    const multisigParsed: IObjectInfo[] = JSON.parse(multisigData);
+export const getId = (type: string, isDev: boolean = false): string => {
+    const dataDir = isDev ? "./src/testnet-data/" : "./src/mainnet-data/";
+    const allObjects: IObjectInfo[] = [];
 
-    const parsed = [...extensionsParsed, ...actionsParsed, ...multisigParsed];
-    const typeToId = new Map(parsed.map(item => [item.type, item.id]));
-    // Find the first key that starts with the type
-    for (let [key, value] of typeToId) {
-        if (key?.startsWith(type)) {
-            if (value === undefined) {
-                throw new Error(`Value for ${type} is undefined`);
+    fs.readdirSync(dataDir)
+        .forEach(file => {
+            try {
+                const fileData = fs.readFileSync(`${dataDir}${file}`, 'utf8');
+                allObjects.push(...JSON.parse(fileData));
+            } catch (error) {
+                console.error(`Error reading or parsing ${file}: ${error}`);
             }
-            return value;
-        }
+        });
+
+    const matchingObject = allObjects.find(item => item.type?.startsWith(type));
+    
+    if (!matchingObject || matchingObject.id === undefined) {
+        throw new Error(`Type ${type} not found or has undefined id in ${dataDir}`);
     }
-    throw new Error(`Type ${type} not found in *-created.json`);
+
+    return matchingObject.id;
 }

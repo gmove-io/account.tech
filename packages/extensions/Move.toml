@@ -1,11 +1,24 @@
 [package]
 name = "KrakenExtensions"
 edition = "2024.alpha"
-license = "MIT" 
-authors = ["Thouny (thouny@tuta.io)", "Jose (jose@interestprotocol.com)"]
+license = "MIT"
+authors = [
+  "Thouny (thouny@tuta.io)",
+  "Jose (jose@interestprotocol.com)"
+]
 
-[dependencies]
-Sui = { git = "https://github.com/MystenLabs/sui.git", subdir = "crates/sui-framework/packages/sui-framework", rev = "testnet", override = true }
+[dependencies.Sui]
+git = "https://github.com/MystenLabs/sui.git"
+subdir = "crates/sui-framework/packages/sui-framework"
+rev = "framework/mainnet"
+
+[dev-dependencies.Sui]
+git = "https://github.com/MystenLabs/sui.git"
+subdir = "crates/sui-framework/packages/sui-framework"
+rev = "testnet"
 
 [addresses]
-kraken_extensions = "0xe756e0a7e94636cef926f3433a606f18bec42664d257ba4ea76593a5558aa47d"
+kraken_extensions = "_"
+
+[dev-addresses]
+kraken_extensions = "0x6a044e64112bd8ccfbe05b6efdf5cb187751b2637cd5b2eb46fee5da83b851be"

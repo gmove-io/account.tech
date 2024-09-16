@@ -1,0 +1,10 @@
+[
+  {
+    "type": "KrakenActions",
+    "id": "0x48101fd53d68b28e2b25a77bde7614faabb54a10f3e53c06be9230e88c4fb07e"
+  },
+  {
+    "type": "package::UpgradeCap",
+    "id": "0xed833473af18b326d2e5fe78dbc6f50c293e00ee8b6db0360eb89b6cbf00e9ba"
+  }
+]
