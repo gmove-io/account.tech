@@ -21,4 +21,4 @@ rev = "testnet"
 kraken_extensions = "_"
 
 [dev-addresses]
-kraken_extensions = "0x6a044e64112bd8ccfbe05b6efdf5cb187751b2637cd5b2eb46fee5da83b851be"
+kraken_extensions = "0xdf902bc4185c426af025068362d6bfa045c49504bd12a9d373a7be3cbb58c355"

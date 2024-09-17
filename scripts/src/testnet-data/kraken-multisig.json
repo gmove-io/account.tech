@@ -1,10 +1,14 @@
 [
   {
+    "type": "account::Registry",
+    "id": "0x38d5dfd6b4e0154b80377b2695dc61df17ef734944384771bdb77a9191292c30"
+  },
+  {
     "type": "KrakenMultisig",
-    "id": "0xb1e5559c3a13e645f822992a870c21a068f5e2e6fa94fa30da41677e4249097c"
+    "id": "0x52f413690fe7e70aacdb99e5e38594f9af7cdef7b73d1c801ac46cd63105d537"
   },
   {
     "type": "package::UpgradeCap",
-    "id": "0xee7565e5181920ee4bcbedaeb45778d8b25c5ab90210d1cc640d00cb27314b09"
+    "id": "0xe908b76713ce7e540e5a4d9529f4b8842b2f59c0e686bd8fe6581fa1594c7526"
   }
 ]

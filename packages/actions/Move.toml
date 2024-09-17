@@ -42,7 +42,7 @@ kraken_extensions = "_"
 kiosk = "_"
 
 [dev-addresses]
-kraken_actions = "0x48101fd53d68b28e2b25a77bde7614faabb54a10f3e53c06be9230e88c4fb07e"
-kraken_multisig = "0xb1e5559c3a13e645f822992a870c21a068f5e2e6fa94fa30da41677e4249097c"
-kraken_extensions = "0x6a044e64112bd8ccfbe05b6efdf5cb187751b2637cd5b2eb46fee5da83b851be"
+kraken_actions = "0xd36ae6acc21a7fd980582d5a5d74c127cebdb3178f499585925311f417bb3840"
+kraken_multisig = "0x52f413690fe7e70aacdb99e5e38594f9af7cdef7b73d1c801ac46cd63105d537"
+kraken_extensions = "0xdf902bc4185c426af025068362d6bfa045c49504bd12a9d373a7be3cbb58c355"
 kiosk = "0xbd8fc1947cf119350184107a3087e2dc27efefa0dd82e25a1f699069fe81a585"
