@@ -13,17 +13,17 @@ const OWNER: address = @0xBABE;
 const ALICE: address = @0xa11e7;
 const BOB: address = @0x10;
 
-public struct Issuer has copy, drop {}
+public struct Witness has copy, drop {}
 
-public struct Issuer2 has copy, drop {}
+public struct Witness2 has copy, drop {}
 
 public struct Action has store {
     value: u64
 }
 
 
-#[test, expected_failure(abort_code = auth::EWrongIssuer)]
-fun test_action_mut_error_not_issuer_module() {
+#[test, expected_failure(abort_code = auth::EWrongWitness)]
+fun test_action_mut_error_not_witness_module() {
     let mut world = start_world();
     let key = b"key".to_string();
 
@@ -32,12 +32,12 @@ fun test_action_mut_error_not_issuer_module() {
     world.multisig().members_mut_for_testing().add(alice);
     world.multisig().members_mut_for_testing().add(bob);
 
-    let proposal = world.create_proposal(Issuer {}, b"".to_string(), key, b"".to_string(), 0, 0);
+    let proposal = world.create_proposal(Witness {}, b"".to_string(), key, b"".to_string(), 0, 0);
     proposal.add_action(Action { value: 1 });
     world.approve_proposal(key);
 
     let mut executable = world.execute_proposal(key);
-    executable.action_mut<Issuer2, Action>(Issuer2 {}, world.multisig().addr());
+    executable.action_mut<Witness2, Action>(Witness2 {}, world.multisig().addr());
 
     destroy(executable);
     world.end();
@@ -54,7 +54,7 @@ fun test_assert_multisig_executed_error_not_multisig_executable() {
     world.multisig().members_mut_for_testing().add(alice);
     world.multisig().members_mut_for_testing().add(bob);
 
-    let proposal = world.create_proposal(Issuer {}, b"".to_string(), key, b"".to_string(), 0, 0);
+    let proposal = world.create_proposal(Witness {}, b"".to_string(), key, b"".to_string(), 0, 0);
     proposal.add_action(Action { value: 1 });
     world.approve_proposal(key);
 
@@ -62,7 +62,7 @@ fun test_assert_multisig_executed_error_not_multisig_executable() {
     let mut executable = world.execute_proposal(key);
     
     let multisig = world.new_multisig();
-    let _ = executable.action_mut<Issuer, Action>(Issuer {}, multisig.addr());
+    let _ = executable.action_mut<Witness, Action>(Witness {}, multisig.addr());
 
     uid.delete();
     destroy(multisig);

@@ -21,7 +21,7 @@ use kraken_multisig::{
 
 // === Errors ===
 
-const EWrongIssuer: u64 = 0;
+const EWrongWitness: u64 = 0;
 const EWrongMultisig: u64 = 1;
 const EWrongVersion: u64 = 2;
 const ENotCoreDep: u64 = 3;
@@ -32,7 +32,7 @@ const ENotDep: u64 = 4;
 // protected type ensuring provenance
 public struct Auth has store, drop {
     // type_name of the witness that instantiated the auth
-    issuer: TypeName,
+    witness: TypeName,
     // name of the auth (can be empty)
     name: String,
     // address of the multisig that created the auth
@@ -41,35 +41,35 @@ public struct Auth has store, drop {
 
 // === Public Functions ===
 
-// construct an auth from an Issuer, an (optional) name and a multisig id
-public fun construct<I: drop>(_: I, name: String, multisig_addr: address): Auth {
-    let issuer = type_name::get<I>();
-    Auth { issuer, name, multisig_addr }
+// construct an auth from a Witness, an (optional) name and a multisig id
+public fun construct<W: drop>(_: W, name: String, multisig_addr: address): Auth {
+    let witness = type_name::get<W>();
+    Auth { witness, name, multisig_addr }
 }
 
 // to be used by modules to execute an action
-public fun assert_is_issuer<I: drop>(auth: &Auth, _: I) {
-    let issuer = type_name::get<I>();
-    assert!(auth.issuer == issuer, EWrongIssuer);
+public fun assert_is_witness<W: drop>(auth: &Auth, _: W) {
+    let witness = type_name::get<W>();
+    assert!(auth.witness == witness, EWrongWitness);
 }
 
 public fun assert_version(deps: &Deps, auth: &Auth, version: u64) {
-    let issuer_package = auth.issuer.get_address().to_string();
-    assert!(deps.get_package_version_from_string(issuer_package) == version, EWrongVersion);
+    let witness_package = auth.witness.get_address().to_string();
+    assert!(deps.get_package_version_from_string(witness_package) == version, EWrongVersion);
 }
 
 /// Assert that the auth has been issued from kraken (multisig or actions) packages
-public fun assert_dep<I: copy + drop>(deps: &Deps, _: I) {
-    let issuer_package = type_name::get<I>().get_address().to_string();
-    assert!(deps.contains(issuer_package), ENotDep);
+public fun assert_dep<W: copy + drop>(deps: &Deps, _: W) {
+    let witness_package = type_name::get<W>().get_address().to_string();
+    assert!(deps.contains(witness_package), ENotDep);
 }
 
 /// Assert that the auth has been issued from kraken (multisig or actions) packages
-public fun assert_core_dep<I: copy + drop>(deps: &Deps, _: I) {
-    let issuer_package = type_name::get<I>().get_address().to_string();
+public fun assert_core_dep<W: copy + drop>(deps: &Deps, _: W) {
+    let witness_package = type_name::get<W>().get_address().to_string();
     assert!(
-        deps.get_package_idx_from_string(issuer_package) == 0 ||
-        deps.get_package_idx_from_string(issuer_package) == 1, 
+        deps.get_package_idx_from_string(witness_package) == 0 ||
+        deps.get_package_idx_from_string(witness_package) == 1, 
         ENotCoreDep
     );
 }
@@ -81,7 +81,7 @@ public fun assert_is_multisig(auth: &Auth, multisig_addr: address) {
 
 // role is package::module::struct::name or package::module::struct
 public fun into_role(auth: &Auth): String {
-    let mut auth_to_role = auth.issuer.into_string().to_string();
+    let mut auth_to_role = auth.witness.into_string().to_string();
     if (!auth.name.is_empty()) {
         auth_to_role.append_utf8(b"::");  
         auth_to_role.append(auth.name);
@@ -91,8 +91,8 @@ public fun into_role(auth: &Auth): String {
 
 // === View Functions ===
 
-public fun issuer(auth: &Auth): TypeName {
-    auth.issuer
+public fun witness(auth: &Auth): TypeName {
+    auth.witness
 }
 
 public fun name(auth: &Auth): String {

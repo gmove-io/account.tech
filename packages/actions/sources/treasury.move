@@ -13,6 +13,7 @@ use sui::{
     bag::{Self, Bag},
     balance::Balance,
     coin::{Self, Coin},
+    transfer::Receiving,
     vec_map::{Self, VecMap},
 };
 use kraken_multisig::{
@@ -32,29 +33,33 @@ const ETreasuryNotEmpty: u64 = 5;
 
 // === Structs ===
 
-// delegated issuer protecting the proposal flow, role and treasury key
-public struct Issuer has copy, drop {}
-
-// [ACTION] propose to open a treasury for the multisig
-public struct Open has store {
-    // label for the treasury and role
-    name: String,
-}
-
-// [ACTION] action to be used with specific proposals making good use of the returned coins, similar as owned::withdraw
-public struct Spend has store {
-    // name of the treasury to withdraw from
-    name: String,
-    // coin types to amounts
-    coins_amounts_map: VecMap<String, u64>,
-}
-
 public struct TreasuryKey has copy, drop, store { name: String }
 
 // multisig's dynamic field holding a budget with different coin types, key is name
 public struct Treasury has store {
     // heterogeneous array of Balances, String -> Balance<C>
     bag: Bag
+}
+
+// [MEMBER] can close a treasury and deposit coins into it
+public struct ManageTreasury has copy, drop {}
+// [PROPOSAL] open a treasury for the multisig
+public struct OpenProposal has copy, drop {}
+// [PROPOSAL] spend from a treasury 
+public struct SpendProposal has copy, drop {}
+
+// [ACTION] propose to open a treasury for the multisig
+public struct OpenAction has store {
+    // label for the treasury and role
+    name: String,
+}
+
+// [ACTION] action to be used with specific proposals making good use of the returned coins, similar as owned::withdraw
+public struct SpendAction has store {
+    // name of the treasury to withdraw from
+    name: String,
+    // coin types to amounts
+    coins_amounts_map: VecMap<String, u64>,
 }
 
 // === View Functions ===
@@ -77,8 +82,14 @@ public fun treasury_exists(multisig: &Multisig, name: String): bool {
     multisig.has_managed_asset(TreasuryKey { name })
 }
 
-public fun treasury(multisig: &Multisig, name: String): &Treasury {
-    multisig.borrow_managed_asset(Issuer {}, TreasuryKey { name })
+public fun deposit_owned<C: drop>(
+    multisig: &mut Multisig,
+    name: String, 
+    receiving: Receiving<Coin<C>>, 
+    ctx: &mut TxContext
+) {
+    let coin = multisig.receive(ManageTreasury {}, receiving);
+    deposit<C>(multisig, name, coin, ctx);
 }
 
 public fun deposit<C: drop>(
@@ -91,7 +102,7 @@ public fun deposit<C: drop>(
     assert!(treasury_exists(multisig, name), ETreasuryDoesntExist);
 
     let treasury: &mut Treasury = 
-        multisig.borrow_managed_asset_mut(Issuer {}, TreasuryKey { name });
+        multisig.borrow_managed_asset_mut(ManageTreasury {}, TreasuryKey { name });
     let coin_type = coin_type_string<C>();
 
     if (treasury.coin_type_exists(coin_type)) {
@@ -105,7 +116,7 @@ public fun deposit<C: drop>(
 public fun close(multisig: &mut Multisig, name: String, ctx: &mut TxContext) {
     multisig.assert_is_member(ctx);
     let Treasury { bag } = 
-        multisig.remove_managed_asset(Issuer {}, TreasuryKey { name });
+        multisig.remove_managed_asset(ManageTreasury {}, TreasuryKey { name });
     assert!(bag.is_empty(), ETreasuryNotEmpty);
     bag.destroy_empty();
 }
@@ -124,7 +135,7 @@ public fun propose_open(
 ) {
     assert!(!treasury_exists(multisig, name), ETreasuryAlreadyExists);
     let proposal_mut = multisig.create_proposal(
-        Issuer {},
+        OpenProposal {},
         name,
         key,
         description,
@@ -144,30 +155,30 @@ public fun execute_open(
     multisig: &mut Multisig,
     ctx: &mut TxContext
 ) {
-    open(&mut executable, multisig, Issuer {}, ctx);
-    destroy_open(&mut executable, Issuer {});
-    executable.destroy(Issuer {});
+    open(&mut executable, multisig, OpenProposal {}, ctx);
+    destroy_open(&mut executable, OpenProposal {});
+    executable.destroy(OpenProposal {});
 }
 
 // === [ACTION] Public Functions ===
 
 public fun new_open(proposal: &mut Proposal, name: String) {
-    proposal.add_action(Open { name });
+    proposal.add_action(OpenAction { name });
 }
 
-public fun open<I: copy + drop>(
+public fun open<W: copy + drop>(
     executable: &mut Executable,
     multisig: &mut Multisig,
-    issuer: I,
+    witness: W,
     ctx: &mut TxContext
 ) {
-    let open_mut: &mut Open = executable.action_mut(issuer, multisig.addr());
-    multisig.add_managed_asset(Issuer {}, TreasuryKey { name: open_mut.name }, Treasury { bag: bag::new(ctx) });
+    let open_mut: &mut OpenAction = executable.action_mut(witness, multisig.addr());
+    multisig.add_managed_asset(ManageTreasury {}, TreasuryKey { name: open_mut.name }, Treasury { bag: bag::new(ctx) });
     open_mut.name = b"".to_string(); // reset to ensure execution
 }
 
-public fun destroy_open<I: copy + drop>(executable: &mut Executable, issuer: I) {
-    let Open { name } = executable.remove_action(issuer);
+public fun destroy_open<W: copy + drop>(executable: &mut Executable, witness: W) {
+    let OpenAction { name } = executable.remove_action(witness);
     assert!(name.is_empty(), EOpenNotExecuted);
 }
 
@@ -178,19 +189,19 @@ public fun new_spend(
     amounts: vector<u64>
 ) {
     assert!(coin_types.length() == amounts.length(), EWrongLength);
-    proposal.add_action(Spend { name, coins_amounts_map: vec_map::from_keys_values(coin_types, amounts) });
+    proposal.add_action(SpendAction { name, coins_amounts_map: vec_map::from_keys_values(coin_types, amounts) });
 }
 
-public fun spend<I: copy + drop, C: drop>(
+public fun spend<W: copy + drop, C: drop>(
     executable: &mut Executable,
     multisig: &mut Multisig,
-    issuer: I,
+    witness: W,
     ctx: &mut TxContext
 ): Coin<C> {
-    let spend_mut: &mut Spend = executable.action_mut(issuer, multisig.addr());
+    let spend_mut: &mut SpendAction = executable.action_mut(witness, multisig.addr());
     let (coin_type, amount) = spend_mut.coins_amounts_map.remove(&coin_type_string<C>());
     
-    let treasury: &mut Treasury = multisig.borrow_managed_asset_mut(Issuer {}, TreasuryKey { name: spend_mut.name });
+    let treasury: &mut Treasury = multisig.borrow_managed_asset_mut(ManageTreasury {}, TreasuryKey { name: spend_mut.name });
     let balance: &mut Balance<C> = treasury.bag.borrow_mut(coin_type);
     let coin = coin::take(balance, amount, ctx);
 
@@ -202,12 +213,12 @@ public fun spend<I: copy + drop, C: drop>(
     coin
 }
 
-public fun destroy_spend<I: copy + drop>(executable: &mut Executable, issuer: I) {
-    let Spend { coins_amounts_map, .. } = executable.remove_action(issuer);
+public fun destroy_spend<W: copy + drop>(executable: &mut Executable, witness: W) {
+    let SpendAction { coins_amounts_map, .. } = executable.remove_action(witness);
     assert!(coins_amounts_map.is_empty(), EWithdrawNotExecuted);
 }
 
 public fun spend_is_executed(executable: &Executable): bool {
-    let spend: &Spend = executable.action();
+    let spend: &SpendAction = executable.action();
     spend.coins_amounts_map.is_empty()
 }

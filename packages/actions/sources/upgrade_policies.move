@@ -41,9 +41,6 @@ public struct Restricted has copy, drop, store {
 
 // === Structs ===
 
-// delegated issuer verifying a proposal is destroyed in the module where it was created
-public struct Issuer has copy, drop {}
-
 // df key for the UpgradeLock
 public struct UpgradeKey has copy, drop, store { name: String }
 
@@ -64,14 +61,21 @@ public struct TimeLock has store {
     delay_ms: u64,
 }
 
+// [MEMBER] can lock an UpgradeCap and borrow it
+public struct ManageUpgrades has copy, drop {}
+// [PROPOSAL] upgrade a package
+public struct UpgradeProposal has copy, drop {}
+// [PROPOSAL] restrict a locked UpgradeCap
+public struct RestrictProposal has copy, drop {}
+
 // [ACTION]
-public struct Upgrade has store {
+public struct UpgradeAction has store {
     // digest of the package build we want to publish
     digest: vector<u8>,
 }
 
 // [ACTION]
-public struct Restrict has store {
+public struct RestrictAction has store {
     // restrict upgrade to this policy
     policy: u8,
 }
@@ -112,7 +116,7 @@ public fun lock_cap(
     ctx: &mut TxContext
 ) {
     multisig.assert_is_member(ctx);
-    multisig.add_managed_asset(Issuer {}, UpgradeKey { name }, lock);
+    multisig.add_managed_asset(ManageUpgrades {}, UpgradeKey { name }, lock);
 }
 
 // lock a cap with a timelock rule
@@ -129,11 +133,11 @@ public fun lock_cap_with_timelock(
 }
 
 public fun borrow_lock(multisig: &Multisig, name: String): &UpgradeLock {
-    multisig.borrow_managed_asset(Issuer {}, UpgradeKey { name })
+    multisig.borrow_managed_asset(ManageUpgrades {}, UpgradeKey { name })
 }
 
 public fun borrow_lock_mut(multisig: &mut Multisig, name: String): &mut UpgradeLock {
-    multisig.borrow_managed_asset_mut(Issuer {}, UpgradeKey { name })
+    multisig.borrow_managed_asset_mut(ManageUpgrades {}, UpgradeKey { name })
 }
 
 public fun upgrade_cap(lock: &UpgradeLock): &UpgradeCap {
@@ -142,7 +146,7 @@ public fun upgrade_cap(lock: &UpgradeLock): &UpgradeCap {
 
 // === [PROPOSAL] Public Functions ===
 
-// step 1: propose an Upgrade by passing the digest of the package build
+// step 1: propose an UpgradeAction by passing the digest of the package build
 // execution_time is automatically set to now + timelock
 // if timelock = 0, it means that upgrade can be executed at any time
 public fun propose_upgrade(
@@ -159,7 +163,7 @@ public fun propose_upgrade(
     let delay = lock.time_delay();
 
     let proposal_mut = multisig.create_proposal(
-        Issuer {},
+        UpgradeProposal {},
         name,
         key,
         description,
@@ -174,12 +178,12 @@ public fun propose_upgrade(
 // step 2: multiple members have to approve the proposal (multisig::approve_proposal)
 // step 3: execute the proposal and return the action (multisig::execute_proposal)
 
-// step 4: destroy Upgrade and return the UpgradeTicket for upgrading
+// step 4: destroy UpgradeAction and return the UpgradeTicket for upgrading
 public fun execute_upgrade(
     executable: &mut Executable,
     multisig: &mut Multisig,
 ): UpgradeTicket {
-    upgrade(executable, multisig, Issuer {})
+    upgrade(executable, multisig, UpgradeProposal {})
 }    
 
 // step 5: consume the ticket to upgrade  
@@ -194,11 +198,11 @@ public fun confirm_upgrade(
     let lock_mut = borrow_lock_mut(multisig, name);
     package::commit_upgrade(&mut lock_mut.upgrade_cap, receipt);
     
-    destroy_upgrade(&mut executable, Issuer {});
-    executable.destroy(Issuer {});
+    destroy_upgrade(&mut executable, UpgradeProposal {});
+    executable.destroy(UpgradeProposal {});
 }
 
-// step 1: propose an Upgrade by passing the digest of the package build
+// step 1: propose an UpgradeAction by passing the digest of the package build
 // execution_time is automatically set to now + timelock
 public fun propose_restrict(
     multisig: &mut Multisig, 
@@ -215,7 +219,7 @@ public fun propose_restrict(
     let current_policy = lock.upgrade_cap.policy();
 
     let proposal_mut = multisig.create_proposal(
-        Issuer {},
+        RestrictProposal {},
         name,
         key,
         description,
@@ -234,24 +238,24 @@ public fun execute_restrict(
     mut executable: Executable,
     multisig: &mut Multisig,
 ) {
-    restrict(&mut executable, multisig, Issuer {});
-    destroy_restrict(&mut executable, Issuer {});
-    executable.destroy(Issuer {});
+    restrict(&mut executable, multisig, RestrictProposal {});
+    destroy_restrict(&mut executable, RestrictProposal {});
+    executable.destroy(RestrictProposal {});
 }
 
 // [ACTION] Public Functions ===
 
 public fun new_upgrade(proposal: &mut Proposal, digest: vector<u8>) {
-    proposal.add_action(Upgrade { digest });
+    proposal.add_action(UpgradeAction { digest });
 }    
 
-public fun upgrade<I: copy + drop>(
+public fun upgrade<W: copy + drop>(
     executable: &mut Executable,
     multisig: &mut Multisig,
-    issuer: I,
+    witness: W,
 ): UpgradeTicket {
     let name = executable.auth().name();
-    let upgrade_mut: &mut Upgrade = executable.action_mut(issuer, multisig.addr());
+    let upgrade_mut: &mut UpgradeAction = executable.action_mut(witness, multisig.addr());
     let lock_mut = borrow_lock_mut(multisig, name);
 
     event::emit(Upgraded {
@@ -267,8 +271,8 @@ public fun upgrade<I: copy + drop>(
     ticket
 }    
 
-public fun destroy_upgrade<I: copy + drop>(executable: &mut Executable, issuer: I) {
-    let Upgrade { digest, .. } = executable.remove_action(issuer);
+public fun destroy_upgrade<W: copy + drop>(executable: &mut Executable, witness: W) {
+    let UpgradeAction { digest, .. } = executable.remove_action(witness);
     assert!(digest.is_empty(), EUpgradeNotExecuted);
 }
 
@@ -281,27 +285,27 @@ public fun new_restrict(proposal: &mut Proposal, current_policy: u8, policy: u8)
         EInvalidPolicy
     );
 
-    proposal.add_action(Restrict { policy });
+    proposal.add_action(RestrictAction { policy });
 }    
 
-public fun restrict<I: copy + drop>(
+public fun restrict<W: copy + drop>(
     executable: &mut Executable,
     multisig: &mut Multisig,
-    issuer: I,
+    witness: W,
 ) {
     let name = executable.auth().name();
-    let restrict_mut: &mut Restrict = executable.action_mut(issuer, multisig.addr());
+    let restrict_mut: &mut RestrictAction = executable.action_mut(witness, multisig.addr());
 
     let (package_id, policy) = if (restrict_mut.policy == package::additive_policy()) {
-        let lock_mut: &mut UpgradeLock = multisig.borrow_managed_asset_mut(Issuer {}, UpgradeKey { name });
+        let lock_mut: &mut UpgradeLock = multisig.borrow_managed_asset_mut(ManageUpgrades {}, UpgradeKey { name });
         lock_mut.upgrade_cap.only_additive_upgrades();
         (lock_mut.upgrade_cap.package(), restrict_mut.policy)
     } else if (restrict_mut.policy == package::dep_only_policy()) {
-        let lock_mut: &mut UpgradeLock = multisig.borrow_managed_asset_mut(Issuer {}, UpgradeKey { name });
+        let lock_mut: &mut UpgradeLock = multisig.borrow_managed_asset_mut(ManageUpgrades {}, UpgradeKey { name });
         lock_mut.upgrade_cap.only_dep_upgrades();
         (lock_mut.upgrade_cap.package(), restrict_mut.policy)
     } else {
-        let lock: UpgradeLock = multisig.remove_managed_asset(Issuer {}, UpgradeKey { name });
+        let lock: UpgradeLock = multisig.remove_managed_asset(ManageUpgrades {}, UpgradeKey { name });
         let (package_id, policy) = (lock.upgrade_cap.package(), restrict_mut.policy);
         let UpgradeLock { id, upgrade_cap } = lock;
         package::make_immutable(upgrade_cap);
@@ -317,8 +321,8 @@ public fun restrict<I: copy + drop>(
     restrict_mut.policy = 0;
 }
 
-public fun destroy_restrict<I: copy + drop>(executable: &mut Executable, issuer: I) {
-    let Restrict { policy, .. } = executable.remove_action(issuer);
+public fun destroy_restrict<W: copy + drop>(executable: &mut Executable, witness: W) {
+    let RestrictAction { policy, .. } = executable.remove_action(witness);
     assert!(policy == 0, ERestrictNotExecuted);
 }
 

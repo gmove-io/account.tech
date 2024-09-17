@@ -14,7 +14,7 @@ use kraken_multisig::multisig::Multisig;
 
 // === Structs ===
 
-public struct Issuer has copy, drop {}
+public struct ManageCoins has copy, drop {}
 
 // === [MEMBER] Public functions ===
 
@@ -31,7 +31,7 @@ public fun merge_and_split<T: drop>(
     // receive all coins
     let mut coins = vector::empty();
     to_merge.do!(|item| {
-        let coin = multisig.receive(Issuer {}, item);
+        let coin = multisig.receive(ManageCoins {}, item);
         coins.push_back(coin);
     });
 

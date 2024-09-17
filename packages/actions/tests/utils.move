@@ -137,9 +137,9 @@ public fun new_multisig(world: &mut World): Multisig {
     )
 }
 
-public fun create_proposal<I: drop>(
+public fun create_proposal<W: drop>(
     world: &mut World, 
-    auth_issuer: I,
+    auth_witness: W,
     auth_name: String,
     key: String, 
     description: String,
@@ -147,7 +147,7 @@ public fun create_proposal<I: drop>(
     expiration_epoch: u64,
 ): &mut Proposal {
     world.multisig.create_proposal(
-        auth_issuer, 
+        auth_witness, 
         auth_name,
         key,
         description, 
@@ -394,31 +394,31 @@ public fun execute_list<T: key + store>(
 
 // === Owned ===
 
-public fun withdraw<O: key + store, I: copy + drop>(
+public fun withdraw<O: key + store, W: copy + drop>(
     world: &mut World, 
     executable: &mut Executable,
     receiving: Receiving<O>,
-    issuer: I,
+    witness: W,
 ): O {
-    owned::withdraw<O, I>(executable, &mut world.multisig, receiving, issuer)
+    owned::withdraw<O, W>(executable, &mut world.multisig, receiving, witness)
 }
 
-public fun borrow<O: key + store, I: copy + drop>(
+public fun borrow<O: key + store, W: copy + drop>(
     world: &mut World, 
     executable: &mut Executable,
     receiving: Receiving<O>,
-    issuer: I,
+    witness: W,
 ): O {
-    owned::borrow<O, I>(executable, &mut world.multisig, receiving, issuer)
+    owned::borrow<O, W>(executable, &mut world.multisig, receiving, witness)
 }
 
-public fun put_back<O: key + store, I: copy + drop>(
+public fun put_back<O: key + store, W: copy + drop>(
     world: &mut World, 
     executable: &mut Executable,
     returned: O,
-    issuer: I,
+    witness: W,
 ) {
-    owned::put_back<O, I>(executable, &world.multisig, returned, issuer);
+    owned::put_back<O, W>(executable, &world.multisig, returned, witness);
 }
 
 // === Payments ===
@@ -510,13 +510,13 @@ public fun cancel_payment_stream<C: drop>(
 
 // === Transfers ===
 
-public fun propose_transfer_object(
+public fun propose_transfer_objects(
     world: &mut World, 
     key: String,
     objects: vector<vector<ID>>,
     recipients: vector<address>
 ) {
-    transfers::propose_transfer_object(
+    transfers::propose_transfer_objects(
         &mut world.multisig, 
         key, 
         b"".to_string(), 

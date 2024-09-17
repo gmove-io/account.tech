@@ -21,8 +21,6 @@ const EMustLeaveAllMultisigs: u64 = 2;
 
 // === Struct ===
 
-public struct Issuer has copy, drop {}
-
 // non-transferable user account for tracking multisigs
 public struct Account has key {
     id: UID,

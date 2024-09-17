@@ -18,7 +18,7 @@ const OWNER: address = @0xBABE;
 
 public struct CURRENCY_TESTS has drop {}
 
-public struct Issuer has drop, copy {}
+public struct Witness has drop, copy {}
 
 #[test]
 fun test_mint_end_to_end() {
@@ -93,9 +93,8 @@ fun test_update_metadata_end_to_end() {
     );
     world.approve_proposal(key);
 
-    let mut executable = world.execute_proposal(key);
-    currency::execute_update(&mut executable, world.multisig(), &mut coin_metadata);
-    currency::complete_update(executable);
+    let executable = world.execute_proposal(key);
+    currency::execute_update(executable, world.multisig(), &mut coin_metadata);
 
     assert!(coin_metadata.get_name() == b"test name".to_string());
     assert!(coin_metadata.get_description() == b"test description".to_string());
@@ -130,11 +129,10 @@ fun test_update_error_no_change() {
         option::none(), 
         option::none(), 
     );
+    let executable = world.execute_proposal(key);
     world.approve_proposal(key);
 
-    let mut executable = world.execute_proposal(key);
-    currency::execute_update(&mut executable, world.multisig(), &mut coin_metadata);
-    currency::complete_update(executable);
+    currency::execute_update(executable, world.multisig(), &mut coin_metadata);
 
     destroy(coin_metadata);
     world.end();
@@ -173,7 +171,7 @@ fun test_destroy_mint_error_mint_not_executed() {
 
     world.scenario().next_tx(OWNER);
     let proposal = world.create_proposal(
-        Issuer {},
+        Witness {},
         b"".to_string(),
         key, 
         b"description".to_string(), 
@@ -185,7 +183,7 @@ fun test_destroy_mint_error_mint_not_executed() {
 
     world.scenario().next_tx(OWNER);
     let mut executable = world.execute_proposal(key);
-    currency::destroy_mint<SUI, Issuer>(&mut executable, Issuer {});
+    currency::destroy_mint<SUI, Witness>(&mut executable, Witness {});
 
     destroy(executable);
     world.end();    
@@ -205,7 +203,7 @@ fun test_destroy_burn_error_burn_not_executed() {
     world.lock_treasury_cap(cap);
 
     let proposal = world.create_proposal(
-        Issuer {},
+        Witness {},
         b"".to_string(),
         key, 
         b"description".to_string(), 
@@ -217,14 +215,14 @@ fun test_destroy_burn_error_burn_not_executed() {
     world.approve_proposal(key);
 
     let mut executable = world.execute_proposal(key);
-    let coin = owned::withdraw<Coin<SUI>, Issuer>(
+    let coin = owned::withdraw<Coin<SUI>, Witness>(
         &mut executable, 
         world.multisig(), 
         receiving_coin, 
-        Issuer {}, 
+        Witness {}, 
     );
-    owned::destroy_withdraw(&mut executable, Issuer {});
-    currency::destroy_burn<SUI, Issuer>(&mut executable, Issuer {});
+    owned::destroy_withdraw(&mut executable, Witness {});
+    currency::destroy_burn<SUI, Witness>(&mut executable, Witness {});
 
     destroy(coin);
     destroy(executable);

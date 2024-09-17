@@ -33,11 +33,15 @@ const ERoleDoesntExist: u64 = 5;
 
 // === Structs ===
 
-// delegated issuer verifying a proposal is destroyed in the module where it was created
-public struct Issuer has copy, drop {}
+// [PROPOSAL] modify the name of the multisig
+public struct ConfigNameProposal has copy, drop {}
+// [PROPOSAL] modify the members and thresholds of the multisig
+public struct ConfigRulesProposal has copy, drop {}
+// [PROPOSAL] modify the dependencies of the multisig
+public struct ConfigDepsProposal has copy, drop {}
 
 // [ACTION] wrap a multisig field into a generic action
-public struct Config<T> has store {
+public struct ConfigAction<T> has store {
     inner: T,
 }
 
@@ -54,7 +58,7 @@ public fun propose_config_name(
     ctx: &mut TxContext
 ) {
     let proposal_mut = multisig.create_proposal(
-        Issuer {},
+        ConfigNameProposal {},
         b"".to_string(),
         key,
         description,
@@ -72,8 +76,8 @@ public fun execute_config_name(
     mut executable: Executable,
     multisig: &mut Multisig, 
 ) {
-    config_name(&mut executable, multisig, Issuer {});
-    executable.destroy(Issuer {});
+    config_name(&mut executable, multisig, ConfigNameProposal {});
+    executable.destroy(ConfigNameProposal {});
 }
 
 // step 1: propose to modify multisig rules (everything touching weights)
@@ -97,7 +101,7 @@ public fun propose_config_rules(
     verify_new_rules(addresses, weights, roles, global, role_names, role_thresholds);
     // verify new rules are valid
     let proposal_mut = multisig.create_proposal(
-        Issuer {},
+        ConfigRulesProposal {},
         b"".to_string(),
         key,
         description,
@@ -117,9 +121,9 @@ public fun execute_config_rules(
     mut executable: Executable,
     multisig: &mut Multisig, 
 ) {
-    config_members(&mut executable, multisig, Issuer {});
-    config_thresholds(&mut executable, multisig, Issuer {});
-    executable.destroy(Issuer {});
+    config_members(&mut executable, multisig, ConfigRulesProposal {});
+    config_thresholds(&mut executable, multisig, ConfigRulesProposal {});
+    executable.destroy(ConfigRulesProposal {});
 }
 
 // step 1: propose to update the version
@@ -136,7 +140,7 @@ public fun propose_config_deps(
     ctx: &mut TxContext
 ) {
     let proposal_mut = multisig.create_proposal(
-        Issuer {},
+        ConfigDepsProposal {},
         b"".to_string(),
         key,
         description,
@@ -155,23 +159,23 @@ public fun execute_config_deps(
     mut executable: Executable,
     multisig: &mut Multisig, 
 ) {
-    config_deps(&mut executable, multisig, Issuer {});
-    executable.destroy(Issuer {});
+    config_deps(&mut executable, multisig, ConfigDepsProposal {});
+    executable.destroy(ConfigDepsProposal {});
 }
 
 // === [ACTION] Public functions ===
 
 public fun new_config_name(proposal: &mut Proposal, name: String) {
-    proposal.add_action(Config { inner: name });
+    proposal.add_action(ConfigAction { inner: name });
 }
 
-public fun config_name<I: copy + drop>(
+public fun config_name<W: copy + drop>(
     executable: &mut Executable,
     multisig: &mut Multisig, 
-    issuer: I,
+    witness: W,
 ) {
-    let Config { inner } = executable.remove_action(issuer);
-    *multisig.name_mut(executable, issuer) = inner;
+    let ConfigAction { inner } = executable.remove_action(witness);
+    *multisig.name_mut(executable, witness) = inner;
 }
 
 public fun new_config_members(
@@ -191,16 +195,16 @@ public fun new_config_members(
         members.add(members::new_member(addr, weight, option::none(), roles.remove(0)));
     });
     
-    proposal.add_action(Config { inner: members });
+    proposal.add_action(ConfigAction { inner: members });
 }    
 
-public fun config_members<I: copy + drop>(
+public fun config_members<W: copy + drop>(
     executable: &mut Executable,
     multisig: &mut Multisig, 
-    issuer: I,
+    witness: W,
 ) {
-    let Config { inner } = executable.remove_action(issuer);
-    *multisig.members_mut(executable, issuer) = inner;
+    let ConfigAction { inner } = executable.remove_action(witness);
+    *multisig.members_mut(executable, witness) = inner;
 }
 
 public fun new_config_thresholds(
@@ -217,22 +221,22 @@ public fun new_config_thresholds(
         thresholds.add(role, threshold);
     });
 
-    proposal.add_action(Config { inner: thresholds });
+    proposal.add_action(ConfigAction { inner: thresholds });
 }    
 
-public fun config_thresholds<I: copy + drop>(
+public fun config_thresholds<W: copy + drop>(
     executable: &mut Executable,
     multisig: &mut Multisig,
-    issuer: I,
+    witness: W,
 ) {
     // threshold modification must be the latest action to be executed to ensure it is reachable
     assert!(
-        executable.action_index<Config<Thresholds>>() + 1 - executable.next_to_destroy() == executable.actions_length(), 
+        executable.action_index<ConfigAction<Thresholds>>() + 1 - executable.next_to_destroy() == executable.actions_length(), 
         EThresholdNotLastAction
     );
     
-    let Config { inner } = executable.remove_action(issuer);
-    *multisig.thresholds_mut(executable, issuer) = inner;
+    let ConfigAction { inner } = executable.remove_action(witness);
+    *multisig.thresholds_mut(executable, witness) = inner;
 }
 
 public fun new_config_deps(
@@ -248,16 +252,16 @@ public fun new_config_deps(
         let dep = deps::new_dep(extensions, name, package, version);
         deps.add(dep);
     });
-    proposal.add_action(Config { inner: deps });
+    proposal.add_action(ConfigAction { inner: deps });
 }
 
-public fun config_deps<I: copy + drop>(
+public fun config_deps<W: copy + drop>(
     executable: &mut Executable,
     multisig: &mut Multisig, 
-    issuer: I,
+    witness: W,
 ) {
-    let Config { inner } = executable.remove_action(issuer);
-    *multisig.deps_mut(executable, issuer) = inner;
+    let ConfigAction { inner } = executable.remove_action(witness);
+    *multisig.deps_mut(executable, witness) = inner;
 }
 
 // === Private functions ===

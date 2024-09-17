@@ -13,9 +13,9 @@ const OWNER: address = @0xBABE;
 const ALICE: address = @0xa11e7;
 const BOB: address = @0x10;
 
-public struct Issuer has copy, drop {}
+public struct Witness has copy, drop {}
 
-public struct Issuer2 has copy, drop {}
+public struct Witness2 has copy, drop {}
 
 public struct Action has store {
     value: u64

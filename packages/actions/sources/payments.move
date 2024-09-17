@@ -19,9 +19,9 @@ use kraken_multisig::{
     executable::Executable
 };
 use kraken_actions::{
-    owned::{Self, Withdraw},
-    treasury::{Self, Spend},
-    currency::{Self, Mint}
+    owned::{Self, WithdrawAction},
+    treasury::{Self, SpendAction},
+    currency::{Self, MintAction}
 };
 
 // === Errors ===
@@ -44,26 +44,6 @@ public struct StreamCreated has copy, drop, store {
 
 // === Structs ===
 
-// delegated issuer verifying a proposal is destroyed in the module where it was created
-public struct Issuer has copy, drop {}
-
-// [ACTION]
-public struct Pay has store {
-    // amount to pay at each due date
-    amount: u64,
-    // number of epochs between each payment
-    interval: u64,
-    // address to pay
-    recipient: address,
-}
-
-// cap enabling bearer to claim the payment
-public struct ClaimCap has key {
-    id: UID,
-    // id of the stream to claim
-    stream_id: ID,
-}
-
 // balance for a payment is locked and sent automatically from backend or claimed manually by the recipient
 public struct Stream<phantom C: drop> has key {
     id: UID,
@@ -75,6 +55,26 @@ public struct Stream<phantom C: drop> has key {
     interval: u64,
     // epoch of the last payment
     last_epoch: u64,
+    // address to pay
+    recipient: address,
+}
+
+// cap enabling bearer to claim the payment
+public struct ClaimCap has key {
+    id: UID,
+    // id of the stream to claim
+    stream_id: ID,
+}
+
+// [PROPOSAL] stream an amount of coin to be paid at specific intervals
+public struct PayProposal has copy, drop {}
+
+// [ACTION]
+public struct PayAction has store {
+    // amount to pay at each due date
+    amount: u64,
+    // number of epochs between each payment
+    interval: u64,
     // address to pay
     recipient: address,
 }
@@ -95,7 +95,7 @@ public fun propose_pay_owned(
     ctx: &mut TxContext
 ) {
     let proposal_mut = multisig.create_proposal(
-        Issuer {},
+        PayProposal {},
         b"".to_string(),
         key,
         description,
@@ -122,7 +122,7 @@ public fun propose_pay_treasury(
     ctx: &mut TxContext
 ) {
     let proposal_mut = multisig.create_proposal(
-        Issuer {},
+        PayProposal {},
         b"".to_string(),
         key,
         description,
@@ -147,7 +147,7 @@ public fun propose_pay_minted<C: drop>(
     ctx: &mut TxContext
 ) {
     let proposal_mut = multisig.create_proposal(
-        Issuer {},
+        PayProposal {},
         b"".to_string(),
         key,
         description,
@@ -168,11 +168,11 @@ public fun execute_pay<C: drop>(
     receiving: Option<Receiving<Coin<C>>>,
     ctx: &mut TxContext
 ) {
-    let coin = access_coin(&mut executable, multisig, receiving, Issuer {}, ctx);
-    pay<C, Issuer>(&mut executable, multisig, coin, Issuer {}, ctx);
+    let coin = access_coin(&mut executable, multisig, receiving, PayProposal {}, ctx);
+    pay<C, PayProposal>(&mut executable, multisig, coin, PayProposal {}, ctx);
 
-    destroy_pay<C, Issuer>(&mut executable, Issuer {});
-    executable.destroy(Issuer {});
+    destroy_pay<C, PayProposal>(&mut executable, PayProposal {});
+    executable.destroy(PayProposal {});
 }
 
 // step 5: bearer of ClaimCap can claim the payment
@@ -231,7 +231,7 @@ public fun new_pay_owned(
     recipient: address,
 ) {
     owned::new_withdraw(proposal, vector[coin_id]);
-    proposal.add_action(Pay { amount, interval, recipient });
+    proposal.add_action(PayAction { amount, interval, recipient });
 }
 
 public fun new_pay_treasury(
@@ -244,7 +244,7 @@ public fun new_pay_treasury(
     recipient: address
 ) {
     treasury::new_spend(proposal, treasury_name, vector[coin_type], vector[coin_amount]);
-    proposal.add_action(Pay { amount, interval, recipient });
+    proposal.add_action(PayAction { amount, interval, recipient });
 }
 
 public fun new_pay_minted<C: drop>(
@@ -255,17 +255,17 @@ public fun new_pay_minted<C: drop>(
     recipient: address
 ) {
     currency::new_mint<C>(proposal, coin_amount);
-    proposal.add_action(Pay { amount, interval, recipient });
+    proposal.add_action(PayAction { amount, interval, recipient });
 }
 
-public fun pay<C: drop, I: copy + drop>(
+public fun pay<C: drop, W: copy + drop>(
     executable: &mut Executable, 
     multisig: &mut Multisig, 
     coin: Coin<C>,
-    issuer: I,
+    witness: W,
     ctx: &mut TxContext
 ) {    
-    let pay_mut: &mut Pay = executable.action_mut(issuer, multisig.addr());
+    let pay_mut: &mut PayAction = executable.action_mut(witness, multisig.addr());
 
     let stream = Stream<C> { 
         id: object::new(ctx), 
@@ -287,21 +287,21 @@ public fun pay<C: drop, I: copy + drop>(
     pay_mut.amount = 0; // reset to ensure action is executed only once
 }
 
-public fun destroy_pay<C: drop, I: copy + drop>(executable: &mut Executable, issuer: I): address {
+public fun destroy_pay<C: drop, W: copy + drop>(executable: &mut Executable, witness: W): address {
     if (is_withdraw<C>(executable)) {
         if (owned::withdraw_is_executed(executable))
-            owned::destroy_withdraw(executable, issuer);
+            owned::destroy_withdraw(executable, witness);
     } else if (is_spend<C>(executable)) {
         if (treasury::spend_is_executed(executable))
-            treasury::destroy_spend(executable, issuer);
+            treasury::destroy_spend(executable, witness);
     } else if (is_mint<C>(executable)) {
         if (currency::mint_is_executed<C>(executable))
-            currency::destroy_mint<C, I>(executable, issuer);
+            currency::destroy_mint<C, W>(executable, witness);
     } else {
         abort EInvalidExecutable
     };    
 
-    let Pay { amount, recipient, .. } = executable.remove_action(issuer);
+    let PayAction { amount, recipient, .. } = executable.remove_action(witness);
     assert!(amount == 0, EPayNotExecuted);
 
     recipient
@@ -332,37 +332,37 @@ public fun recipient<C: drop>(self: &Stream<C>): address {
 // === Private functions ===
 
 // retrieve an object from the Multisig owned or managed assets 
-fun access_coin<C: drop, I: copy + drop>(
+fun access_coin<C: drop, W: copy + drop>(
     executable: &mut Executable, 
     multisig: &mut Multisig,
     receiving: Option<Receiving<Coin<C>>>,
-    issuer: I,
+    witness: W,
     ctx: &mut TxContext
 ): Coin<C> {
     if (is_withdraw<C>(executable)) {
         assert!(receiving.is_some(), EReceivingShouldBeSome);
-        owned::withdraw(executable, multisig, receiving.destroy_some(), issuer)
+        owned::withdraw(executable, multisig, receiving.destroy_some(), witness)
     } else if (is_spend<C>(executable)) {
-        treasury::spend(executable, multisig, issuer, ctx)
+        treasury::spend(executable, multisig, witness, ctx)
     } else if (is_mint<C>(executable)) {
-        currency::mint(executable, multisig, issuer, ctx)
+        currency::mint(executable, multisig, witness, ctx)
     } else {
         abort EInvalidExecutable
     }
 }
 
 fun is_withdraw<C: drop>(executable: &Executable): bool {
-    executable.action_index<Withdraw>() < executable.action_index<Spend>() &&
-    executable.action_index<Withdraw>() < executable.action_index<Mint<C>>()
+    executable.action_index<WithdrawAction>() < executable.action_index<SpendAction>() &&
+    executable.action_index<WithdrawAction>() < executable.action_index<MintAction<C>>()
 }
 
 fun is_spend<C: drop>(executable: &Executable): bool {
-    executable.action_index<Spend>() < executable.action_index<Withdraw>() &&
-    executable.action_index<Spend>() < executable.action_index<Mint<C>>()
+    executable.action_index<SpendAction>() < executable.action_index<WithdrawAction>() &&
+    executable.action_index<SpendAction>() < executable.action_index<MintAction<C>>()
 }
 
 fun is_mint<C: drop>(executable: &Executable): bool {
-    executable.action_index<Mint<C>>() < executable.action_index<Withdraw>() &&
-    executable.action_index<Mint<C>>() < executable.action_index<Spend>()
+    executable.action_index<MintAction<C>>() < executable.action_index<WithdrawAction>() &&
+    executable.action_index<MintAction<C>>() < executable.action_index<SpendAction>()
 }
 

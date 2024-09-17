@@ -45,11 +45,11 @@ const VERSION: u64 = 1;
 // shared object 
 public struct Multisig has key {
     id: UID,
+    // human readable name to differentiate the multisigs
+    name: String,
     // ids and versions of the packages this multisig is using
     // idx 0: kraken_multisig, idx 1: kraken_actions
     deps: Deps,
-    // human readable name to differentiate the multisigs
-    name: String,
     // members of the multisig
     members: Members,
     // manage global threshold and role -> threshold
@@ -83,8 +83,8 @@ public fun new(
 
     Multisig { 
         id: object::new(ctx),
-        deps,
         name,
+        deps,
         thresholds: thresholds::new(1),
         members,
         proposals: proposals::new(),
@@ -101,9 +101,9 @@ public fun share(multisig: Multisig) {
 
 // create a new proposal for an action
 // that must be constructed in another module
-public fun create_proposal<I: drop>(
+public fun create_proposal<W: drop>(
     multisig: &mut Multisig, 
-    issuer: I, // module's auth issuer
+    witness: W, // module's auth witness
     auth_name: String, // module's auth name
     key: String, // proposal key
     description: String,
@@ -112,7 +112,7 @@ public fun create_proposal<I: drop>(
     ctx: &mut TxContext
 ): &mut Proposal {
     multisig.assert_is_member(ctx);
-    let auth = auth::construct(issuer, auth_name, multisig.addr());
+    let auth = auth::construct(witness, auth_name, multisig.addr());
     multisig.deps.assert_version(&auth, VERSION);
 
     let proposal = proposals::new_proposal(
@@ -193,12 +193,12 @@ public fun addr(multisig: &Multisig): address {
     multisig.id.uid_to_inner().id_to_address()
 }
 
-public fun deps(multisig: &Multisig): &Deps {
-    &multisig.deps
-}
-
 public fun name(multisig: &Multisig): String {
     multisig.name
+}
+
+public fun deps(multisig: &Multisig): &Deps {
+    &multisig.deps
 }
 
 public fun members(multisig: &Multisig): &Members {
@@ -228,40 +228,40 @@ public fun assert_is_member(multisig: &Multisig, ctx: &TxContext) {
 // === Deps-only functions ===
 
 // managed assets
-public fun add_managed_asset<K: copy + drop + store, A: store, I: copy + drop>(
+public fun add_managed_asset<K: copy + drop + store, A: store, W: copy + drop>(
     multisig: &mut Multisig, 
-    issuer: I,
+    witness: W,
     key: K, 
     asset: A,
 ) {
-    multisig.deps.assert_dep(issuer);
+    multisig.deps.assert_dep(witness);
     df::add(&mut multisig.id, key, asset);
 }
 
-public fun borrow_managed_asset<K: copy + drop + store, A: store, I: copy + drop>(
+public fun borrow_managed_asset<K: copy + drop + store, A: store, W: copy + drop>(
     multisig: &Multisig, 
-    issuer: I,
+    witness: W,
     key: K, 
 ): &A {
-    multisig.deps.assert_dep(issuer);
+    multisig.deps.assert_dep(witness);
     df::borrow(&multisig.id, key)
 }
 
-public fun borrow_managed_asset_mut<K: copy + drop + store, A: store, I: copy + drop>(
+public fun borrow_managed_asset_mut<K: copy + drop + store, A: store, W: copy + drop>(
     multisig: &mut Multisig, 
-    issuer: I,
+    witness: W,
     key: K, 
 ): &mut A {
-    multisig.deps.assert_dep(issuer);
+    multisig.deps.assert_dep(witness);
     df::borrow_mut(&mut multisig.id, key)
 }
 
-public fun remove_managed_asset<K: copy + drop + store, A: store, I: copy + drop>(
+public fun remove_managed_asset<K: copy + drop + store, A: store, W: copy + drop>(
     multisig: &mut Multisig, 
-    issuer: I,
+    witness: W,
     key: K, 
 ): A {
-    multisig.deps.assert_dep(issuer);
+    multisig.deps.assert_dep(witness);
     df::remove(&mut multisig.id, key)
 }
 
@@ -275,57 +275,57 @@ public fun has_managed_asset<K: copy + drop + store>(
 // === Core Deps only functions ===
 
 // owned objects
-public fun receive<T: key + store, I: copy + drop>(
+public fun receive<T: key + store, W: copy + drop>(
     multisig: &mut Multisig, 
-    issuer: I,
+    witness: W,
     receiving: Receiving<T>,
 ): T {
-    multisig.deps.assert_core_dep(issuer);
+    multisig.deps.assert_core_dep(witness);
     transfer::public_receive(&mut multisig.id, receiving)
 }
 
 // fields
-public fun deps_mut<I: copy + drop>(
+public fun name_mut<W: copy + drop>(
     multisig: &mut Multisig, 
     executable: &Executable,
-    issuer: I,
-): &mut Deps {
-    executable.auth().assert_is_issuer(issuer);
-    executable.auth().assert_is_multisig(multisig.addr());
-    multisig.deps.assert_core_dep(issuer);
-    &mut multisig.deps
-}
-
-public fun name_mut<I: copy + drop>(
-    multisig: &mut Multisig, 
-    executable: &Executable,
-    issuer: I,
+    witness: W,
 ): &mut String {
-    executable.auth().assert_is_issuer(issuer);
+    executable.auth().assert_is_witness(witness);
     executable.auth().assert_is_multisig(multisig.addr());
-    multisig.deps.assert_core_dep(issuer);
+    multisig.deps.assert_core_dep(witness);
     &mut multisig.name
 }
 
-public fun thresholds_mut<I: copy + drop>(
+public fun deps_mut<W: copy + drop>(
     multisig: &mut Multisig, 
     executable: &Executable,
-    issuer: I,
-): &mut Thresholds {
-    executable.auth().assert_is_issuer(issuer);
+    witness: W,
+): &mut Deps {
+    executable.auth().assert_is_witness(witness);
     executable.auth().assert_is_multisig(multisig.addr());
-    multisig.deps.assert_core_dep(issuer);
+    multisig.deps.assert_core_dep(witness);
+    &mut multisig.deps
+}
+
+public fun thresholds_mut<W: copy + drop>(
+    multisig: &mut Multisig, 
+    executable: &Executable,
+    witness: W,
+): &mut Thresholds {
+    executable.auth().assert_is_witness(witness);
+    executable.auth().assert_is_multisig(multisig.addr());
+    multisig.deps.assert_core_dep(witness);
     &mut multisig.thresholds
 }
 
-public fun members_mut<I: copy + drop>(
+public fun members_mut<W: copy + drop>(
     multisig: &mut Multisig, 
     executable: &Executable,
-    issuer: I,
+    witness: W,
 ): &mut Members {
-    executable.auth().assert_is_issuer(issuer);
+    executable.auth().assert_is_witness(witness);
     executable.auth().assert_is_multisig(multisig.addr());
-    multisig.deps.assert_core_dep(issuer);
+    multisig.deps.assert_core_dep(witness);
     &mut multisig.members
 }
 

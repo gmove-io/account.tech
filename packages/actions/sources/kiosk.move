@@ -32,9 +32,6 @@ const EListAllNftsBefore: u64 = 4;
 
 // === Structs ===    
 
-// delegated issuer verifying a proposal is destroyed in the module where it was created
-public struct Issuer has copy, drop {}
-
 // df key for the KioskOwnerLock
 public struct KioskOwnerKey has copy, drop, store { name: String }
 
@@ -44,8 +41,15 @@ public struct KioskOwnerLock has store {
     kiosk_owner_cap: KioskOwnerCap,
 }
 
+// [MEMBER] can create a Kiosk and lock the KioskOwnerCap in the Multisig to restrict taking and listing operations
+public struct ManageKiosk has copy, drop {}
+// [PROPOSAL] take nfts from a kiosk managed by a multisig
+public struct TakeProposal has copy, drop {}
+// [PROPOSAL] list nfts in a kiosk managed by a multisig
+public struct ListProposal has copy, drop {}
+
 // [ACTION] transfer nfts from the multisig's kiosk to another one
-public struct Take has store {
+public struct TakeAction has store {
     // id of the nfts to transfer
     nft_ids: vector<ID>,
     // owner of the receiver kiosk
@@ -53,7 +57,7 @@ public struct Take has store {
 }
 
 // [ACTION] list nfts for purchase
-public struct List has store {
+public struct ListAction has store {
     // name of the kiosk
     name: String,
     // id of the nfts to list to the prices
@@ -70,17 +74,17 @@ public fun new(multisig: &mut Multisig, name: String, ctx: &mut TxContext) {
     kiosk.set_owner_custom(&kiosk_owner_cap, multisig.addr());
 
     let kiosk_owner_lock = KioskOwnerLock { kiosk_owner_cap };
-    multisig.add_managed_asset(Issuer {}, KioskOwnerKey { name }, kiosk_owner_lock);
+    multisig.add_managed_asset(ManageKiosk {}, KioskOwnerKey { name }, kiosk_owner_lock);
 
     transfer::public_share_object(kiosk);
 }
 
 public fun borrow_lock(multisig: &Multisig, name: String): &KioskOwnerLock {
-    multisig.borrow_managed_asset(Issuer {}, KioskOwnerKey { name })
+    multisig.borrow_managed_asset(ManageKiosk {}, KioskOwnerKey { name })
 }
 
 public fun borrow_lock_mut(multisig: &mut Multisig, name: String): &mut KioskOwnerLock {
-    multisig.borrow_managed_asset_mut(Issuer {}, KioskOwnerKey { name })
+    multisig.borrow_managed_asset_mut(ManageKiosk {}, KioskOwnerKey { name })
 }
 
 // deposit from another Kiosk, no need for proposal
@@ -164,7 +168,7 @@ public fun propose_take(
     ctx: &mut TxContext
 ) {
     let proposal_mut = multisig.create_proposal(
-        Issuer {},
+        TakeProposal {},
         name,
         key,
         description,
@@ -188,13 +192,13 @@ public fun execute_take<O: key + store>(
     policy: &mut TransferPolicy<O>,
     ctx: &mut TxContext
 ): TransferRequest<O> {
-    take(executable, multisig, multisig_kiosk, recipient_kiosk, recipient_cap, policy, Issuer {}, ctx)
+    take(executable, multisig, multisig_kiosk, recipient_kiosk, recipient_cap, policy, TakeProposal {}, ctx)
 }
 
 // step 5: destroy the executable, must `put_back_cap()`
 public fun complete_take(mut executable: Executable) {
-    destroy_take(&mut executable, Issuer {});
-    executable.destroy(Issuer {});
+    destroy_take(&mut executable, TakeProposal {});
+    executable.destroy(TakeProposal {});
 }
 
 // step 1: propose to list nfts
@@ -210,7 +214,7 @@ public fun propose_list(
     ctx: &mut TxContext
 ) {
     let proposal_mut = multisig.create_proposal(
-        Issuer {},
+        ListProposal {},
         name,
         key,
         description,
@@ -230,13 +234,13 @@ public fun execute_list<O: key + store>(
     multisig: &mut Multisig,
     kiosk: &mut Kiosk,
 ) {
-    list<O, Issuer>(executable, multisig, kiosk, Issuer {});
+    list<O, ListProposal>(executable, multisig, kiosk, ListProposal {});
 }
 
 // step 5: destroy the executable, must `put_back_cap()`
 public fun complete_list(mut executable: Executable) {
-    destroy_list(&mut executable, Issuer {});
-    executable.destroy(Issuer {});
+    destroy_list(&mut executable, ListProposal {});
+    executable.destroy(ListProposal {});
 }
 
 // === [ACTION] Public functions ===
@@ -246,21 +250,21 @@ public fun new_take(
     nft_ids: vector<ID>, 
     recipient: address
 ) {
-    proposal.add_action(Take { nft_ids, recipient });
+    proposal.add_action(TakeAction { nft_ids, recipient });
 }
 
-public fun take<O: key + store, I: copy + drop>(
+public fun take<O: key + store, W: copy + drop>(
     executable: &mut Executable,
     multisig: &mut Multisig,
     multisig_kiosk: &mut Kiosk, 
     recipient_kiosk: &mut Kiosk, 
     recipient_cap: &KioskOwnerCap, 
     policy: &mut TransferPolicy<O>,
-    issuer: I,
+    witness: W,
     ctx: &mut TxContext
 ): TransferRequest<O> {
     let name = executable.auth().name();
-    let take_mut: &mut Take = executable.action_mut(issuer, multisig.addr());
+    let take_mut: &mut TakeAction = executable.action_mut(witness, multisig.addr());
     let lock_mut = borrow_lock_mut(multisig, name);
     assert!(take_mut.recipient == ctx.sender(), EWrongReceiver);
 
@@ -283,8 +287,8 @@ public fun take<O: key + store, I: copy + drop>(
     request
 }
 
-public fun destroy_take<I: copy + drop>(executable: &mut Executable, issuer: I): address {
-    let Take { nft_ids, recipient, .. } = executable.remove_action(issuer);
+public fun destroy_take<W: copy + drop>(executable: &mut Executable, witness: W): address {
+    let TakeAction { nft_ids, recipient, .. } = executable.remove_action(witness);
     assert!(nft_ids.is_empty(), ETransferAllNftsBefore);
     recipient
 }
@@ -296,24 +300,24 @@ public fun new_list(
     prices: vector<u64>
 ) {
     assert!(nft_ids.length() == prices.length(), EWrongNftsPrices);
-    proposal.add_action(List { name, nfts_prices_map: vec_map::from_keys_values(nft_ids, prices) });
+    proposal.add_action(ListAction { name, nfts_prices_map: vec_map::from_keys_values(nft_ids, prices) });
 }
 
-public fun list<O: key + store, I: copy + drop>(
+public fun list<O: key + store, W: copy + drop>(
     executable: &mut Executable,
     multisig: &mut Multisig,
     kiosk: &mut Kiosk,
-    issuer: I,
+    witness: W,
 ) {
     let name = executable.auth().name();
-    let list_mut: &mut List = executable.action_mut(issuer, multisig.addr());
+    let list_mut: &mut ListAction = executable.action_mut(witness, multisig.addr());
     let lock_mut = borrow_lock_mut(multisig, name);
 
     let (nft_id, price) = list_mut.nfts_prices_map.remove_entry_by_idx(0);
     kiosk.list<O>(&lock_mut.kiosk_owner_cap, nft_id, price);
 }
 
-public fun destroy_list<I: copy + drop>(executable: &mut Executable, issuer: I) {
-    let List { nfts_prices_map, .. } = executable.remove_action(issuer);
+public fun destroy_list<W: copy + drop>(executable: &mut Executable, witness: W) {
+    let ListAction { nfts_prices_map, .. } = executable.remove_action(witness);
     assert!(nfts_prices_map.is_empty(), EListAllNftsBefore);
 }

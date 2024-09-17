@@ -41,12 +41,12 @@ public(package) fun new(auth: Auth, actions: Bag): Executable {
     }
 }
 
-public fun action_mut<I: drop, A: store>(
+public fun action_mut<W: drop, A: store>(
     executable: &mut Executable, 
-    issuer: I,
+    witness: W,
     multisig_addr: address,
 ): &mut A {
-    executable.auth.assert_is_issuer(issuer);
+    executable.auth.assert_is_witness(witness);
     executable.auth.assert_is_multisig(multisig_addr);
 
     let idx = executable.action_index<A>();
@@ -54,11 +54,11 @@ public fun action_mut<I: drop, A: store>(
 }
 
 // need to destroy all actions before destroying the executable
-public fun remove_action<I: drop, A: store>(
+public fun remove_action<W: drop, A: store>(
     executable: &mut Executable, 
-    issuer: I,
+    witness: W,
 ): A {
-    executable.auth.assert_is_issuer(issuer);
+    executable.auth.assert_is_witness(witness);
 
     let next = executable.next_to_destroy;
     executable.next_to_destroy = next + 1;
@@ -67,9 +67,9 @@ public fun remove_action<I: drop, A: store>(
 }
 
 // to complete the execution
-public fun destroy<I: drop>(
+public fun destroy<W: drop>(
     executable: Executable, 
-    issuer: I
+    witness: W
 ) {
     let Executable { 
         auth, 
@@ -77,7 +77,7 @@ public fun destroy<I: drop>(
         ..
     } = executable;
     
-    auth.assert_is_issuer(issuer);
+    auth.assert_is_witness(witness);
     actions.destroy_empty();
 }
 

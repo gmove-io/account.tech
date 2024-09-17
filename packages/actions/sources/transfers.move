@@ -17,9 +17,9 @@ use kraken_multisig::{
     executable::Executable
 };
 use kraken_actions::{
-    currency::{Self, Mint},
-    owned::{Self, Withdraw},
-    treasury::{Self, Spend},
+    currency::{Self, MintAction},
+    owned::{Self, WithdrawAction},
+    treasury::{Self, SpendAction},
 };
 
 // === Errors ===
@@ -31,12 +31,14 @@ const ETransferNotExecuted: u64 = 3;
 
 // === Structs ===
 
-// delegated issuer verifying a proposal is destroyed in the module where it was created
-public struct Issuer has copy, drop {}
+// [PROPOSAL] transfers multiple objects
+public struct TransferObjectsProposal has copy, drop {}
+// [PROPOSAL] transfer coins owned by the multisig, managed by the treasury or minted within the multisig
+public struct TransferCoinProposal has copy, drop {}
 
-// [ACTION] used in combination with Mint, Withdraw or Spend 
+// [ACTION] used in combination with MintAction, WithdrawAction or SpendAction 
 // to transfer the coins or objects to a recipient
-public struct Transfer has store {
+public struct TransferAction has store {
     // address to transfer to
     recipient: address,
 }
@@ -44,7 +46,7 @@ public struct Transfer has store {
 // === [PROPOSAL] Public functions ===
 
 // step 1: propose to send owned objects
-public fun propose_transfer_object(
+public fun propose_transfer_objects(
     multisig: &mut Multisig, 
     key: String,
     description: String,
@@ -56,7 +58,7 @@ public fun propose_transfer_object(
 ) {
     assert!(recipients.length() == objects.length(), EDifferentLength);
     let proposal_mut = multisig.create_proposal(
-        Issuer {},
+        TransferObjectsProposal {},
         b"".to_string(),
         key,
         description,
@@ -66,7 +68,7 @@ public fun propose_transfer_object(
     );
 
     objects.zip_do!(recipients, |objs, recipient| {
-        new_transfer_object(proposal_mut, objs, recipient);
+        new_transfer_objects(proposal_mut, objs, recipient);
     });
 }
 
@@ -79,17 +81,17 @@ public fun execute_transfer_object<T: key + store>(
     multisig: &mut Multisig, 
     receiving: Receiving<T>,
 ) {
-    transfer_object(executable, multisig, receiving, Issuer {});
+    transfer_object(executable, multisig, receiving, TransferObjectsProposal {});
 }
 
 // step 5: destroy transfer for recipient
-public fun confirm_transfer_object(executable: &mut Executable) {
-    destroy_transfer_object(executable, Issuer {});
+public fun confirm_transfer_objects(executable: &mut Executable) {
+    destroy_transfer_objects(executable, TransferObjectsProposal {});
 }
 
 // step 6: complete transfers and destroy the executable
-public fun complete_transfer(executable: Executable) {
-    executable.destroy(Issuer {});
+public fun complete_transfers(executable: Executable) {
+    executable.destroy(TransferObjectsProposal {});
 }
 
 // step 1: propose to send owned coins
@@ -105,7 +107,7 @@ public fun propose_transfer_coin_owned(
 ) {
     assert!(recipients.length() == coin_objects.length(), EDifferentLength);
     let proposal_mut = multisig.create_proposal(
-        Issuer {},
+        TransferCoinProposal {},
         b"".to_string(),
         key,
         description,
@@ -134,7 +136,7 @@ public fun propose_transfer_coin_treasury(
 ) {
     assert!(coin_amounts.length() == coin_types.length(), EDifferentLength);
     let proposal_mut = multisig.create_proposal(
-        Issuer {},
+        TransferCoinProposal {},
         b"".to_string(),
         key,
         description,
@@ -162,7 +164,7 @@ public fun propose_transfer_coin_minted<C: drop>(
 ) {
     assert!(amounts.length() == recipients.length(), EDifferentLength);
     let proposal_mut = multisig.create_proposal(
-        Issuer {},
+        TransferCoinProposal {},
         b"".to_string(),
         key,
         description,
@@ -186,69 +188,69 @@ public fun execute_transfer_coin<C: drop>(
     receiving: Option<Receiving<Coin<C>>>,
     ctx: &mut TxContext
 ) {
-    let coin = access_coin<C, Issuer>(executable, multisig, receiving, Issuer {}, ctx);
-    transfer_coin(executable, multisig, coin, Issuer {});
+    let coin = access_coin<C, TransferCoinProposal>(executable, multisig, receiving, TransferCoinProposal {}, ctx);
+    transfer_coin(executable, multisig, coin, TransferCoinProposal {});
 }
 
 // step 5: destroy transfer for recipient
 public fun confirm_transfer_coin<C: drop>(executable: &mut Executable) {
-    destroy_transfer_coin<C, Issuer>(executable, Issuer {});
+    destroy_transfer_coin<C, TransferCoinProposal>(executable, TransferCoinProposal {});
 }
 // step 6: complete transfers and destroy the executable `complete_transfer`
 
 // === [ACTION] Public functions ===
 
 // retrieve an object from the Multisig owned or managed assets 
-public fun access_coin<C: drop, I: copy + drop>(
+public fun access_coin<C: drop, W: copy + drop>(
     executable: &mut Executable, 
     multisig: &mut Multisig,
     receiving: Option<Receiving<Coin<C>>>,
-    issuer: I,
+    witness: W,
     ctx: &mut TxContext
 ): Coin<C> {
     if (is_withdraw<C>(executable)) {
         assert!(receiving.is_some(), EReceivingShouldBeSome);
-        owned::withdraw(executable, multisig, receiving.destroy_some(), issuer)
+        owned::withdraw(executable, multisig, receiving.destroy_some(), witness)
     } else if (is_spend<C>(executable)) {
-        treasury::spend(executable, multisig, issuer, ctx)
+        treasury::spend(executable, multisig, witness, ctx)
     } else if (is_mint<C>(executable)) {
-        currency::mint(executable, multisig, issuer, ctx)
+        currency::mint(executable, multisig, witness, ctx)
     } else {
         abort EInvalidExecutable
     }
 }
 
-public fun new_transfer_object(
+public fun new_transfer_objects(
     proposal: &mut Proposal, 
     objects: vector<ID>, 
     recipient: address
 ) {
     owned::new_withdraw(proposal, objects);
-    proposal.add_action(Transfer { recipient });
+    proposal.add_action(TransferAction { recipient });
 }
 
-public fun transfer_object<T: key + store, I: copy + drop>(
+public fun transfer_object<T: key + store, W: copy + drop>(
     executable: &mut Executable, 
     multisig: &mut Multisig, 
     receiving: Receiving<T>,
-    issuer: I,
+    witness: W,
 ) {
-    let object = owned::withdraw(executable, multisig, receiving, issuer);
+    let object = owned::withdraw(executable, multisig, receiving, witness);
     let is_executed = owned::withdraw_is_executed(executable);
     
-    let transfer_mut: &mut Transfer = executable.action_mut(issuer, multisig.addr());
+    let transfer_mut: &mut TransferAction = executable.action_mut(witness, multisig.addr());
     transfer::public_transfer(object, transfer_mut.recipient);
 
     if (is_executed)
         transfer_mut.recipient = @0xF; // reset to ensure it is executed once
 }
 
-public fun destroy_transfer_object<I: copy + drop>(
+public fun destroy_transfer_objects<W: copy + drop>(
     executable: &mut Executable, 
-    issuer: I
+    witness: W
 ) {
-    owned::destroy_withdraw(executable, issuer);
-    let Transfer { recipient } = executable.remove_action(issuer);
+    owned::destroy_withdraw(executable, witness);
+    let TransferAction { recipient } = executable.remove_action(witness);
     assert!(recipient == @0xF, ETransferNotExecuted);
 }
 
@@ -258,7 +260,7 @@ public fun new_transfer_coin_owned(
     recipient: address
 ) {
     owned::new_withdraw(proposal, objects);
-    proposal.add_action(Transfer { recipient });
+    proposal.add_action(TransferAction { recipient });
 }
 
 public fun new_transfer_coin_treasury(
@@ -269,7 +271,7 @@ public fun new_transfer_coin_treasury(
     recipient: address
 ) {
     treasury::new_spend(proposal, treasury_name, coin_types, amounts);
-    proposal.add_action(Transfer { recipient });
+    proposal.add_action(TransferAction { recipient });
 }
 
 public fun new_transfer_coin_minted<C: drop>(
@@ -278,62 +280,62 @@ public fun new_transfer_coin_minted<C: drop>(
     recipient: address
 ) {
     currency::new_mint<C>(proposal, amount);
-    proposal.add_action(Transfer { recipient });
+    proposal.add_action(TransferAction { recipient });
 }
 
-public fun transfer_coin<C: drop, I: copy + drop>(
+public fun transfer_coin<C: drop, W: copy + drop>(
     executable: &mut Executable, 
     multisig: &Multisig,
     coin: Coin<C>,
-    issuer: I,
+    witness: W,
 ) {
     let is_executed = (
         owned::withdraw_is_executed(executable) || 
         treasury::spend_is_executed(executable) || 
         currency::mint_is_executed<C>(executable)
     );
-    let transfer_mut: &mut Transfer = executable.action_mut(issuer, multisig.addr());
+    let transfer_mut: &mut TransferAction = executable.action_mut(witness, multisig.addr());
     transfer::public_transfer(coin, transfer_mut.recipient);  
     
     if (is_executed)
         transfer_mut.recipient = @0xF; // reset to ensure it is executed once
 }
 
-public fun destroy_transfer_coin<C: drop, I: copy + drop>(
+public fun destroy_transfer_coin<C: drop, W: copy + drop>(
     executable: &mut Executable, 
-    issuer: I
+    witness: W
 ) {
     if (is_withdraw<C>(executable)) {
         if (owned::withdraw_is_executed(executable))
-            owned::destroy_withdraw(executable, issuer);
+            owned::destroy_withdraw(executable, witness);
     } else if (is_spend<C>(executable)) {
         if (treasury::spend_is_executed(executable))
-            treasury::destroy_spend(executable, issuer);
+            treasury::destroy_spend(executable, witness);
     } else if (is_mint<C>(executable)) {
         if (currency::mint_is_executed<C>(executable))
-            currency::destroy_mint<C, I>(executable, issuer);
+            currency::destroy_mint<C, W>(executable, witness);
     } else {
         abort EInvalidExecutable
     };  
 
-    let Transfer { recipient } = executable.remove_action(issuer);
+    let TransferAction { recipient } = executable.remove_action(witness);
     assert!(recipient == @0xF, ETransferNotExecuted);
 }
 
 // === Private functions ===
 
 fun is_withdraw<C: drop>(executable: &Executable): bool {
-    executable.action_index<Withdraw>() < executable.action_index<Spend>() &&
-    executable.action_index<Withdraw>() < executable.action_index<Mint<C>>()
+    executable.action_index<WithdrawAction>() < executable.action_index<SpendAction>() &&
+    executable.action_index<WithdrawAction>() < executable.action_index<MintAction<C>>()
 }
 
 fun is_spend<C: drop>(executable: &Executable): bool {
-    executable.action_index<Spend>() < executable.action_index<Withdraw>() &&
-    executable.action_index<Spend>() < executable.action_index<Mint<C>>()
+    executable.action_index<SpendAction>() < executable.action_index<WithdrawAction>() &&
+    executable.action_index<SpendAction>() < executable.action_index<MintAction<C>>()
 }
 
 fun is_mint<C: drop>(executable: &Executable): bool {
-    executable.action_index<Mint<C>>() < executable.action_index<Withdraw>() &&
-    executable.action_index<Mint<C>>() < executable.action_index<Spend>()
+    executable.action_index<MintAction<C>>() < executable.action_index<WithdrawAction>() &&
+    executable.action_index<MintAction<C>>() < executable.action_index<SpendAction>()
 }
 

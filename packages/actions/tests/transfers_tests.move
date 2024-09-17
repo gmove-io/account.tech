@@ -32,16 +32,16 @@ fun test_transfer_object_end_to_end() {
     let id1 = receiving1.receiving_object_id();
     let id2 = receiving2.receiving_object_id();
 
-    world.propose_transfer_object(key, vector[vector[id1], vector[id2]], vector[OWNER, ALICE]);
+    world.propose_transfer_objects(key, vector[vector[id1], vector[id2]], vector[OWNER, ALICE]);
     world.approve_proposal(key);
 
     world.scenario().next_tx(OWNER);
     let mut executable = world.execute_proposal(key);
     transfers::execute_transfer_object<Object>(&mut executable, world.multisig(), receiving1);
-    transfers::confirm_transfer_object(&mut executable);
+    transfers::confirm_transfer_objects(&mut executable);
     transfers::execute_transfer_object<Object2>(&mut executable, world.multisig(), receiving2);
-    transfers::confirm_transfer_object(&mut executable);
-    transfers::complete_transfer(executable);
+    transfers::confirm_transfer_objects(&mut executable);
+    transfers::complete_transfers(executable);
 
     world.scenario().next_tx(OWNER);
     let object1 = take_from_address_by_id<Object>(world.scenario(), OWNER, id1);
@@ -62,7 +62,7 @@ fun test_propose_transfer_object_error_different_length() {
     let id1 = receiving1.receiving_object_id();
     let id2 = receiving2.receiving_object_id();
 
-    world.propose_transfer_object(key, vector[vector[id1], vector[id2]], vector[OWNER]);        
+    world.propose_transfer_objects(key, vector[vector[id1], vector[id2]], vector[OWNER]);        
 
     world.end();
 }    

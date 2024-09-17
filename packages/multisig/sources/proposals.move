@@ -36,21 +36,21 @@ const EProposalKeyAlreadyExists: u64 = 3;
 // === Events ===
 
 public struct Created has copy, drop, store {
-    auth_issuer: String,
+    auth_witness: String,
     auth_name: String,
     name: String,
     description: String,
 }
 
 public struct Approved has copy, drop, store {
-    auth_issuer: String,
+    auth_witness: String,
     auth_name: String,
     name: String,
     description: String,
 }
 
 public struct Executed has copy, drop, store {
-    auth_issuer: String,
+    auth_witness: String,
     auth_name: String,
     name: String,
     description: String,
@@ -192,7 +192,7 @@ public(package) fun add(
     assert!(!proposals.contains(proposal.name), EProposalKeyAlreadyExists);
 
     event::emit(Created {
-        auth_issuer: proposal.auth.issuer().into_string().to_string(),
+        auth_witness: proposal.auth.witness().into_string().to_string(),
         auth_name: proposal.auth.name(),
         name: proposal.name,
         description: proposal.description,
@@ -209,7 +209,7 @@ public(package) fun remove(
     let Proposal { auth, actions, description, .. } = proposals.inner.remove(idx);
 
     event::emit(Executed {
-        auth_issuer: auth.issuer().into_string().to_string(),
+        auth_witness: auth.witness().into_string().to_string(),
         auth_name: auth.name(),
         name,
         description,
@@ -227,7 +227,7 @@ public(package) fun approve(
     assert!(!proposal.has_approved(ctx.sender()), EAlreadyApproved);
     
     event::emit(Approved {
-        auth_issuer: proposal.auth.issuer().into_string().to_string(),
+        auth_witness: proposal.auth.witness().into_string().to_string(),
         auth_name: proposal.auth.name(),
         name: proposal.name,
         description: proposal.description,

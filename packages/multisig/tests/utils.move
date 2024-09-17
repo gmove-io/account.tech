@@ -115,7 +115,7 @@ public fun new_multisig(world: &mut World): Multisig {
 
 public fun create_proposal<I: drop>(
     world: &mut World, 
-    auth_issuer: I,
+    auth_witness: I,
     auth_name: String,
     key: String, 
     description: String,
@@ -123,7 +123,7 @@ public fun create_proposal<I: drop>(
     expiration_epoch: u64,
 ): &mut Proposal {
     world.multisig.create_proposal(
-        auth_issuer, 
+        auth_witness, 
         auth_name,
         key,
         description, 

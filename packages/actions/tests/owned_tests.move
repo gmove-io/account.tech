@@ -14,7 +14,7 @@ const OWNER: address = @0xBABE;
 
 public struct Object has key, store { id: UID }
 
-public struct Issuer has drop, copy {}
+public struct Witness has drop, copy {}
 
 #[test]
 fun test_withdraw_end_to_end() {
@@ -27,14 +27,14 @@ fun test_withdraw_end_to_end() {
     transfer::public_transfer(object1, multisig_address);
 
     world.scenario().next_tx(OWNER);
-    let proposal = world.create_proposal(Issuer {}, b"".to_string(), key, b"".to_string(), 0, 0);
+    let proposal = world.create_proposal(Witness {}, b"".to_string(), key, b"".to_string(), 0, 0);
     owned::new_withdraw(proposal, vector[id1]);
     world.approve_proposal(key);
 
     let mut executable = world.execute_proposal(key);
-    let object1 = world.withdraw<Object, Issuer>(&mut executable, receiving_ticket_by_id(id1), Issuer {});
-    owned::destroy_withdraw(&mut executable, Issuer {});
-    executable.destroy(Issuer {});
+    let object1 = world.withdraw<Object, Witness>(&mut executable, receiving_ticket_by_id(id1), Witness {});
+    owned::destroy_withdraw(&mut executable, Witness {});
+    executable.destroy(Witness {});
     assert!(object1.id.to_inner() == id1);
 
     destroy(object1);
@@ -52,17 +52,17 @@ fun test_borrow_end_to_end() {
     transfer::public_transfer(object1, multisig_address);
 
     world.scenario().next_tx(OWNER);
-    let proposal = world.create_proposal(Issuer {}, b"".to_string(), key, b"".to_string(), 0, 0);
+    let proposal = world.create_proposal(Witness {}, b"".to_string(), key, b"".to_string(), 0, 0);
     owned::new_borrow(proposal, vector[id1]);
     world.approve_proposal(key);
 
     let mut executable = world.execute_proposal(key);
-    let object1 = world.borrow<Object, Issuer>(&mut executable, receiving_ticket_by_id(id1), Issuer {});
+    let object1 = world.borrow<Object, Witness>(&mut executable, receiving_ticket_by_id(id1), Witness {});
     assert!(object::id(&object1) == id1);
-    world.put_back<Object, Issuer>(&mut executable, object1, Issuer {});
+    world.put_back<Object, Witness>(&mut executable, object1, Witness {});
 
-    owned::destroy_borrow(&mut executable, Issuer {});
-    executable.destroy(Issuer {});
+    owned::destroy_borrow(&mut executable, Witness {});
+    executable.destroy(Witness {});
     world.end();
 }
 
@@ -80,14 +80,14 @@ fun test_withdraw_error_wrong_object() {
     transfer::public_transfer(object2, multisig_address);
 
     world.scenario().next_tx(OWNER);
-    let proposal = world.create_proposal(Issuer {}, b"".to_string(), key, b"".to_string(), 0, 0);
+    let proposal = world.create_proposal(Witness {}, b"".to_string(), key, b"".to_string(), 0, 0);
     owned::new_withdraw(proposal, vector[id1]);
     world.approve_proposal(key);
 
     let mut executable = world.execute_proposal(key);
-    let object1 = world.withdraw<Object, Issuer>(&mut executable, receiving_ticket_by_id(id2), Issuer {});
-    owned::destroy_withdraw(&mut executable, Issuer {});
-    executable.destroy(Issuer {});
+    let object1 = world.withdraw<Object, Witness>(&mut executable, receiving_ticket_by_id(id2), Witness {});
+    owned::destroy_withdraw(&mut executable, Witness {});
+    executable.destroy(Witness {});
     
     destroy(object1);
     world.end();        
@@ -104,13 +104,13 @@ fun test_withdraw_error_retrieve_all_objects_before() {
     transfer::public_transfer(object1, multisig_address);
 
     world.scenario().next_tx(OWNER);
-    let proposal = world.create_proposal(Issuer {}, b"".to_string(), key, b"".to_string(), 0, 0);
+    let proposal = world.create_proposal(Witness {}, b"".to_string(), key, b"".to_string(), 0, 0);
     owned::new_withdraw(proposal, vector[id1]);
     world.approve_proposal(key);
 
     let mut executable = world.execute_proposal(key);
-    owned::destroy_withdraw(&mut executable, Issuer {});
-    executable.destroy(Issuer {});
+    owned::destroy_withdraw(&mut executable, Witness {});
+    executable.destroy(Witness {});
 
     world.end();
 }
@@ -127,18 +127,18 @@ fun test_put_back_error_wrong_object() {
     transfer::public_transfer(object1, multisig_address);
 
     world.scenario().next_tx(OWNER);
-    let proposal = world.create_proposal(Issuer {}, b"".to_string(), key, b"".to_string(), 0, 0);
+    let proposal = world.create_proposal(Witness {}, b"".to_string(), key, b"".to_string(), 0, 0);
     owned::new_borrow(proposal, vector[id1]);
     world.approve_proposal(key);
 
     let mut executable = world.execute_proposal(key);
-    let object1 = world.borrow<Object, Issuer>(&mut executable, receiving_ticket_by_id(id1), Issuer {});
+    let object1 = world.borrow<Object, Witness>(&mut executable, receiving_ticket_by_id(id1), Witness {});
     assert!(object::id(&object1) == id1);
-    world.put_back<Object, Issuer>(&mut executable, object2, Issuer {});
-    world.put_back<Object, Issuer>(&mut executable, object1, Issuer {});
+    world.put_back<Object, Witness>(&mut executable, object2, Witness {});
+    world.put_back<Object, Witness>(&mut executable, object1, Witness {});
 
-    owned::destroy_borrow(&mut executable, Issuer {});
-    executable.destroy(Issuer {});
+    owned::destroy_borrow(&mut executable, Witness {});
+    executable.destroy(Witness {});
     world.end();
 }
 
@@ -153,15 +153,15 @@ fun test_complete_borrow_error_return_all_objects_before() {
     transfer::public_transfer(object1, multisig_address);
 
     world.scenario().next_tx(OWNER);
-    let proposal = world.create_proposal(Issuer {}, b"".to_string(), key, b"".to_string(), 0, 0);
+    let proposal = world.create_proposal(Witness {}, b"".to_string(), key, b"".to_string(), 0, 0);
     owned::new_borrow(proposal, vector[id1]);
     world.approve_proposal(key);
 
     let mut executable = world.execute_proposal(key);
-    let object1 = world.borrow<Object, Issuer>(&mut executable, receiving_ticket_by_id(id1), Issuer {});
-    owned::destroy_borrow(&mut executable, Issuer {});
+    let object1 = world.borrow<Object, Witness>(&mut executable, receiving_ticket_by_id(id1), Witness {});
+    owned::destroy_borrow(&mut executable, Witness {});
 
-    executable.destroy(Issuer {});
+    executable.destroy(Witness {});
     destroy(object1);
     world.end();
 }

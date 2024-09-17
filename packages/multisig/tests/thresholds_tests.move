@@ -14,9 +14,9 @@ const OWNER: address = @0xBABE;
 const ALICE: address = @0xa11e7;
 const BOB: address = @0x10;
 
-public struct Issuer has copy, drop {}
+public struct Witness has copy, drop {}
 
-public struct Issuer2 has copy, drop {}
+public struct Witness2 has copy, drop {}
 
 public struct Action has store {
     value: u64
@@ -32,7 +32,7 @@ fun test_execute_proposal_error_threshold_not_reached() {
     world.multisig().members_mut_for_testing().add(alice);
     world.multisig().members_mut_for_testing().add(bob);
 
-    world.create_proposal(Issuer {}, b"".to_string(), key, b"".to_string(), 0, 0);
+    world.create_proposal(Witness {}, b"".to_string(), key, b"".to_string(), 0, 0);
     let executable = world.execute_proposal(key);
 
     destroy(executable);

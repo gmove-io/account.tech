@@ -13,9 +13,9 @@ const OWNER: address = @0xBABE;
 const ALICE: address = @0xa11e7;
 const BOB: address = @0x10;
 
-public struct Issuer has copy, drop {}
+public struct Witness has copy, drop {}
 
-public struct Issuer2 has copy, drop {}
+public struct Witness2 has copy, drop {}
 
 public struct Action has store {
     value: u64
@@ -44,7 +44,7 @@ fun test_create_proposal() {
     let addr = world.multisig().addr();
 
     let proposal = world.create_proposal(
-        Issuer {},
+        Witness {},
         b"".to_string(),
         b"key".to_string(),
         b"proposal".to_string(),
@@ -55,7 +55,7 @@ fun test_create_proposal() {
     proposal.add_action(Action { value: 1 });
     proposal.add_action(Action { value: 2 });   
 
-    proposal.auth().assert_is_issuer(Issuer {});
+    proposal.auth().assert_is_witness(Witness {});
     proposal.auth().assert_is_multisig(addr);
     assert!(proposal.approved() == vector[]);
     assert!(proposal.description() == b"proposal".to_string());
@@ -80,7 +80,7 @@ fun test_approve_proposal() {
     world.multisig().member_mut(ALICE).set_weight(2);
     world.multisig().member_mut(BOB).set_weight(3);
 
-    let proposal = world.create_proposal(Issuer {}, b"".to_string(), key, b"".to_string(), 0, 0);
+    let proposal = world.create_proposal(Witness {}, b"".to_string(), key, b"".to_string(), 0, 0);
     proposal.add_action(Action { value: 1 });
     proposal.add_action(Action { value: 2 });   
 
@@ -110,7 +110,7 @@ fun test_remove_approval() {
     world.multisig().member_mut(ALICE).set_weight(2);
     world.multisig().member_mut(BOB).set_weight(3);
 
-    let proposal = world.create_proposal(Issuer {}, b"".to_string(), key, b"".to_string(), 0, 0);
+    let proposal = world.create_proposal(Witness {}, b"".to_string(), key, b"".to_string(), 0, 0);
     proposal.add_action(Action { value: 1 });
     proposal.add_action(Action { value: 2 });   
 
@@ -138,7 +138,7 @@ fun test_remove_approval() {
 //     let mut world = start_world();
 //     let key = b"key".to_string();
 
-//     world.create_proposal(Issuer {}, b"".to_string(), key, b"".to_string(), 0, 0);
+//     world.create_proposal(Witness {}, b"".to_string(), key, b"".to_string(), 0, 0);
 //     assert!(world.multisig().proposals_length() == 1);
 
 //     let actions = world.delete_proposal(key);
@@ -168,7 +168,7 @@ fun test_execute_proposal_error_cant_be_executed_yet() {
     world.multisig().members_mut_for_testing().add(alice);
     world.multisig().members_mut_for_testing().add(bob);
 
-    world.create_proposal(Issuer {}, b"".to_string(), key, b"".to_string(), 5, 0);
+    world.create_proposal(Witness {}, b"".to_string(), key, b"".to_string(), 5, 0);
     world.approve_proposal(key);
     let executable = world.execute_proposal(key);
 
@@ -182,7 +182,7 @@ fun test_execute_proposal_error_cant_be_executed_yet() {
 //     let mut world = start_world();
 //     let key = b"key".to_string();
 
-//     world.create_proposal(Issuer {}, b"".to_string(), key, b"".to_string(), 0, 2);
+//     world.create_proposal(Witness {}, b"".to_string(), key, b"".to_string(), 0, 2);
 //     assert!(world.multisig().proposals().length() == 1);
 
 //     let actions = world.delete_proposal(key);
