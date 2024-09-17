@@ -16,10 +16,8 @@ const ALICE: address = @0xA11CE;
 fun test_join_multisig() {
     let mut world = start_world();
 
-    account::new(b"Sam".to_string(), b"Sam.png".to_string(), world.scenario().ctx());
-
     world.scenario().next_tx(OWNER);
-    let mut user_account = world.scenario().take_from_address<Account>(OWNER);
+    let mut user_account = account::new(b"Sam".to_string(), b"Sam.png".to_string(), world.scenario().ctx());
     let mut multisig2 = world.new_multisig();
     assert!(user_account.username() == b"Sam".to_string());
     assert!(user_account.profile_picture() == b"Sam.png".to_string());
@@ -39,10 +37,7 @@ fun test_leave_multisig() {
     let mut world = start_world();
 
     world.scenario().next_tx(ALICE);
-    account::new(b"Alice".to_string(), b"Alice.png".to_string(), world.scenario().ctx());
-
-    world.scenario().next_tx(ALICE);
-    let mut user_account = world.scenario().take_from_address<Account>(ALICE);
+    let mut user_account = account::new(b"Alice".to_string(), b"Alice.png".to_string(), world.scenario().ctx());
     let member = members::new_member(ALICE, 1, option::none(), vector[]);
     world.multisig().members_mut_for_testing().add(member);
     
@@ -61,10 +56,7 @@ fun test_accept_invite() {
     let mut world = start_world();
 
     world.scenario().next_tx(ALICE);
-    account::new(b"Alice".to_string(), b"Alice.png".to_string(), world.scenario().ctx());
-
-    world.scenario().next_tx(ALICE);
-    let mut user_account = world.scenario().take_from_address<Account>(ALICE);
+    let mut user_account = account::new(b"Alice".to_string(), b"Alice.png".to_string(), world.scenario().ctx());
     let member = members::new_member(ALICE, 1, option::none(), vector[]);
     world.multisig().members_mut_for_testing().add(member);
     assert!(user_account.multisig_ids() == vector[]);
@@ -85,10 +77,7 @@ fun test_refuse_invite() {
     let mut world = start_world();
 
     world.scenario().next_tx(ALICE);
-    account::new(b"Alice".to_string(), b"Alice.png".to_string(), world.scenario().ctx());
-
-    world.scenario().next_tx(ALICE);
-    let user_account = world.scenario().take_from_address<Account>(ALICE);
+    let user_account = account::new(b"Alice".to_string(), b"Alice.png".to_string(), world.scenario().ctx());
     let member = members::new_member(ALICE, 1, option::none(), vector[]);
     world.multisig().members_mut_for_testing().add(member);
     assert!(user_account.multisig_ids() == vector[]);

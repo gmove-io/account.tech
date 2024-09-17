@@ -34,10 +34,10 @@ public struct World {
 public fun start_world(): World {
     let mut scenario = ts::begin(OWNER);
     extensions::init_for_testing(scenario.ctx());
-    account::new(b"sam".to_string(), b"move_god.png".to_string(), scenario.ctx());
+    account::init_for_testing(scenario.ctx());
 
     scenario.next_tx(OWNER);
-    let account = scenario.take_from_sender<Account>();
+    let account = account::new(b"sam".to_string(), b"move_god.png".to_string(), scenario.ctx());
     let cap = scenario.take_from_sender<AdminCap>();
     let mut extensions = scenario.take_shared<Extensions>();
     // initialize Clock, Multisig, Extensions
@@ -77,6 +77,14 @@ public fun end(world: World) {
 
 public fun multisig(world: &mut World): &mut Multisig {
     &mut world.multisig
+}
+
+public fun account(world: &mut World): &mut Account {
+    &mut world.account
+}
+
+public fun extensions(world: &mut World): &mut Extensions {
+    &mut world.extensions
 }
 
 public fun clock(world: &mut World): &mut Clock {

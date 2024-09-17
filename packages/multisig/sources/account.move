@@ -10,7 +10,10 @@ module kraken_multisig::account;
 // === Imports ===
 
 use std::string::String;
-use sui::vec_set::{Self, VecSet};
+use sui::{
+    vec_set::{Self, VecSet},
+    table::{Self, Table},
+};
 use kraken_multisig::multisig::Multisig;
 
 // === Errors ===
@@ -18,8 +21,16 @@ use kraken_multisig::multisig::Multisig;
 const ENotMember: u64 = 0;
 const EWrongMultisig: u64 = 1;
 const EMustLeaveAllMultisigs: u64 = 2;
+const EAlreadyHasAccount: u64 = 3;
 
 // === Struct ===
+
+// shared object enforcing one account per user
+public struct Registry has key {
+    id: UID,
+    // address to account mapping
+    accounts: Table<address, ID>,
+}
 
 // non-transferable user account for tracking multisigs
 public struct Account has key {
@@ -40,17 +51,21 @@ public struct Invite has key {
 
 // === Public functions ===
 
-// creates and send a soulbound Account to the sender (1 per user)
-public fun new(username: String, profile_picture: String, ctx: &mut TxContext) {
-    transfer::transfer(
-        Account {
-            id: object::new(ctx),
-            username,
-            profile_picture,
-            multisig_ids: vec_set::empty(),
-        },
-        ctx.sender(),
-    );
+fun init(ctx: &mut TxContext) {
+    transfer::share_object(Registry {
+        id: object::new(ctx),
+        accounts: table::new(ctx),
+    });
+}
+
+// creates soulbound Account (1 per user)
+public fun new(username: String, profile_picture: String, ctx: &mut TxContext): Account {
+    Account {
+        id: object::new(ctx),
+        username,
+        profile_picture,
+        multisig_ids: vec_set::empty(),
+    }
 }
 
 // === [MEMBER] Public functions ===
@@ -65,6 +80,12 @@ public fun join_multisig(account: &mut Account, multisig: &mut Multisig, ctx: &T
 public fun leave_multisig(account: &mut Account, multisig: &mut Multisig, ctx: &TxContext) {
     multisig.member_mut(ctx.sender()).unregister_account_id();
     account.multisig_ids.remove(&object::id(multisig));
+}
+
+// can transfer the account only if the other address has no account yet
+public fun transfer(registry: &mut Registry, account: Account, recipient: address) {
+    assert!(!registry.accounts.contains(recipient), EAlreadyHasAccount);
+    transfer::transfer(account, recipient);
 }
 
 // must leave all multisigs before, for consistency
@@ -117,4 +138,11 @@ public fun multisig_ids(account: &Account): vector<ID> {
 
 public fun multisig_id(invite: &Invite): ID {
     invite.multisig_id
+}
+
+// === Test functions ===
+
+#[test_only]
+public fun init_for_testing(ctx: &mut TxContext) {
+    init(ctx);
 }

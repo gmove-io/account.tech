@@ -48,22 +48,21 @@ public struct World {
 public fun start_world(): World {
     let mut scenario = ts::begin(OWNER);
     extensions::init_for_testing(scenario.ctx());
-    account::new(b"sam".to_string(), b"move_god.png".to_string(), scenario.ctx());
 
     scenario.next_tx(OWNER);
-    let account = scenario.take_from_sender<Account>();
+    let account = account::new(b"sam".to_string(), b"move_god.png".to_string(), scenario.ctx());
     let cap = scenario.take_from_sender<AdminCap>();
     let mut extensions = scenario.take_shared<Extensions>();
 
     // initialize Clock, Multisig, Extensions
     let clock = clock::create_for_testing(scenario.ctx());
-    extensions::init_core_deps(&cap, &mut extensions, vector[@kraken_multisig, @0xCAFE]);
+    extensions::init_core_deps(&cap, &mut extensions, vector[@kraken_multisig, @kraken_actions]);
     let mut multisig = multisig::new(
         &extensions,
         b"Kraken".to_string(), 
         object::id(&account), 
         vector[b"KrakenMultisig".to_string(), b"KrakenActions".to_string()],
-        vector[@kraken_multisig, @0xCAFE],
+        vector[@kraken_multisig, @kraken_actions],
         vector[1, 1],
         scenario.ctx()
     );
