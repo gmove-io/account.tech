@@ -66,25 +66,15 @@ public fun new(
     extensions: &Extensions,
     name: String, 
     account_id: ID, 
-    dep_names: vector<String>,
-    dep_packages: vector<address>,
-    mut dep_versions: vector<u64>,
     ctx: &mut TxContext
 ): Multisig {
     let mut members = members::new();
     members.add(members::new_member(ctx.sender(), 1, option::some(account_id), vector[]));
     
-    let mut deps = deps::new(extensions);
-    dep_names.zip_do!(dep_packages, |name, package| {
-        let version = dep_versions.remove(0);
-        let dep = deps::new_dep(extensions, name, package, version);
-        deps.add(dep);
-    });
-
     Multisig { 
         id: object::new(ctx),
         name,
-        deps,
+        deps: deps::new(extensions),
         thresholds: thresholds::new(1),
         members,
         proposals: proposals::new(),

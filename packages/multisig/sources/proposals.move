@@ -38,21 +38,21 @@ const EProposalKeyAlreadyExists: u64 = 3;
 public struct Created has copy, drop, store {
     auth_witness: String,
     auth_name: String,
-    name: String,
+    key: String,
     description: String,
 }
 
 public struct Approved has copy, drop, store {
     auth_witness: String,
     auth_name: String,
-    name: String,
+    key: String,
     description: String,
 }
 
 public struct Executed has copy, drop, store {
     auth_witness: String,
     auth_name: String,
-    name: String,
+    key: String,
     description: String,
 }
 
@@ -68,7 +68,7 @@ public struct Proposal has store {
     // module that issued the proposal and must destroy it
     auth: Auth,
     // name of the proposal, serves as a key, should be unique
-    name: String,
+    key: String,
     // what this proposal aims to do, for informational purpose
     description: String,
     // the proposal can be deleted from this epoch
@@ -92,17 +92,17 @@ public fun length(proposals: &Proposals): u64 {
     proposals.inner.length()
 }
 
-public fun get_idx(proposals: &Proposals, name: String): u64 {
-    proposals.inner.find_index!(|proposal| proposal.name == name).destroy_some()
+public fun get_idx(proposals: &Proposals, key: String): u64 {
+    proposals.inner.find_index!(|proposal| proposal.key == key).destroy_some()
 }
 
-public fun contains(proposals: &Proposals, name: String): bool {
-    proposals.inner.any!(|proposal| proposal.name == name)
+public fun contains(proposals: &Proposals, key: String): bool {
+    proposals.inner.any!(|proposal| proposal.key == key)
 }
 
-public fun get(proposals: &Proposals, name: String): &Proposal {
-    assert!(proposals.contains(name), EProposalNotFound);
-    let idx = proposals.get_idx(name);
+public fun get(proposals: &Proposals, key: String): &Proposal {
+    assert!(proposals.contains(key), EProposalNotFound);
+    let idx = proposals.get_idx(key);
     &proposals.inner[idx]
 }
 
@@ -160,7 +160,7 @@ public(package) fun new(): Proposals {
 // that must be constructed in another module
 public(package) fun new_proposal(
     auth: Auth,
-    name: String,
+    key: String,
     description: String,
     execution_time: u64, // timestamp in ms
     expiration_epoch: u64,
@@ -168,7 +168,7 @@ public(package) fun new_proposal(
 ): Proposal {
     Proposal { 
         auth,
-        name,
+        key,
         description,
         execution_time,
         expiration_epoch,
@@ -179,9 +179,9 @@ public(package) fun new_proposal(
     }
 }
 
-public(package) fun get_mut(proposals: &mut Proposals, name: String): &mut Proposal {
-    assert!(proposals.contains(name), EProposalNotFound);
-    let idx = proposals.get_idx(name);
+public(package) fun get_mut(proposals: &mut Proposals, key: String): &mut Proposal {
+    assert!(proposals.contains(key), EProposalNotFound);
+    let idx = proposals.get_idx(key);
     &mut proposals.inner[idx]
 }
 
@@ -189,12 +189,12 @@ public(package) fun add(
     proposals: &mut Proposals,
     proposal: Proposal,
 ) {
-    assert!(!proposals.contains(proposal.name), EProposalKeyAlreadyExists);
+    assert!(!proposals.contains(proposal.key), EProposalKeyAlreadyExists);
 
     event::emit(Created {
         auth_witness: proposal.auth.witness().into_string().to_string(),
         auth_name: proposal.auth.name(),
-        name: proposal.name,
+        key: proposal.key,
         description: proposal.description,
     });
 
@@ -203,15 +203,15 @@ public(package) fun add(
 
 public(package) fun remove(
     proposals: &mut Proposals,
-    name: String,
+    key: String,
 ): (Auth, Bag) {
-    let idx = proposals.get_idx(name);
+    let idx = proposals.get_idx(key);
     let Proposal { auth, actions, description, .. } = proposals.inner.remove(idx);
 
     event::emit(Executed {
         auth_witness: auth.witness().into_string().to_string(),
         auth_name: auth.name(),
-        name,
+        key,
         description,
     });
 
@@ -229,7 +229,7 @@ public(package) fun approve(
     event::emit(Approved {
         auth_witness: proposal.auth.witness().into_string().to_string(),
         auth_name: proposal.auth.name(),
-        name: proposal.name,
+        key: proposal.key,
         description: proposal.description,
     });
 

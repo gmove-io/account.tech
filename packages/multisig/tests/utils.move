@@ -47,9 +47,6 @@ public fun start_world(): World {
         &extensions,
         b"kraken".to_string(), 
         object::id(&account), 
-        vector[b"KrakenMultisig".to_string(), b"KrakenActions".to_string()],
-        vector[@kraken_multisig, @0xCAFE],
-        vector[1, 1],
         scenario.ctx()
     );
 
@@ -114,9 +111,6 @@ public fun new_multisig(world: &mut World): Multisig {
         &world.extensions,
         b"kraken2".to_string(), 
         object::id(&world.account), 
-        vector[b"KrakenMultisig".to_string(), b"KrakenActions".to_string()],
-        vector[@kraken_multisig, @0xCAFE],
-        vector[1, 1],
         world.scenario.ctx()
     )
 }
