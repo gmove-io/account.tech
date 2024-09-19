@@ -1,10 +1,10 @@
 [
   {
-    "type": "package::UpgradeCap",
-    "id": "0x7b3e40c1bbdf5103f5257992106a92063f522afb65bc5dc84d699925a2c15b2d"
+    "type": "KrakenActions",
+    "id": "0x29dd152d8a8a427cb3eb343e2f58f68e9f07587597eb23816df3e2b04a72bdfd"
   },
   {
-    "type": "KrakenActions",
-    "id": "0xd36ae6acc21a7fd980582d5a5d74c127cebdb3178f499585925311f417bb3840"
+    "type": "package::UpgradeCap",
+    "id": "0x780bf700577fdb93a39baabe1ff506139193645c7e1462a4cba4af4f861b35f5"
   }
 ]
