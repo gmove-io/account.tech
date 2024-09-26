@@ -1,9 +1,9 @@
-/// This is the core module managing Multisig and Proposals.
+/// This is the core module managing Multisig.
 /// It provides the apis to create, approve and execute proposals with actions.
 /// 
 /// The flow is as follows:
 ///   1. A proposal is created by pushing actions into it. 
-///      Actions are stacked from last to first, they must be executed then destroyed from last to first.
+///      Actions are stacked from first to last, they must be executed then destroyed in the same order.
 ///   2. When the threshold is reached, a proposal can be executed. 
 ///      This returns an Executable hot potato constructed from certain fields of the approved Proposal. 
 ///      It is directly passed into action functions to enforce multisig approval for an action to be executed.
@@ -42,7 +42,7 @@ const VERSION: u64 = 1;
 
 // === Structs ===
 
-// shared object 
+/// Shared object 
 public struct Multisig has key {
     id: UID,
     // human readable name to differentiate the multisigs
@@ -60,8 +60,8 @@ public struct Multisig has key {
 
 // === Public mutative functions ===
 
-// init and share a new Multisig object
-// creator is added by default with weight and threshold of 1
+/// Init and returns a new Multisig object
+/// Creator is added by default with weight and global threshold of 1
 public fun new(
     extensions: &Extensions,
     name: String, 
@@ -69,7 +69,7 @@ public fun new(
     ctx: &mut TxContext
 ): Multisig {
     let mut members = members::new();
-    members.add(members::new_member(ctx.sender(), 1, option::some(account_id), vector[]));
+    members.add(ctx.sender(), 1, option::some(account_id), vector[]);
     
     Multisig { 
         id: object::new(ctx),
@@ -81,7 +81,7 @@ public fun new(
     }
 }
 
-// can be initialized by the creator before shared
+/// Must be initialized by the creator before being shared
 #[allow(lint(share_owned))]
 public fun share(multisig: Multisig) {
     transfer::share_object(multisig);
@@ -89,8 +89,7 @@ public fun share(multisig: Multisig) {
 
 // === Multisig-only functions ===
 
-// create a new proposal for an action
-// that must be constructed in another module
+/// Creates a new proposal that must be constructed in another module
 public fun create_proposal<W: drop>(
     multisig: &mut Multisig, 
     witness: W, // module's auth witness
@@ -98,7 +97,7 @@ public fun create_proposal<W: drop>(
     key: String, // proposal key
     description: String,
     execution_time: u64, // timestamp in ms
-    expiration_epoch: u64,
+    expiration_epoch: u64, // epoch when we can delete the proposal
     ctx: &mut TxContext
 ): &mut Proposal {
     multisig.assert_is_member(ctx);
@@ -115,10 +114,11 @@ public fun create_proposal<W: drop>(
     );
 
     multisig.proposals.add(proposal);
+    // returns the proposal mutably for the caller to push actions into it
     multisig.proposals.get_mut(key)
 }
 
-// increase the global threshold and the role threshold if the signer has one
+/// Increases the global threshold and the role threshold if the signer has the one from the proposal
 public fun approve_proposal(
     multisig: &mut Multisig, 
     key: String, 
@@ -127,12 +127,13 @@ public fun approve_proposal(
     multisig.assert_is_member(ctx);
 
     let proposal = multisig.proposals.get_mut(key);
+    // asserts that it uses the right KrakenMultisig package version
     multisig.deps.assert_version(proposal.auth(), VERSION);
     let member = multisig.members.get(ctx.sender()); 
     proposal.approve(member, ctx);
 }
 
-// the signer removes his agreement
+/// The signer removes his agreement
 public fun remove_approval(
     multisig: &mut Multisig, 
     key: String, 
@@ -144,14 +145,13 @@ public fun remove_approval(
     proposal.disapprove(member, ctx);
 }
 
-// return an executable if the number of signers is >= threshold
+/// Returns an executable if the number of signers is >= (global || role) threshold
+/// Anyone can execute a proposal, this allows to automate the execution of proposals
 public fun execute_proposal(
     multisig: &mut Multisig, 
     key: String, 
     clock: &Clock,
 ): Executable {
-    // multisig.assert_is_member(ctx); remove to be able to automate it
-
     let proposal = multisig.proposals.get(key);
     assert!(clock.timestamp_ms() >= proposal.execution_time(), ECantBeExecutedYet);
     multisig.thresholds.assert_reached(proposal);
@@ -217,7 +217,9 @@ public fun assert_is_member(multisig: &Multisig, ctx: &TxContext) {
 
 // === Deps-only functions ===
 
-// managed assets
+/// Managed assets:
+/// Those are objects attached as dynamic fields to the multisig object
+
 public fun add_managed_asset<K: copy + drop + store, A: store, W: copy + drop>(
     multisig: &mut Multisig, 
     witness: W,
@@ -264,7 +266,9 @@ public fun has_managed_asset<K: copy + drop + store>(
 
 // === Core Deps only functions ===
 
-// owned objects
+/// Owned objects:
+/// Those are objects owned by the multisig
+
 public fun receive<T: key + store, W: copy + drop>(
     multisig: &mut Multisig, 
     witness: W,
@@ -274,7 +278,9 @@ public fun receive<T: key + store, W: copy + drop>(
     transfer::public_receive(&mut multisig.id, receiving)
 }
 
-// fields
+/// Fields:
+/// Those are the fields of the multisig object
+
 public fun name_mut<W: copy + drop>(
     multisig: &mut Multisig, 
     executable: &Executable,
@@ -321,7 +327,7 @@ public fun members_mut<W: copy + drop>(
 
 // === Package functions ===
 
-// only accessible from account module
+/// Only accessible from account module
 public(package) fun member_mut(
     multisig: &mut Multisig, 
     addr: address,

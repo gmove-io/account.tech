@@ -1,15 +1,5 @@
-/// This is the core module managing Multisig and Proposals.
-/// It provides the apis to create, approve and execute proposals with actions.
-/// 
-/// The flow is as follows:
-///   1. A proposal is created by pushing actions into it. 
-///      Actions are stacked from last to first, they must be executed then destroyed from last to first.
-///   2. When the threshold is reached, a proposal can be executed. 
-///      This returns an Executable hot potato constructed from certain fields of the approved Proposal. 
-///      It is directly passed into action functions to enforce multisig approval for an action to be executed.
-///   3. The module that created the proposal must destroy all of the actions and the Executable after execution 
-///      by passing the same witness that was used for instanciation. 
-///      This prevents the actions or the proposal to be stored instead of executed.
+/// This is the core module managing Proposals.
+/// It provides the interface to create, approve and execute proposals which is used in the `multisig` module.
 
 module kraken_multisig::proposals;
 
@@ -58,12 +48,14 @@ public struct Executed has copy, drop, store {
 
 // === Structs ===
 
+/// Parent struct protecting the proposals
 public struct Proposals has store {
     inner: vector<Proposal>
 }
 
-// proposal owning a single action requested to be executed
-// can be executed if length(approved) >= multisig.threshold
+/// Child struct, proposal owning a single action requested to be executed
+/// can be executed if total_weight >= multisig.thresholds.global
+/// or role_weight >= multisig.thresholds.role
 public struct Proposal has store {
     // module that issued the proposal and must destroy it
     auth: Auth,
@@ -80,7 +72,7 @@ public struct Proposal has store {
     actions: Bag,
     // total weight of all members that approved the proposal
     total_weight: u64,
-    // sum of the weights of members who approved with the role
+    // sum of the weights of members who approved and have the role
     role_weight: u64, 
     // who has approved the proposal
     approved: VecSet<address>,
@@ -144,7 +136,7 @@ public fun has_approved(proposal: &Proposal, addr: address): bool {
 
 // === Multisig-only functions ===
 
-// insert action to the proposal bag, safe because proposal_mut is only accessible upon creation
+/// Inserts an action to the proposal bag, safe because proposal_mut is only accessible upon creation
 public fun add_action<A: store>(proposal: &mut Proposal, action: A) {
     let idx = proposal.actions.length();
     proposal.actions.add(idx, action);
@@ -152,12 +144,12 @@ public fun add_action<A: store>(proposal: &mut Proposal, action: A) {
 
 // === Package functions ===
 
+/// The following functions are only used in the `multisig` module
+
 public(package) fun new(): Proposals {
     Proposals { inner: vector[] }
 }
 
-// create a new proposal for an action
-// that must be constructed in another module
 public(package) fun new_proposal(
     auth: Auth,
     key: String,
@@ -218,7 +210,6 @@ public(package) fun remove(
     (auth, actions)
 }
 
-// increase the global threshold and the role threshold if the signer has one
 public(package) fun approve(
     proposal: &mut Proposal, 
     member: &Member, 
@@ -243,7 +234,6 @@ public(package) fun approve(
         proposal.role_weight = proposal.role_weight + weight;
 }
 
-// the signer removes his agreement
 public(package) fun disapprove(
     proposal: &mut Proposal, 
     member: &Member, 

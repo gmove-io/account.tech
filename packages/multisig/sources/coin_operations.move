@@ -1,4 +1,4 @@
-/// Handles coin merging and splitting for the multisig.
+/// Handles coin merging and splitting for the multisigs.
 /// Any member can merge and split without approvals.
 /// Used to prepare a Proposal with coins having the exact amount needed.
 
@@ -14,12 +14,13 @@ use kraken_multisig::multisig::Multisig;
 
 // === Structs ===
 
+/// Delegated witness authorizing access to the inner multisig
 public struct ManageCoins has copy, drop {}
 
 // === [MEMBER] Public functions ===
 
-// members can merge and split coins, no need for approvals
-// returns the IDs to use in a following proposal, sorted by "to_split" amounts
+/// Members can merge and split coins, no need for approvals
+/// Returns the IDs to use in a following proposal, conserve the order
 public fun merge_and_split<T: drop>(
     multisig: &mut Multisig, 
     to_merge: vector<Receiving<Coin<T>>>, // there can be only one coin if we just want to split

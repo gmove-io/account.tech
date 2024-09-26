@@ -1,15 +1,7 @@
-/// This is the core module managing Multisig and Proposals.
-/// It provides the apis to create, approve and execute proposals with actions.
-/// 
-/// The flow is as follows:
-///   1. A proposal is created by pushing actions into it. 
-///      Actions are stacked from last to first, they must be executed then destroyed from last to first.
-///   2. When the threshold is reached, a proposal can be executed. 
-///      This returns an Executable hot potato constructed from certain fields of the approved Proposal. 
-///      It is directly passed into action functions to enforce multisig approval for an action to be executed.
-///   3. The module that created the proposal must destroy all of the actions and the Executable after execution 
-///      by passing the same witness that was used for instanciation. 
-///      This prevents the actions or the proposal to be stored instead of executed.
+/// This module defines and manages the members of a multisig.
+/// Members have an address and a weight (1 by default).
+/// They can have an account ID, when there's none it means the member didn't join yet.
+/// They can also have roles, which are Auth.witness + opt(Auth.name).
 
 module kraken_multisig::members;
 
@@ -24,11 +16,12 @@ const EMemberNotFound: u64 = 0;
 
 // === Structs ===
 
+/// Parent struct protecting the deps
 public struct Members has store, drop {
     inner: vector<Member>,
 }
 
-// struct for managing and displaying members
+// Child struct for managing and displaying members
 public struct Member has copy, drop, store {
     addr: address,
     // voting power of the member
@@ -41,32 +34,28 @@ public struct Member has copy, drop, store {
 
 // === Public mutative functions ===
 
+/// Creates a new Deps struct with the core dependencies
 public fun new(): Members {
     Members { inner: vector[] }
 }
 
-public fun new_member(
+// Protected because &mut Deps is only accessible from KrakenMultisig and KrakenActions
+public fun add(
+    members: &mut Members,
     addr: address,
     weight: u64,
     account_id: Option<ID>,
     roles: vector<String>,
-): Member {
-    Member {
+) {
+    members.inner.push_back(Member {
         addr,
         weight,
         account_id,
         roles: vec_set::from_keys(roles),
-    }
+    });
 }
 
-// protected because &mut Deps accessible only from KrakenMultisig and KrakenActions
-public fun add(
-    members: &mut Members,
-    member: Member,
-) {
-    members.inner.push_back(member);
-}
-
+/// Registers the member's account ID, upon joining the multisig
 public fun register_account_id(
     member: &mut Member,
     id: ID,
@@ -74,6 +63,7 @@ public fun register_account_id(
     member.account_id.swap_or_fill(id);
 }
 
+/// Unregisters the member's account ID, upon leaving the multisig
 public fun unregister_account_id(
     member: &mut Member,
 ): ID {

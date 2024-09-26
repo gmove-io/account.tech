@@ -1,4 +1,12 @@
+/// Thresholds control which Proposals can be executed.
+/// There is a global threshold that any member can reach.
+/// There are also role-based thresholds that can be reached by members with a certain role.
+/// Roles correspond to the delegated witness of a Proposal with an optional name.
+
 module kraken_multisig::thresholds;
+
+// === Imports ===
+
 use std::string::String;
 use kraken_multisig::proposals::Proposal;
 
@@ -9,12 +17,13 @@ const EThresholdNotReached: u64 = 1;
 
 // === Structs ===
 
-// map roles to their threshold
+/// Parent struct protecting the thresholds
 public struct Thresholds has store, drop {
     global: u64,
     roles: vector<Role>,
 }
 
+/// Child struct representing a role with a name and its threshold
 public struct Role has copy, drop, store {
     name: String,
     threshold: u64,
@@ -22,28 +31,15 @@ public struct Role has copy, drop, store {
 
 // === Public functions ===
 
+/// Creates a new Thresholds struct with the global threshold set to `global` and no roles
 public fun new(global: u64): Thresholds {
     Thresholds { global, roles: vector[] }
 }
 
+/// Protected because &mut Thresholds is only accessible from KrakenMultisig and KrakenActions
 public fun add(roles: &mut Thresholds, name: String, threshold: u64) {
     roles.roles.push_back(Role { name, threshold });
 }
-
-// protected because &mut Deps accessible only from KrakenMultisig and KrakenActions
-// public fun set_global(roles: &mut Thresholds, global: u64) {
-//     roles.global = global;
-// }
-
-// public fun set_role(roles: &mut Thresholds, name: String, threshold: u64) {
-//     let idx = roles.get_idx(name);
-//     roles.roles[idx].threshold = threshold;
-// }
-
-// public fun remove(roles: &mut Thresholds, name: String) {
-//     let idx = roles.get_idx(name);
-//     roles.roles.remove(idx);
-// }
 
 // === View functions ===
 

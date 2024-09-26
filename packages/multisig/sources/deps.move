@@ -1,7 +1,18 @@
+/// Dependencies are all the packages that a Multisig object can use.
+/// They are stored in a vector and can be updated only upon approval by members.
+/// KrakenMultisig and KrakenActions can be found at index 0 and 1.
+/// 
+/// Not all packages are allowed to be used by a Multisig.
+/// The list of whitelisted packages is stored in the KrakenExtensions package.
+
 module kraken_multisig::deps;
+
+// === Imports ===
 
 use std::string::String;
 use kraken_extensions::extensions::Extensions;
+
+// === Aliases ===
 
 public use fun kraken_multisig::auth::assert_core_dep as Deps.assert_core_dep;
 public use fun kraken_multisig::auth::assert_dep as Deps.assert_dep;
@@ -13,41 +24,52 @@ const EDepNotFound: u64 = 0;
 
 // === Structs ===
 
+/// Parent struct protecting the deps
 public struct Deps has store, drop {
     inner: vector<Dep>,
 }
 
+/// Child struct storing the name, package and version of a dependency
 public struct Dep has copy, store, drop {
+    // name of the package
     name: String,
+    // id of the package
     package: address,
+    // version of the package
     version: u64,
 }
 
 // === Public functions ===
 
+/// Creates a new Deps struct with the core dependencies
 public fun new(extensions: &Extensions): Deps {
     let (packages, versions) = extensions.get_latest_core_deps();
     let mut inner = vector[];
 
-    inner.push_back(new_dep(extensions, b"KrakenMultisig".to_string(), packages[0], versions[0]));
-    inner.push_back(new_dep(extensions, b"KrakenActions".to_string(), packages[1], versions[1]));
+    inner.push_back(Dep { 
+        name: b"KrakenMultisig".to_string(), 
+        package: packages[0], 
+        version: versions[0] 
+    });
+    inner.push_back(Dep { 
+        name: b"KrakenActions".to_string(), 
+        package: packages[1], 
+        version: versions[1] 
+    });
 
     Deps { inner }
 }
 
-// protected because &mut Deps accessible only from KrakenMultisig and KrakenActions
-public fun new_dep(
+/// Protected because &mut Deps is only accessible from KrakenMultisig and KrakenActions
+public fun add_dep(
+    deps: &mut Deps,
     extensions: &Extensions,
     name: String,
     package: address, 
-    version: u64, 
-): Dep {
+    version: u64
+) {
     extensions.assert_extension_exists(name, package, version);
-    Dep { package, version, name }
-}
-
-public fun add(deps: &mut Deps, dep: Dep) {
-    deps.inner.push_back(dep);
+    deps.inner.push_back(Dep { name, package, version });
 }
 
 // === View functions ===

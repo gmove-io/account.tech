@@ -1,15 +1,7 @@
-/// This is the core module managing Multisig and Proposals.
-/// It provides the apis to create, approve and execute proposals with actions.
-/// 
-/// The flow is as follows:
-///   1. A proposal is created by pushing actions into it. 
-///      Actions are stacked from last to first, they must be executed then destroyed from last to first.
-///   2. When the threshold is reached, a proposal can be executed. 
-///      This returns an Executable hot potato constructed from certain fields of the approved Proposal. 
-///      It is directly passed into action functions to enforce multisig approval for an action to be executed.
-///   3. The module that created the proposal must destroy all of the actions and the Executable after execution 
-///      by passing the same witness that was used for instanciation. 
-///      This prevents the actions or the proposal to be stored instead of executed.
+/// The Executable struct is hot potato constructed from a Proposal that has been approved.
+/// It ensures that the actions are executed as it can't be stored.
+/// A delegated witness pattern is used to ensure only the proposal interface that created it 
+/// can access the underlying actions and destroy it.
 
 module kraken_multisig::executable;
 
@@ -20,19 +12,19 @@ use kraken_multisig::auth::Auth;
 
 // === Structs ===
 
-// hot potato ensuring the action in the proposal is executed as it can't be stored
+/// Hot potato ensuring the action in the proposal is executed as it can't be stored
 public struct Executable {
     // module that issued the proposal and must destroy it
     auth: Auth,
     // index of the next action to destroy, starts at 0
     next_to_destroy: u64,
-    // actions to be executed in order
+    // actions to be executed in order, heterogenous array
     actions: Bag,
 }
 
 // === Multisig-only functions ===
 
-// return an executable if the number of signers is >= threshold
+/// Is only called from the proposal module
 public(package) fun new(auth: Auth, actions: Bag): Executable {
     Executable { 
         auth,
@@ -41,6 +33,7 @@ public(package) fun new(auth: Auth, actions: Bag): Executable {
     }
 }
 
+/// Is only called from the proposal module, as well as the following functions
 public fun action_mut<W: drop, A: store>(
     executable: &mut Executable, 
     witness: W,
@@ -53,7 +46,7 @@ public fun action_mut<W: drop, A: store>(
     executable.actions.borrow_mut(idx)
 }
 
-// need to destroy all actions before destroying the executable
+/// Needs to destroy all actions before destroying the executable
 public fun remove_action<W: drop, A: store>(
     executable: &mut Executable, 
     witness: W,
@@ -66,7 +59,7 @@ public fun remove_action<W: drop, A: store>(
     executable.actions.remove(next)
 }
 
-// to complete the execution
+/// Completes the execution
 public fun destroy<W: drop>(
     executable: Executable, 
     witness: W
