@@ -30,7 +30,7 @@ const EUpdateNotExecuted: u64 = 1;
 const EWrongValue: u64 = 2;
 const EMintNotExecuted: u64 = 3;
 const EBurnNotExecuted: u64 = 4;
-const EWrongCoinType: u64 = 5;
+const ENoLock: u64 = 5;
 
 // === Events ===
 
@@ -95,6 +95,10 @@ public fun lock_cap<C: drop>(
     multisig.add_managed_asset(ManageCurrency {}, CurrencyKey<C> {}, treasury_lock);
 }
 
+public fun has_lock<C: drop>(multisig: &Multisig): bool {
+    multisig.has_managed_asset(CurrencyKey<C> {})
+}
+
 public fun borrow_lock<C: drop>(multisig: &Multisig): &CurrencyLock<C> {
     multisig.borrow_managed_asset(ManageCurrency {}, CurrencyKey<C> {})
 }
@@ -119,6 +123,7 @@ public fun propose_mint<C: drop>(
     amount: u64,
     ctx: &mut TxContext
 ) {
+    assert!(has_lock<C>(multisig), ENoLock);
     let proposal_mut = multisig.create_proposal(
         MintProposal {}, 
         type_to_name<C>(), // the coin type is the auth name 
@@ -157,6 +162,7 @@ public fun propose_burn<C: drop>(
     amount: u64,
     ctx: &mut TxContext
 ) {
+    assert!(has_lock<C>(multisig), ENoLock);
     let proposal_mut = multisig.create_proposal(
         BurnProposal {}, 
         type_to_name<C>(), // the coin type is the auth name 
@@ -199,6 +205,7 @@ public fun propose_update<C: drop>(
     md_icon: Option<String>,
     ctx: &mut TxContext
 ) {
+    assert!(has_lock<C>(multisig), ENoLock);
     let proposal_mut = multisig.create_proposal(
         UpdateProposal {},
         type_to_name<C>(), // the coin type is the auth name 

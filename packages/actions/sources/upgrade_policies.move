@@ -26,6 +26,7 @@ const EPolicyShouldRestrict: u64 = 1;
 const EInvalidPolicy: u64 = 2;
 const EUpgradeNotExecuted: u64 = 3;
 const ERestrictNotExecuted: u64 = 4;
+const ENoLock: u64 = 5;
 
 // === Events ===
 
@@ -132,6 +133,10 @@ public fun lock_cap_with_timelock(
     lock.lock_cap(multisig, name, ctx);
 }
 
+public fun has_lock(multisig: &Multisig, name: String): bool {
+    multisig.has_managed_asset(UpgradeKey { name })
+}
+
 public fun borrow_lock(multisig: &Multisig, name: String): &UpgradeLock {
     multisig.borrow_managed_asset(ManageUpgrades {}, UpgradeKey { name })
 }
@@ -159,6 +164,7 @@ public fun propose_upgrade(
     clock: &Clock,
     ctx: &mut TxContext
 ) {
+    assert!(has_lock(multisig, name), ENoLock);
     let lock = borrow_lock(multisig, name);
     let delay = lock.time_delay();
 
@@ -214,6 +220,7 @@ public fun propose_restrict(
     clock: &Clock,
     ctx: &mut TxContext
 ) {
+    assert!(has_lock(multisig, name), ENoLock);
     let lock = borrow_lock(multisig, name);
     let delay = lock.time_delay();
     let current_policy = lock.upgrade_cap.policy();
