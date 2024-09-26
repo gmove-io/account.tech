@@ -4,9 +4,8 @@ use std::string::String;
 // === Errors ===
 
 const EExtensionNotFound: u64 = 0;
-const EInvalidDeps: u64 = 1;
-const EPackageNotFound: u64 = 2;
-const EWrongVersion: u64 = 3;
+const EPackageNotFound: u64 = 1;
+const EWrongVersion: u64 = 2;
 
 // === Structs ===
 
@@ -40,20 +39,19 @@ fun init(ctx: &mut TxContext) {
     });
 }
 
-public fun init_core_deps(
-    _: &AdminCap,
-    extensions: &mut Extensions,
-    packages: vector<address>, 
-) {
-    assert!(packages.length() == 2, EInvalidDeps);
-
-    extensions.add(b"KrakenMultisig".to_string(), packages[0], 1);
-    extensions.add(b"KrakenActions".to_string(), packages[1], 1);
-}
-
-public fun add(extensions: &mut Extensions, name: String, package: address, version: u64) {
+public fun add(extensions: &mut Extensions, _: &AdminCap, name: String, package: address, version: u64) {
     let extension = Extension { name, history: vector[History { package, version }] };
     extensions.inner.push_back(extension);
+}
+
+public fun remove(extensions: &mut Extensions, _: &AdminCap, name: String) {
+    let idx = extensions.get_idx_for_name(name);
+    extensions.inner.remove(idx);
+}
+
+public fun update(extensions: &mut Extensions, _: &AdminCap, name: String, package: address, version: u64) {
+    let idx = extensions.get_idx_for_name(name);
+    extensions.inner[idx].history.push_back(History { package, version });
 }
 
 // === View functions ===
@@ -69,14 +67,16 @@ public fun get_latest_core_deps(
     versions.push_back(multisig_history[0].version);
 
     let actions_history = get_history(extensions, b"KrakenActions".to_string());
-    packages.push_back(actions_history[0].package);
-    versions.push_back(actions_history[0].version);
+    packages.push_back(actions_history[1].package);
+    versions.push_back(actions_history[1].version);
 
+    // packages[0] & versions[0] are KrakenMultisig
+    // packages[1] & versions[1] are KrakenActions
     (packages, versions)
 }
 
 public fun get_history(extensions: &Extensions, name: String): vector<History> {
-    let idx = extensions.get_idx_for_history(name);
+    let idx = extensions.get_idx_for_name(name);
     extensions.inner[idx].history
 }
 
@@ -85,7 +85,7 @@ public fun get_version(history: vector<History>, package: address): u64 {
     history[idx].version
 }
 
-public fun get_idx_for_history(extensions: &Extensions, name: String): u64 {
+public fun get_idx_for_name(extensions: &Extensions, name: String): u64 {
     let opt = extensions.inner.find_index!(|dep| dep.name == name);
     assert!(opt.is_some(), EExtensionNotFound);
     opt.destroy_some()
