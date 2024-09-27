@@ -1,6 +1,6 @@
 /// This module uses the owned apis to stream a coin for a payment.
 /// A payment has an amount to be paid at each interval, until the balance is empty.
-/// It can be cancelled by multisig members.
+/// It can be cancelled at any time by the multisig members.
 
 module kraken_actions::payments;
 
@@ -44,7 +44,7 @@ public struct StreamCreated has copy, drop, store {
 
 // === Structs ===
 
-// balance for a payment is locked and sent automatically from backend or claimed manually by the recipient
+/// Balance for a payment is locked and sent automatically from backend or claimed manually by the recipient
 public struct Stream<phantom C: drop> has key {
     id: UID,
     // remaining balance to be sent
@@ -59,17 +59,17 @@ public struct Stream<phantom C: drop> has key {
     recipient: address,
 }
 
-// cap enabling bearer to claim the payment
+/// Cap enabling bearer to claim the payment
 public struct ClaimCap has key {
     id: UID,
     // id of the stream to claim
     stream_id: ID,
 }
 
-// [PROPOSAL] stream an amount of coin to be paid at specific intervals
+/// [PROPOSAL] streams an amount of coin to be paid at specific intervals
 public struct PayProposal has copy, drop {}
 
-// [ACTION]
+/// [ACTION] creates a payment stream
 public struct PayAction has store {
     // amount to pay at each due date
     amount: u64,
@@ -88,7 +88,7 @@ public fun propose_pay_owned(
     description: String,
     execution_time: u64,
     expiration_epoch: u64,
-    coin: ID, // must have the total amount to be paid
+    coin: ID, // coin owned by the multisig, must have the total amount to be paid
     amount: u64, // amount to be paid at each interval
     interval: u64, // number of epochs between each payment
     recipient: address,
@@ -106,7 +106,7 @@ public fun propose_pay_owned(
     new_pay_owned(proposal_mut, coin, amount, interval, recipient);
 }
 
-// step 1(bis): propose to create a Stream with a specific amount to be paid at each interval
+// step 1(bis): same but from a treasury
 public fun propose_pay_treasury(
     multisig: &mut Multisig, 
     key: String,
@@ -133,7 +133,7 @@ public fun propose_pay_treasury(
     new_pay_treasury(proposal_mut, treasury_name, coin_type, coin_amount, amount, interval, recipient);
 }
 
-// step 1(bis): propose to create a Stream with a specific amount to be paid at each interval
+// step 1(bis): same but from a minted coin
 public fun propose_pay_minted<C: drop>(
     multisig: &mut Multisig, 
     key: String,
@@ -331,7 +331,7 @@ public fun recipient<C: drop>(self: &Stream<C>): address {
 
 // === Private functions ===
 
-// retrieve an object from the Multisig owned or managed assets 
+// retrieves an object from the Multisig owned or managed assets 
 fun access_coin<C: drop, W: copy + drop>(
     executable: &mut Executable, 
     multisig: &mut Multisig,

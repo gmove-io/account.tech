@@ -1,8 +1,8 @@
 /// Members can place nfts from their kiosk into the multisig's without approval.
-/// Nfts can be transferred into any other Kiosk. Upon approval, the recipient must execute the transfer.
+/// Nfts can be proposed for transfer into any other Kiosk. Upon approval, the recipient must execute the transfer.
 /// The functions take the caller's kiosk and the multisig's kiosk to execute.
 /// Nfts can be listed for sale in the kiosk, and then purchased by anyone.
-/// The multisig can withdraw the profits from the kiosk.
+/// Members can withdraw the profits from the kiosk to the Multisig.
 
 module kraken_actions::kiosk;
 
@@ -32,23 +32,23 @@ const EListAllNftsBefore: u64 = 4;
 
 // === Structs ===    
 
-// df key for the KioskOwnerLock
+/// Dynamic Field key for the KioskOwnerLock
 public struct KioskOwnerKey has copy, drop, store { name: String }
 
-// Wrapper restricting access to a KioskOwnerCap
+/// Dynamic Field wrapper restricting access to a KioskOwnerCap
 public struct KioskOwnerLock has store {
     // the cap to lock
     kiosk_owner_cap: KioskOwnerCap,
 }
 
-// [MEMBER] can create a Kiosk and lock the KioskOwnerCap in the Multisig to restrict taking and listing operations
+/// [MEMBER] can create a Kiosk and lock the KioskOwnerCap in the Multisig to restrict taking and listing operations
 public struct ManageKiosk has copy, drop {}
-// [PROPOSAL] take nfts from a kiosk managed by a multisig
+/// [PROPOSAL] take nfts from a kiosk managed by a multisig
 public struct TakeProposal has copy, drop {}
-// [PROPOSAL] list nfts in a kiosk managed by a multisig
+/// [PROPOSAL] list nfts in a kiosk managed by a multisig
 public struct ListProposal has copy, drop {}
 
-// [ACTION] transfer nfts from the multisig's kiosk to another one
+/// [ACTION] transfer nfts from the multisig's kiosk to another one
 public struct TakeAction has store {
     // id of the nfts to transfer
     nft_ids: vector<ID>,
@@ -56,9 +56,9 @@ public struct TakeAction has store {
     recipient: address,
 }
 
-// [ACTION] list nfts for purchase
+/// [ACTION] list nfts for purchase
 public struct ListAction has store {
-    // name of the kiosk
+    // name of the multisig's kiosk
     name: String,
     // id of the nfts to list to the prices
     nfts_prices_map: VecMap<ID, u64>
@@ -66,7 +66,8 @@ public struct ListAction has store {
 
 // === [MEMBER] Public functions ===
 
-// not composable because of the lock
+/// Creates a new Kiosk and locks the KioskOwnerCap in the Multisig
+/// Only a member can create a Kiosk
 #[allow(lint(share_owned))]
 public fun new(multisig: &mut Multisig, name: String, ctx: &mut TxContext) {
     multisig.assert_is_member(ctx);
@@ -87,8 +88,9 @@ public fun borrow_lock_mut(multisig: &mut Multisig, name: String): &mut KioskOwn
     multisig.borrow_managed_asset_mut(ManageKiosk {}, KioskOwnerKey { name })
 }
 
-// deposit from another Kiosk, no need for proposal
-// only doable if there is maximum a royalty and lock rule for the type
+/// Deposits from another Kiosk, no need for proposal.
+/// Optional royalty and lock rules are automatically resolved for the type.
+/// The rest of the rules must be confirmed via the frontend.
 public fun place<O: key + store>(
     multisig: &mut Multisig, 
     multisig_kiosk: &mut Kiosk, 
@@ -120,7 +122,7 @@ public fun place<O: key + store>(
     request
 }
 
-// members can delist nfts
+/// Members can delist nfts
 public fun delist<O: key + store>(
     multisig: &mut Multisig, 
     kiosk: &mut Kiosk, 
@@ -133,7 +135,7 @@ public fun delist<O: key + store>(
     kiosk.delist<O>(&lock_mut.kiosk_owner_cap, nft);
 }
 
-// members can withdraw the profits to the multisig
+/// Members can withdraw the profits to the multisig
 public fun withdraw_profits(
     multisig: &mut Multisig,
     kiosk: &mut Kiosk,
@@ -195,7 +197,7 @@ public fun execute_take<O: key + store>(
     take(executable, multisig, multisig_kiosk, recipient_kiosk, recipient_cap, policy, TakeProposal {}, ctx)
 }
 
-// step 5: destroy the executable, must `put_back_cap()`
+// step 5: destroy the executable
 public fun complete_take(mut executable: Executable) {
     destroy_take(&mut executable, TakeProposal {});
     executable.destroy(TakeProposal {});
@@ -237,7 +239,7 @@ public fun execute_list<O: key + store>(
     list<O, ListProposal>(executable, multisig, kiosk, ListProposal {});
 }
 
-// step 5: destroy the executable, must `put_back_cap()`
+// step 5: destroy the executable
 public fun complete_list(mut executable: Executable) {
     destroy_list(&mut executable, ListProposal {});
     executable.destroy(ListProposal {});

@@ -1,6 +1,4 @@
-/// This module uses the owned apis to transfer assets owned by the multisig.
-/// Objects can also be delivered to a single address, meaning that the recipient must claim the objects.
-/// If the delivery is not confirmed, the Multisig can retrieve the objects.
+/// This module uses the owned apis to transfer assets owned or managed by the multisig.
 
 module kraken_actions::transfers;
 
@@ -31,13 +29,12 @@ const ETransferNotExecuted: u64 = 3;
 
 // === Structs ===
 
-// [PROPOSAL] transfers multiple objects
+/// [PROPOSAL] transfers multiple objects
 public struct TransferObjectsProposal has copy, drop {}
-// [PROPOSAL] transfer coins owned by the multisig, managed by the treasury or minted within the multisig
+/// [PROPOSAL] transfers coins owned by the multisig, managed by the treasury or minted within the multisig
 public struct TransferCoinProposal has copy, drop {}
 
-// [ACTION] used in combination with MintAction, WithdrawAction or SpendAction 
-// to transfer the coins or objects to a recipient
+/// [ACTION] used in combination with other actions (like WithdrawAction) to transfer the coins or objects to a recipient
 public struct TransferAction has store {
     // address to transfer to
     recipient: address,

@@ -61,7 +61,7 @@ public fun new(extensions: &Extensions): Deps {
 }
 
 /// Protected because &mut Deps is only accessible from KrakenMultisig and KrakenActions
-public fun add_dep(
+public fun add(
     deps: &mut Deps,
     extensions: &Extensions,
     name: String,

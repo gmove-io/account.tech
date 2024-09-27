@@ -5,7 +5,6 @@ use kraken_actions::{
     config,
     actions_test_utils::{Self, start_world},
 };
-use kraken_extensions::extensions;
 
 const OWNER: address = @0xBABE;
 const ALICE: address = @0xA11CE;

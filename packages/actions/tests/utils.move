@@ -56,7 +56,8 @@ public fun start_world(): World {
 
     // initialize Clock, Multisig, Extensions
     let clock = clock::create_for_testing(scenario.ctx());
-    extensions::init_core_deps(&cap, &mut extensions, vector[@kraken_multisig, @kraken_actions]);
+    extensions.add(&cap, b"KrakenMultisig".to_string(), @kraken_multisig, 1);
+    extensions.add(&cap, b"KrakenActions".to_string(), @kraken_actions, 1);
     let mut multisig = multisig::new(
         &extensions,
         b"Kraken".to_string(), 

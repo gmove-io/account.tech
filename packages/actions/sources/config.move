@@ -1,8 +1,16 @@
 /// This module allows to manage Multisig settings.
-/// The action can be to add or remove members, to change the threshold or the name.
-/// If one wants to update the weights of members, they must remove the members and add them back with new weights in the same proposal.
-/// The new total weight must be lower than the threshold.
-/// Teams can choose to use any version of the package and must explicitly migrate to the new version.
+/// The actions are related to the modifications of all the fields of the Multisig (except Proposals).
+/// All these fields are encapsulated in the `Multisig` struct and each managed in their own module.
+/// They are only accessible mutably via [core-deps-only] functions defined in multisig.move which are used here only.
+/// 
+/// The members and thresholds modifications are grouped under a single proposal because they often go by pair.
+/// The threshold modification must be executed at the end to ensure they are reachable.
+/// The proposal also verifies the validity of the new values upon creation (e.g. threshold not higher than total weight).
+/// 
+/// Dependencies are all the packages and their versions that the multisig depends on (including this one).
+/// The allowed dependencies are defined in the `Extensions` struct and are maintained by Kraken team.
+/// Multisig users can choose to use any version of any package and must explicitly migrate to the new version.
+/// This is closer to a trustless model where anyone with the UpgradeCap could update the dependencies maliciously.
 
 module kraken_actions::config;
 
@@ -33,14 +41,20 @@ const ERoleDoesntExist: u64 = 5;
 
 // === Structs ===
 
-// [PROPOSAL] modify the name of the multisig
+/// The following structs are delegated witnesses (copy & drop abilities).
+/// They are used to authenticate the multisig proposals.
+/// Only the proposal that instantiated the witness can also destroy it.
+/// Those structs also define the different roles that members can have.
+/// Finally, they are used to parse the actions of the proposal off-chain.
+
+/// [PROPOSAL] modifies the name of the multisig
 public struct ConfigNameProposal has copy, drop {}
-// [PROPOSAL] modify the members and thresholds of the multisig
+/// [PROPOSAL] modifies the members and thresholds of the multisig
 public struct ConfigRulesProposal has copy, drop {}
-// [PROPOSAL] modify the dependencies of the multisig
+/// [PROPOSAL] modifies the dependencies of the multisig
 public struct ConfigDepsProposal has copy, drop {}
 
-// [ACTION] wrap a multisig field into a generic action
+/// [ACTION] wraps a multisig field into a generic action
 public struct ConfigAction<T> has store {
     inner: T,
 }
@@ -70,8 +84,9 @@ public fun propose_config_name(
 }
 
 // step 2: multiple members have to approve the proposal (multisig::approve_proposal)
+// step 3: execute the proposal and return the action (multisig::execute_proposal)
 
-// step 3: execute the action and modify Multisig object
+// step 4: execute the action and modify Multisig object
 public fun execute_config_name(
     mut executable: Executable,
     multisig: &mut Multisig, 
@@ -115,8 +130,9 @@ public fun propose_config_rules(
 }
 
 // step 2: multiple members have to approve the proposal (multisig::approve_proposal)
+// step 3: execute the proposal and return the action (multisig::execute_proposal)
 
-// step 3: execute the action and modify Multisig object
+// step 4: execute the action and modify Multisig object
 public fun execute_config_rules(
     mut executable: Executable,
     multisig: &mut Multisig, 
@@ -126,7 +142,7 @@ public fun execute_config_rules(
     executable.destroy(ConfigRulesProposal {});
 }
 
-// step 1: propose to update the version
+// step 1: propose to update the dependencies
 public fun propose_config_deps(
     multisig: &mut Multisig, 
     key: String,
@@ -192,7 +208,7 @@ public fun new_config_members(
 
     let mut members = members::new();
     addresses.zip_do!(weights, |addr, weight| {
-        members.add(members::new_member(addr, weight, option::none(), roles.remove(0)));
+        members.add(addr, weight, option::none(), roles.remove(0));
     });
     
     proposal.add_action(ConfigAction { inner: members });
@@ -229,7 +245,7 @@ public fun config_thresholds<W: copy + drop>(
     multisig: &mut Multisig,
     witness: W,
 ) {
-    // threshold modification must be the latest action to be executed to ensure it is reachable
+    // threshold modification must be the last action to be executed to ensure it is reachable
     assert!(
         executable.action_index<ConfigAction<Thresholds>>() + 1 - executable.next_to_destroy() == executable.actions_length(), 
         EThresholdNotLastAction
@@ -249,8 +265,7 @@ public fun new_config_deps(
     let mut deps = deps::new(extensions);
     names.zip_do!(packages, |name, package| {
         let version = versions.remove(0);
-        let dep = deps::new_dep(extensions, name, package, version);
-        deps.add(dep);
+        deps.add(extensions, name, package, version);
     });
     proposal.add_action(ConfigAction { inner: deps });
 }

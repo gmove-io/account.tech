@@ -1,7 +1,7 @@
 /// Members can lock a TreasuryCap in the Multisig to restrict minting and burning operations.
 /// as well as modifying the CoinMetadata
 /// Members can propose to mint a Coin that will be sent to the Multisig and burn one of its coin.
-/// It uses a Withdraw action. The Coin could be merged beforehand.
+/// It uses a Withdraw action. The burnt Coin could be merged beforehand.
 
 module kraken_actions::currency;
 
@@ -46,35 +46,35 @@ public struct Burned has copy, drop, store {
 
 // === Structs ===    
 
-// df key for the CurrencyLock
+/// Dynamic Field key for the CurrencyLock
 public struct CurrencyKey<phantom C: drop> has copy, drop, store {}
 
-// Wrapper restricting access to a TreasuryCap
+/// Dynamic Field wrapper restricting access to a TreasuryCap
 public struct CurrencyLock<phantom C: drop> has store {
     // the cap to lock
     treasury_cap: TreasuryCap<C>,
 }
 
-// [MEMBER] can lock a TreasuryCap in the Multisig to restrict minting and burning operations
+/// [MEMBER] can lock a TreasuryCap in the Multisig to restrict minting and burning operations
 public struct ManageCurrency has copy, drop {}
-// [PROPOSAL] mint new coins from a locked TreasuryCap
+/// [PROPOSAL] mints new coins from a locked TreasuryCap
 public struct MintProposal has copy, drop {}
-// [PROPOSAL] burn coins from the multisig using a locked TreasuryCap
+/// [PROPOSAL] burns coins from the multisig using a locked TreasuryCap
 public struct BurnProposal has copy, drop {}
-// [PROPOSAL] update the CoinMetadata associated with a locked TreasuryCap
+/// [PROPOSAL] updates the CoinMetadata associated with a locked TreasuryCap
 public struct UpdateProposal has copy, drop {}
 
-// [ACTION] mint new coins
+/// [ACTION] mint new coins
 public struct MintAction<phantom C: drop> has store {
     amount: u64,
 }
 
-// [ACTION] burn coins
+/// [ACTION] burns coins
 public struct BurnAction<phantom C: drop> has store {
     amount: u64,
 }
 
-// [ACTION] update a CoinMetadata object using a locked TreasuryCap 
+/// [ACTION] updates a CoinMetadata object using a locked TreasuryCap 
 public struct UpdateAction<phantom C: drop> has store { 
     name: Option<String>,
     symbol: Option<String>,
@@ -83,6 +83,8 @@ public struct UpdateAction<phantom C: drop> has store {
 }
 
 // === [MEMBER] Public functions ===
+
+/// Only a member can lock a TreasuryCap and borrow it.
 
 public fun lock_cap<C: drop>(
     multisig: &mut Multisig,
@@ -192,7 +194,7 @@ public fun execute_burn<C: drop>(
     executable.destroy(BurnProposal {});
 }
 
-// step 1: propose to transfer nfts to another kiosk
+// step 1: propose to update the CoinMetadata
 public fun propose_update<C: drop>(
     multisig: &mut Multisig,
     key: String,

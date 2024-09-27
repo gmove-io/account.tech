@@ -1,4 +1,4 @@
-/// Members can set multiple treasuries with different budgets and manager.
+/// Members can create multiple treasuries with different budgets and managers (members with roles).
 /// This allows for a more flexible and granular way to manage funds.
 
 module kraken_actions::treasury;
@@ -33,28 +33,29 @@ const ETreasuryNotEmpty: u64 = 5;
 
 // === Structs ===
 
+/// Dynamic Field key for the Treasury
 public struct TreasuryKey has copy, drop, store { name: String }
 
-// multisig's dynamic field holding a budget with different coin types, key is name
+/// Dynamic field holding a budget with different coin types, key is name
 public struct Treasury has store {
     // heterogeneous array of Balances, String -> Balance<C>
     bag: Bag
 }
 
-// [MEMBER] can close a treasury and deposit coins into it
+/// [MEMBER] can close a treasury and deposit coins into it
 public struct ManageTreasury has copy, drop {}
-// [PROPOSAL] open a treasury for the multisig
+/// [PROPOSAL] opens a treasury for the multisig
 public struct OpenProposal has copy, drop {}
-// [PROPOSAL] spend from a treasury 
+/// [PROPOSAL] spends from a treasury 
 public struct SpendProposal has copy, drop {}
 
-// [ACTION] propose to open a treasury for the multisig
+/// [ACTION] proposes to open a treasury for the multisig
 public struct OpenAction has store {
     // label for the treasury and role
     name: String,
 }
 
-// [ACTION] action to be used with specific proposals making good use of the returned coins, similar as owned::withdraw
+/// [ACTION] action to be used with specific proposals making good use of the returned coins, similar as owned::withdraw
 public struct SpendAction has store {
     // name of the treasury to withdraw from
     name: String,
@@ -82,6 +83,7 @@ public fun treasury_exists(multisig: &Multisig, name: String): bool {
     multisig.has_managed_asset(TreasuryKey { name })
 }
 
+/// Deposits coins owned by the multisig into a treasury
 public fun deposit_owned<C: drop>(
     multisig: &mut Multisig,
     name: String, 
@@ -92,6 +94,7 @@ public fun deposit_owned<C: drop>(
     deposit<C>(multisig, name, coin, ctx);
 }
 
+/// Deposits coins owned by a member into a treasury
 public fun deposit<C: drop>(
     multisig: &mut Multisig,
     name: String, 
@@ -113,6 +116,7 @@ public fun deposit<C: drop>(
     };
 }
 
+/// Closes the treasury if empty
 public fun close(multisig: &mut Multisig, name: String, ctx: &mut TxContext) {
     multisig.assert_is_member(ctx);
     let Treasury { bag } = 

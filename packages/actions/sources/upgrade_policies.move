@@ -1,4 +1,4 @@
-/// Package managers can lock UpgradeCaps in the multisig. Caps can't be unlocked to enforce the policies.
+/// Package managers can lock UpgradeCaps in the multisig. Caps can't be unlocked, this is to enforce the policies.
 /// Any rule can be defined for the upgrade lock. The module provide a timelock rule by default, based on execution time.
 /// Upon locking, the user can define an optional timelock corresponding to the minimum delay between an upgrade proposal and its execution.
 /// The multisig can decide to make the policy more restrictive or destroy the Cap, to make the package immutable.
@@ -42,10 +42,10 @@ public struct Restricted has copy, drop, store {
 
 // === Structs ===
 
-// df key for the UpgradeLock
+/// Dynamic field key for the UpgradeLock
 public struct UpgradeKey has copy, drop, store { name: String }
 
-// Wrapper restricting access to an UpgradeCap, with optional timelock
+/// Dynamic field wrapper restricting access to an UpgradeCap, with optional timelock
 public struct UpgradeLock has key, store {
     id: UID,
     // the cap to lock
@@ -54,35 +54,36 @@ public struct UpgradeLock has key, store {
     // DF: config: C,
 }
 
-// df key for TimeLock
+/// Dynamic field key for TimeLock
 public struct TimeLockKey has copy, drop, store {}
 
-// timelock config for the UpgradeLock
+/// Dynamic field timelock config for the UpgradeLock
 public struct TimeLock has store {
     delay_ms: u64,
 }
 
-// [MEMBER] can lock an UpgradeCap and borrow it
+/// [MEMBER] can lock an UpgradeCap and borrow it
 public struct ManageUpgrades has copy, drop {}
-// [PROPOSAL] upgrade a package
+/// [PROPOSAL] upgrades a package
 public struct UpgradeProposal has copy, drop {}
-// [PROPOSAL] restrict a locked UpgradeCap
+/// [PROPOSAL] restricts a locked UpgradeCap
 public struct RestrictProposal has copy, drop {}
 
-// [ACTION]
+/// [ACTION] upgrades a package
 public struct UpgradeAction has store {
     // digest of the package build we want to publish
     digest: vector<u8>,
 }
 
-// [ACTION]
+/// [ACTION] restricts a locked UpgradeCap
 public struct RestrictAction has store {
-    // restrict upgrade to this policy
+    // downgrades to this policy
     policy: u8,
 }
 
 // === [MEMBER] Public Functions ===
 
+/// Creates a new UpgradeLock and returns it
 public fun new_lock(
     upgrade_cap: UpgradeCap,
     ctx: &mut TxContext
@@ -93,7 +94,7 @@ public fun new_lock(
     }
 }
 
-// add a rule with any config to the upgrade lock
+/// Adds a rule with any config to the upgrade lock
 public fun add_rule<K: copy + drop + store, R: store>(
     lock: &mut UpgradeLock,
     key: K,
@@ -102,7 +103,7 @@ public fun add_rule<K: copy + drop + store, R: store>(
     df::add(&mut lock.id, key, rule);
 }
 
-// check if a rule exists
+/// Checks if a rule exists
 public fun has_rule<K: copy + drop + store>(
     lock: &UpgradeLock,
     key: K,
@@ -110,6 +111,7 @@ public fun has_rule<K: copy + drop + store>(
     df::exists_(&lock.id, key)
 }
 
+/// Attaches the UpgradeLock as a Dynamic Field to the multisig
 public fun lock_cap(
     lock: UpgradeLock,
     multisig: &mut Multisig,
@@ -120,7 +122,7 @@ public fun lock_cap(
     multisig.add_managed_asset(ManageUpgrades {}, UpgradeKey { name }, lock);
 }
 
-// lock a cap with a timelock rule
+/// Locks a cap with a timelock rule
 public fun lock_cap_with_timelock(
     multisig: &mut Multisig,
     name: String,

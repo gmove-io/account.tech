@@ -1,9 +1,9 @@
-/// This module allows multisig members to access objects owned by the multisig in a secure way.
+/// This module allows proposals to access objects owned by the multisig in a secure way with Transfer to Object (TTO).
 /// The objects can be taken only via an WithdrawAction action.
 /// This action can't be proposed directly since it wouldn't make sense to withdraw an object without using it.
 /// Objects can be borrowed by adding both a WithdrawAction and a ReturnAction action to the proposal.
 /// This is automatically handled by the borrow functions.
-/// Caution: borrowed Coins can be emptied, only withdraw the amount you need (merge and split coins before if necessary)
+/// Caution: borrowed Coins and similar assets can be emptied, only withdraw the amount you need (merge and split coins before if necessary)
 
 module kraken_actions::owned;
 
@@ -24,13 +24,13 @@ const ERetrieveAllObjectsBefore: u64 = 2;
 
 // === Structs ===
 
-// [ACTION] guard access to multisig owned objects which can only be received via this action
+/// [ACTION] guards access to multisig owned objects which can only be received via this action
 public struct WithdrawAction has store {
     // the owned objects we want to access
     objects: vector<ID>,
 }
 
-// [ACTION] enforces accessed objects to be sent back to the multisig, depends on WithdrawAction
+/// [ACTION] enforces accessed objects to be sent back to the multisig, depends on WithdrawAction
 public struct ReturnAction has store {
     // list of objects to put back into the multisig
     to_return: vector<ID>,
