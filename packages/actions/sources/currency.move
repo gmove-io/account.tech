@@ -2,6 +2,8 @@
 /// as well as modifying the CoinMetadata
 /// Members can propose to mint a Coin that will be sent to the Multisig and burn one of its coin.
 /// It uses a Withdraw action. The burnt Coin could be merged beforehand.
+/// 
+/// Coins minted by the multisig can also be transferred or paid to any address.
 
 module kraken_actions::currency;
 
@@ -21,7 +23,11 @@ use kraken_multisig::{
     proposals::Proposal,
     executable::Executable
 };
-use kraken_actions::owned;
+use kraken_actions::{
+    owned,
+    transfers,
+    payments,
+};
 
 // === Errors ===
 
@@ -31,6 +37,7 @@ const EWrongValue: u64 = 2;
 const EMintNotExecuted: u64 = 3;
 const EBurnNotExecuted: u64 = 4;
 const ENoLock: u64 = 5;
+const EDifferentLength: u64 = 6;
 
 // === Events ===
 
@@ -63,6 +70,10 @@ public struct MintProposal has copy, drop {}
 public struct BurnProposal has copy, drop {}
 /// [PROPOSAL] updates the CoinMetadata associated with a locked TreasuryCap
 public struct UpdateProposal has copy, drop {}
+/// [PROPOSAL] transfers from a minted coin 
+public struct TransferProposal has copy, drop {}
+/// [PROPOSAL] pays from a minted coin
+public struct PayProposal has copy, drop {}
 
 /// [ACTION] mint new coins
 public struct MintAction<phantom C: drop> has store {
@@ -234,6 +245,104 @@ public fun execute_update<C: drop>(
     executable.destroy(UpdateProposal {});
 }
 
+// step 1: propose to send managed coins
+public fun propose_transfer<C: drop>(
+    multisig: &mut Multisig, 
+    key: String,
+    description: String,
+    execution_time: u64,
+    expiration_epoch: u64,
+    amounts: vector<u64>,
+    recipients: vector<address>,
+    ctx: &mut TxContext
+) {
+    assert!(amounts.length() == recipients.length(), EDifferentLength);
+    let proposal_mut = multisig.create_proposal(
+        TransferProposal {},
+        b"".to_string(),
+        key,
+        description,
+        execution_time,
+        expiration_epoch,
+        ctx
+    );
+
+    amounts.zip_do!(recipients, |amount, recipient| {
+        new_mint<C>(proposal_mut, amount);
+        transfers::new_transfer(proposal_mut, recipient);
+    });
+}
+
+// step 2: multiple members have to approve the proposal (multisig::approve_proposal)
+// step 3: execute the proposal and return the action (multisig::execute_proposal)
+
+// step 4: loop over transfer
+public fun execute_transfer<C: drop>(
+    executable: &mut Executable, 
+    multisig: &mut Multisig, 
+    ctx: &mut TxContext
+) {
+    let coin: Coin<C> = mint(executable, multisig, TransferProposal {}, ctx);
+
+    let is_executed = false;
+    let mint: &MintAction<C> = executable.action();
+
+    if (mint.amount == 0) {
+        let MintAction<C> { .. } = executable.remove_action(TransferProposal {});
+        is_executed = true;
+    };
+
+    transfers::transfer(executable, multisig, coin, TransferProposal {}, is_executed);
+
+    if (is_executed) {
+        transfers::destroy_transfer(executable, TransferProposal {});
+    }
+}
+
+// step 1: propose to pay from a minted coin
+public fun propose_pay<C: drop>(
+    multisig: &mut Multisig, 
+    key: String,
+    description: String,
+    execution_time: u64,
+    expiration_epoch: u64,
+    coin_amount: u64,
+    amount: u64, // amount to be paid at each interval
+    interval: u64, // number of epochs between each payment
+    recipient: address,
+    ctx: &mut TxContext
+) {
+    let proposal_mut = multisig.create_proposal(
+        PayProposal {},
+        b"".to_string(),
+        key,
+        description,
+        execution_time,
+        expiration_epoch,
+        ctx
+    );
+
+    new_mint<C>(proposal_mut, coin_amount);
+    payments::new_pay(proposal_mut, amount, interval, recipient);
+}
+
+// step 2: multiple members have to approve the proposal (multisig::approve_proposal)
+// step 3: execute the proposal and return the action (multisig::execute_proposal)
+
+// step 4: loop over it in PTB, sends last object from the Send action
+public fun execute_pay<C: drop>(
+    mut executable: Executable, 
+    multisig: &mut Multisig, 
+    ctx: &mut TxContext
+) {
+    let coin: Coin<C> = mint(&mut executable, multisig, PayProposal {}, ctx);
+    payments::pay(&mut executable, multisig, coin, PayProposal {}, ctx);
+
+    destroy_mint<C, PayProposal>(&mut executable, PayProposal {});
+    payments::destroy_pay(&mut executable, PayProposal {});
+    executable.destroy(PayProposal {});
+}
+
 // === [ACTION] Public functions ===
 
 public fun new_mint<C: drop>(proposal: &mut Proposal, amount: u64) {
@@ -262,11 +371,6 @@ public fun mint<C: drop, W: drop>(
 public fun destroy_mint<C: drop, W: drop>(executable: &mut Executable, witness: W) {
     let MintAction<C> { amount } = executable.remove_action(witness);
     assert!(amount == 0, EMintNotExecuted);
-}
-
-public fun mint_is_executed<C: drop>(executable: &Executable): bool {
-    let mint: &MintAction<C> = executable.action();
-    mint.amount == 0
 }
 
 public fun new_burn<C: drop>(proposal: &mut Proposal, amount: u64) {

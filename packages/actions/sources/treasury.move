@@ -1,5 +1,7 @@
 /// Members can create multiple treasuries with different budgets and managers (members with roles).
 /// This allows for a more flexible and granular way to manage funds.
+/// 
+/// Coins managed by treasuries can also be transferred or paid to any address.
 
 module kraken_actions::treasury;
 
@@ -21,6 +23,10 @@ use kraken_multisig::{
     proposals::Proposal,
     executable::Executable
 };
+use kraken_actions::{
+    transfers,
+    payments,
+};
 
 // === Errors ===
 
@@ -29,7 +35,8 @@ const EOpenNotExecuted: u64 = 1;
 const ETreasuryAlreadyExists: u64 = 2;
 const EWrongLength: u64 = 3;
 const EWithdrawNotExecuted: u64 = 4;
-const ETreasuryNotEmpty: u64 = 5;
+const EDifferentLength: u64 = 5;
+const ETreasuryNotEmpty: u64 = 6;
 
 // === Structs ===
 
@@ -46,8 +53,10 @@ public struct Treasury has store {
 public struct ManageTreasury has copy, drop {}
 /// [PROPOSAL] opens a treasury for the multisig
 public struct OpenProposal has copy, drop {}
-/// [PROPOSAL] spends from a treasury 
-public struct SpendProposal has copy, drop {}
+/// [PROPOSAL] transfers from a treasury 
+public struct TransferProposal has copy, drop {}
+/// [PROPOSAL] pays from a treasury
+public struct PayProposal has copy, drop {}
 
 /// [ACTION] proposes to open a treasury for the multisig
 public struct OpenAction has store {
@@ -164,6 +173,109 @@ public fun execute_open(
     executable.destroy(OpenProposal {});
 }
 
+// step 1: propose to send managed coins
+public fun propose_transfer(
+    multisig: &mut Multisig, 
+    key: String,
+    description: String,
+    execution_time: u64,
+    expiration_epoch: u64,
+    treasury_name: String,
+    coin_types: vector<vector<String>>,
+    coin_amounts: vector<vector<u64>>,
+    recipients: vector<address>,
+    ctx: &mut TxContext
+) {
+    assert!(coin_amounts.length() == coin_types.length(), EDifferentLength);
+    let proposal_mut = multisig.create_proposal(
+        TransferProposal {},
+        b"".to_string(),
+        key,
+        description,
+        execution_time,
+        expiration_epoch,
+        ctx
+    );
+
+    coin_types.zip_do!(coin_amounts, |types, amounts| {
+        new_spend(proposal_mut, treasury_name, types, amounts);
+        transfers::new_transfer(proposal_mut, recipients.remove(0));
+    });
+}
+
+// step 2: multiple members have to approve the proposal (multisig::approve_proposal)
+// step 3: execute the proposal and return the action (multisig::execute_proposal)
+
+// step 4: loop over transfer
+public fun execute_transfer<C: drop>(
+    executable: &mut Executable, 
+    multisig: &mut Multisig, 
+    ctx: &mut TxContext
+) {
+    let coin: Coin<C> = spend(executable, multisig, TransferProposal {}, ctx);
+
+    let is_executed = false;
+    let spend: &SpendAction = executable.action();
+
+    if (spend.coins_amounts_map.is_empty()) {
+        let SpendAction { coins_amounts_map, .. } = executable.remove_action(TransferProposal {});
+        coins_amounts_map.destroy_empty();
+        is_executed = true;
+    };
+
+    transfers::transfer(executable, multisig, coin, TransferProposal {}, is_executed);
+
+    if (is_executed) {
+        transfers::destroy_transfer(executable, TransferProposal {});
+    }
+}
+
+// step 1(bis): same but from a treasury
+public fun propose_pay_treasury(
+    multisig: &mut Multisig, 
+    key: String,
+    description: String,
+    execution_time: u64,
+    expiration_epoch: u64,
+    treasury_name: String, 
+    coin_type: String, 
+    coin_amount: u64, 
+    amount: u64, // amount to be paid at each interval
+    interval: u64, // number of epochs between each payment
+    recipient: address,
+    ctx: &mut TxContext
+) {
+    let proposal_mut = multisig.create_proposal(
+        PayProposal {},
+        b"".to_string(),
+        key,
+        description,
+        execution_time,
+        expiration_epoch,
+        ctx
+    );
+
+    new_spend(proposal_mut, treasury_name, vector[coin_type], vector[coin_amount]);
+    payments::new_pay(proposal_mut, amount, interval, recipient);
+}
+
+// step 2: multiple members have to approve the proposal (multisig::approve_proposal)
+// step 3: execute the proposal and return the action (multisig::execute_proposal)
+
+// step 4: loop over it in PTB, sends last object from the Send action
+public fun execute_pay<C: drop>(
+    mut executable: Executable, 
+    multisig: &mut Multisig, 
+    ctx: &mut TxContext
+) {
+    let coin: Coin<C> = spend(&mut executable, multisig, PayProposal {}, ctx);
+    payments::pay(&mut executable, multisig, coin, PayProposal {}, ctx);
+
+    destroy_spend(&mut executable, PayProposal {});
+    payments::destroy_pay(&mut executable, PayProposal {});
+    executable.destroy(PayProposal {});
+}
+
 // === [ACTION] Public Functions ===
 
 public fun new_open(proposal: &mut Proposal, name: String) {
@@ -220,11 +332,6 @@ public fun spend<W: copy + drop, C: drop>(
 public fun destroy_spend<W: copy + drop>(executable: &mut Executable, witness: W) {
     let SpendAction { coins_amounts_map, .. } = executable.remove_action(witness);
     assert!(coins_amounts_map.is_empty(), EWithdrawNotExecuted);
-}
-
-public fun spend_is_executed(executable: &Executable): bool {
-    let spend: &SpendAction = executable.action();
-    spend.coins_amounts_map.is_empty()
 }
 
 // === [CORE DEPS] Public functions ===

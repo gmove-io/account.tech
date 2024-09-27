@@ -1,4 +1,4 @@
-/// This module uses the owned apis to stream a coin for a payment.
+/// This module provides the apis to stream a coin for a payment.
 /// A payment has an amount to be paid at each interval, until the balance is empty.
 /// It can be cancelled at any time by the multisig members.
 
@@ -6,9 +6,7 @@ module kraken_actions::payments;
 
 // === Imports ===
 
-use std::string::String;
 use sui::{
-    transfer::Receiving,
     balance::Balance,
     coin::{Self, Coin},
     event,
@@ -18,20 +16,13 @@ use kraken_multisig::{
     proposals::Proposal,
     executable::Executable
 };
-use kraken_actions::{
-    owned::{Self, WithdrawAction},
-    treasury::{Self, SpendAction},
-    currency::{Self, MintAction}
-};
 
 // === Errors ===
 
 const ECompletePaymentBefore: u64 = 0;
 const EPayTooEarly: u64 = 1;
 const EPayNotExecuted: u64 = 2;
-const EReceivingShouldBeSome: u64 = 3;
-const EWrongStream: u64 = 4;
-const EInvalidExecutable: u64 = 5;
+const EWrongStream: u64 = 3;
 
 // === Events ===
 
@@ -66,9 +57,6 @@ public struct ClaimCap has key {
     stream_id: ID,
 }
 
-/// [PROPOSAL] streams an amount of coin to be paid at specific intervals
-public struct PayProposal has copy, drop {}
-
 /// [ACTION] creates a payment stream
 public struct PayAction has store {
     // amount to pay at each due date
@@ -81,99 +69,10 @@ public struct PayAction has store {
 
 // === [PROPOSAL] Public Functions ===
 
-// step 1: propose to create a Stream with a specific amount to be paid at each interval
-public fun propose_pay_owned(
-    multisig: &mut Multisig, 
-    key: String,
-    description: String,
-    execution_time: u64,
-    expiration_epoch: u64,
-    coin: ID, // coin owned by the multisig, must have the total amount to be paid
-    amount: u64, // amount to be paid at each interval
-    interval: u64, // number of epochs between each payment
-    recipient: address,
-    ctx: &mut TxContext
-) {
-    let proposal_mut = multisig.create_proposal(
-        PayProposal {},
-        b"".to_string(),
-        key,
-        description,
-        execution_time,
-        expiration_epoch,
-        ctx
-    );
-    new_pay_owned(proposal_mut, coin, amount, interval, recipient);
-}
-
-// step 1(bis): same but from a treasury
-public fun propose_pay_treasury(
-    multisig: &mut Multisig, 
-    key: String,
-    description: String,
-    execution_time: u64,
-    expiration_epoch: u64,
-    treasury_name: String, 
-    coin_type: String, 
-    coin_amount: u64, 
-    amount: u64, // amount to be paid at each interval
-    interval: u64, // number of epochs between each payment
-    recipient: address,
-    ctx: &mut TxContext
-) {
-    let proposal_mut = multisig.create_proposal(
-        PayProposal {},
-        b"".to_string(),
-        key,
-        description,
-        execution_time,
-        expiration_epoch,
-        ctx
-    );
-    new_pay_treasury(proposal_mut, treasury_name, coin_type, coin_amount, amount, interval, recipient);
-}
-
-// step 1(bis): same but from a minted coin
-public fun propose_pay_minted<C: drop>(
-    multisig: &mut Multisig, 
-    key: String,
-    description: String,
-    execution_time: u64,
-    expiration_epoch: u64,
-    coin_amount: u64,
-    amount: u64, // amount to be paid at each interval
-    interval: u64, // number of epochs between each payment
-    recipient: address,
-    ctx: &mut TxContext
-) {
-    let proposal_mut = multisig.create_proposal(
-        PayProposal {},
-        b"".to_string(),
-        key,
-        description,
-        execution_time,
-        expiration_epoch,
-        ctx
-    );
-    new_pay_minted<C>(proposal_mut, coin_amount, amount, interval, recipient);
-}
-
+// step 1: propose the pay action from another module
 // step 2: multiple members have to approve the proposal (multisig::approve_proposal)
 // step 3: execute the proposal and return the action (multisig::execute_proposal)
-
-// step 4: loop over it in PTB, sends last object from the Send action
-public fun execute_pay<C: drop>(
-    mut executable: Executable, 
-    multisig: &mut Multisig, 
-    receiving: Option<Receiving<Coin<C>>>,
-    ctx: &mut TxContext
-) {
-    let coin = access_coin(&mut executable, multisig, receiving, PayProposal {}, ctx);
-    pay<C, PayProposal>(&mut executable, multisig, coin, PayProposal {}, ctx);
-
-    destroy_pay<C, PayProposal>(&mut executable, PayProposal {});
-    executable.destroy(PayProposal {});
-}
+// step 4: loop over `execute_transfer` it in PTB from the module implementing it
 
 // step 5: bearer of ClaimCap can claim the payment
 public fun claim<C: drop>(stream: &mut Stream<C>, cap: &ClaimCap, ctx: &mut TxContext) {
@@ -223,38 +122,12 @@ public fun cancel_payment_stream<C: drop>(
 
 // === [ACTION] Public Functions ===
 
-public fun new_pay_owned(
+public fun new_pay(
     proposal: &mut Proposal, 
-    coin_id: ID, 
     amount: u64,
     interval: u64,
     recipient: address,
 ) {
-    owned::new_withdraw(proposal, vector[coin_id]);
-    proposal.add_action(PayAction { amount, interval, recipient });
-}
-
-public fun new_pay_treasury(
-    proposal: &mut Proposal, 
-    treasury_name: String, 
-    coin_type: String, 
-    coin_amount: u64, 
-    amount: u64,
-    interval: u64, 
-    recipient: address
-) {
-    treasury::new_spend(proposal, treasury_name, vector[coin_type], vector[coin_amount]);
-    proposal.add_action(PayAction { amount, interval, recipient });
-}
-
-public fun new_pay_minted<C: drop>(
-    proposal: &mut Proposal, 
-    coin_amount: u64,
-    amount: u64, 
-    interval: u64, 
-    recipient: address
-) {
-    currency::new_mint<C>(proposal, coin_amount);
     proposal.add_action(PayAction { amount, interval, recipient });
 }
 
@@ -287,20 +160,7 @@ public fun pay<C: drop, W: copy + drop>(
     pay_mut.amount = 0; // reset to ensure action is executed only once
 }
 
-public fun destroy_pay<C: drop, W: copy + drop>(executable: &mut Executable, witness: W): address {
-    if (is_withdraw<C>(executable)) {
-        if (owned::withdraw_is_executed(executable))
-            owned::destroy_withdraw(executable, witness);
-    } else if (is_spend<C>(executable)) {
-        if (treasury::spend_is_executed(executable))
-            treasury::destroy_spend(executable, witness);
-    } else if (is_mint<C>(executable)) {
-        if (currency::mint_is_executed<C>(executable))
-            currency::destroy_mint<C, W>(executable, witness);
-    } else {
-        abort EInvalidExecutable
-    };    
-
+public fun destroy_pay<W: copy + drop>(executable: &mut Executable, witness: W): address {
     let PayAction { amount, recipient, .. } = executable.remove_action(witness);
     assert!(amount == 0, EPayNotExecuted);
 
@@ -339,41 +199,3 @@ public fun delete_pay_action<W: copy + drop>(
     multisig.deps().assert_core_dep(witness);
     let PayAction { .. } = action;
 }
-
-// === Private functions ===
-
-// retrieves an object from the Multisig owned or managed assets 
-fun access_coin<C: drop, W: copy + drop>(
-    executable: &mut Executable, 
-    multisig: &mut Multisig,
-    receiving: Option<Receiving<Coin<C>>>,
-    witness: W,
-    ctx: &mut TxContext
-): Coin<C> {
-    if (is_withdraw<C>(executable)) {
-        assert!(receiving.is_some(), EReceivingShouldBeSome);
-        owned::withdraw(executable, multisig, receiving.destroy_some(), witness)
-    } else if (is_spend<C>(executable)) {
-        treasury::spend(executable, multisig, witness, ctx)
-    } else if (is_mint<C>(executable)) {
-        currency::mint(executable, multisig, witness, ctx)
-    } else {
-        abort EInvalidExecutable
-    }
-}
-
-fun is_withdraw<C: drop>(executable: &Executable): bool {
-    executable.action_index<WithdrawAction>() < executable.action_index<SpendAction>() &&
-    executable.action_index<WithdrawAction>() < executable.action_index<MintAction<C>>()
-}
-
-fun is_spend<C: drop>(executable: &Executable): bool {
-    executable.action_index<SpendAction>() < executable.action_index<WithdrawAction>() &&
-    executable.action_index<SpendAction>() < executable.action_index<MintAction<C>>()
-}
-
-fun is_mint<C: drop>(executable: &Executable): bool {
-    executable.action_index<MintAction<C>>() < executable.action_index<WithdrawAction>() &&
-    executable.action_index<MintAction<C>>() < executable.action_index<SpendAction>()
-}
-
