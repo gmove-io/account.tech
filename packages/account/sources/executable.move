@@ -3,12 +3,12 @@
 /// A delegated witness pattern is used to ensure only the proposal interface that created it 
 /// can access the underlying actions and destroy it.
 
-module kraken_multisig::executable;
+module kraken_account::executable;
 
 // === Imports ===
 
 use sui::bag::Bag;
-use kraken_multisig::auth::Auth;
+use kraken_account::auth::Auth;
 
 // === Structs ===
 
@@ -22,7 +22,7 @@ public struct Executable {
     actions: Bag,
 }
 
-// === Multisig-only functions ===
+// === Account-only functions ===
 
 /// Is only called from the proposal module
 public(package) fun new(auth: Auth, actions: Bag): Executable {
@@ -37,10 +37,10 @@ public(package) fun new(auth: Auth, actions: Bag): Executable {
 public fun action_mut<W: drop, A: store>(
     executable: &mut Executable, 
     witness: W,
-    multisig_addr: address,
+    account_addr: address,
 ): &mut A {
     executable.auth.assert_is_witness(witness);
-    executable.auth.assert_is_multisig(multisig_addr);
+    executable.auth.assert_is_account(account_addr);
 
     let idx = executable.action_index<A>();
     executable.actions.borrow_mut(idx)

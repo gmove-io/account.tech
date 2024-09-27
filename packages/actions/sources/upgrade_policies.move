@@ -1,7 +1,7 @@
-/// Package managers can lock UpgradeCaps in the multisig. Caps can't be unlocked, this is to enforce the policies.
+/// Package managers can lock UpgradeCaps in the account. Caps can't be unlocked, this is to enforce the policies.
 /// Any rule can be defined for the upgrade lock. The module provide a timelock rule by default, based on execution time.
 /// Upon locking, the user can define an optional timelock corresponding to the minimum delay between an upgrade proposal and its execution.
-/// The multisig can decide to make the policy more restrictive or destroy the Cap, to make the package immutable.
+/// The account can decide to make the policy more restrictive or destroy the Cap, to make the package immutable.
 
 module kraken_actions::upgrade_policies;
 
@@ -14,8 +14,8 @@ use sui::{
     dynamic_field as df,
     event,
 };
-use kraken_multisig::{
-    multisig::Multisig,
+use kraken_account::{
+    account::Account,
     proposals::Proposal,
     executable::Executable
 };
@@ -111,20 +111,20 @@ public fun has_rule<K: copy + drop + store>(
     df::exists_(&lock.id, key)
 }
 
-/// Attaches the UpgradeLock as a Dynamic Field to the multisig
+/// Attaches the UpgradeLock as a Dynamic Field to the account
 public fun lock_cap(
     lock: UpgradeLock,
-    multisig: &mut Multisig,
+    account: &mut Account,
     name: String,
     ctx: &mut TxContext
 ) {
-    multisig.assert_is_member(ctx);
-    multisig.add_managed_asset(ManageUpgrades {}, UpgradeKey { name }, lock);
+    account.assert_is_member(ctx);
+    account.add_managed_asset(ManageUpgrades {}, UpgradeKey { name }, lock);
 }
 
 /// Locks a cap with a timelock rule
 public fun lock_cap_with_timelock(
-    multisig: &mut Multisig,
+    account: &mut Account,
     name: String,
     delay_ms: u64,
     upgrade_cap: UpgradeCap,
@@ -132,19 +132,19 @@ public fun lock_cap_with_timelock(
 ) {
     let mut lock = new_lock(upgrade_cap, ctx);
     add_rule(&mut lock, TimeLockKey {}, TimeLock { delay_ms });
-    lock.lock_cap(multisig, name, ctx);
+    lock.lock_cap(account, name, ctx);
 }
 
-public fun has_lock(multisig: &Multisig, name: String): bool {
-    multisig.has_managed_asset(UpgradeKey { name })
+public fun has_lock(account: &Account, name: String): bool {
+    account.has_managed_asset(UpgradeKey { name })
 }
 
-public fun borrow_lock(multisig: &Multisig, name: String): &UpgradeLock {
-    multisig.borrow_managed_asset(ManageUpgrades {}, UpgradeKey { name })
+public fun borrow_lock(account: &Account, name: String): &UpgradeLock {
+    account.borrow_managed_asset(ManageUpgrades {}, UpgradeKey { name })
 }
 
-public fun borrow_lock_mut(multisig: &mut Multisig, name: String): &mut UpgradeLock {
-    multisig.borrow_managed_asset_mut(ManageUpgrades {}, UpgradeKey { name })
+public fun borrow_lock_mut(account: &mut Account, name: String): &mut UpgradeLock {
+    account.borrow_managed_asset_mut(ManageUpgrades {}, UpgradeKey { name })
 }
 
 public fun upgrade_cap(lock: &UpgradeLock): &UpgradeCap {
@@ -157,7 +157,7 @@ public fun upgrade_cap(lock: &UpgradeLock): &UpgradeCap {
 // execution_time is automatically set to now + timelock
 // if timelock = 0, it means that upgrade can be executed at any time
 public fun propose_upgrade(
-    multisig: &mut Multisig, 
+    account: &mut Account, 
     key: String,
     description: String,
     expiration_epoch: u64,
@@ -166,11 +166,11 @@ public fun propose_upgrade(
     clock: &Clock,
     ctx: &mut TxContext
 ) {
-    assert!(has_lock(multisig, name), ENoLock);
-    let lock = borrow_lock(multisig, name);
+    assert!(has_lock(account, name), ENoLock);
+    let lock = borrow_lock(account, name);
     let delay = lock.time_delay();
 
-    let proposal_mut = multisig.create_proposal(
+    let proposal_mut = account.create_proposal(
         UpgradeProposal {},
         name,
         key,
@@ -183,15 +183,15 @@ public fun propose_upgrade(
     new_upgrade(proposal_mut, digest);
 }
 
-// step 2: multiple members have to approve the proposal (multisig::approve_proposal)
-// step 3: execute the proposal and return the action (multisig::execute_proposal)
+// step 2: multiple members have to approve the proposal (account::approve_proposal)
+// step 3: execute the proposal and return the action (account::execute_proposal)
 
 // step 4: destroy UpgradeAction and return the UpgradeTicket for upgrading
 public fun execute_upgrade(
     executable: &mut Executable,
-    multisig: &mut Multisig,
+    account: &mut Account,
 ): UpgradeTicket {
-    upgrade(executable, multisig, UpgradeProposal {})
+    upgrade(executable, account, UpgradeProposal {})
 }    
 
 // step 5: consume the ticket to upgrade  
@@ -199,11 +199,11 @@ public fun execute_upgrade(
 // step 6: consume the receipt to commit the upgrade
 public fun confirm_upgrade(
     mut executable: Executable,
-    multisig: &mut Multisig,
+    account: &mut Account,
     receipt: UpgradeReceipt,
 ) {
     let name = executable.auth().name();
-    let lock_mut = borrow_lock_mut(multisig, name);
+    let lock_mut = borrow_lock_mut(account, name);
     package::commit_upgrade(&mut lock_mut.upgrade_cap, receipt);
     
     destroy_upgrade(&mut executable, UpgradeProposal {});
@@ -213,7 +213,7 @@ public fun confirm_upgrade(
 // step 1: propose an UpgradeAction by passing the digest of the package build
 // execution_time is automatically set to now + timelock
 public fun propose_restrict(
-    multisig: &mut Multisig, 
+    account: &mut Account, 
     key: String,
     description: String,
     expiration_epoch: u64,
@@ -222,12 +222,12 @@ public fun propose_restrict(
     clock: &Clock,
     ctx: &mut TxContext
 ) {
-    assert!(has_lock(multisig, name), ENoLock);
-    let lock = borrow_lock(multisig, name);
+    assert!(has_lock(account, name), ENoLock);
+    let lock = borrow_lock(account, name);
     let delay = lock.time_delay();
     let current_policy = lock.upgrade_cap.policy();
 
-    let proposal_mut = multisig.create_proposal(
+    let proposal_mut = account.create_proposal(
         RestrictProposal {},
         name,
         key,
@@ -239,15 +239,15 @@ public fun propose_restrict(
     new_restrict(proposal_mut, current_policy, policy);
 }
 
-// step 2: multiple members have to approve the proposal (multisig::approve_proposal)
-// step 3: execute the proposal and return the action (multisig::execute_proposal)
+// step 2: multiple members have to approve the proposal (account::approve_proposal)
+// step 3: execute the proposal and return the action (account::execute_proposal)
 
 // step 4: restrict the upgrade policy
 public fun execute_restrict(
     mut executable: Executable,
-    multisig: &mut Multisig,
+    account: &mut Account,
 ) {
-    restrict(&mut executable, multisig, RestrictProposal {});
+    restrict(&mut executable, account, RestrictProposal {});
     destroy_restrict(&mut executable, RestrictProposal {});
     executable.destroy(RestrictProposal {});
 }
@@ -260,12 +260,12 @@ public fun new_upgrade(proposal: &mut Proposal, digest: vector<u8>) {
 
 public fun upgrade<W: copy + drop>(
     executable: &mut Executable,
-    multisig: &mut Multisig,
+    account: &mut Account,
     witness: W,
 ): UpgradeTicket {
     let name = executable.auth().name();
-    let upgrade_mut: &mut UpgradeAction = executable.action_mut(witness, multisig.addr());
-    let lock_mut = borrow_lock_mut(multisig, name);
+    let upgrade_mut: &mut UpgradeAction = executable.action_mut(witness, account.addr());
+    let lock_mut = borrow_lock_mut(account, name);
 
     event::emit(Upgraded {
         package_id: lock_mut.upgrade_cap.package(),
@@ -299,22 +299,22 @@ public fun new_restrict(proposal: &mut Proposal, current_policy: u8, policy: u8)
 
 public fun restrict<W: copy + drop>(
     executable: &mut Executable,
-    multisig: &mut Multisig,
+    account: &mut Account,
     witness: W,
 ) {
     let name = executable.auth().name();
-    let restrict_mut: &mut RestrictAction = executable.action_mut(witness, multisig.addr());
+    let restrict_mut: &mut RestrictAction = executable.action_mut(witness, account.addr());
 
     let (package_id, policy) = if (restrict_mut.policy == package::additive_policy()) {
-        let lock_mut: &mut UpgradeLock = multisig.borrow_managed_asset_mut(ManageUpgrades {}, UpgradeKey { name });
+        let lock_mut: &mut UpgradeLock = account.borrow_managed_asset_mut(ManageUpgrades {}, UpgradeKey { name });
         lock_mut.upgrade_cap.only_additive_upgrades();
         (lock_mut.upgrade_cap.package(), restrict_mut.policy)
     } else if (restrict_mut.policy == package::dep_only_policy()) {
-        let lock_mut: &mut UpgradeLock = multisig.borrow_managed_asset_mut(ManageUpgrades {}, UpgradeKey { name });
+        let lock_mut: &mut UpgradeLock = account.borrow_managed_asset_mut(ManageUpgrades {}, UpgradeKey { name });
         lock_mut.upgrade_cap.only_dep_upgrades();
         (lock_mut.upgrade_cap.package(), restrict_mut.policy)
     } else {
-        let lock: UpgradeLock = multisig.remove_managed_asset(ManageUpgrades {}, UpgradeKey { name });
+        let lock: UpgradeLock = account.remove_managed_asset(ManageUpgrades {}, UpgradeKey { name });
         let (package_id, policy) = (lock.upgrade_cap.package(), restrict_mut.policy);
         let UpgradeLock { id, upgrade_cap } = lock;
         package::make_immutable(upgrade_cap);
@@ -339,10 +339,10 @@ public fun destroy_restrict<W: copy + drop>(executable: &mut Executable, witness
 
 public fun delete_upgrade_action<W: copy + drop>(
     action: UpgradeAction, 
-    multisig: &Multisig, 
+    account: &Account, 
     witness: W
 ) {
-    multisig.deps().assert_core_dep(witness);
+    account.deps().assert_core_dep(witness);
     let UpgradeAction { .. } = action;
 }
 

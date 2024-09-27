@@ -23,7 +23,7 @@ public struct Witness has drop, copy {}
 #[test]
 fun test_mint_end_to_end() {
     let mut world = start_world();
-    let addr = world.multisig().addr();
+    let addr = world.account().addr();
     let key = b"mint proposal".to_string();
 
     let cap = coin::create_treasury_cap_for_testing<SUI>(world.scenario().ctx()); 
@@ -51,10 +51,10 @@ fun test_burn_end_to_end() {
 
     let mut cap = coin::create_treasury_cap_for_testing<SUI>(world.scenario().ctx()); 
     let sui_coin = cap.mint<SUI>(100, world.scenario().ctx());
-    transfer::public_transfer(sui_coin, world.multisig().addr());
+    transfer::public_transfer(sui_coin, world.account().addr());
 
     world.scenario().next_tx(OWNER);
-    let receiving_coin = most_recent_receiving_ticket(&world.multisig().addr().to_id());
+    let receiving_coin = most_recent_receiving_ticket(&world.account().addr().to_id());
     world.lock_treasury_cap(cap);
     
     world.scenario().next_tx(OWNER);
@@ -62,7 +62,7 @@ fun test_burn_end_to_end() {
     world.approve_proposal(key);
 
     let executable = world.execute_proposal(key);
-    currency::execute_burn<SUI>(executable, world.multisig(), receiving_coin);
+    currency::execute_burn<SUI>(executable, world.account(), receiving_coin);
 
     world.end();
 }
@@ -94,7 +94,7 @@ fun test_update_metadata_end_to_end() {
     world.approve_proposal(key);
 
     let executable = world.execute_proposal(key);
-    currency::execute_update(executable, world.multisig(), &mut coin_metadata);
+    currency::execute_update(executable, world.account(), &mut coin_metadata);
 
     assert!(coin_metadata.get_name() == b"test name".to_string());
     assert!(coin_metadata.get_description() == b"test description".to_string());
@@ -132,7 +132,7 @@ fun test_update_error_no_change() {
     let executable = world.execute_proposal(key);
     world.approve_proposal(key);
 
-    currency::execute_update(executable, world.multisig(), &mut coin_metadata);
+    currency::execute_update(executable, world.account(), &mut coin_metadata);
 
     destroy(coin_metadata);
     world.end();
@@ -145,10 +145,10 @@ fun test_burn_error_wrong_value() {
 
     let mut cap = coin::create_treasury_cap_for_testing<SUI>(world.scenario().ctx()); 
     let sui_coin =  cap.mint<SUI>(101, world.scenario().ctx()); // wrong burn value
-    transfer::public_transfer(sui_coin, world.multisig().addr());
+    transfer::public_transfer(sui_coin, world.account().addr());
     
     world.scenario().next_tx(OWNER);
-    let receiving_coin = most_recent_receiving_ticket(&world.multisig().addr().to_id());
+    let receiving_coin = most_recent_receiving_ticket(&world.account().addr().to_id());
     world.lock_treasury_cap(cap);
 
     world.scenario().next_tx(OWNER);
@@ -156,7 +156,7 @@ fun test_burn_error_wrong_value() {
     world.approve_proposal(key);
 
     let executable = world.execute_proposal(key);
-    currency::execute_burn<SUI>(executable, world.multisig(), receiving_coin);
+    currency::execute_burn<SUI>(executable, world.account(), receiving_coin);
 
     world.end();
 }
@@ -196,10 +196,10 @@ fun test_destroy_burn_error_burn_not_executed() {
 
     let mut cap = coin::create_treasury_cap_for_testing<SUI>(world.scenario().ctx()); 
     let sui_coin =  cap.mint<SUI>(100, world.scenario().ctx());
-    transfer::public_transfer(sui_coin, world.multisig().addr());
+    transfer::public_transfer(sui_coin, world.account().addr());
 
     world.scenario().next_tx(OWNER);
-    let receiving_coin = most_recent_receiving_ticket(&world.multisig().addr().to_id());
+    let receiving_coin = most_recent_receiving_ticket(&world.account().addr().to_id());
     world.lock_treasury_cap(cap);
 
     let proposal = world.create_proposal(
@@ -217,7 +217,7 @@ fun test_destroy_burn_error_burn_not_executed() {
     let mut executable = world.execute_proposal(key);
     let coin = owned::withdraw<Coin<SUI>, Witness>(
         &mut executable, 
-        world.multisig(), 
+        world.account(), 
         receiving_coin, 
         Witness {}, 
     );

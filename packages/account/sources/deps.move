@@ -1,11 +1,11 @@
-/// Dependencies are all the packages that a Multisig object can use.
+/// Dependencies are all the packages that an Account object can use.
 /// They are stored in a vector and can be updated only upon approval by members.
 /// KrakenMultisig and KrakenActions can be found at index 0 and 1.
 /// 
-/// Not all packages are allowed to be used by a Multisig.
+/// Not all packages are allowed to be used by a Account.
 /// The list of whitelisted packages is stored in the KrakenExtensions package.
 
-module kraken_multisig::deps;
+module kraken_account::deps;
 
 // === Imports ===
 
@@ -14,9 +14,9 @@ use kraken_extensions::extensions::Extensions;
 
 // === Aliases ===
 
-public use fun kraken_multisig::auth::assert_core_dep as Deps.assert_core_dep;
-public use fun kraken_multisig::auth::assert_dep as Deps.assert_dep;
-public use fun kraken_multisig::auth::assert_version as Deps.assert_version;
+public use fun kraken_account::auth::assert_core_dep as Deps.assert_core_dep;
+public use fun kraken_account::auth::assert_dep as Deps.assert_dep;
+public use fun kraken_account::auth::assert_version as Deps.assert_version;
 
 // === Errors ===
 
@@ -47,7 +47,7 @@ public fun new(extensions: &Extensions): Deps {
     let mut inner = vector[];
 
     inner.push_back(Dep { 
-        name: b"KrakenMultisig".to_string(), 
+        name: b"KrakenAccount".to_string(), 
         package: packages[0], 
         version: versions[0] 
     });
@@ -60,7 +60,7 @@ public fun new(extensions: &Extensions): Deps {
     Deps { inner }
 }
 
-/// Protected because &mut Deps is only accessible from KrakenMultisig and KrakenActions
+/// Protected because &mut Deps is only accessible from KrakenAccount and KrakenActions
 public fun add(
     deps: &mut Deps,
     extensions: &Extensions,

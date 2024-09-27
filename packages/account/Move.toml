@@ -1,5 +1,5 @@
 [package]
-name = "KrakenMultisig"
+name = "KrakenAccount"
 edition = "2024.alpha"
 license = "MIT"
 authors = [
@@ -24,9 +24,9 @@ rev = "testnet"
 local = "../extensions"
 
 [addresses]
-kraken_multisig = "_"
+kraken_account = "_"
 kraken_extensions = "_"
 
 [dev-addresses]
-kraken_multisig = "0xacfd4da2d93e228e252150fc3bd030c8c3ce86b6267706de94ad8f9f6b6eba0d"
+kraken_account = "0xacfd4da2d93e228e252150fc3bd030c8c3ce86b6267706de94ad8f9f6b6eba0d"
 kraken_extensions = "0x2d1f315f2b4f5cb64901b054c7f315a03f0aea3f49f6e6c9b74cbd1d12f4b6c7"

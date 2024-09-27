@@ -1,11 +1,11 @@
-/// This module allows proposals to access objects owned by the multisig in a secure way with Transfer to Object (TTO).
+/// This module allows proposals to access objects owned by the account in a secure way with Transfer to Object (TTO).
 /// The objects can be taken only via an WithdrawAction action.
 /// This action can't be proposed directly since it wouldn't make sense to withdraw an object without using it.
 /// Objects can be borrowed by adding both a WithdrawAction and a ReturnAction action to the proposal.
 /// This is automatically handled by the borrow functions.
 /// Caution: borrowed Coins and similar assets can be emptied, only withdraw the amount you need (merge and split coins before if necessary)
 /// 
-/// Objects owned by the multisig can also be transferred to any address.
+/// Objects owned by the account can also be transferred to any address.
 /// Objects can be used to stream payments at specific intervals.
 
 module kraken_actions::owned;
@@ -17,8 +17,8 @@ use sui::{
     transfer::Receiving,
     coin::Coin
 };
-use kraken_multisig::{
-    multisig::Multisig,
+use kraken_account::{
+    account::Account,
     proposals::Proposal,
     executable::Executable
 };
@@ -41,15 +41,15 @@ public struct TransferProposal has copy, drop {}
 /// [PROPOSAL] streams an amount of coin to be paid at specific intervals
 public struct PayProposal has copy, drop {}
 
-/// [ACTION] guards access to multisig owned objects which can only be received via this action
+/// [ACTION] guards access to account owned objects which can only be received via this action
 public struct WithdrawAction has store {
     // the owned objects we want to access
     objects: vector<ID>,
 }
 
-/// [ACTION] enforces accessed objects to be sent back to the multisig, depends on WithdrawAction
+/// [ACTION] enforces accessed objects to be sent back to the account, depends on WithdrawAction
 public struct ReturnAction has store {
-    // list of objects to put back into the multisig
+    // list of objects to put back into the account
     to_return: vector<ID>,
 }
 
@@ -57,7 +57,7 @@ public struct ReturnAction has store {
 
 // step 1: propose to send owned objects
 public fun propose_transfer(
-    multisig: &mut Multisig, 
+    account: &mut Account, 
     key: String,
     description: String,
     execution_time: u64,
@@ -67,7 +67,7 @@ public fun propose_transfer(
     ctx: &mut TxContext
 ) {
     assert!(recipients.length() == objects.length(), EDifferentLength);
-    let proposal_mut = multisig.create_proposal(
+    let proposal_mut = account.create_proposal(
         TransferProposal {},
         b"".to_string(),
         key,
@@ -83,16 +83,16 @@ public fun propose_transfer(
     });
 }
 
-// step 2: multiple members have to approve the proposal (multisig::approve_proposal)
-// step 3: execute the proposal and return the action (multisig::execute_proposal)
+// step 2: multiple members have to approve the proposal (account::approve_proposal)
+// step 3: execute the proposal and return the action (account::execute_proposal)
 
 // step 4: loop over transfer
 public fun execute_transfer<T: key + store>(
     executable: &mut Executable, 
-    multisig: &mut Multisig, 
+    account: &mut Account, 
     receiving: Receiving<T>,
 ) {
-    let object = withdraw(executable, multisig, receiving, TransferProposal {});
+    let object = withdraw(executable, account, receiving, TransferProposal {});
     
     let mut is_executed = false;
     let withdraw: &WithdrawAction = executable.action();
@@ -103,7 +103,7 @@ public fun execute_transfer<T: key + store>(
         is_executed = true;
     };
 
-    transfers::transfer(executable, multisig, object, TransferProposal {}, is_executed);
+    transfers::transfer(executable, account, object, TransferProposal {}, is_executed);
 
     if (is_executed) {
         transfers::destroy_transfer(executable, TransferProposal {});
@@ -117,18 +117,18 @@ public fun complete_transfers(executable: Executable) {
 
 // step 1: propose to create a Stream with a specific amount to be paid at each interval
 public fun propose_pay(
-    multisig: &mut Multisig, 
+    account: &mut Account, 
     key: String,
     description: String,
     execution_time: u64,
     expiration_epoch: u64,
-    coin: ID, // coin owned by the multisig, must have the total amount to be paid
+    coin: ID, // coin owned by the account, must have the total amount to be paid
     amount: u64, // amount to be paid at each interval
     interval: u64, // number of epochs between each payment
     recipient: address,
     ctx: &mut TxContext
 ) {
-    let proposal_mut = multisig.create_proposal(
+    let proposal_mut = account.create_proposal(
         PayProposal {},
         b"".to_string(),
         key,
@@ -142,18 +142,18 @@ public fun propose_pay(
     payments::new_pay(proposal_mut, amount, interval, recipient);
 }
 
-// step 2: multiple members have to approve the proposal (multisig::approve_proposal)
-// step 3: execute the proposal and return the action (multisig::execute_proposal)
+// step 2: multiple members have to approve the proposal (account::approve_proposal)
+// step 3: execute the proposal and return the action (account::execute_proposal)
 
 // step 4: loop over it in PTB, sends last object from the Send action
 public fun execute_pay<C: drop>(
     mut executable: Executable, 
-    multisig: &mut Multisig, 
+    account: &mut Account, 
     receiving: Receiving<Coin<C>>,
     ctx: &mut TxContext
 ) {
-    let coin: Coin<C> = withdraw(&mut executable, multisig, receiving, PayProposal {});
-    payments::pay(&mut executable, multisig, coin, PayProposal {}, ctx);
+    let coin: Coin<C> = withdraw(&mut executable, account, receiving, PayProposal {});
+    payments::pay(&mut executable, account, coin, PayProposal {}, ctx);
 
     destroy_withdraw(&mut executable, PayProposal {});
     payments::destroy_pay(&mut executable, PayProposal {});
@@ -168,15 +168,15 @@ public fun new_withdraw(proposal: &mut Proposal, objects: vector<ID>) {
 
 public fun withdraw<T: key + store, W: copy + drop>(
     executable: &mut Executable,
-    multisig: &mut Multisig, 
+    account: &mut Account, 
     receiving: Receiving<T>,
     witness: W,
 ): T {
-    let withdraw_mut: &mut WithdrawAction = executable.action_mut(witness, multisig.addr());
+    let withdraw_mut: &mut WithdrawAction = executable.action_mut(witness, account.addr());
     let (_, idx) = withdraw_mut.objects.index_of(&transfer::receiving_object_id(&receiving));
     let id = withdraw_mut.objects.remove(idx);
 
-    let received = multisig.receive(witness, receiving);
+    let received = account.receive(witness, receiving);
     let received_id = object::id(&received);
     assert!(received_id == id, EWrongObject);
 
@@ -195,25 +195,25 @@ public fun new_borrow(proposal: &mut Proposal, objects: vector<ID>) {
 
 public fun borrow<T: key + store, W: copy + drop>(
     executable: &mut Executable,
-    multisig: &mut Multisig, 
+    account: &mut Account, 
     receiving: Receiving<T>,
     witness: W,
 ): T {
-    withdraw(executable, multisig, receiving, witness)
+    withdraw(executable, account, receiving, witness)
 }
 
 public fun put_back<T: key + store, W: copy + drop>(
     executable: &mut Executable,
-    multisig: &Multisig, 
+    account: &Account, 
     returned: T, 
     witness: W,
 ) {
-    let borrow_mut: &mut ReturnAction = executable.action_mut(witness, multisig.addr());
+    let borrow_mut: &mut ReturnAction = executable.action_mut(witness, account.addr());
     let (exists_, idx) = borrow_mut.to_return.index_of(&object::id(&returned));
     assert!(exists_, EWrongObject);
 
     borrow_mut.to_return.remove(idx);
-    transfer::public_transfer(returned, multisig.addr());
+    transfer::public_transfer(returned, account.addr());
 }
 
 public fun destroy_borrow<W: copy + drop>(executable: &mut Executable, witness: W) {
@@ -226,18 +226,18 @@ public fun destroy_borrow<W: copy + drop>(executable: &mut Executable, witness: 
 
 public fun delete_withdraw_action<W: copy + drop>(
     action: WithdrawAction, 
-    multisig: &Multisig, 
+    account: &Account, 
     witness: W
 ) {
-    multisig.deps().assert_core_dep(witness);
+    account.deps().assert_core_dep(witness);
     let WithdrawAction { .. } = action;
 }
 
 public fun delete_return_action<W: copy + drop>(
     action: ReturnAction, 
-    multisig: &Multisig, 
+    account: &Account, 
     witness: W
 ) {
-    multisig.deps().assert_core_dep(witness);
+    account.deps().assert_core_dep(witness);
     let ReturnAction { .. } = action;
 }

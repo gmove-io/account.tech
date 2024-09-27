@@ -1,13 +1,13 @@
 #[test_only]
-module kraken_multisig::proposals_tests;
+module kraken_account::proposals_tests;
 
 use sui::test_utils::destroy;
-use kraken_multisig::{
-    multisig,
+use kraken_account::{
+    account,
     auth,
     members,
     proposals,
-    multisig_test_utils::start_world
+    account_test_utils::start_world
 };
 
 const OWNER: address = @0xBABE;

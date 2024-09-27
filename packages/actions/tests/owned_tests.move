@@ -23,8 +23,8 @@ fun test_withdraw_end_to_end() {
 
     let object1 = new_object(world.scenario().ctx());
     let id1 = object::id(&object1);
-    let multisig_address = world.multisig().addr();
-    transfer::public_transfer(object1, multisig_address);
+    let account_address = world.account().addr();
+    transfer::public_transfer(object1, account_address);
 
     world.scenario().next_tx(OWNER);
     let proposal = world.create_proposal(Witness {}, b"".to_string(), key, b"".to_string(), 0, 0);
@@ -48,8 +48,8 @@ fun test_borrow_end_to_end() {
     let key = b"owned tests".to_string();
     let object1 = new_object(world.scenario().ctx());
     let id1 = object::id(&object1);
-    let multisig_address = world.multisig().addr();
-    transfer::public_transfer(object1, multisig_address);
+    let account_address = world.account().addr();
+    transfer::public_transfer(object1, account_address);
 
     world.scenario().next_tx(OWNER);
     let proposal = world.create_proposal(Witness {}, b"".to_string(), key, b"".to_string(), 0, 0);
@@ -75,9 +75,9 @@ fun test_withdraw_error_wrong_object() {
     let object2 = new_object(world.scenario().ctx());
     let id1 = object::id(&object1);
     let id2 = object::id(&object2);
-    let multisig_address = world.multisig().addr();
-    transfer::public_transfer(object1, multisig_address);
-    transfer::public_transfer(object2, multisig_address);
+    let account_address = world.account().addr();
+    transfer::public_transfer(object1, account_address);
+    transfer::public_transfer(object2, account_address);
 
     world.scenario().next_tx(OWNER);
     let proposal = world.create_proposal(Witness {}, b"".to_string(), key, b"".to_string(), 0, 0);
@@ -100,8 +100,8 @@ fun test_withdraw_error_retrieve_all_objects_before() {
 
     let object1 = new_object(world.scenario().ctx());
     let id1 = object::id(&object1);
-    let multisig_address = world.multisig().addr();
-    transfer::public_transfer(object1, multisig_address);
+    let account_address = world.account().addr();
+    transfer::public_transfer(object1, account_address);
 
     world.scenario().next_tx(OWNER);
     let proposal = world.create_proposal(Witness {}, b"".to_string(), key, b"".to_string(), 0, 0);
@@ -123,8 +123,8 @@ fun test_put_back_error_wrong_object() {
     let object1 = new_object(world.scenario().ctx());
     let object2 = new_object(world.scenario().ctx());
     let id1 = object::id(&object1);
-    let multisig_address = world.multisig().addr();
-    transfer::public_transfer(object1, multisig_address);
+    let account_address = world.account().addr();
+    transfer::public_transfer(object1, account_address);
 
     world.scenario().next_tx(OWNER);
     let proposal = world.create_proposal(Witness {}, b"".to_string(), key, b"".to_string(), 0, 0);
@@ -149,8 +149,8 @@ fun test_complete_borrow_error_return_all_objects_before() {
 
     let object1 = new_object(world.scenario().ctx());
     let id1 = object::id(&object1);
-    let multisig_address = world.multisig().addr();
-    transfer::public_transfer(object1, multisig_address);
+    let account_address = world.account().addr();
+    transfer::public_transfer(object1, account_address);
 
     world.scenario().next_tx(OWNER);
     let proposal = world.create_proposal(Witness {}, b"".to_string(), key, b"".to_string(), 0, 0);

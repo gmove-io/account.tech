@@ -1,5 +1,5 @@
 #[test_only]
-module kraken_multisig::multisig_test_utils;
+module kraken_account::account_test_utils;
 
 use std::string::String;
 use sui::{
@@ -9,10 +9,10 @@ use sui::{
     coin::Coin,
     test_scenario::{Self as ts, Scenario, most_recent_id_for_address},
 };
-use kraken_multisig::{
+use kraken_account::{
     coin_operations,
-    account::{Self, Account, Invite},
-    multisig::{Self, Multisig},
+    user::{Self, User, Invite},
+    account::{Self, Account},
     proposals::Proposal,
     executable::Executable,
 };
@@ -24,8 +24,8 @@ const OWNER: address = @0xBABE;
 public struct World {
     scenario: Scenario,
     clock: Clock,
+    user: User,
     account: Account,
-    multisig: Multisig,
     extensions: Extensions
 }
 
@@ -34,51 +34,51 @@ public struct World {
 public fun start_world(): World {
     let mut scenario = ts::begin(OWNER);
     extensions::init_for_testing(scenario.ctx());
-    account::init_for_testing(scenario.ctx());
+    user::init_for_testing(scenario.ctx());
 
     scenario.next_tx(OWNER);
-    let account = account::new(b"sam".to_string(), b"move_god.png".to_string(), scenario.ctx());
+    let user = user::new(b"sam".to_string(), b"move_god.png".to_string(), scenario.ctx());
     let cap = scenario.take_from_sender<AdminCap>();
     let mut extensions = scenario.take_shared<Extensions>();
-    // initialize Clock, Multisig, Extensions
+    // initialize Clock, Account, Extensions
     let clock = clock::create_for_testing(scenario.ctx());
-    extensions.add(&cap, b"KrakenMultisig".to_string(), @kraken_multisig, 1);
+    extensions.add(&cap, b"KrakenAccount".to_string(), @kraken_account, 1);
     extensions.add(&cap, b"KrakenActions".to_string(), @0xCAFE, 1);
-    let multisig = multisig::new(
+    let account = account::new(
         &extensions,
         b"kraken".to_string(), 
-        object::id(&account), 
+        object::id(&user), 
         scenario.ctx()
     );
 
     scenario.next_tx(OWNER);
     destroy(cap);
 
-    World { scenario, clock, account, multisig, extensions }
+    World { scenario, clock, user, account, extensions }
 }
 
 public fun end(world: World) {
     let World { 
         scenario, 
         clock, 
-        multisig, 
         account, 
+        user, 
         extensions
     } = world;
 
     destroy(clock);
+    destroy(user);
     destroy(account);
-    destroy(multisig);
     destroy(extensions);
     scenario.end();
 }
 
-public fun multisig(world: &mut World): &mut Multisig {
-    &mut world.multisig
-}
-
 public fun account(world: &mut World): &mut Account {
     &mut world.account
+}
+
+public fun user(world: &mut World): &mut User {
+    &mut world.user
 }
 
 public fun extensions(world: &mut World): &mut Extensions {
@@ -93,25 +93,25 @@ public fun scenario(world: &mut World): &mut Scenario {
     &mut world.scenario
 }
 
-public fun last_id_for_multisig<T: key>(world: &World): ID {
-    most_recent_id_for_address<T>(world.multisig.addr()).extract()
+public fun last_id_for_account<T: key>(world: &World): ID {
+    most_recent_id_for_address<T>(world.account.addr()).extract()
 }
 
 public fun role(module_name: vector<u8>): String {
-    let mut role = @kraken_multisig.to_string();
+    let mut role = @kraken_account.to_string();
     role.append_utf8(b"::");
     role.append_utf8(module_name);
     role.append_utf8(b"::Auth");
     role
 }
 
-// === Multisig ===
+// === Account ===
 
-public fun new_multisig(world: &mut World): Multisig {
-    multisig::new(
+public fun new_account(world: &mut World): Account {
+    account::new(
         &world.extensions,
         b"kraken2".to_string(), 
-        object::id(&world.account), 
+        object::id(&world.user), 
         world.scenario.ctx()
     )
 }
@@ -125,7 +125,7 @@ public fun create_proposal<I: drop>(
     execution_time: u64, // timestamp in ms
     expiration_epoch: u64,
 ): &mut Proposal {
-    world.multisig.create_proposal(
+    world.account.create_proposal(
         auth_witness, 
         auth_name,
         key,
@@ -140,14 +140,14 @@ public fun approve_proposal(
     world: &mut World, 
     key: String, 
 ) {
-    world.multisig.approve_proposal(key, world.scenario.ctx());
+    world.account.approve_proposal(key, world.scenario.ctx());
 }
 
 public fun remove_approval(
     world: &mut World, 
     key: String, 
 ) {
-    world.multisig.remove_approval(key, world.scenario.ctx());
+    world.account.remove_approval(key, world.scenario.ctx());
 }
 
 // TODO:
@@ -155,20 +155,20 @@ public fun remove_approval(
 //     world: &mut World, 
 //     key: String
 // ): Bag {
-//     world.multisig.proposal(key).delete(world.scenario.ctx())
+//     world.account.proposal(key).delete(world.scenario.ctx())
 // }
 
 public fun execute_proposal(
     world: &mut World, 
     key: String, 
 ): Executable {
-    world.multisig.execute_proposal(key, &world.clock)
+    world.account.execute_proposal(key, &world.clock)
 }
 
 public fun assert_is_member(
     world: &mut World, 
 ) {
-    multisig::assert_is_member(&world.multisig, world.scenario.ctx());
+    account::assert_is_member(&world.account, world.scenario.ctx());
 }
 
 // === Coin Operations ===
@@ -178,36 +178,36 @@ public fun merge_and_split<T: drop>(
     to_merge: vector<Receiving<Coin<T>>>,
     to_split: vector<u64> 
 ): vector<ID> {
-    coin_operations::merge_and_split(&mut world.multisig, to_merge, to_split, world.scenario.ctx())
+    coin_operations::merge_and_split(&mut world.account, to_merge, to_split, world.scenario.ctx())
 }
 
-// === Account ===
+// === User ===
 
-public fun join_multisig(
+public fun join_account(
     world: &mut World, 
-    account: &mut Account
+    user: &mut User
 ) {
-    account::join_multisig(account, &mut world.multisig, world.scenario.ctx());
+    user::join_account(user, &mut world.account, world.scenario.ctx());
 }
 
-public fun leave_multisig(
+public fun leave_account(
     world: &mut World, 
-    account: &mut Account
+    user: &mut User
 ) {
-    account::leave_multisig(account, &mut world.multisig, world.scenario.ctx());
+    user::leave_account(user, &mut world.account, world.scenario.ctx());
 }
 
 public fun send_invite(
     world: &mut World, 
     recipient: address
 ) {
-    account::send_invite(&world.multisig, recipient, world.scenario.ctx());
+    user::send_invite(&world.account, recipient, world.scenario.ctx());
 }    
 
 public fun accept_invite(
     world: &mut World,
-    account: &mut Account,
+    user: &mut User,
     invite: Invite
 ) {
-    account::accept_invite(account, &mut world.multisig, invite, world.scenario.ctx());
+    user::accept_invite(user, &mut world.account, invite, world.scenario.ctx());
 } 

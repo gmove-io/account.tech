@@ -62,15 +62,15 @@ public fun get_latest_core_deps(
     let mut packages = vector[];
     let mut versions = vector[];
 
-    let multisig_history = get_history(extensions, b"KrakenMultisig".to_string());
-    packages.push_back(multisig_history[0].package);
-    versions.push_back(multisig_history[0].version);
+    let account_history = get_history(extensions, b"KrakenAccount".to_string());
+    packages.push_back(account_history[0].package);
+    versions.push_back(account_history[0].version);
 
     let actions_history = get_history(extensions, b"KrakenActions".to_string());
     packages.push_back(actions_history[1].package);
     versions.push_back(actions_history[1].version);
 
-    // packages[0] & versions[0] are KrakenMultisig
+    // packages[0] & versions[0] are KrakenAccount
     // packages[1] & versions[1] are KrakenActions
     (packages, versions)
 }

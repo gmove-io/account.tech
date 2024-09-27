@@ -1,8 +1,8 @@
-/// Handles coin merging and splitting for the multisigs.
+/// Handles coin merging and splitting for the multisig Accounts.
 /// Any member can merge and split without approvals.
 /// Used to prepare a Proposal with coins having the exact amount needed.
 
-module kraken_multisig::coin_operations;
+module kraken_account::coin_operations;
 
 // === Imports ===
 
@@ -10,11 +10,11 @@ use sui::{
     coin::{Self, Coin},
     transfer::Receiving
 };
-use kraken_multisig::multisig::Multisig;
+use kraken_account::account::Account;
 
 // === Structs ===
 
-/// Delegated witness authorizing access to the inner multisig
+/// Delegated witness authorizing access to the inner Account
 public struct ManageCoins has copy, drop {}
 
 // === [MEMBER] Public functions ===
@@ -22,22 +22,22 @@ public struct ManageCoins has copy, drop {}
 /// Members can merge and split coins, no need for approvals
 /// Returns the IDs to use in a following proposal, conserve the order
 public fun merge_and_split<T: drop>(
-    multisig: &mut Multisig, 
+    account: &mut Account, 
     to_merge: vector<Receiving<Coin<T>>>, // there can be only one coin if we just want to split
     to_split: vector<u64>, // there can be no amount if we just want to merge
     ctx: &mut TxContext
 ): vector<ID> { 
-    multisig.assert_is_member(ctx);
+    account.assert_is_member(ctx);
 
     // receive all coins
     let mut coins = vector::empty();
     to_merge.do!(|item| {
-        let coin = multisig.receive(ManageCoins {}, item);
+        let coin = account.receive(ManageCoins {}, item);
         coins.push_back(coin);
     });
 
     let coin = merge(coins, ctx);
-    let ids = split(multisig, coin, to_split, ctx);
+    let ids = split(account, coin, to_split, ctx);
 
     ids
 }
@@ -55,7 +55,7 @@ fun merge<T: drop>(
 }
 
 fun split<T: drop>(
-    multisig: &Multisig, 
+    account: &Account, 
     mut coin: Coin<T>,
     amounts: vector<u64>, 
     ctx: &mut TxContext
@@ -63,10 +63,10 @@ fun split<T: drop>(
     let ids = amounts.map!(|amount| {
         let split = coin.split(amount, ctx);
         let id = object::id(&split);
-        transfer::public_transfer(split, multisig.addr());
+        transfer::public_transfer(split, account.addr());
         id
     });
-    transfer::public_transfer(coin, multisig.addr());
+    transfer::public_transfer(coin, account.addr());
 
     ids
 }

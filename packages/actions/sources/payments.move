@@ -1,6 +1,6 @@
 /// This module provides the apis to stream a coin for a payment.
 /// A payment has an amount to be paid at each interval, until the balance is empty.
-/// It can be cancelled at any time by the multisig members.
+/// It can be cancelled at any time by the account members.
 
 module kraken_actions::payments;
 
@@ -11,8 +11,8 @@ use sui::{
     coin::{Self, Coin},
     event,
 };
-use kraken_multisig::{
-    multisig::Multisig,
+use kraken_account::{
+    account::Account,
     proposals::Proposal,
     executable::Executable
 };
@@ -70,8 +70,8 @@ public struct PayAction has store {
 // === [PROPOSAL] Public Functions ===
 
 // step 1: propose the pay action from another module
-// step 2: multiple members have to approve the proposal (multisig::approve_proposal)
-// step 3: execute the proposal and return the action (multisig::execute_proposal)
+// step 2: multiple members have to approve the proposal (account::approve_proposal)
+// step 3: execute the proposal and return the action (account::execute_proposal)
 // step 4: loop over `execute_transfer` it in PTB from the module implementing it
 
 // step 5: bearer of ClaimCap can claim the payment
@@ -104,19 +104,19 @@ public fun destroy_empty_stream<C: drop>(stream: Stream<C>) {
     id.delete();
 }
 
-// step 6 (bis): multisig member can cancel the payment (member only)
+// step 6 (bis): account member can cancel the payment (member only)
 public fun cancel_payment_stream<C: drop>(
     stream: Stream<C>, 
-    multisig: &Multisig,
+    account: &Account,
     ctx: &mut TxContext
 ) {
-    multisig.assert_is_member(ctx);
+    account.assert_is_member(ctx);
     let Stream { id, balance, .. } = stream;
     id.delete();
 
     transfer::public_transfer(
         coin::from_balance(balance, ctx), 
-        multisig.addr()
+        account.addr()
     );
 }
 
@@ -133,12 +133,12 @@ public fun new_pay(
 
 public fun pay<C: drop, W: copy + drop>(
     executable: &mut Executable, 
-    multisig: &mut Multisig, 
+    account: &mut Account, 
     coin: Coin<C>,
     witness: W,
     ctx: &mut TxContext
 ) {    
-    let pay_mut: &mut PayAction = executable.action_mut(witness, multisig.addr());
+    let pay_mut: &mut PayAction = executable.action_mut(witness, account.addr());
 
     let stream = Stream<C> { 
         id: object::new(ctx), 
@@ -193,9 +193,9 @@ public fun recipient<C: drop>(self: &Stream<C>): address {
 
 public fun delete_pay_action<W: copy + drop>(
     action: PayAction, 
-    multisig: &Multisig, 
+    account: &Account, 
     witness: W
 ) {
-    multisig.deps().assert_core_dep(witness);
+    account.deps().assert_core_dep(witness);
     let PayAction { .. } = action;
 }

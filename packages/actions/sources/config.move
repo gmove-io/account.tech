@@ -1,15 +1,15 @@
-/// This module allows to manage Multisig settings.
-/// The actions are related to the modifications of all the fields of the Multisig (except Proposals).
-/// All these fields are encapsulated in the `Multisig` struct and each managed in their own module.
-/// They are only accessible mutably via [core-deps-only] functions defined in multisig.move which are used here only.
+/// This module allows to manage Account settings.
+/// The actions are related to the modifications of all the fields of the Account (except Proposals).
+/// All these fields are encapsulated in the `Account` struct and each managed in their own module.
+/// They are only accessible mutably via [core-deps-only] functions defined in account.move which are used here only.
 /// 
 /// The members and thresholds modifications are grouped under a single proposal because they often go by pair.
 /// The threshold modification must be executed at the end to ensure they are reachable.
 /// The proposal also verifies the validity of the new values upon creation (e.g. threshold not higher than total weight).
 /// 
-/// Dependencies are all the packages and their versions that the multisig depends on (including this one).
+/// Dependencies are all the packages and their versions that the account depends on (including this one).
 /// The allowed dependencies are defined in the `Extensions` struct and are maintained by Kraken team.
-/// Multisig users can choose to use any version of any package and must explicitly migrate to the new version.
+/// Account users can choose to use any version of any package and must explicitly migrate to the new version.
 /// This is closer to a trustless model where anyone with the UpgradeCap could update the dependencies maliciously.
 
 module kraken_actions::config;
@@ -20,8 +20,8 @@ use std::string::String;
 use sui::{
     vec_map::{Self, VecMap},
 };
-use kraken_multisig::{
-    multisig::Multisig,
+use kraken_account::{
+    account::Account,
     proposals::Proposal,
     executable::Executable,
     deps,
@@ -42,19 +42,19 @@ const ERoleDoesntExist: u64 = 5;
 // === Structs ===
 
 /// The following structs are delegated witnesses (copy & drop abilities).
-/// They are used to authenticate the multisig proposals.
+/// They are used to authenticate the account proposals.
 /// Only the proposal that instantiated the witness can also destroy it.
 /// Those structs also define the different roles that members can have.
 /// Finally, they are used to parse the actions of the proposal off-chain.
 
-/// [PROPOSAL] modifies the name of the multisig
+/// [PROPOSAL] modifies the name of the account
 public struct ConfigNameProposal has copy, drop {}
-/// [PROPOSAL] modifies the members and thresholds of the multisig
+/// [PROPOSAL] modifies the members and thresholds of the account
 public struct ConfigRulesProposal has copy, drop {}
-/// [PROPOSAL] modifies the dependencies of the multisig
+/// [PROPOSAL] modifies the dependencies of the account
 public struct ConfigDepsProposal has copy, drop {}
 
-/// [ACTION] wraps a multisig field into a generic action
+/// [ACTION] wraps a account field into a generic action
 public struct ConfigAction<T> has store {
     inner: T,
 }
@@ -63,7 +63,7 @@ public struct ConfigAction<T> has store {
 
 // step 1: propose to change the name
 public fun propose_config_name(
-    multisig: &mut Multisig, 
+    account: &mut Account, 
     key: String,
     description: String,
     execution_time: u64,
@@ -71,7 +71,7 @@ public fun propose_config_name(
     name: String,
     ctx: &mut TxContext
 ) {
-    let proposal_mut = multisig.create_proposal(
+    let proposal_mut = account.create_proposal(
         ConfigNameProposal {},
         b"".to_string(),
         key,
@@ -83,22 +83,22 @@ public fun propose_config_name(
     new_config_name(proposal_mut, name);
 }
 
-// step 2: multiple members have to approve the proposal (multisig::approve_proposal)
-// step 3: execute the proposal and return the action (multisig::execute_proposal)
+// step 2: multiple members have to approve the proposal (account::approve_proposal)
+// step 3: execute the proposal and return the action (account::execute_proposal)
 
-// step 4: execute the action and modify Multisig object
+// step 4: execute the action and modify Account object
 public fun execute_config_name(
     mut executable: Executable,
-    multisig: &mut Multisig, 
+    account: &mut Account, 
 ) {
-    config_name(&mut executable, multisig, ConfigNameProposal {});
+    config_name(&mut executable, account, ConfigNameProposal {});
     executable.destroy(ConfigNameProposal {});
 }
 
-// step 1: propose to modify multisig rules (everything touching weights)
+// step 1: propose to modify account rules (everything touching weights)
 // threshold has to be valid (reachable and different from 0 for global)
 public fun propose_config_rules(
-    multisig: &mut Multisig, 
+    account: &mut Account, 
     key: String,
     description: String,
     execution_time: u64,
@@ -115,7 +115,7 @@ public fun propose_config_rules(
 ) {
     verify_new_rules(addresses, weights, roles, global, role_names, role_thresholds);
     // verify new rules are valid
-    let proposal_mut = multisig.create_proposal(
+    let proposal_mut = account.create_proposal(
         ConfigRulesProposal {},
         b"".to_string(),
         key,
@@ -129,22 +129,22 @@ public fun propose_config_rules(
     new_config_thresholds(proposal_mut, global, role_names, role_thresholds);
 }
 
-// step 2: multiple members have to approve the proposal (multisig::approve_proposal)
-// step 3: execute the proposal and return the action (multisig::execute_proposal)
+// step 2: multiple members have to approve the proposal (account::approve_proposal)
+// step 3: execute the proposal and return the action (account::execute_proposal)
 
-// step 4: execute the action and modify Multisig object
+// step 4: execute the action and modify Account object
 public fun execute_config_rules(
     mut executable: Executable,
-    multisig: &mut Multisig, 
+    account: &mut Account, 
 ) {
-    config_members(&mut executable, multisig, ConfigRulesProposal {});
-    config_thresholds(&mut executable, multisig, ConfigRulesProposal {});
+    config_members(&mut executable, account, ConfigRulesProposal {});
+    config_thresholds(&mut executable, account, ConfigRulesProposal {});
     executable.destroy(ConfigRulesProposal {});
 }
 
 // step 1: propose to update the dependencies
 public fun propose_config_deps(
-    multisig: &mut Multisig, 
+    account: &mut Account, 
     key: String,
     description: String,
     execution_time: u64,
@@ -155,7 +155,7 @@ public fun propose_config_deps(
     versions: vector<u64>,
     ctx: &mut TxContext
 ) {
-    let proposal_mut = multisig.create_proposal(
+    let proposal_mut = account.create_proposal(
         ConfigDepsProposal {},
         b"".to_string(),
         key,
@@ -167,15 +167,15 @@ public fun propose_config_deps(
     new_config_deps(proposal_mut, extensions, names, packages, versions);
 }
 
-// step 2: multiple members have to approve the proposal (multisig::approve_proposal)
-// step 3: execute the proposal and return the action (multisig::execute_proposal)
+// step 2: multiple members have to approve the proposal (account::approve_proposal)
+// step 3: execute the proposal and return the action (account::execute_proposal)
 
-// step 4: execute the action and modify Multisig object
+// step 4: execute the action and modify Account object
 public fun execute_config_deps(
     mut executable: Executable,
-    multisig: &mut Multisig, 
+    account: &mut Account, 
 ) {
-    config_deps(&mut executable, multisig, ConfigDepsProposal {});
+    config_deps(&mut executable, account, ConfigDepsProposal {});
     executable.destroy(ConfigDepsProposal {});
 }
 
@@ -187,11 +187,11 @@ public fun new_config_name(proposal: &mut Proposal, name: String) {
 
 public fun config_name<W: copy + drop>(
     executable: &mut Executable,
-    multisig: &mut Multisig, 
+    account: &mut Account, 
     witness: W,
 ) {
     let ConfigAction { inner } = executable.remove_action(witness);
-    *multisig.name_mut(executable, witness) = inner;
+    *account.name_mut(executable, witness) = inner;
 }
 
 public fun new_config_members(
@@ -216,11 +216,11 @@ public fun new_config_members(
 
 public fun config_members<W: copy + drop>(
     executable: &mut Executable,
-    multisig: &mut Multisig, 
+    account: &mut Account, 
     witness: W,
 ) {
     let ConfigAction { inner } = executable.remove_action(witness);
-    *multisig.members_mut(executable, witness) = inner;
+    *account.members_mut(executable, witness) = inner;
 }
 
 public fun new_config_thresholds(
@@ -242,7 +242,7 @@ public fun new_config_thresholds(
 
 public fun config_thresholds<W: copy + drop>(
     executable: &mut Executable,
-    multisig: &mut Multisig,
+    account: &mut Account,
     witness: W,
 ) {
     // threshold modification must be the last action to be executed to ensure it is reachable
@@ -252,7 +252,7 @@ public fun config_thresholds<W: copy + drop>(
     );
     
     let ConfigAction { inner } = executable.remove_action(witness);
-    *multisig.thresholds_mut(executable, witness) = inner;
+    *account.thresholds_mut(executable, witness) = inner;
 }
 
 public fun new_config_deps(
@@ -272,21 +272,21 @@ public fun new_config_deps(
 
 public fun config_deps<W: copy + drop>(
     executable: &mut Executable,
-    multisig: &mut Multisig, 
+    account: &mut Account, 
     witness: W,
 ) {
     let ConfigAction { inner } = executable.remove_action(witness);
-    *multisig.deps_mut(executable, witness) = inner;
+    *account.deps_mut(executable, witness) = inner;
 }
 
 // === [CORE DEPS] Public functions ===
 
 public fun delete_config_action<T: drop, W: copy + drop>(
     action: ConfigAction<T>, 
-    multisig: &Multisig,
+    account: &Account,
     witness: W,
 ) {
-    multisig.deps().assert_core_dep(witness);
+    account.deps().assert_core_dep(witness);
     let ConfigAction { .. } = action;
 }
 

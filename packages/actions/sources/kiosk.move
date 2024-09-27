@@ -1,8 +1,8 @@
-/// Members can place nfts from their kiosk into the multisig's without approval.
+/// Members can place nfts from their kiosk into the account's without approval.
 /// Nfts can be proposed for transfer into any other Kiosk. Upon approval, the recipient must execute the transfer.
-/// The functions take the caller's kiosk and the multisig's kiosk to execute.
+/// The functions take the caller's kiosk and the account's kiosk to execute.
 /// Nfts can be listed for sale in the kiosk, and then purchased by anyone.
-/// Members can withdraw the profits from the kiosk to the Multisig.
+/// Members can withdraw the profits from the kiosk to the Account.
 
 module kraken_actions::kiosk;
 
@@ -17,8 +17,8 @@ use sui::{
     vec_map::{Self, VecMap},
 };
 use kiosk::{kiosk_lock_rule, royalty_rule};
-use kraken_multisig::{
-    multisig::Multisig,
+use kraken_account::{
+    account::Account,
     proposals::Proposal,
     executable::Executable
 };
@@ -41,14 +41,14 @@ public struct KioskOwnerLock has store {
     kiosk_owner_cap: KioskOwnerCap,
 }
 
-/// [MEMBER] can create a Kiosk and lock the KioskOwnerCap in the Multisig to restrict taking and listing operations
+/// [MEMBER] can create a Kiosk and lock the KioskOwnerCap in the Account to restrict taking and listing operations
 public struct ManageKiosk has copy, drop {}
-/// [PROPOSAL] take nfts from a kiosk managed by a multisig
+/// [PROPOSAL] take nfts from a kiosk managed by a account
 public struct TakeProposal has copy, drop {}
-/// [PROPOSAL] list nfts in a kiosk managed by a multisig
+/// [PROPOSAL] list nfts in a kiosk managed by a account
 public struct ListProposal has copy, drop {}
 
-/// [ACTION] transfer nfts from the multisig's kiosk to another one
+/// [ACTION] transfer nfts from the account's kiosk to another one
 public struct TakeAction has store {
     // id of the nfts to transfer
     nft_ids: vector<ID>,
@@ -58,7 +58,7 @@ public struct TakeAction has store {
 
 /// [ACTION] list nfts for purchase
 public struct ListAction has store {
-    // name of the multisig's kiosk
+    // name of the account's kiosk
     name: String,
     // id of the nfts to list to the prices
     nfts_prices_map: VecMap<ID, u64>
@@ -66,34 +66,34 @@ public struct ListAction has store {
 
 // === [MEMBER] Public functions ===
 
-/// Creates a new Kiosk and locks the KioskOwnerCap in the Multisig
+/// Creates a new Kiosk and locks the KioskOwnerCap in the Account
 /// Only a member can create a Kiosk
 #[allow(lint(share_owned))]
-public fun new(multisig: &mut Multisig, name: String, ctx: &mut TxContext) {
-    multisig.assert_is_member(ctx);
+public fun new(account: &mut Account, name: String, ctx: &mut TxContext) {
+    account.assert_is_member(ctx);
     let (mut kiosk, kiosk_owner_cap) = kiosk::new(ctx);
-    kiosk.set_owner_custom(&kiosk_owner_cap, multisig.addr());
+    kiosk.set_owner_custom(&kiosk_owner_cap, account.addr());
 
     let kiosk_owner_lock = KioskOwnerLock { kiosk_owner_cap };
-    multisig.add_managed_asset(ManageKiosk {}, KioskOwnerKey { name }, kiosk_owner_lock);
+    account.add_managed_asset(ManageKiosk {}, KioskOwnerKey { name }, kiosk_owner_lock);
 
     transfer::public_share_object(kiosk);
 }
 
-public fun borrow_lock(multisig: &Multisig, name: String): &KioskOwnerLock {
-    multisig.borrow_managed_asset(ManageKiosk {}, KioskOwnerKey { name })
+public fun borrow_lock(account: &Account, name: String): &KioskOwnerLock {
+    account.borrow_managed_asset(ManageKiosk {}, KioskOwnerKey { name })
 }
 
-public fun borrow_lock_mut(multisig: &mut Multisig, name: String): &mut KioskOwnerLock {
-    multisig.borrow_managed_asset_mut(ManageKiosk {}, KioskOwnerKey { name })
+public fun borrow_lock_mut(account: &mut Account, name: String): &mut KioskOwnerLock {
+    account.borrow_managed_asset_mut(ManageKiosk {}, KioskOwnerKey { name })
 }
 
 /// Deposits from another Kiosk, no need for proposal.
 /// Optional royalty and lock rules are automatically resolved for the type.
 /// The rest of the rules must be confirmed via the frontend.
 public fun place<O: key + store>(
-    multisig: &mut Multisig, 
-    multisig_kiosk: &mut Kiosk, 
+    account: &mut Account, 
+    account_kiosk: &mut Kiosk, 
     sender_kiosk: &mut Kiosk, 
     sender_cap: &KioskOwnerCap, 
     name: String,
@@ -101,17 +101,17 @@ public fun place<O: key + store>(
     policy: &mut TransferPolicy<O>,
     ctx: &mut TxContext
 ): TransferRequest<O> {
-    multisig.assert_is_member(ctx);
-    let lock_mut = borrow_lock_mut(multisig, name);
+    account.assert_is_member(ctx);
+    let lock_mut = borrow_lock_mut(account, name);
 
     sender_kiosk.list<O>(sender_cap, nft_id, 0);
     let (nft, mut request) = sender_kiosk.purchase<O>(nft_id, coin::zero<SUI>(ctx));
 
     if (policy.has_rule<O, kiosk_lock_rule::Rule>()) {
-        multisig_kiosk.lock(&lock_mut.kiosk_owner_cap, policy, nft);
-        kiosk_lock_rule::prove(&mut request, multisig_kiosk);
+        account_kiosk.lock(&lock_mut.kiosk_owner_cap, policy, nft);
+        kiosk_lock_rule::prove(&mut request, account_kiosk);
     } else {
-        multisig_kiosk.place(&lock_mut.kiosk_owner_cap, nft);
+        account_kiosk.place(&lock_mut.kiosk_owner_cap, nft);
     };
 
     if (policy.has_rule<O, royalty_rule::Rule>()) {
@@ -124,26 +124,26 @@ public fun place<O: key + store>(
 
 /// Members can delist nfts
 public fun delist<O: key + store>(
-    multisig: &mut Multisig, 
+    account: &mut Account, 
     kiosk: &mut Kiosk, 
     name: String,
     nft: ID,
     ctx: &mut TxContext
 ) {
-    multisig.assert_is_member(ctx);
-    let lock_mut = borrow_lock_mut(multisig, name);
+    account.assert_is_member(ctx);
+    let lock_mut = borrow_lock_mut(account, name);
     kiosk.delist<O>(&lock_mut.kiosk_owner_cap, nft);
 }
 
-/// Members can withdraw the profits to the multisig
+/// Members can withdraw the profits to the account
 public fun withdraw_profits(
-    multisig: &mut Multisig,
+    account: &mut Account,
     kiosk: &mut Kiosk,
     name: String,
     ctx: &mut TxContext
 ) {
-    multisig.assert_is_member(ctx);
-    let lock_mut = borrow_lock_mut(multisig, name);
+    account.assert_is_member(ctx);
+    let lock_mut = borrow_lock_mut(account, name);
 
     let profits_mut = kiosk.profits_mut(&lock_mut.kiosk_owner_cap);
     let profits_value = profits_mut.value();
@@ -151,7 +151,7 @@ public fun withdraw_profits(
 
     transfer::public_transfer(
         coin::from_balance<SUI>(profits, ctx), 
-        multisig.addr()
+        account.addr()
     );
 }
 
@@ -159,7 +159,7 @@ public fun withdraw_profits(
 
 // step 1: propose to transfer nfts to another kiosk
 public fun propose_take(
-    multisig: &mut Multisig,
+    account: &mut Account,
     key: String,
     description: String,
     execution_time: u64,
@@ -169,7 +169,7 @@ public fun propose_take(
     recipient: address,
     ctx: &mut TxContext
 ) {
-    let proposal_mut = multisig.create_proposal(
+    let proposal_mut = account.create_proposal(
         TakeProposal {},
         name,
         key,
@@ -181,20 +181,20 @@ public fun propose_take(
     new_take(proposal_mut, nft_ids, recipient);
 }
 
-// step 2: multiple members have to approve the proposal (multisig::approve_proposal)
-// step 3: execute the proposal and return the action (multisig::execute_proposal)
+// step 2: multiple members have to approve the proposal (account::approve_proposal)
+// step 3: execute the proposal and return the action (account::execute_proposal)
 
 // step 4: the recipient (anyone) must loop over this function to take the nfts in any of his Kiosks
 public fun execute_take<O: key + store>(
     executable: &mut Executable,
-    multisig: &mut Multisig,
-    multisig_kiosk: &mut Kiosk, 
+    account: &mut Account,
+    account_kiosk: &mut Kiosk, 
     recipient_kiosk: &mut Kiosk, 
     recipient_cap: &KioskOwnerCap, 
     policy: &mut TransferPolicy<O>,
     ctx: &mut TxContext
 ): TransferRequest<O> {
-    take(executable, multisig, multisig_kiosk, recipient_kiosk, recipient_cap, policy, TakeProposal {}, ctx)
+    take(executable, account, account_kiosk, recipient_kiosk, recipient_cap, policy, TakeProposal {}, ctx)
 }
 
 // step 5: destroy the executable
@@ -205,7 +205,7 @@ public fun complete_take(mut executable: Executable) {
 
 // step 1: propose to list nfts
 public fun propose_list(
-    multisig: &mut Multisig,
+    account: &mut Account,
     key: String,
     description: String,
     execution_time: u64,
@@ -215,7 +215,7 @@ public fun propose_list(
     prices: vector<u64>,
     ctx: &mut TxContext
 ) {
-    let proposal_mut = multisig.create_proposal(
+    let proposal_mut = account.create_proposal(
         ListProposal {},
         name,
         key,
@@ -227,16 +227,16 @@ public fun propose_list(
     new_list(proposal_mut, name, nft_ids, prices);
 }
 
-// step 2: multiple members have to approve the proposal (multisig::approve_proposal)
-// step 3: execute the proposal and return the action (multisig::execute_proposal)
+// step 2: multiple members have to approve the proposal (account::approve_proposal)
+// step 3: execute the proposal and return the action (account::execute_proposal)
 
 // step 4: list last nft in action
 public fun execute_list<O: key + store>(
     executable: &mut Executable,
-    multisig: &mut Multisig,
+    account: &mut Account,
     kiosk: &mut Kiosk,
 ) {
-    list<O, ListProposal>(executable, multisig, kiosk, ListProposal {});
+    list<O, ListProposal>(executable, account, kiosk, ListProposal {});
 }
 
 // step 5: destroy the executable
@@ -257,8 +257,8 @@ public fun new_take(
 
 public fun take<O: key + store, W: copy + drop>(
     executable: &mut Executable,
-    multisig: &mut Multisig,
-    multisig_kiosk: &mut Kiosk, 
+    account: &mut Account,
+    account_kiosk: &mut Kiosk, 
     recipient_kiosk: &mut Kiosk, 
     recipient_cap: &KioskOwnerCap, 
     policy: &mut TransferPolicy<O>,
@@ -266,13 +266,13 @@ public fun take<O: key + store, W: copy + drop>(
     ctx: &mut TxContext
 ): TransferRequest<O> {
     let name = executable.auth().name();
-    let take_mut: &mut TakeAction = executable.action_mut(witness, multisig.addr());
-    let lock_mut = borrow_lock_mut(multisig, name);
+    let take_mut: &mut TakeAction = executable.action_mut(witness, account.addr());
+    let lock_mut = borrow_lock_mut(account, name);
     assert!(take_mut.recipient == ctx.sender(), EWrongReceiver);
 
     let nft_id = take_mut.nft_ids.remove(0);
-    multisig_kiosk.list<O>(&lock_mut.kiosk_owner_cap, nft_id, 0);
-    let (nft, mut request) = multisig_kiosk.purchase<O>(nft_id, coin::zero<SUI>(ctx));
+    account_kiosk.list<O>(&lock_mut.kiosk_owner_cap, nft_id, 0);
+    let (nft, mut request) = account_kiosk.purchase<O>(nft_id, coin::zero<SUI>(ctx));
 
     if (policy.has_rule<O, kiosk_lock_rule::Rule>()) {
         recipient_kiosk.lock(recipient_cap, policy, nft);
@@ -307,13 +307,13 @@ public fun new_list(
 
 public fun list<O: key + store, W: copy + drop>(
     executable: &mut Executable,
-    multisig: &mut Multisig,
+    account: &mut Account,
     kiosk: &mut Kiosk,
     witness: W,
 ) {
     let name = executable.auth().name();
-    let list_mut: &mut ListAction = executable.action_mut(witness, multisig.addr());
-    let lock_mut = borrow_lock_mut(multisig, name);
+    let list_mut: &mut ListAction = executable.action_mut(witness, account.addr());
+    let lock_mut = borrow_lock_mut(account, name);
 
     let (nft_id, price) = list_mut.nfts_prices_map.remove_entry_by_idx(0);
     kiosk.list<O>(&lock_mut.kiosk_owner_cap, nft_id, price);
@@ -328,18 +328,18 @@ public fun destroy_list<W: copy + drop>(executable: &mut Executable, witness: W)
 
 public fun delete_take_action<W: copy + drop>(
     action: TakeAction, 
-    multisig: &Multisig, 
+    account: &Account, 
     witness: W
 ) {
-    multisig.deps().assert_core_dep(witness);
+    account.deps().assert_core_dep(witness);
     let TakeAction { .. } = action;
 }
 
 public fun delete_list_action<W: copy + drop>(
     action: ListAction, 
-    multisig: &Multisig, 
+    account: &Account, 
     witness: W
 ) {
-    multisig.deps().assert_core_dep(witness);
+    account.deps().assert_core_dep(witness);
     let ListAction { .. } = action;
 }

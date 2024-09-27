@@ -1,7 +1,7 @@
 /// This is the core module managing Proposals.
-/// It provides the interface to create, approve and execute proposals which is used in the `multisig` module.
+/// It provides the interface to create, approve and execute proposals which is used in the `account` module.
 
-module kraken_multisig::proposals;
+module kraken_account::proposals;
 
 // === Imports ===
 
@@ -11,7 +11,7 @@ use sui::{
     bag::{Self, Bag},
     event,
 };
-use kraken_multisig::{
+use kraken_account::{
     auth::Auth,
     members::Member,
 };
@@ -55,8 +55,8 @@ public struct Proposals has store {
 }
 
 /// Child struct, proposal owning a single action requested to be executed
-/// can be executed if total_weight >= multisig.thresholds.global
-/// or role_weight >= multisig.thresholds.role
+/// can be executed if total_weight >= account.thresholds.global
+/// or role_weight >= account.thresholds.role
 public struct Proposal has store {
     // module that issued the proposal and must destroy it
     auth: Auth,
@@ -135,7 +135,7 @@ public fun has_approved(proposal: &Proposal, addr: address): bool {
     proposal.approved.contains(&addr)
 }
 
-// === Multisig-only functions ===
+// === Account-only functions ===
 
 /// Inserts an action to the proposal bag, safe because proposal_mut is only accessible upon creation
 public fun add_action<A: store>(proposal: &mut Proposal, action: A) {
@@ -145,7 +145,7 @@ public fun add_action<A: store>(proposal: &mut Proposal, action: A) {
 
 // === Package functions ===
 
-/// The following functions are only used in the `multisig` module
+/// The following functions are only used in the `account` module
 
 public(package) fun new(): Proposals {
     Proposals { inner: vector[] }

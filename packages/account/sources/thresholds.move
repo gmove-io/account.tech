@@ -3,12 +3,12 @@
 /// There are also role-based thresholds that can be reached by members with a certain role.
 /// Roles correspond to the delegated witness of a Proposal with an optional name.
 
-module kraken_multisig::thresholds;
+module kraken_account::thresholds;
 
 // === Imports ===
 
 use std::string::String;
-use kraken_multisig::proposals::Proposal;
+use kraken_account::proposals::Proposal;
 
 // === Errors ===
 
@@ -36,7 +36,7 @@ public fun new(global: u64): Thresholds {
     Thresholds { global, roles: vector[] }
 }
 
-/// Protected because &mut Thresholds is only accessible from KrakenMultisig and KrakenActions
+/// Protected because &mut Thresholds is only accessible from KrakenAccount and KrakenActions
 public fun add(roles: &mut Thresholds, name: String, threshold: u64) {
     roles.roles.push_back(Role { name, threshold });
 }

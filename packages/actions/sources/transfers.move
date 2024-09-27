@@ -1,11 +1,11 @@
-/// This module defines apis to transfer assets owned or managed by the multisig.
+/// This module defines apis to transfer assets owned or managed by the account.
 /// The proposals can implement transfers for any action type (e.g. see owned or treasury).
 
 module kraken_actions::transfers;
 
 // === Imports ===
-use kraken_multisig::{
-    multisig::Multisig,
+use kraken_account::{
+    account::Account,
     proposals::Proposal,
     executable::Executable
 };
@@ -33,12 +33,12 @@ public fun new_transfer(
 
 public fun transfer<T: key + store, W: copy + drop>(
     executable: &mut Executable, 
-    multisig: &mut Multisig, 
+    account: &mut Account, 
     object: T,
     witness: W,
     is_executed: bool,
 ) {
-    let transfer_mut: &mut TransferAction = executable.action_mut(witness, multisig.addr());
+    let transfer_mut: &mut TransferAction = executable.action_mut(witness, account.addr());
     transfer::public_transfer(object, transfer_mut.recipient);
 
     if (is_executed)
@@ -57,9 +57,9 @@ public fun destroy_transfer<W: copy + drop>(
 
 public fun delete_transfer_action<W: copy + drop>(
     action: TransferAction, 
-    multisig: &Multisig, 
+    account: &Account, 
     witness: W
 ) {
-    multisig.deps().assert_core_dep(witness);
+    account.deps().assert_core_dep(witness);
     let TransferAction { .. } = action;
 }

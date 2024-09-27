@@ -227,11 +227,11 @@
 // fun pay_owned(world: &mut World) {
 //     let key = b"pay proposal".to_string();
 //     let coin = mint_for_testing<SUI>(20, world.scenario().ctx());
-//     let multisig_address = world.multisig().addr();
-//     transfer::public_transfer(coin, multisig_address);
+//     let account_address = world.account().addr();
+//     transfer::public_transfer(coin, account_address);
 
 //     world.scenario().next_tx(OWNER);
-//     let receiving_coin = most_recent_receiving_ticket<Coin<SUI>>(&multisig_address.to_id());
+//     let receiving_coin = most_recent_receiving_ticket<Coin<SUI>>(&account_address.to_id());
     
 //     world.propose_pay_owned(key, receiving_coin.receiving_object_id(), 10, 2, ALICE);
 //     world.approve_proposal(key);

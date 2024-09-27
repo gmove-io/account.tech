@@ -1,9 +1,9 @@
-/// This module defines and manages the members of a multisig.
+/// This module defines and manages the members of a multisig Account.
 /// Members have an address and a weight (1 by default).
-/// They can have an account ID, when there's none it means the member didn't join yet.
+/// They can have an User ID, when there's none it means the member didn't join yet.
 /// They can also have roles, which are Auth.witness + opt(Auth.name).
 
-module kraken_multisig::members;
+module kraken_account::members;
 
 // === Imports ===
 
@@ -21,13 +21,13 @@ public struct Members has store, drop {
     inner: vector<Member>,
 }
 
-// Child struct for managing and displaying members
+/// Child struct for managing and displaying members
 public struct Member has copy, drop, store {
     addr: address,
     // voting power of the member
     weight: u64,
-    // ID of the member's account, none if he didn't join yet
-    account_id: Option<ID>,
+    // ID of the member's User object, none if he didn't join yet
+    user_id: Option<ID>,
     // roles that have been attributed
     roles: VecSet<String>,
 }
@@ -39,35 +39,35 @@ public fun new(): Members {
     Members { inner: vector[] }
 }
 
-// Protected because &mut Deps is only accessible from KrakenMultisig and KrakenActions
+// Protected because &mut Deps is only accessible from KrakenAccount and KrakenActions
 public fun add(
     members: &mut Members,
     addr: address,
     weight: u64,
-    account_id: Option<ID>,
+    user_id: Option<ID>,
     roles: vector<String>,
 ) {
     members.inner.push_back(Member {
         addr,
         weight,
-        account_id,
+        user_id,
         roles: vec_set::from_keys(roles),
     });
 }
 
-/// Registers the member's account ID, upon joining the multisig
-public fun register_account_id(
+/// Registers the member's User ID, upon joining the Account
+public fun register_user_id(
     member: &mut Member,
     id: ID,
 ) {
-    member.account_id.swap_or_fill(id);
+    member.user_id.swap_or_fill(id);
 }
 
-/// Unregisters the member's account ID, upon leaving the multisig
-public fun unregister_account_id(
+/// Unregisters the member's User ID, upon leaving the Account
+public fun unregister_user_id(
     member: &mut Member,
 ): ID {
-    member.account_id.extract()
+    member.user_id.extract()
 }
 
 // === View functions ===
@@ -100,8 +100,8 @@ public fun weight(member: &Member): u64 {
     member.weight
 }
 
-public fun account_id(member: &Member): Option<ID> {
-    member.account_id
+public fun user_id(member: &Member): Option<ID> {
+    member.user_id
 }
 
 public fun roles(member: &Member): vector<String> {

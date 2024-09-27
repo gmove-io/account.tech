@@ -35,9 +35,9 @@ fun test_upgrade_end_to_end() {
     world.approve_proposal(key);
 
     let mut executable = world.execute_proposal(key);
-    let ticket = upgrade_policies::execute_upgrade(&mut executable, world.multisig());
+    let ticket = upgrade_policies::execute_upgrade(&mut executable, world.account());
     let receipt = ticket.test_upgrade();
-    upgrade_policies::confirm_upgrade(executable, world.multisig(), receipt);
+    upgrade_policies::confirm_upgrade(executable, world.account(), receipt);
 
     package_id.delete();
     world.end();
@@ -55,13 +55,13 @@ fun test_restrict_end_to_end() {
 
     world.scenario().next_tx(OWNER);
     world.propose_restrict(key, name, package::additive_policy());
-    let proposal = world.multisig().proposal(key);
+    let proposal = world.account().proposal(key);
     assert!(proposal.execution_time() == 108);
     world.clock().increment_for_testing(109);
     world.approve_proposal(key);
 
     let executable = world.execute_proposal(key);
-    upgrade_policies::execute_restrict(executable, world.multisig());
+    upgrade_policies::execute_restrict(executable, world.account());
 
     package_id.delete();
     world.end();
@@ -79,12 +79,12 @@ fun test_restrict_error_policy_should_restrict() {
 
     world.scenario().next_tx(OWNER);
     world.propose_restrict(key, name, package::compatible_policy());
-    let proposal = world.multisig().proposal(key);
+    let proposal = world.account().proposal(key);
     assert!(proposal.execution_time() == 108);
     world.approve_proposal(key);
 
     let executable = world.execute_proposal(key);
-    upgrade_policies::execute_restrict(executable, world.multisig());
+    upgrade_policies::execute_restrict(executable, world.account());
 
     package_id.delete();
     world.end();
@@ -102,12 +102,12 @@ fun test_restrict_error_invalid_policy() {
 
     world.scenario().next_tx(OWNER);
     world.propose_restrict(key, name, 7);
-    let proposal = world.multisig().proposal(key);
+    let proposal = world.account().proposal(key);
     assert!(proposal.execution_time() == 108);
     world.approve_proposal(key);
 
     let executable = world.execute_proposal(key);
-    upgrade_policies::execute_restrict(executable, world.multisig());
+    upgrade_policies::execute_restrict(executable, world.account());
 
     package_id.delete();
     world.end();

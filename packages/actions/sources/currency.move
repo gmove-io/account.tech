@@ -1,9 +1,9 @@
-/// Members can lock a TreasuryCap in the Multisig to restrict minting and burning operations.
+/// Members can lock a TreasuryCap in the Account to restrict minting and burning operations.
 /// as well as modifying the CoinMetadata
-/// Members can propose to mint a Coin that will be sent to the Multisig and burn one of its coin.
+/// Members can propose to mint a Coin that will be sent to the Account and burn one of its coin.
 /// It uses a Withdraw action. The burnt Coin could be merged beforehand.
 /// 
-/// Coins minted by the multisig can also be transferred or paid to any address.
+/// Coins minted by the account can also be transferred or paid to any address.
 
 module kraken_actions::currency;
 
@@ -18,8 +18,8 @@ use sui::{
     coin::{Coin, TreasuryCap, CoinMetadata},
     event,
 };
-use kraken_multisig::{
-    multisig::Multisig,
+use kraken_account::{
+    account::Account,
     proposals::Proposal,
     executable::Executable
 };
@@ -62,11 +62,11 @@ public struct CurrencyLock<phantom C: drop> has store {
     treasury_cap: TreasuryCap<C>,
 }
 
-/// [MEMBER] can lock a TreasuryCap in the Multisig to restrict minting and burning operations
+/// [MEMBER] can lock a TreasuryCap in the Account to restrict minting and burning operations
 public struct ManageCurrency has copy, drop {}
 /// [PROPOSAL] mints new coins from a locked TreasuryCap
 public struct MintProposal has copy, drop {}
-/// [PROPOSAL] burns coins from the multisig using a locked TreasuryCap
+/// [PROPOSAL] burns coins from the account using a locked TreasuryCap
 public struct BurnProposal has copy, drop {}
 /// [PROPOSAL] updates the CoinMetadata associated with a locked TreasuryCap
 public struct UpdateProposal has copy, drop {}
@@ -98,26 +98,26 @@ public struct UpdateAction<phantom C: drop> has store {
 /// Only a member can lock a TreasuryCap and borrow it.
 
 public fun lock_cap<C: drop>(
-    multisig: &mut Multisig,
+    account: &mut Account,
     treasury_cap: TreasuryCap<C>,
     ctx: &mut TxContext
 ) {
-    multisig.assert_is_member(ctx);
+    account.assert_is_member(ctx);
     let treasury_lock = CurrencyLock { treasury_cap };
 
-    multisig.add_managed_asset(ManageCurrency {}, CurrencyKey<C> {}, treasury_lock);
+    account.add_managed_asset(ManageCurrency {}, CurrencyKey<C> {}, treasury_lock);
 }
 
-public fun has_lock<C: drop>(multisig: &Multisig): bool {
-    multisig.has_managed_asset(CurrencyKey<C> {})
+public fun has_lock<C: drop>(account: &Account): bool {
+    account.has_managed_asset(CurrencyKey<C> {})
 }
 
-public fun borrow_lock<C: drop>(multisig: &Multisig): &CurrencyLock<C> {
-    multisig.borrow_managed_asset(ManageCurrency {}, CurrencyKey<C> {})
+public fun borrow_lock<C: drop>(account: &Account): &CurrencyLock<C> {
+    account.borrow_managed_asset(ManageCurrency {}, CurrencyKey<C> {})
 }
 
-public fun borrow_lock_mut<C: drop>(multisig: &mut Multisig): &mut CurrencyLock<C> {
-    multisig.borrow_managed_asset_mut(ManageCurrency {}, CurrencyKey<C> {})
+public fun borrow_lock_mut<C: drop>(account: &mut Account): &mut CurrencyLock<C> {
+    account.borrow_managed_asset_mut(ManageCurrency {}, CurrencyKey<C> {})
 }
 
 public fun supply<C: drop>(lock: &CurrencyLock<C>): u64 {
@@ -126,9 +126,9 @@ public fun supply<C: drop>(lock: &CurrencyLock<C>): u64 {
 
 // === [PROPOSAL] Public functions ===
 
-// step 1: propose to mint an amount of a coin that will be transferred to the multisig
+// step 1: propose to mint an amount of a coin that will be transferred to the account
 public fun propose_mint<C: drop>(
-    multisig: &mut Multisig,
+    account: &mut Account,
     key: String,
     description: String,
     execution_time: u64,
@@ -136,8 +136,8 @@ public fun propose_mint<C: drop>(
     amount: u64,
     ctx: &mut TxContext
 ) {
-    assert!(has_lock<C>(multisig), ENoLock);
-    let proposal_mut = multisig.create_proposal(
+    assert!(has_lock<C>(account), ENoLock);
+    let proposal_mut = account.create_proposal(
         MintProposal {}, 
         type_to_name<C>(), // the coin type is the auth name 
         key, 
@@ -149,24 +149,24 @@ public fun propose_mint<C: drop>(
     new_mint<C>(proposal_mut, amount);
 }
 
-// step 2: multiple members have to approve the proposal (multisig::approve_proposal)
-// step 3: execute the proposal and return the action (multisig::execute_proposal)
+// step 2: multiple members have to approve the proposal (account::approve_proposal)
+// step 3: execute the proposal and return the action (account::execute_proposal)
 
-// step 4: mint the coins and send them to the multisig
+// step 4: mint the coins and send them to the account
 public fun execute_mint<C: drop>(
     mut executable: Executable,
-    multisig: &mut Multisig,
+    account: &mut Account,
     ctx: &mut TxContext
 ) {
-    let coin = mint<C, MintProposal>(&mut executable, multisig, MintProposal {}, ctx);
-    transfer::public_transfer(coin, multisig.addr());
+    let coin = mint<C, MintProposal>(&mut executable, account, MintProposal {}, ctx);
+    transfer::public_transfer(coin, account.addr());
     destroy_mint<C, MintProposal>(&mut executable, MintProposal {});
     executable.destroy(MintProposal {});
 }
 
-// step 1: propose to burn an amount of a coin owned by the multisig
+// step 1: propose to burn an amount of a coin owned by the account
 public fun propose_burn<C: drop>(
-    multisig: &mut Multisig,
+    account: &mut Account,
     key: String,
     description: String,
     execution_time: u64,
@@ -175,8 +175,8 @@ public fun propose_burn<C: drop>(
     amount: u64,
     ctx: &mut TxContext
 ) {
-    assert!(has_lock<C>(multisig), ENoLock);
-    let proposal_mut = multisig.create_proposal(
+    assert!(has_lock<C>(account), ENoLock);
+    let proposal_mut = account.create_proposal(
         BurnProposal {}, 
         type_to_name<C>(), // the coin type is the auth name 
         key, 
@@ -189,17 +189,17 @@ public fun propose_burn<C: drop>(
     new_burn<C>(proposal_mut, amount);
 }
 
-// step 2: multiple members have to approve the proposal (multisig::approve_proposal)
-// step 3: execute the proposal and return the action (multisig::execute_proposal)
+// step 2: multiple members have to approve the proposal (account::approve_proposal)
+// step 3: execute the proposal and return the action (account::execute_proposal)
 
-// step 4: burn the coin initially owned by the multisig
+// step 4: burn the coin initially owned by the account
 public fun execute_burn<C: drop>(
     mut executable: Executable,
-    multisig: &mut Multisig,
+    account: &mut Account,
     receiving: Receiving<Coin<C>>,
 ) {
-    let coin = owned::withdraw(&mut executable, multisig, receiving, BurnProposal {});
-    burn<C, BurnProposal>(&mut executable, multisig, coin, BurnProposal {});
+    let coin = owned::withdraw(&mut executable, account, receiving, BurnProposal {});
+    burn<C, BurnProposal>(&mut executable, account, coin, BurnProposal {});
     owned::destroy_withdraw(&mut executable, BurnProposal {});
     destroy_burn<C, BurnProposal>(&mut executable, BurnProposal {});
     executable.destroy(BurnProposal {});
@@ -207,7 +207,7 @@ public fun execute_burn<C: drop>(
 
 // step 1: propose to update the CoinMetadata
 public fun propose_update<C: drop>(
-    multisig: &mut Multisig,
+    account: &mut Account,
     key: String,
     description: String,
     execution_time: u64,
@@ -218,8 +218,8 @@ public fun propose_update<C: drop>(
     md_icon: Option<String>,
     ctx: &mut TxContext
 ) {
-    assert!(has_lock<C>(multisig), ENoLock);
-    let proposal_mut = multisig.create_proposal(
+    assert!(has_lock<C>(account), ENoLock);
+    let proposal_mut = account.create_proposal(
         UpdateProposal {},
         type_to_name<C>(), // the coin type is the auth name 
         key,
@@ -231,23 +231,23 @@ public fun propose_update<C: drop>(
     new_update<C>(proposal_mut, md_name, md_symbol, md_description, md_icon);
 }
 
-// step 2: multiple members have to approve the proposal (multisig::approve_proposal)
-// step 3: execute the proposal and return the action (multisig::execute_proposal)
+// step 2: multiple members have to approve the proposal (account::approve_proposal)
+// step 3: execute the proposal and return the action (account::execute_proposal)
 
 // step 4: update the CoinMetadata
 public fun execute_update<C: drop>(
     mut executable: Executable,
-    multisig: &mut Multisig,
+    account: &mut Account,
     metadata: &mut CoinMetadata<C>,
 ) {
-    update(&mut executable, multisig, metadata, UpdateProposal {});
+    update(&mut executable, account, metadata, UpdateProposal {});
     destroy_update<C, UpdateProposal>(&mut executable, UpdateProposal {});
     executable.destroy(UpdateProposal {});
 }
 
 // step 1: propose to send managed coins
 public fun propose_transfer<C: drop>(
-    multisig: &mut Multisig, 
+    account: &mut Account, 
     key: String,
     description: String,
     execution_time: u64,
@@ -257,7 +257,7 @@ public fun propose_transfer<C: drop>(
     ctx: &mut TxContext
 ) {
     assert!(amounts.length() == recipients.length(), EDifferentLength);
-    let proposal_mut = multisig.create_proposal(
+    let proposal_mut = account.create_proposal(
         TransferProposal {},
         b"".to_string(),
         key,
@@ -273,16 +273,16 @@ public fun propose_transfer<C: drop>(
     });
 }
 
-// step 2: multiple members have to approve the proposal (multisig::approve_proposal)
-// step 3: execute the proposal and return the action (multisig::execute_proposal)
+// step 2: multiple members have to approve the proposal (account::approve_proposal)
+// step 3: execute the proposal and return the action (account::execute_proposal)
 
 // step 4: loop over transfer
 public fun execute_transfer<C: drop>(
     executable: &mut Executable, 
-    multisig: &mut Multisig, 
+    account: &mut Account, 
     ctx: &mut TxContext
 ) {
-    let coin: Coin<C> = mint(executable, multisig, TransferProposal {}, ctx);
+    let coin: Coin<C> = mint(executable, account, TransferProposal {}, ctx);
 
     let mut is_executed = false;
     let mint: &MintAction<C> = executable.action();
@@ -292,7 +292,7 @@ public fun execute_transfer<C: drop>(
         is_executed = true;
     };
 
-    transfers::transfer(executable, multisig, coin, TransferProposal {}, is_executed);
+    transfers::transfer(executable, account, coin, TransferProposal {}, is_executed);
 
     if (is_executed) {
         transfers::destroy_transfer(executable, TransferProposal {});
@@ -301,7 +301,7 @@ public fun execute_transfer<C: drop>(
 
 // step 1: propose to pay from a minted coin
 public fun propose_pay<C: drop>(
-    multisig: &mut Multisig, 
+    account: &mut Account, 
     key: String,
     description: String,
     execution_time: u64,
@@ -312,7 +312,7 @@ public fun propose_pay<C: drop>(
     recipient: address,
     ctx: &mut TxContext
 ) {
-    let proposal_mut = multisig.create_proposal(
+    let proposal_mut = account.create_proposal(
         PayProposal {},
         b"".to_string(),
         key,
@@ -326,17 +326,17 @@ public fun propose_pay<C: drop>(
     payments::new_pay(proposal_mut, amount, interval, recipient);
 }
 
-// step 2: multiple members have to approve the proposal (multisig::approve_proposal)
-// step 3: execute the proposal and return the action (multisig::execute_proposal)
+// step 2: multiple members have to approve the proposal (account::approve_proposal)
+// step 3: execute the proposal and return the action (account::execute_proposal)
 
 // step 4: loop over it in PTB, sends last object from the Send action
 public fun execute_pay<C: drop>(
     mut executable: Executable, 
-    multisig: &mut Multisig, 
+    account: &mut Account, 
     ctx: &mut TxContext
 ) {
-    let coin: Coin<C> = mint(&mut executable, multisig, PayProposal {}, ctx);
-    payments::pay(&mut executable, multisig, coin, PayProposal {}, ctx);
+    let coin: Coin<C> = mint(&mut executable, account, PayProposal {}, ctx);
+    payments::pay(&mut executable, account, coin, PayProposal {}, ctx);
 
     destroy_mint<C, PayProposal>(&mut executable, PayProposal {});
     payments::destroy_pay(&mut executable, PayProposal {});
@@ -351,18 +351,18 @@ public fun new_mint<C: drop>(proposal: &mut Proposal, amount: u64) {
 
 public fun mint<C: drop, W: drop>(
     executable: &mut Executable, 
-    multisig: &mut Multisig,
+    account: &mut Account,
     witness: W, 
     ctx: &mut TxContext
 ): Coin<C> {
-    let mint_mut: &mut MintAction<C> = executable.action_mut(witness, multisig.addr());
+    let mint_mut: &mut MintAction<C> = executable.action_mut(witness, account.addr());
     
     event::emit(Minted {
         coin_type: type_to_name<C>(),
         amount: mint_mut.amount,
     });
     
-    let lock_mut = borrow_lock_mut<C>(multisig);
+    let lock_mut = borrow_lock_mut<C>(account);
     let coin = lock_mut.treasury_cap.mint(mint_mut.amount, ctx);
     mint_mut.amount = 0; // reset to ensure it has been executed
     coin
@@ -379,18 +379,18 @@ public fun new_burn<C: drop>(proposal: &mut Proposal, amount: u64) {
 
 public fun burn<C: drop, W: copy + drop>(
     executable: &mut Executable, 
-    multisig: &mut Multisig,
+    account: &mut Account,
     coin: Coin<C>,
     witness: W, 
 ) {
-    let burn_mut: &mut BurnAction<C> = executable.action_mut(witness, multisig.addr());
+    let burn_mut: &mut BurnAction<C> = executable.action_mut(witness, account.addr());
     
     event::emit(Burned {
         coin_type: type_to_name<C>(),
         amount: burn_mut.amount,
     });
     
-    let lock_mut = borrow_lock_mut<C>(multisig);
+    let lock_mut = borrow_lock_mut<C>(account);
     assert!(burn_mut.amount == coin.value(), EWrongValue);
     lock_mut.treasury_cap.burn(coin);
     burn_mut.amount = 0; // reset to ensure it has been executed
@@ -414,12 +414,12 @@ public fun new_update<C: drop>(
 
 public fun update<C: drop, W: copy + drop>(
     executable: &mut Executable,
-    multisig: &mut Multisig,
+    account: &mut Account,
     metadata: &mut CoinMetadata<C>,
     witness: W,
 ) {
-    let update_mut: &mut UpdateAction<C> = executable.action_mut(witness, multisig.addr());
-    let lock_mut = borrow_lock_mut<C>(multisig);
+    let update_mut: &mut UpdateAction<C> = executable.action_mut(witness, account.addr());
+    let lock_mut = borrow_lock_mut<C>(account);
 
     if (update_mut.name.is_some()) {
         lock_mut.treasury_cap.update_name(metadata, update_mut.name.extract());
@@ -445,28 +445,28 @@ public fun destroy_update<C: drop, W: copy + drop>(executable: &mut Executable, 
 
 public fun delete_mint_action<C: drop, W: copy + drop>(
     action: MintAction<C>, 
-    multisig: &Multisig,
+    account: &Account,
     witness: W,
 ) {
-    multisig.deps().assert_core_dep(witness);
+    account.deps().assert_core_dep(witness);
     let MintAction { .. } = action;
 }
 
 public fun delete_burn_action<C: drop, W: copy + drop>(
     action: BurnAction<C>, 
-    multisig: &Multisig,
+    account: &Account,
     witness: W,
 ) {
-    multisig.deps().assert_core_dep(witness);
+    account.deps().assert_core_dep(witness);
     let BurnAction { .. } = action;
 }
 
 public fun delete_update_action<C: drop, W: copy + drop>(
     action: UpdateAction<C>, 
-    multisig: &Multisig,
+    account: &Account,
     witness: W,
 ) {
-    multisig.deps().assert_core_dep(witness);
+    account.deps().assert_core_dep(witness);
     let UpdateAction { .. } = action;
 }
 

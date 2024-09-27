@@ -1,13 +1,13 @@
 #[test_only]
-module kraken_multisig::thresholds_tests;
+module kraken_account::thresholds_tests;
 
 use sui::test_utils::destroy;
-use kraken_multisig::{
-    multisig,
+use kraken_account::{
+    account,
     auth,
     members,
     thresholds,
-    multisig_test_utils::start_world
+    account_test_utils::start_world
 };
 
 const OWNER: address = @0xBABE;
@@ -27,8 +27,8 @@ fun test_execute_proposal_error_threshold_not_reached() {
     let mut world = start_world();
     let key = b"key".to_string();
 
-    world.multisig().members_mut_for_testing().add(ALICE, 2, option::none(), vector[]);
-    world.multisig().members_mut_for_testing().add(BOB, 3, option::none(), vector[]);
+    world.account().members_mut_for_testing().add(ALICE, 2, option::none(), vector[]);
+    world.account().members_mut_for_testing().add(BOB, 3, option::none(), vector[]);
 
     world.create_proposal(Witness {}, b"".to_string(), key, b"".to_string(), 0, 0);
     let executable = world.execute_proposal(key);

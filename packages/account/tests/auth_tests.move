@@ -1,12 +1,12 @@
 #[test_only]
-module kraken_multisig::auth_tests;
+module kraken_account::auth_tests;
 
 use sui::test_utils::destroy;
-use kraken_multisig::{
-    multisig,
+use kraken_account::{
+    account,
     auth,
     members,
-    multisig_test_utils::start_world
+    account_test_utils::start_world
 };
 
 const OWNER: address = @0xBABE;
@@ -27,27 +27,27 @@ fun test_action_mut_error_not_witness_module() {
     let mut world = start_world();
     let key = b"key".to_string();
 
-    world.multisig().members_mut_for_testing().add(ALICE, 2, option::none(), vector[]);
-    world.multisig().members_mut_for_testing().add(BOB, 3, option::none(), vector[]);
+    world.account().members_mut_for_testing().add(ALICE, 2, option::none(), vector[]);
+    world.account().members_mut_for_testing().add(BOB, 3, option::none(), vector[]);
 
     let proposal = world.create_proposal(Witness {}, b"".to_string(), key, b"".to_string(), 0, 0);
     proposal.add_action(Action { value: 1 });
     world.approve_proposal(key);
 
     let mut executable = world.execute_proposal(key);
-    executable.action_mut<Witness2, Action>(Witness2 {}, world.multisig().addr());
+    executable.action_mut<Witness2, Action>(Witness2 {}, world.account().addr());
 
     destroy(executable);
     world.end();
 }  
 
-#[test, expected_failure(abort_code = auth::EWrongMultisig)]
-fun test_assert_multisig_executed_error_not_multisig_executable() {
+#[test, expected_failure(abort_code = auth::EWrongaccount)]
+fun test_assert_account_executed_error_not_account_executable() {
     let mut world = start_world();
     let key = b"key".to_string();
 
-    world.multisig().members_mut_for_testing().add(ALICE, 2, option::none(), vector[]);
-    world.multisig().members_mut_for_testing().add(BOB, 3, option::none(), vector[]);
+    world.account().members_mut_for_testing().add(ALICE, 2, option::none(), vector[]);
+    world.account().members_mut_for_testing().add(BOB, 3, option::none(), vector[]);
 
     let proposal = world.create_proposal(Witness {}, b"".to_string(), key, b"".to_string(), 0, 0);
     proposal.add_action(Action { value: 1 });
@@ -56,11 +56,11 @@ fun test_assert_multisig_executed_error_not_multisig_executable() {
     let uid = object::new(world.scenario().ctx());
     let mut executable = world.execute_proposal(key);
     
-    let multisig = world.new_multisig();
-    let _ = executable.action_mut<Witness, Action>(Witness {}, multisig.addr());
+    let account = world.new_account();
+    let _ = executable.action_mut<Witness, Action>(Witness {}, account.addr());
 
     uid.delete();
-    destroy(multisig);
+    destroy(account);
     destroy(executable);
     world.end();
 }

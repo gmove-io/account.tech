@@ -21,9 +21,9 @@ fun test_config_name_end_to_end() {
     );
     world.approve_proposal(key);
     let executable = world.execute_proposal(key);    
-    config::execute_config_name(executable, world.multisig());
+    config::execute_config_name(executable, world.account());
 
-    assert!(world.multisig().name() == b"new name".to_string());
+    assert!(world.account().name() == b"new name".to_string());
     world.end();     
 }
 
@@ -32,14 +32,14 @@ fun test_config_name_end_to_end() {
 fun test_config_rules_end_to_end() {
     let mut world = start_world();
     let sender = world.scenario().ctx().sender();
-    let multisig = world.multisig();
+    let account = world.account();
     let key = b"rules proposal".to_string();
 
-    assert!(multisig.name() == b"Kraken".to_string());
-    assert!(multisig.thresholds().get_global_threshold() == 1);
-    assert!(multisig.members().addresses() == vector[sender]);
-    assert!(multisig.member(sender).weight() == 1);
-    assert!(multisig.proposals().length() == 0);
+    assert!(account.name() == b"Kraken".to_string());
+    assert!(account.thresholds().get_global_threshold() == 1);
+    assert!(account.members().addresses() == vector[sender]);
+    assert!(account.member(sender).weight() == 1);
+    assert!(account.proposals().length() == 0);
 
     let role = actions_test_utils::role(b"config");
     world.propose_config_rules(
@@ -54,18 +54,18 @@ fun test_config_rules_end_to_end() {
     world.approve_proposal(key);
 
     let executable = world.execute_proposal(key);
-    config::execute_config_rules(executable, world.multisig());
+    config::execute_config_rules(executable, world.account());
 
-    let multisig = world.multisig();
+    let account = world.account();
 
-    assert!(multisig.members().addresses() == vector[ALICE, BOB]);
-    assert!(multisig.member(ALICE).weight() == 2);
-    assert!(multisig.member(BOB).weight() == 1);
-    assert!(multisig.member(ALICE).roles() == vector[]);
-    assert!(multisig.member(BOB).roles() == vector[role]);
+    assert!(account.members().addresses() == vector[ALICE, BOB]);
+    assert!(account.member(ALICE).weight() == 2);
+    assert!(account.member(BOB).weight() == 1);
+    assert!(account.member(ALICE).roles() == vector[]);
+    assert!(account.member(BOB).roles() == vector[role]);
 
-    assert!(multisig.thresholds().get_global_threshold() == 3);
-    assert!(multisig.thresholds().get_role_threshold(role) == 1);
+    assert!(account.thresholds().get_global_threshold() == 3);
+    assert!(account.thresholds().get_role_threshold(role) == 1);
 
     world.end();        
 }
@@ -77,29 +77,29 @@ fun test_config_rules_end_to_end() {
 
 //     let key = b"deps proposal".to_string();
 
-//     assert!(world.multisig().deps().get_idx(@kraken_multisig) == 0);
-//     assert!(world.multisig().deps().get_idx(@0xCAFE) == 1);
-//     assert!(world.multisig().deps().get_version(@kraken_multisig) == 1);
-//     assert!(world.multisig().deps().get_version(@0xCAFE) == 1);
+//     assert!(world.account().deps().get_idx(@kraken_account) == 0);
+//     assert!(world.account().deps().get_idx(@0xCAFE) == 1);
+//     assert!(world.account().deps().get_version(@kraken_account) == 1);
+//     assert!(world.account().deps().get_version(@0xCAFE) == 1);
 
 //     extensions::add(&world.extensions(), name, package, version)
 
 //     world.propose_config_deps(
 //         key, 
-//         vector[b"KrakenMultisig".to_string(), b"KrakenActions".to_string(), b"External".to_string()],
-//         vector[@kraken_multisig, @0xCAFE, @0xAAA],
+//         vector[b"KrakenAccount".to_string(), b"KrakenActions".to_string(), b"External".to_string()],
+//         vector[@kraken_account, @0xCAFE, @0xAAA],
 //         vector[2, 3, 1],
 //     );
 //     world.approve_proposal(key);
 //     let executable = world.execute_proposal(key);    
-//     config::execute_config_deps(executable, world.multisig());
+//     config::execute_config_deps(executable, world.account());
 
-//     assert!(world.multisig().deps().get_idx(@kraken_multisig) == 0);
-//     assert!(world.multisig().deps().get_idx(@0xCAFE) == 1);
-//     assert!(world.multisig().deps().get_idx(@0xAAA) == 2);
-//     assert!(world.multisig().deps().get_version(@kraken_multisig) == 2);
-//     assert!(world.multisig().deps().get_version(@0xCAFE) == 3);
-//     assert!(world.multisig().deps().get_version(@0xAAA) == 1);
+//     assert!(world.account().deps().get_idx(@kraken_account) == 0);
+//     assert!(world.account().deps().get_idx(@0xCAFE) == 1);
+//     assert!(world.account().deps().get_idx(@0xAAA) == 2);
+//     assert!(world.account().deps().get_version(@kraken_account) == 2);
+//     assert!(world.account().deps().get_version(@0xCAFE) == 3);
+//     assert!(world.account().deps().get_version(@0xAAA) == 1);
 
 //     world.end();     
 // }
@@ -121,7 +121,7 @@ fun test_verify_config_no_error_no_member_has_role() {
     );
     world.approve_proposal(key);
     let executable = world.execute_proposal(key);
-    config::execute_config_rules(executable, world.multisig());
+    config::execute_config_rules(executable, world.account());
 
     world.end();         
 }
@@ -142,7 +142,7 @@ fun test_verify_config_error_global_threshold_null() {
     );
     world.approve_proposal(key);
     let executable = world.execute_proposal(key);
-    config::execute_config_rules(executable, world.multisig());
+    config::execute_config_rules(executable, world.account());
 
     world.end();         
 }
@@ -164,7 +164,7 @@ fun test_verify_config_error_global_threshold_too_high() {
     );
     world.approve_proposal(key);
     let executable = world.execute_proposal(key);
-    config::execute_config_rules(executable, world.multisig());
+    config::execute_config_rules(executable, world.account());
 
     world.end();         
 }
@@ -186,7 +186,7 @@ fun test_verify_config_error_role_threshold_too_high() {
     );
     world.approve_proposal(key);
     let executable = world.execute_proposal(key);
-    config::execute_config_rules(executable, world.multisig());
+    config::execute_config_rules(executable, world.account());
 
     world.end();         
 }
@@ -208,7 +208,7 @@ fun test_verify_config_error_threshold_too_high() {
     );
     world.approve_proposal(key);
     let executable = world.execute_proposal(key);
-    config::execute_config_rules(executable, world.multisig());
+    config::execute_config_rules(executable, world.account());
 
     world.end();         
 }
@@ -230,7 +230,7 @@ fun test_verify_config_error_members_not_same_length() {
     );
     world.approve_proposal(key);
     let executable = world.execute_proposal(key);
-    config::execute_config_rules(executable, world.multisig());
+    config::execute_config_rules(executable, world.account());
 
     world.end();         
 }
@@ -252,7 +252,7 @@ fun test_verify_config_error_members_not_same_length_2() {
     );
     world.approve_proposal(key);
     let executable = world.execute_proposal(key);
-    config::execute_config_rules(executable, world.multisig());
+    config::execute_config_rules(executable, world.account());
 
     world.end();         
 }
@@ -274,7 +274,7 @@ fun test_verify_config_error_roles_not_same_length() {
     );
     world.approve_proposal(key);
     let executable = world.execute_proposal(key);
-    config::execute_config_rules(executable, world.multisig());
+    config::execute_config_rules(executable, world.account());
 
     world.end();         
 }

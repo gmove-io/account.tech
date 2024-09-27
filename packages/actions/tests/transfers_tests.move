@@ -39,9 +39,9 @@
 
 //     world.scenario().next_tx(OWNER);
 //     let mut executable = world.execute_proposal(key);
-//     transfers::execute_transfer_object<Object>(&mut executable, world.multisig(), receiving1);
+//     transfers::execute_transfer_object<Object>(&mut executable, world.account(), receiving1);
 //     transfers::confirm_transfer_objects(&mut executable);
-//     transfers::execute_transfer_object<Object2>(&mut executable, world.multisig(), receiving2);
+//     transfers::execute_transfer_object<Object2>(&mut executable, world.account(), receiving2);
 //     transfers::confirm_transfer_objects(&mut executable);
 //     transfers::complete_transfers(executable);
 
@@ -70,17 +70,17 @@
 // }    
 
 // fun create_transfer_and_return_receiving1(world: &mut World): Receiving<Object> {
-//     let multisig_address = world.multisig().addr();
+//     let account_address = world.account().addr();
 //     let obj = Object { id: object::new(world.scenario().ctx()) };
-//     transfer::public_transfer(obj, multisig_address);
+//     transfer::public_transfer(obj, account_address);
 //     world.scenario().next_tx(OWNER);
-//     most_recent_receiving_ticket<Object>(&multisig_address.to_id())
+//     most_recent_receiving_ticket<Object>(&account_address.to_id())
 // }
 
 // fun create_transfer_and_return_receiving2(world: &mut World): Receiving<Object2> {
-//     let multisig_address = world.multisig().addr();
+//     let account_address = world.account().addr();
 //     let obj = Object2 { id: object::new(world.scenario().ctx()) };
-//     transfer::public_transfer(obj, multisig_address);
+//     transfer::public_transfer(obj, account_address);
 //     world.scenario().next_tx(OWNER);
-//     most_recent_receiving_ticket<Object2>(&multisig_address.to_id())
+//     most_recent_receiving_ticket<Object2>(&account_address.to_id())
 // }

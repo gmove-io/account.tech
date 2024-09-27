@@ -12,11 +12,11 @@ use sui::{
     test_utils::destroy,
     test_scenario::{Self as ts, Scenario, most_recent_id_for_address},
 };
-use kraken_multisig::{
-    multisig::{Self, Multisig},
+use kraken_account::{
+    account::{Self, Account},
     proposals::Proposal,
     executable::Executable,
-    account::{Self, Account},
+    user::{Self, User},
 };
 use kraken_actions::{
     owned,
@@ -36,8 +36,8 @@ const OWNER: address = @0xBABE;
 public struct World {
     scenario: Scenario,
     clock: Clock,
+    user: User,
     account: Account,
-    multisig: Multisig,
     kiosk: Kiosk,
     extensions: Extensions,
     cap: AdminCap,
@@ -50,50 +50,50 @@ public fun start_world(): World {
     extensions::init_for_testing(scenario.ctx());
 
     scenario.next_tx(OWNER);
-    let account = account::new(b"sam".to_string(), b"move_god.png".to_string(), scenario.ctx());
+    let user = user::new(b"sam".to_string(), b"move_god.png".to_string(), scenario.ctx());
     let cap = scenario.take_from_sender<AdminCap>();
     let mut extensions = scenario.take_shared<Extensions>();
 
-    // initialize Clock, Multisig, Extensions
+    // initialize Clock, Account, Extensions
     let clock = clock::create_for_testing(scenario.ctx());
-    extensions.add(&cap, b"KrakenMultisig".to_string(), @kraken_multisig, 1);
+    extensions.add(&cap, b"KrakenAccount".to_string(), @kraken_account, 1);
     extensions.add(&cap, b"KrakenActions".to_string(), @kraken_actions, 1);
-    let mut multisig = multisig::new(
+    let mut account = account::new(
         &extensions,
         b"Kraken".to_string(), 
-        object::id(&account), 
+        object::id(&user), 
         scenario.ctx()
     );
-    k_kiosk::new(&mut multisig, b"kiosk".to_string(), scenario.ctx());
+    k_kiosk::new(&mut account, b"kiosk".to_string(), scenario.ctx());
 
     scenario.next_tx(OWNER);
     let kiosk = scenario.take_shared<Kiosk>();
 
-    World { scenario, clock, account, multisig, kiosk, extensions, cap }
+    World { scenario, clock, user, account, kiosk, extensions, cap }
 }
 
 public fun end(world: World) {
     let World { 
         scenario, 
         clock, 
-        multisig, 
         account, 
+        user, 
         kiosk,
         extensions,
         cap
     } = world;
 
     destroy(clock);
+    destroy(user);
     destroy(account);
-    destroy(multisig);
     destroy(kiosk);
     destroy(extensions);
     destroy(cap);
     scenario.end();
 }
 
-public fun multisig(world: &mut World): &mut Multisig {
-    &mut world.multisig
+public fun account(world: &mut World): &mut Account {
+    &mut world.account
 }
 
 public fun clock(world: &mut World): &mut Clock {
@@ -108,8 +108,8 @@ public fun scenario(world: &mut World): &mut Scenario {
     &mut world.scenario
 }
 
-public fun last_id_for_multisig<T: key>(world: &World): ID {
-    most_recent_id_for_address<T>(world.multisig.addr()).extract()
+public fun last_id_for_account<T: key>(world: &World): ID {
+    most_recent_id_for_address<T>(world.account.addr()).extract()
 }
 
 public fun role(module_name: vector<u8>): String {
@@ -120,13 +120,13 @@ public fun role(module_name: vector<u8>): String {
     role
 }
 
-// === Multisig ===
+// === Account ===
 
-public fun new_multisig(world: &mut World): Multisig {
-    multisig::new(
+public fun new_account(world: &mut World): Account {
+    account::new(
         &world.extensions,
         b"kraken2".to_string(), 
-        object::id(&world.account), 
+        object::id(&world.user), 
         world.scenario.ctx()
     )
 }
@@ -140,7 +140,7 @@ public fun create_proposal<W: drop>(
     execution_time: u64, // timestamp in ms
     expiration_epoch: u64,
 ): &mut Proposal {
-    world.multisig.create_proposal(
+    world.account.create_proposal(
         auth_witness, 
         auth_name,
         key,
@@ -155,14 +155,14 @@ public fun approve_proposal(
     world: &mut World, 
     key: String, 
 ) {
-    world.multisig.approve_proposal(key, world.scenario.ctx());
+    world.account.approve_proposal(key, world.scenario.ctx());
 }
 
 public fun execute_proposal(
     world: &mut World, 
     key: String, 
 ): Executable {
-    world.multisig.execute_proposal(key, &world.clock)
+    world.account.execute_proposal(key, &world.clock)
 }
 
 // === Config ===
@@ -173,7 +173,7 @@ public fun propose_config_name(
     name: String
 ) {
     config::propose_config_name(
-        &mut world.multisig, 
+        &mut world.account, 
         key, 
         b"".to_string(), 
         0, 
@@ -194,7 +194,7 @@ public fun propose_config_rules(
     role_thresholds: vector<u64>,
 ) {
     config::propose_config_rules(
-        &mut world.multisig, 
+        &mut world.account, 
         key,
         b"".to_string(), 
         0, 
@@ -217,7 +217,7 @@ public fun propose_config_deps(
     versions: vector<u64>,
 ) {
     config::propose_config_deps(
-        &mut world.multisig,
+        &mut world.account,
         key,
         b"".to_string(), 
         0, 
@@ -233,7 +233,7 @@ public fun propose_config_deps(
 // === Currency ===
 
 public fun lock_treasury_cap<C: drop>(world: &mut World, cap: TreasuryCap<C>) {
-    currency::lock_cap(&mut world.multisig, cap, world.scenario.ctx());
+    currency::lock_cap(&mut world.account, cap, world.scenario.ctx());
 }
 
 public fun propose_mint<C: drop>(
@@ -242,7 +242,7 @@ public fun propose_mint<C: drop>(
     amount: u64
 ) {
     currency::propose_mint<C>(
-        &mut world.multisig, 
+        &mut world.account, 
         key, 
         b"".to_string(), 
         0, 
@@ -256,7 +256,7 @@ public fun execute_mint<C: drop>(
     world: &mut World,
     executable: Executable,
 ) {
-    currency::execute_mint<C>(executable, &mut world.multisig, world.scenario.ctx());
+    currency::execute_mint<C>(executable, &mut world.account, world.scenario.ctx());
 }
 
 public fun propose_burn<C: drop>(
@@ -266,7 +266,7 @@ public fun propose_burn<C: drop>(
     amount: u64,
 ) {
     currency::propose_burn<C>(
-        &mut world.multisig, 
+        &mut world.account, 
         key, 
         b"".to_string(), 
         0, 
@@ -286,7 +286,7 @@ public fun propose_update<C: drop>(
     icon_url: Option<String>,
 ) {
     currency::propose_update<C>(
-        &mut world.multisig,
+        &mut world.account,
         key,
         b"".to_string(), 
         0, 
@@ -306,7 +306,7 @@ public fun propose_transfer_minted<C: drop>(
     recipients: vector<address>,
 ) {
     currency::propose_transfer<C>(
-        &mut world.multisig, 
+        &mut world.account, 
         key, 
         b"".to_string(), 
         0, 
@@ -326,7 +326,7 @@ public fun propose_pay_minted<C: drop>(
     recipient: address,
 ) {
     currency::propose_pay<C>(
-        &mut world.multisig,
+        &mut world.account,
         key,
         b"".to_string(), 
         0, 
@@ -343,7 +343,7 @@ public fun execute_pay_minted<C: drop>(
     world: &mut World,
     executable: Executable, 
 ) {
-    currency::execute_pay<C>(executable, &mut world.multisig, world.scenario.ctx());
+    currency::execute_pay<C>(executable, &mut world.account, world.scenario.ctx());
 }
 
 // === Kiosk ===
@@ -357,7 +357,7 @@ public fun place<T: key + store>(
     policy: &mut TransferPolicy<T>,
 ): TransferRequest<T> {
     k_kiosk::place(
-        &mut world.multisig,
+        &mut world.account,
         &mut world.kiosk,
         sender_kiosk,
         sender_cap,
@@ -376,7 +376,7 @@ public fun propose_take(
     recipient: address,
 ) {
     k_kiosk::propose_take(
-        &mut world.multisig,
+        &mut world.account,
         key,
         b"".to_string(), 
         0, 
@@ -397,7 +397,7 @@ public fun execute_take<T: key + store>(
 ): TransferRequest<T> {
     k_kiosk::execute_take(
         executable,
-        &mut world.multisig,
+        &mut world.account,
         &mut world.kiosk,
         recipient_kiosk,
         recipient_cap,
@@ -414,7 +414,7 @@ public fun propose_list(
     prices: vector<u64>
 ) {
     k_kiosk::propose_list(
-        &mut world.multisig,
+        &mut world.account,
         key,
         b"".to_string(), 
         0, 
@@ -430,7 +430,7 @@ public fun execute_list<T: key + store>(
     world: &mut World,
     executable: &mut Executable,
 ) {
-    k_kiosk::execute_list<T>(executable, &mut world.multisig, &mut world.kiosk);
+    k_kiosk::execute_list<T>(executable, &mut world.account, &mut world.kiosk);
 }
 
 // === Owned ===
@@ -441,7 +441,7 @@ public fun withdraw<O: key + store, W: copy + drop>(
     receiving: Receiving<O>,
     witness: W,
 ): O {
-    owned::withdraw<O, W>(executable, &mut world.multisig, receiving, witness)
+    owned::withdraw<O, W>(executable, &mut world.account, receiving, witness)
 }
 
 public fun borrow<O: key + store, W: copy + drop>(
@@ -450,7 +450,7 @@ public fun borrow<O: key + store, W: copy + drop>(
     receiving: Receiving<O>,
     witness: W,
 ): O {
-    owned::borrow<O, W>(executable, &mut world.multisig, receiving, witness)
+    owned::borrow<O, W>(executable, &mut world.account, receiving, witness)
 }
 
 public fun put_back<O: key + store, W: copy + drop>(
@@ -459,7 +459,7 @@ public fun put_back<O: key + store, W: copy + drop>(
     returned: O,
     witness: W,
 ) {
-    owned::put_back<O, W>(executable, &world.multisig, returned, witness);
+    owned::put_back<O, W>(executable, &world.account, returned, witness);
 }
 
 public fun propose_transfer_owned(
@@ -469,7 +469,7 @@ public fun propose_transfer_owned(
     recipients: vector<address>
 ) {
     owned::propose_transfer(
-        &mut world.multisig, 
+        &mut world.account, 
         key, 
         b"".to_string(), 
         0, 
@@ -489,7 +489,7 @@ public fun propose_pay_owned(
     recipient: address,
 ) {
     owned::propose_pay(
-        &mut world.multisig,
+        &mut world.account,
         key,
         b"".to_string(), 
         0, 
@@ -507,7 +507,7 @@ public fun execute_pay_owned<C: drop>(
     executable: Executable, 
     receiving: Receiving<Coin<C>>,
 ) {
-    owned::execute_pay<C>(executable, &mut world.multisig, receiving, world.scenario.ctx());
+    owned::execute_pay<C>(executable, &mut world.account, receiving, world.scenario.ctx());
 }
 
 // === Payments ===
@@ -516,7 +516,7 @@ public fun cancel_payment_stream<C: drop>(
     world: &mut World,
     stream: Stream<C>,
 ) {
-    payments::cancel_payment_stream(stream, &world.multisig, world.scenario.ctx());
+    payments::cancel_payment_stream(stream, &world.account, world.scenario.ctx());
 }
 
 // === Treasury ===
@@ -527,7 +527,7 @@ public fun deposit<C: drop>(
     amount: u64,
 ) {
     treasury::deposit<C>(
-        &mut world.multisig, 
+        &mut world.account, 
         name, 
         coin::mint_for_testing<C>(amount, world.scenario.ctx()), 
         world.scenario.ctx()
@@ -538,7 +538,7 @@ public fun close(
     world: &mut World,
     name: String,
 ) {
-    treasury::close(&mut world.multisig, name, world.scenario.ctx());
+    treasury::close(&mut world.account, name, world.scenario.ctx());
 }
 
 public fun propose_open(
@@ -547,7 +547,7 @@ public fun propose_open(
     name: String,
 ) {
     treasury::propose_open(
-        &mut world.multisig, 
+        &mut world.account, 
         key,
         b"".to_string(), 
         0, 
@@ -561,7 +561,7 @@ public fun execute_open(
     world: &mut World,
     executable: Executable,
 ) {
-    treasury::execute_open(executable, &mut world.multisig, world.scenario.ctx());
+    treasury::execute_open(executable, &mut world.account, world.scenario.ctx());
 }
 
 public fun propose_transfer_treasury(
@@ -573,7 +573,7 @@ public fun propose_transfer_treasury(
     recipients: vector<address>,
 ) {
     treasury::propose_transfer(
-        &mut world.multisig, 
+        &mut world.account, 
         key, 
         b"".to_string(), 
         0, 
@@ -597,7 +597,7 @@ public fun propose_pay_treasury(
     recipient: address,
 ) {
     treasury::propose_pay(
-        &mut world.multisig,
+        &mut world.account,
         key,
         b"".to_string(), 
         0, 
@@ -616,7 +616,7 @@ public fun execute_pay_treasury<C: drop>(
     world: &mut World,
     executable: Executable, 
 ) {
-    treasury::execute_pay<C>(executable, &mut world.multisig, world.scenario.ctx());
+    treasury::execute_pay<C>(executable, &mut world.account, world.scenario.ctx());
 }
 
 // === Upgrade Policies ===
@@ -626,7 +626,7 @@ public fun lock_cap(
     upgrade_lock: UpgradeLock,
     label: String,
 ) {
-    upgrade_lock.lock_cap(&mut world.multisig, label, world.scenario.ctx());
+    upgrade_lock.lock_cap(&mut world.account, label, world.scenario.ctx());
 }
 
 public fun lock_cap_with_timelock(
@@ -635,7 +635,7 @@ public fun lock_cap_with_timelock(
     delay_ms: u64,
     upgrade_cap: UpgradeCap
 ) {
-    upgrade_policies::lock_cap_with_timelock(&mut world.multisig, label, delay_ms, upgrade_cap, world.scenario.ctx());
+    upgrade_policies::lock_cap_with_timelock(&mut world.account, label, delay_ms, upgrade_cap, world.scenario.ctx());
 }
 
 public fun propose_upgrade(
@@ -645,7 +645,7 @@ public fun propose_upgrade(
     digest: vector<u8>,
 ) {
     upgrade_policies::propose_upgrade(
-        &mut world.multisig, 
+        &mut world.account, 
         key, 
         b"".to_string(), 
         0, 
@@ -663,7 +663,7 @@ public fun propose_restrict(
     policy: u8,
 ) {
     upgrade_policies::propose_restrict(
-        &mut world.multisig, 
+        &mut world.account, 
         key, 
         b"".to_string(),
         0, 
