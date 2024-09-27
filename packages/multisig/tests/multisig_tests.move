@@ -72,10 +72,8 @@ fun test_approve_proposal() {
     let mut world = start_world();
     let key = b"key".to_string();
 
-    let alice = members::new_member(ALICE, 1, option::none(), vector[]);
-    let bob = members::new_member(BOB, 1, option::none(), vector[]);
-    world.multisig().members_mut_for_testing().add(alice);
-    world.multisig().members_mut_for_testing().add(bob);
+    world.multisig().members_mut_for_testing().add(ALICE, 1, option::none(), vector[]);
+    world.multisig().members_mut_for_testing().add(BOB, 1, option::none(), vector[]);
 
     world.multisig().member_mut(ALICE).set_weight(2);
     world.multisig().member_mut(BOB).set_weight(3);
@@ -102,10 +100,8 @@ fun test_remove_approval() {
     let mut world = start_world();
     let key = b"key".to_string();
 
-    let alice = members::new_member(ALICE, 1, option::none(), vector[]);
-    let bob = members::new_member(BOB, 1, option::none(), vector[]);
-    world.multisig().members_mut_for_testing().add(alice);
-    world.multisig().members_mut_for_testing().add(bob);
+    world.multisig().members_mut_for_testing().add(ALICE, 1, option::none(), vector[]);
+    world.multisig().members_mut_for_testing().add(BOB, 1, option::none(), vector[]);
 
     world.multisig().member_mut(ALICE).set_weight(2);
     world.multisig().member_mut(BOB).set_weight(3);
@@ -163,10 +159,8 @@ fun test_execute_proposal_error_cant_be_executed_yet() {
     let mut world = start_world();
     let key = b"key".to_string();
 
-    let alice = members::new_member(ALICE, 2, option::none(), vector[]);
-    let bob = members::new_member(BOB, 3, option::none(), vector[]);
-    world.multisig().members_mut_for_testing().add(alice);
-    world.multisig().members_mut_for_testing().add(bob);
+    world.multisig().members_mut_for_testing().add(ALICE, 2, option::none(), vector[]);
+    world.multisig().members_mut_for_testing().add(BOB, 3, option::none(), vector[]);
 
     world.create_proposal(Witness {}, b"".to_string(), key, b"".to_string(), 5, 0);
     world.approve_proposal(key);

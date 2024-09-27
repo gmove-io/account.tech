@@ -28,10 +28,8 @@ fun test_members_end_to_end() {
     assert!(!world.multisig().members().is_member(ALICE));
     assert!(!world.multisig().members().is_member(BOB));
 
-    let alice = members::new_member(ALICE, 2, option::none(), vector[]);
-    world.multisig().members_mut_for_testing().add(alice);
-    let bob = members::new_member(BOB, 3, option::none(), vector[]);
-    world.multisig().members_mut_for_testing().add(bob);
+    world.multisig().members_mut_for_testing().add(ALICE, 2, option::none(), vector[]);
+    world.multisig().members_mut_for_testing().add(BOB, 3, option::none(), vector[]);
 
     assert!(world.multisig().members().is_member(ALICE));
     assert!(world.multisig().members().is_member(BOB));

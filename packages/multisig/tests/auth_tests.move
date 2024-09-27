@@ -27,10 +27,8 @@ fun test_action_mut_error_not_witness_module() {
     let mut world = start_world();
     let key = b"key".to_string();
 
-    let alice = members::new_member(ALICE, 2, option::none(), vector[]);
-    let bob = members::new_member(BOB, 3, option::none(), vector[]);
-    world.multisig().members_mut_for_testing().add(alice);
-    world.multisig().members_mut_for_testing().add(bob);
+    world.multisig().members_mut_for_testing().add(ALICE, 2, option::none(), vector[]);
+    world.multisig().members_mut_for_testing().add(BOB, 3, option::none(), vector[]);
 
     let proposal = world.create_proposal(Witness {}, b"".to_string(), key, b"".to_string(), 0, 0);
     proposal.add_action(Action { value: 1 });
@@ -48,11 +46,8 @@ fun test_assert_multisig_executed_error_not_multisig_executable() {
     let mut world = start_world();
     let key = b"key".to_string();
 
-    let alice = members::new_member(ALICE, 2, option::none(), vector[]);
-    let bob = members::new_member(BOB, 3, option::none(), vector[]);
-
-    world.multisig().members_mut_for_testing().add(alice);
-    world.multisig().members_mut_for_testing().add(bob);
+    world.multisig().members_mut_for_testing().add(ALICE, 2, option::none(), vector[]);
+    world.multisig().members_mut_for_testing().add(BOB, 3, option::none(), vector[]);
 
     let proposal = world.create_proposal(Witness {}, b"".to_string(), key, b"".to_string(), 0, 0);
     proposal.add_action(Action { value: 1 });

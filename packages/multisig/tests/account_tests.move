@@ -38,8 +38,7 @@ fun test_leave_multisig() {
 
     world.scenario().next_tx(ALICE);
     let mut user_account = account::new(b"Alice".to_string(), b"Alice.png".to_string(), world.scenario().ctx());
-    let member = members::new_member(ALICE, 1, option::none(), vector[]);
-    world.multisig().members_mut_for_testing().add(member);
+    world.multisig().members_mut_for_testing().add(ALICE, 1, option::none(), vector[]);
     
     world.join_multisig(&mut user_account);
     assert!(user_account.multisig_ids() == vector[object::id(world.multisig())]);
@@ -57,8 +56,7 @@ fun test_accept_invite() {
 
     world.scenario().next_tx(ALICE);
     let mut user_account = account::new(b"Alice".to_string(), b"Alice.png".to_string(), world.scenario().ctx());
-    let member = members::new_member(ALICE, 1, option::none(), vector[]);
-    world.multisig().members_mut_for_testing().add(member);
+    world.multisig().members_mut_for_testing().add(ALICE, 1, option::none(), vector[]);
     assert!(user_account.multisig_ids() == vector[]);
     world.send_invite(ALICE);
 
@@ -78,8 +76,7 @@ fun test_refuse_invite() {
 
     world.scenario().next_tx(ALICE);
     let user_account = account::new(b"Alice".to_string(), b"Alice.png".to_string(), world.scenario().ctx());
-    let member = members::new_member(ALICE, 1, option::none(), vector[]);
-    world.multisig().members_mut_for_testing().add(member);
+    world.multisig().members_mut_for_testing().add(ALICE, 1, option::none(), vector[]);
     assert!(user_account.multisig_ids() == vector[]);
     world.send_invite(ALICE);
 
