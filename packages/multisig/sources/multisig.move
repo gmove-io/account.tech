@@ -20,6 +20,7 @@ use sui::{
     transfer::Receiving,
     clock::Clock, 
     dynamic_field as df,
+    bag::Bag,
 };
 use kraken_multisig::{
     auth,
@@ -162,20 +163,18 @@ public fun execute_proposal(
     executable::new(auth, actions)
 }
 
-// TODO: manage actions in bag (drop?)
-// removes a proposal if it has expired
-// public fun delete_proposal(
-//     multisig: &mut Multisig, 
-//     key: String, 
-//     ctx: &mut TxContext
-// ): Bag {
-//     let (_, proposal) = multisig.proposals.remove(&key);
-//     assert!(proposal.expiration_epoch() <= ctx.epoch(), EHasntExpired);
-//     let (auth, actions) = proposal.destroy();
-//     multisig.deps.assert_version(&auth, VERSION);
+/// Removes a proposal if it has expired
+/// Needs to delete each action in the bag within their own module
+public fun delete_proposal(
+    multisig: &mut Multisig, 
+    key: String, 
+    ctx: &mut TxContext
+): Bag {
+    let (auth, actions) = multisig.proposals.delete(key, ctx);
+    multisig.deps.assert_version(&auth, VERSION);
 
-//     actions
-// }
+    actions
+}
 
 // === View functions ===
 

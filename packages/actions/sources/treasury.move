@@ -226,3 +226,14 @@ public fun spend_is_executed(executable: &Executable): bool {
     let spend: &SpendAction = executable.action();
     spend.coins_amounts_map.is_empty()
 }
+
+// === [CORE DEPS] Public functions ===
+
+public fun delete_spend_action<W: copy + drop>(
+    action: SpendAction, 
+    multisig: &Multisig, 
+    witness: W
+) {
+    multisig.deps().assert_core_dep(witness);
+    let SpendAction { .. } = action;
+}

@@ -102,3 +102,23 @@ public fun destroy_borrow<W: copy + drop>(executable: &mut Executable, witness: 
     let ReturnAction { to_return } = executable.remove_action(witness);
     assert!(to_return.is_empty(), EReturnAllObjectsBefore);
 }
+
+// === [CORE DEPS] Public functions ===
+
+public fun delete_withdraw_action<W: copy + drop>(
+    action: WithdrawAction, 
+    multisig: &Multisig, 
+    witness: W
+) {
+    multisig.deps().assert_core_dep(witness);
+    let WithdrawAction { .. } = action;
+}
+
+public fun delete_return_action<W: copy + drop>(
+    action: ReturnAction, 
+    multisig: &Multisig, 
+    witness: W
+) {
+    multisig.deps().assert_core_dep(witness);
+    let ReturnAction { .. } = action;
+}

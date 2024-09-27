@@ -319,6 +319,17 @@ public fun destroy_transfer_coin<C: drop, W: copy + drop>(
     assert!(recipient == @0xF, ETransferNotExecuted);
 }
 
+// === [CORE DEPS] Public functions ===
+
+public fun delete_transfer_action<W: copy + drop>(
+    action: TransferAction, 
+    multisig: &Multisig, 
+    witness: W
+) {
+    multisig.deps().assert_core_dep(witness);
+    let TransferAction { .. } = action;
+}
+
 // === Private functions ===
 
 fun is_withdraw<C: drop>(executable: &Executable): bool {

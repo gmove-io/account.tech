@@ -335,6 +335,19 @@ public fun destroy_restrict<W: copy + drop>(executable: &mut Executable, witness
     assert!(policy == 0, ERestrictNotExecuted);
 }
 
+// === [CORE DEPS] Public functions ===
+
+public fun delete_upgrade_action<W: copy + drop>(
+    action: UpgradeAction, 
+    multisig: &Multisig, 
+    witness: W
+) {
+    multisig.deps().assert_core_dep(witness);
+    let UpgradeAction { .. } = action;
+}
+
+// === Private Functions ===
+
 fun time_delay(lock: &UpgradeLock): u64 {
     if (lock.has_rule(TimeLockKey {})) {
         let timelock: &TimeLock = df::borrow(&lock.id, TimeLockKey {});

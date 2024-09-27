@@ -323,3 +323,23 @@ public fun destroy_list<W: copy + drop>(executable: &mut Executable, witness: W)
     let ListAction { nfts_prices_map, .. } = executable.remove_action(witness);
     assert!(nfts_prices_map.is_empty(), EListAllNftsBefore);
 }
+
+// === [CORE DEPS] Public functions ===
+
+public fun delete_take_action<W: copy + drop>(
+    action: TakeAction, 
+    multisig: &Multisig, 
+    witness: W
+) {
+    multisig.deps().assert_core_dep(witness);
+    let TakeAction { .. } = action;
+}
+
+public fun delete_list_action<W: copy + drop>(
+    action: ListAction, 
+    multisig: &Multisig, 
+    witness: W
+) {
+    multisig.deps().assert_core_dep(witness);
+    let ListAction { .. } = action;
+}

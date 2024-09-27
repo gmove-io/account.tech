@@ -279,6 +279,17 @@ public fun config_deps<W: copy + drop>(
     *multisig.deps_mut(executable, witness) = inner;
 }
 
+// === [CORE DEPS] Public functions ===
+
+public fun delete_config_action<T: drop, W: copy + drop>(
+    action: ConfigAction<T>, 
+    multisig: &Multisig,
+    witness: W,
+) {
+    multisig.deps().assert_core_dep(witness);
+    let ConfigAction { .. } = action;
+}
+
 // === Private functions ===
 
 fun verify_new_rules(

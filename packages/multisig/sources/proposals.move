@@ -22,6 +22,7 @@ const EAlreadyApproved: u64 = 0;
 const ENotApproved: u64 = 1;
 const EProposalNotFound: u64 = 2;
 const EProposalKeyAlreadyExists: u64 = 3;
+const EHasntExpired: u64 = 4;
 
 // === Events ===
 
@@ -206,6 +207,18 @@ public(package) fun remove(
         key,
         description,
     });
+
+    (auth, actions)
+}
+
+public(package) fun delete(
+    proposals: &mut Proposals,
+    key: String,
+    ctx: &TxContext
+): (Auth, Bag) {
+    let idx = proposals.get_idx(key);
+    let Proposal { auth, expiration_epoch, actions, .. } = proposals.inner.remove(idx);
+    assert!(expiration_epoch <= ctx.epoch(), EHasntExpired);
 
     (auth, actions)
 }

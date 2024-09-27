@@ -329,6 +329,17 @@ public fun recipient<C: drop>(self: &Stream<C>): address {
     self.recipient
 }
 
+// === [CORE DEPS] Public functions ===
+
+public fun delete_pay_action<W: copy + drop>(
+    action: PayAction, 
+    multisig: &Multisig, 
+    witness: W
+) {
+    multisig.deps().assert_core_dep(witness);
+    let PayAction { .. } = action;
+}
+
 // === Private functions ===
 
 // retrieves an object from the Multisig owned or managed assets 

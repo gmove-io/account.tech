@@ -337,6 +337,37 @@ public fun destroy_update<C: drop, W: copy + drop>(executable: &mut Executable, 
     assert!(name.is_none() && symbol.is_none() && description.is_none() && icon_url.is_none(), EUpdateNotExecuted);
 }
 
+// === [CORE DEPS] Public functions ===
+
+public fun delete_mint_action<C: drop, W: copy + drop>(
+    action: MintAction<C>, 
+    multisig: &Multisig,
+    witness: W,
+) {
+    multisig.deps().assert_core_dep(witness);
+    let MintAction { .. } = action;
+}
+
+public fun delete_burn_action<C: drop, W: copy + drop>(
+    action: BurnAction<C>, 
+    multisig: &Multisig,
+    witness: W,
+) {
+    multisig.deps().assert_core_dep(witness);
+    let BurnAction { .. } = action;
+}
+
+public fun delete_update_action<C: drop, W: copy + drop>(
+    action: UpdateAction<C>, 
+    multisig: &Multisig,
+    witness: W,
+) {
+    multisig.deps().assert_core_dep(witness);
+    let UpdateAction { .. } = action;
+}
+
+// === Private functions ===
+
 fun type_to_name<T: drop>(): String {
     type_name::get<T>().into_string().to_string()
 }
