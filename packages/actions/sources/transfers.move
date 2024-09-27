@@ -13,7 +13,6 @@ use kraken_multisig::{
 // === Errors ===
 
 const ETransferNotExecuted: u64 = 0;
-const EDifferentLength: u64 = 1;
 
 // === Structs ===
 

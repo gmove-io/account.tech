@@ -284,7 +284,7 @@ public fun execute_transfer<C: drop>(
 ) {
     let coin: Coin<C> = mint(executable, multisig, TransferProposal {}, ctx);
 
-    let is_executed = false;
+    let mut is_executed = false;
     let mint: &MintAction<C> = executable.action();
 
     if (mint.amount == 0) {

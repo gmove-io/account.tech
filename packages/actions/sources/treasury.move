@@ -183,7 +183,7 @@ public fun propose_transfer(
     treasury_name: String,
     coin_types: vector<vector<String>>,
     coin_amounts: vector<vector<u64>>,
-    recipients: vector<address>,
+    mut recipients: vector<address>,
     ctx: &mut TxContext
 ) {
     assert!(coin_amounts.length() == coin_types.length(), EDifferentLength);
@@ -214,7 +214,7 @@ public fun execute_transfer<C: drop>(
 ) {
     let coin: Coin<C> = spend(executable, multisig, TransferProposal {}, ctx);
 
-    let is_executed = false;
+    let mut is_executed = false;
     let spend: &SpendAction = executable.action();
 
     if (spend.coins_amounts_map.is_empty()) {
@@ -231,7 +231,7 @@ public fun execute_transfer<C: drop>(
 }
 
 // step 1(bis): same but from a treasury
-public fun propose_pay_treasury(
+public fun propose_pay(
     multisig: &mut Multisig, 
     key: String,
     description: String,

@@ -299,6 +299,53 @@ public fun propose_update<C: drop>(
     );
 }
 
+public fun propose_transfer_minted<C: drop>(
+    world: &mut World, 
+    key: String,
+    amounts: vector<u64>,
+    recipients: vector<address>,
+) {
+    currency::propose_transfer<C>(
+        &mut world.multisig, 
+        key, 
+        b"".to_string(), 
+        0, 
+        0, 
+        amounts,
+        recipients, 
+        world.scenario.ctx()
+    );
+}
+
+public fun propose_pay_minted<C: drop>(
+    world: &mut World,
+    key: String,
+    coin_amount: u64,
+    amount: u64, // amount to be paid at each interval
+    interval: u64, // number of epochs between each payment
+    recipient: address,
+) {
+    currency::propose_pay<C>(
+        &mut world.multisig,
+        key,
+        b"".to_string(), 
+        0, 
+        0, 
+        coin_amount,
+        amount,
+        interval,
+        recipient,
+        world.scenario.ctx()
+    );
+}
+
+public fun execute_pay_minted<C: drop>(
+    world: &mut World,
+    executable: Executable, 
+) {
+    currency::execute_pay<C>(executable, &mut world.multisig, world.scenario.ctx());
+}
+
 // === Kiosk ===
 
 public fun place<T: key + store>(
@@ -415,7 +462,23 @@ public fun put_back<O: key + store, W: copy + drop>(
     owned::put_back<O, W>(executable, &world.multisig, returned, witness);
 }
 
-// === Payments ===
+public fun propose_transfer_owned(
+    world: &mut World, 
+    key: String,
+    objects: vector<vector<ID>>,
+    recipients: vector<address>
+) {
+    owned::propose_transfer(
+        &mut world.multisig, 
+        key, 
+        b"".to_string(), 
+        0, 
+        0, 
+        objects, 
+        recipients, 
+        world.scenario.ctx()
+    );
+}
 
 public fun propose_pay_owned(
     world: &mut World,
@@ -425,7 +488,7 @@ public fun propose_pay_owned(
     interval: u64, // number of epochs between each payment
     recipient: address,
 ) {
-    payments::propose_pay_owned(
+    owned::propose_pay(
         &mut world.multisig,
         key,
         b"".to_string(), 
@@ -439,145 +502,21 @@ public fun propose_pay_owned(
     );
 }
 
-public fun propose_pay_treasury(
-    world: &mut World,
-    key: String,
-    treasury_name: String, 
-    coin_type: String, 
-    coin_amount: u64, 
-    amount: u64, // amount to be paid at each interval
-    interval: u64, // number of epochs between each payment
-    recipient: address,
-) {
-    payments::propose_pay_treasury(
-        &mut world.multisig,
-        key,
-        b"".to_string(), 
-        0, 
-        0, 
-        treasury_name,
-        coin_type,
-        coin_amount,
-        amount,
-        interval,
-        recipient,
-        world.scenario.ctx()
-    );
-}
-
-public fun propose_pay_minted<C: drop>(
-    world: &mut World,
-    key: String,
-    coin_amount: u64,
-    amount: u64, // amount to be paid at each interval
-    interval: u64, // number of epochs between each payment
-    recipient: address,
-) {
-    payments::propose_pay_minted<C>(
-        &mut world.multisig,
-        key,
-        b"".to_string(), 
-        0, 
-        0, 
-        coin_amount,
-        amount,
-        interval,
-        recipient,
-        world.scenario.ctx()
-    );
-}
-
-public fun execute_pay<C: drop>(
+public fun execute_pay_owned<C: drop>(
     world: &mut World,
     executable: Executable, 
-    receiving: Option<Receiving<Coin<C>>>
+    receiving: Receiving<Coin<C>>,
 ) {
-    payments::execute_pay<C>(executable, &mut world.multisig, receiving, world.scenario.ctx());
+    owned::execute_pay<C>(executable, &mut world.multisig, receiving, world.scenario.ctx());
 }
+
+// === Payments ===
 
 public fun cancel_payment_stream<C: drop>(
     world: &mut World,
     stream: Stream<C>,
 ) {
     payments::cancel_payment_stream(stream, &world.multisig, world.scenario.ctx());
-}
-
-// === Transfers ===
-
-public fun propose_transfer_objects(
-    world: &mut World, 
-    key: String,
-    objects: vector<vector<ID>>,
-    recipients: vector<address>
-) {
-    transfers::propose_transfer_objects(
-        &mut world.multisig, 
-        key, 
-        b"".to_string(), 
-        0, 
-        0, 
-        objects, 
-        recipients, 
-        world.scenario.ctx()
-    );
-}
-
-public fun propose_transfer_coin_owned(
-    world: &mut World, 
-    key: String,
-    objects: vector<vector<ID>>,
-    recipients: vector<address>
-) {
-    transfers::propose_transfer_coin_owned(
-        &mut world.multisig, 
-        key, 
-        b"".to_string(), 
-        0, 
-        0, 
-        objects, 
-        recipients, 
-        world.scenario.ctx()
-    );
-}
-
-public fun propose_transfer_coin_treasury(
-    world: &mut World, 
-    key: String,
-    treasury_name: String,
-    coin_types: vector<vector<String>>,
-    coin_amounts: vector<vector<u64>>,
-    recipients: vector<address>,
-) {
-    transfers::propose_transfer_coin_treasury(
-        &mut world.multisig, 
-        key, 
-        b"".to_string(), 
-        0, 
-        0, 
-        treasury_name,
-        coin_types,
-        coin_amounts,
-        recipients, 
-        world.scenario.ctx()
-    );
-}
-
-public fun propose_transfer_coin_minted<C: drop>(
-    world: &mut World, 
-    key: String,
-    amounts: vector<u64>,
-    recipients: vector<address>,
-) {
-    transfers::propose_transfer_coin_minted<C>(
-        &mut world.multisig, 
-        key, 
-        b"".to_string(), 
-        0, 
-        0, 
-        amounts,
-        recipients, 
-        world.scenario.ctx()
-    );
 }
 
 // === Treasury ===
@@ -623,6 +562,61 @@ public fun execute_open(
     executable: Executable,
 ) {
     treasury::execute_open(executable, &mut world.multisig, world.scenario.ctx());
+}
+
+public fun propose_transfer_treasury(
+    world: &mut World, 
+    key: String,
+    treasury_name: String,
+    coin_types: vector<vector<String>>,
+    coin_amounts: vector<vector<u64>>,
+    recipients: vector<address>,
+) {
+    treasury::propose_transfer(
+        &mut world.multisig, 
+        key, 
+        b"".to_string(), 
+        0, 
+        0, 
+        treasury_name,
+        coin_types,
+        coin_amounts,
+        recipients, 
+        world.scenario.ctx()
+    );
+}
+
+public fun propose_pay_treasury(
+    world: &mut World,
+    key: String,
+    treasury_name: String, 
+    coin_type: String, 
+    coin_amount: u64, 
+    amount: u64, // amount to be paid at each interval
+    interval: u64, // number of epochs between each payment
+    recipient: address,
+) {
+    treasury::propose_pay(
+        &mut world.multisig,
+        key,
+        b"".to_string(), 
+        0, 
+        0, 
+        treasury_name,
+        coin_type,
+        coin_amount,
+        amount,
+        interval,
+        recipient,
+        world.scenario.ctx()
+    );
+}
+
+public fun execute_pay_treasury<C: drop>(
+    world: &mut World,
+    executable: Executable, 
+) {
+    treasury::execute_pay<C>(executable, &mut world.multisig, world.scenario.ctx());
 }
 
 // === Upgrade Policies ===
