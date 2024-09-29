@@ -232,8 +232,8 @@ public fun propose_config_deps(
 
 // === Currency ===
 
-public fun lock_treasury_cap<C: drop>(world: &mut World, cap: TreasuryCap<C>) {
-    currency::lock_cap(&mut world.account, cap, world.scenario.ctx());
+public fun lock_treasury_cap<C: drop>(world: &mut World, cap: TreasuryCap<C>, can_mint: bool) {
+    currency::lock_cap(&mut world.account, cap, can_mint, world.scenario.ctx());
 }
 
 public fun propose_mint<C: drop>(

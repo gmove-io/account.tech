@@ -27,7 +27,7 @@ fun test_mint_end_to_end() {
     let key = b"mint proposal".to_string();
 
     let cap = coin::create_treasury_cap_for_testing<SUI>(world.scenario().ctx()); 
-    world.lock_treasury_cap(cap);
+    world.lock_treasury_cap(cap, true);
 
     world.scenario().next_tx(OWNER);
     world.propose_mint<SUI>(key, 100);
@@ -55,7 +55,7 @@ fun test_burn_end_to_end() {
 
     world.scenario().next_tx(OWNER);
     let receiving_coin = most_recent_receiving_ticket(&world.account().addr().to_id());
-    world.lock_treasury_cap(cap);
+    world.lock_treasury_cap(cap, true);
     
     world.scenario().next_tx(OWNER);
     world.propose_burn<SUI>(key, receiving_coin.receiving_object_id(), 100);
@@ -81,7 +81,7 @@ fun test_update_metadata_end_to_end() {
         option::none(), 
         world.scenario().ctx()
     );
-    world.lock_treasury_cap(treasury_cap);
+    world.lock_treasury_cap(treasury_cap, true);
 
     world.scenario().next_tx(OWNER);
     world.propose_update<CURRENCY_TESTS>(
@@ -119,7 +119,7 @@ fun test_update_error_no_change() {
         option::none(), 
         world.scenario().ctx()
     );
-    world.lock_treasury_cap(treasury_cap);
+    world.lock_treasury_cap(treasury_cap, true);
 
     world.scenario().next_tx(OWNER);
     world.propose_update<CURRENCY_TESTS>(
@@ -149,7 +149,7 @@ fun test_burn_error_wrong_value() {
     
     world.scenario().next_tx(OWNER);
     let receiving_coin = most_recent_receiving_ticket(&world.account().addr().to_id());
-    world.lock_treasury_cap(cap);
+    world.lock_treasury_cap(cap, true);
 
     world.scenario().next_tx(OWNER);
     world.propose_burn<SUI>(key, receiving_coin.receiving_object_id(), 100);
@@ -167,7 +167,7 @@ fun test_destroy_mint_error_mint_not_executed() {
     let key = b"mint proposal".to_string();
 
     let cap = coin::create_treasury_cap_for_testing<SUI>(world.scenario().ctx()); 
-    world.lock_treasury_cap(cap);
+    world.lock_treasury_cap(cap, true);
 
     world.scenario().next_tx(OWNER);
     let mut proposal = world.create_proposal(
@@ -178,7 +178,7 @@ fun test_destroy_mint_error_mint_not_executed() {
         0, 
         0, 
     );
-    currency::new_mint<SUI, Witness>(&mut proposal, 100, Witness {});
+    currency::new_mint<SUI, Witness>(&mut proposal, currency::borrow_lock<SUI>(world.account()), 100, Witness {});
     world.account().add_proposal(proposal, Witness {});
     world.approve_proposal(key);
 
@@ -201,7 +201,7 @@ fun test_destroy_burn_error_burn_not_executed() {
 
     world.scenario().next_tx(OWNER);
     let receiving_coin = most_recent_receiving_ticket(&world.account().addr().to_id());
-    world.lock_treasury_cap(cap);
+    world.lock_treasury_cap(cap, true);
 
     let mut proposal = world.create_proposal(
         Witness {},

@@ -116,7 +116,7 @@ Furthermore, the `AccountProtocol` shouldn't need to be upgraded since its funct
 
 1. **Config**: Enables the modification of the Account settings such as member addition or removal, threshold changes, roles addition, and name update, as well as the Account dependency management.
 
-2. **Currency**: Allows creators to lock a TreasuryCap and limit its permissions. Members can mint coins and use them in transfers or payments.
+2. **Currency**: Allows creators to lock a TreasuryCap and limit its permissions. Members can mint coins and use them in transfers or payments. Mint can be disabled upon lock.
 
 3. **Kiosk**: Handles the creation of a Kiosk, which is a container for NFTs owned by the Account. The Kiosk module can be used to move NFTs between the Account and other Kiosks. NFTs can listed and delisted from the Kiosk and profits can be withdrawn. Each Kiosk has a matching role that can be assign to members.
 

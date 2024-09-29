@@ -38,6 +38,7 @@ const EMintNotExecuted: u64 = 3;
 const EBurnNotExecuted: u64 = 4;
 const ENoLock: u64 = 5;
 const EDifferentLength: u64 = 6;
+const EMintDisabled: u64 = 7;
 
 // === Events ===
 
@@ -58,6 +59,8 @@ public struct CurrencyKey<phantom C: drop> has copy, drop, store {}
 
 /// Dynamic Field wrapper restricting access to a TreasuryCap
 public struct CurrencyLock<phantom C: drop> has store {
+    // coins can be minted or no, coins can always be burnt by the owners
+    can_mint: bool,
     // the cap to lock
     treasury_cap: TreasuryCap<C>,
 }
@@ -100,10 +103,11 @@ public struct UpdateAction<phantom C: drop> has store {
 public fun lock_cap<C: drop>(
     account: &mut Account,
     treasury_cap: TreasuryCap<C>,
+    can_mint: bool,
     ctx: &mut TxContext
 ) {
     account.assert_is_member(ctx);
-    let treasury_lock = CurrencyLock { treasury_cap };
+    let treasury_lock = CurrencyLock { can_mint, treasury_cap };
 
     account.add_managed_asset(ManageCurrency {}, CurrencyKey<C> {}, treasury_lock);
 }
@@ -118,6 +122,10 @@ public fun borrow_lock<C: drop>(account: &Account): &CurrencyLock<C> {
 
 public fun borrow_lock_mut<C: drop>(account: &mut Account): &mut CurrencyLock<C> {
     account.borrow_managed_asset_mut(ManageCurrency {}, CurrencyKey<C> {})
+}
+
+public fun can_mint<C: drop>(lock: &CurrencyLock<C>): bool {
+    lock.can_mint
 }
 
 public fun supply<C: drop>(lock: &CurrencyLock<C>): u64 {
@@ -147,7 +155,7 @@ public fun propose_mint<C: drop>(
         expiration_epoch, 
         ctx
     );
-    new_mint<C, MintProposal>(&mut proposal, amount, MintProposal {});
+    new_mint<C, MintProposal>(&mut proposal, borrow_lock<C>(account), amount, MintProposal {});
     account.add_proposal(proposal, MintProposal {});
 }
 
@@ -277,7 +285,7 @@ public fun propose_transfer<C: drop>(
     );
 
     amounts.zip_do!(recipients, |amount, recipient| {
-        new_mint<C, TransferProposal>(&mut proposal, amount, TransferProposal {});
+        new_mint<C, TransferProposal>(&mut proposal, borrow_lock<C>(account), amount, TransferProposal {});
         transfers::new_transfer(&mut proposal, recipient, TransferProposal {});
     });
 
@@ -333,7 +341,7 @@ public fun propose_pay<C: drop>(
         ctx
     );
 
-    new_mint<C, PayProposal>(&mut proposal, coin_amount, PayProposal {});
+    new_mint<C, PayProposal>(&mut proposal, borrow_lock<C>(account), coin_amount, PayProposal {});
     payments::new_pay(&mut proposal, amount, interval, recipient, PayProposal {});
 
     account.add_proposal(proposal, PayProposal {});
@@ -360,9 +368,11 @@ public fun execute_pay<C: drop>(
 
 public fun new_mint<C: drop, W: copy + drop>(
     proposal: &mut Proposal, 
+    lock: &CurrencyLock<C>,
     amount: u64,
     witness: W,    
 ) {
+    assert!(lock.can_mint, EMintDisabled);
     proposal.add_action(MintAction<C> { amount }, witness);
 }
 
