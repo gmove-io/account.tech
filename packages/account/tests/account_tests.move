@@ -1,89 +1,187 @@
 #[test_only]
-module kraken_account::user_tests;
+module kraken_account::account_tests;
 
 use sui::test_utils::destroy;
 use kraken_account::{
     account,
+    auth,
     members,
-    account_test_utils::start_world,
-    user::{Self, User, Invite}
+    account_test_utils::start_world
 };
 
 const OWNER: address = @0xBABE;
-const ALICE: address = @0xA11CE;
+const ALICE: address = @0xa11e7;
+const BOB: address = @0x10;
+
+public struct Witness has copy, drop {}
+
+public struct Witness2 has copy, drop {}
+
+public struct Action has store {
+    value: u64
+}
+
+// test expiration & execution time
 
 #[test]
-fun test_join_account() {
+fun test_new_account() {
     let mut world = start_world();
 
-    world.scenario().next_tx(OWNER);
-    let mut user = user::new(b"Sam".to_string(), b"Sam.png".to_string(), world.scenario().ctx());
-    let mut account2 = world.new_account();
-    assert!(user.username() == b"Sam".to_string());
-    assert!(user.profile_picture() == b"Sam.png".to_string());
-    assert!(user.account_ids() == vector[]);
+    let sender = world.scenario().ctx().sender();
+    let account = world.account();
 
-    world.join_account(&mut user);
-    user.join_account(&mut account2, world.scenario().ctx());
-    assert!(user.account_ids() == vector[object::id(world.account()) ,object::id(&account2)]);
+    assert!(account.name() == b"kraken".to_string());
+    assert!(account.thresholds().get_global_threshold() == 1);
+    assert!(account.members().addresses() == vector[sender]);
+    assert!(account.proposals().length() == 0);
 
-    destroy(user);
-    destroy(account2);
+    world.end();
+} 
+
+#[test]
+fun test_create_proposal() {
+    let mut world = start_world();
+    let addr = world.account().addr();
+
+    let proposal = world.create_proposal(
+        Witness {},
+        b"".to_string(),
+        b"key".to_string(),
+        b"proposal".to_string(),
+        5,
+        2,
+    );
+
+    proposal.add_action(Action { value: 1 });
+    proposal.add_action(Action { value: 2 });   
+
+    proposal.auth().assert_is_witness(Witness {});
+    proposal.auth().assert_is_account(addr);
+    assert!(proposal.approved() == vector[]);
+    assert!(proposal.description() == b"proposal".to_string());
+    assert!(proposal.expiration_epoch() == 2);
+    assert!(proposal.execution_time() == 5);
+    assert!(proposal.total_weight() == 0);
+    assert!(proposal.actions_length() == 2);
+
     world.end();
 }
 
 #[test]
-fun test_leave_account() {
+fun test_approve_proposal() {
     let mut world = start_world();
+    let key = b"key".to_string();
 
-    world.scenario().next_tx(ALICE);
-    let mut user = user::new(b"Alice".to_string(), b"Alice.png".to_string(), world.scenario().ctx());
     world.account().members_mut_for_testing().add(ALICE, 1, option::none(), vector[]);
-    
-    world.join_account(&mut user);
-    assert!(user.account_ids() == vector[object::id(world.account())]);
+    world.account().members_mut_for_testing().add(BOB, 1, option::none(), vector[]);
 
-    world.leave_account(&mut user);
-    assert!(user.account_ids() == vector[]);
-    
-    user.destroy();
-    world.end();
+    world.account().member_mut(ALICE).set_weight(2);
+    world.account().member_mut(BOB).set_weight(3);
+
+    let proposal = world.create_proposal(Witness {}, b"".to_string(), key, b"".to_string(), 0, 0);
+    proposal.add_action(Action { value: 1 });
+    proposal.add_action(Action { value: 2 });   
+
+    world.scenario().next_tx(ALICE);
+    world.approve_proposal(key);
+    let proposal = world.account().proposals().get(key);
+    assert!(proposal.total_weight() == 2);
+
+    world.scenario().next_tx(BOB);
+    world.approve_proposal(key);
+    let proposal = world.account().proposals().get(key);
+    assert!(proposal.total_weight() == 5);
+
+    world.end();        
 }
 
 #[test]
-fun test_accept_invite() {
+fun test_remove_approval() {
+    let mut world = start_world();
+    let key = b"key".to_string();
+
+    world.account().members_mut_for_testing().add(ALICE, 1, option::none(), vector[]);
+    world.account().members_mut_for_testing().add(BOB, 1, option::none(), vector[]);
+
+    world.account().member_mut(ALICE).set_weight(2);
+    world.account().member_mut(BOB).set_weight(3);
+
+    let proposal = world.create_proposal(Witness {}, b"".to_string(), key, b"".to_string(), 0, 0);
+    proposal.add_action(Action { value: 1 });
+    proposal.add_action(Action { value: 2 });   
+
+    world.scenario().next_tx(ALICE);
+    world.approve_proposal(key);
+    let proposal = world.account().proposals().get(key);
+    assert!(proposal.total_weight() == 2);
+
+    world.scenario().next_tx(BOB);
+    world.approve_proposal(key);
+    let proposal = world.account().proposals().get(key);
+    assert!(proposal.total_weight() == 5);
+
+    world.scenario().next_tx(BOB);
+    world.remove_approval(key);
+    let proposal = world.account().proposals().get(key);
+    assert!(proposal.total_weight() == 2);        
+
+    world.end();        
+}
+
+// TODO:
+// #[test]
+// fun delete_proposal() {
+//     let mut world = start_world();
+//     let key = b"key".to_string();
+
+//     world.create_proposal(Witness {}, b"".to_string(), key, b"".to_string(), 0, 0);
+//     assert!(world.account().proposals_length() == 1);
+
+//     let actions = world.delete_proposal(key);
+//     actions.destroy_empty();
+//     assert!(world.account().proposals_length() == 0);
+
+//     world.end();
+// }
+
+#[test, expected_failure(abort_code = account::ECallerIsNotMember)]
+fun test_assert_is_member_error_caller_is_not_member() {
     let mut world = start_world();
 
     world.scenario().next_tx(ALICE);
-    let mut user = user::new(b"Alice".to_string(), b"Alice.png".to_string(), world.scenario().ctx());
-    world.account().members_mut_for_testing().add(ALICE, 1, option::none(), vector[]);
-    assert!(user.account_ids() == vector[]);
-    world.send_invite(ALICE);
+    world.assert_is_member();
 
-    world.scenario().next_tx(ALICE);
-    let invite = world.scenario().take_from_address<Invite>(ALICE);
-    assert!(invite.account_id() == object::id(world.account()));
-    world.accept_invite(&mut user, invite);
-    assert!(user.account_ids() == vector[object::id(world.account())]);
-    
-    destroy(user);
-    world.end();
-}
+    world.end();     
+}    
 
-#[test]
-fun test_refuse_invite() {
+#[test, expected_failure(abort_code = account::ECantBeExecutedYet)]
+fun test_execute_proposal_error_cant_be_executed_yet() {
     let mut world = start_world();
+    let key = b"key".to_string();
 
-    world.scenario().next_tx(ALICE);
-    let user = user::new(b"Alice".to_string(), b"Alice.png".to_string(), world.scenario().ctx());
-    world.account().members_mut_for_testing().add(ALICE, 1, option::none(), vector[]);
-    assert!(user.account_ids() == vector[]);
-    world.send_invite(ALICE);
+    world.account().members_mut_for_testing().add(ALICE, 2, option::none(), vector[]);
+    world.account().members_mut_for_testing().add(BOB, 3, option::none(), vector[]);
 
-    world.scenario().next_tx(ALICE);
-    let invite = world.scenario().take_from_address<Invite>(ALICE);
-    invite.refuse_invite();
-    
-    destroy(user);
+    world.create_proposal(Witness {}, b"".to_string(), key, b"".to_string(), 5, 0);
+    world.approve_proposal(key);
+    let executable = world.execute_proposal(key);
+
+    destroy(executable);
     world.end();
-}
+}      
+
+// TODO:
+// #[test, expected_failure(abort_code = account::EHasntExpired)]
+// fun delete_proposal_error_hasnt_expired() {
+//     let mut world = start_world();
+//     let key = b"key".to_string();
+
+//     world.create_proposal(Witness {}, b"".to_string(), key, b"".to_string(), 0, 2);
+//     assert!(world.account().proposals().length() == 1);
+
+//     let actions = world.delete_proposal(key);
+//     actions.destroy_empty();
+//     assert!(world.account().proposals().length() == 0);
+
+//     world.end();
+// }
