@@ -1,5 +1,5 @@
 [package]
-name = "KrakenExtensions"
+name = "AccountExtensions"
 edition = "2024.alpha"
 license = "MIT"
 authors = [
@@ -18,7 +18,7 @@ subdir = "crates/sui-framework/packages/sui-framework"
 rev = "testnet"
 
 [addresses]
-kraken_extensions = "_"
+account_extensions = "_"
 
 [dev-addresses]
-kraken_extensions = "0x2d1f315f2b4f5cb64901b054c7f315a03f0aea3f49f6e6c9b74cbd1d12f4b6c7"
+account_extensions = "0x2d1f315f2b4f5cb64901b054c7f315a03f0aea3f49f6e6c9b74cbd1d12f4b6c7"

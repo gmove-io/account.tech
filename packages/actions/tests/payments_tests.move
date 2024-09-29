@@ -1,7 +1,7 @@
 // TODO: move or fix (no more proposal in this module)
 
 // #[test_only]
-// module kraken_actions::payments_tests;
+// module account_actions::payments_tests;
 
 // use std::type_name;
 // use sui::{
@@ -9,7 +9,7 @@
 //     coin::{Coin, mint_for_testing, create_treasury_cap_for_testing},
 //     test_scenario::most_recent_receiving_ticket,
 // };
-// use kraken_actions::{
+// use account_actions::{
 //     payments::{Self, Stream},
 //     actions_test_utils::{start_world, World},
 // };

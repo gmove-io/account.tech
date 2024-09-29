@@ -1,5 +1,5 @@
 #[test_only]
-module kraken_actions::currency_tests;
+module account_actions::currency_tests;
 
 use sui::{
     url,
@@ -8,7 +8,7 @@ use sui::{
     test_utils::destroy,
     test_scenario::most_recent_receiving_ticket
 };
-use kraken_actions::{
+use account_actions::{
     owned,
     currency,
     actions_test_utils::start_world,

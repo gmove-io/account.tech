@@ -8,7 +8,7 @@
 /// Objects owned by the account can also be transferred to any address.
 /// Objects can be used to stream payments at specific intervals.
 
-module kraken_actions::owned;
+module account_actions::owned;
 
 // === Imports ===
 
@@ -17,12 +17,12 @@ use sui::{
     transfer::Receiving,
     coin::Coin
 };
-use kraken_account::{
+use account_protocol::{
     account::Account,
     proposals::Proposal,
     executable::Executable
 };
-use kraken_actions::{
+use account_actions::{
     transfers,
     payments,
 };

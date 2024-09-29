@@ -2,7 +2,7 @@
 /// Any member can merge and split without approvals.
 /// Used to prepare a Proposal with coins having the exact amount needed.
 
-module kraken_account::coin_operations;
+module account_protocol::coin_operations;
 
 // === Imports ===
 
@@ -10,7 +10,7 @@ use sui::{
     coin::{Self, Coin},
     transfer::Receiving
 };
-use kraken_account::account::Account;
+use account_protocol::account::Account;
 
 // === Structs ===
 

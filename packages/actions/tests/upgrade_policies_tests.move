@@ -1,8 +1,8 @@
 #[test_only]
-module kraken_actions::upgrade_policies_tests;
+module account_actions::upgrade_policies_tests;
 
 use sui::package;
-use kraken_actions::{
+use account_actions::{
     upgrade_policies,
     actions_test_utils::start_world
 };

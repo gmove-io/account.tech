@@ -1,4 +1,4 @@
-module kraken_extensions::extensions;
+module account_extensions::extensions;
 use std::string::String;
 
 // === Errors ===
@@ -62,16 +62,16 @@ public fun get_latest_core_deps(
     let mut packages = vector[];
     let mut versions = vector[];
 
-    let account_history = get_history(extensions, b"KrakenAccount".to_string());
+    let account_history = get_history(extensions, b"AccountProtocol".to_string());
     packages.push_back(account_history[0].package);
     versions.push_back(account_history[0].version);
 
-    let actions_history = get_history(extensions, b"KrakenActions".to_string());
+    let actions_history = get_history(extensions, b"AccountActions".to_string());
     packages.push_back(actions_history[1].package);
     versions.push_back(actions_history[1].version);
 
-    // packages[0] & versions[0] are KrakenAccount
-    // packages[1] & versions[1] are KrakenActions
+    // packages[0] & versions[0] are AccountProtocol
+    // packages[1] & versions[1] are AccountActions
     (packages, versions)
 }
 

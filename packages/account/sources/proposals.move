@@ -1,7 +1,7 @@
 /// This is the core module managing Proposals.
 /// It provides the interface to create, approve and execute proposals which is used in the `account` module.
 
-module kraken_account::proposals;
+module account_protocol::proposals;
 
 // === Imports ===
 
@@ -11,7 +11,7 @@ use sui::{
     bag::{Self, Bag},
     event,
 };
-use kraken_account::{
+use account_protocol::{
     auth::Auth,
     members::Member,
 };

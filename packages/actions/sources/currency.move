@@ -5,7 +5,7 @@
 /// 
 /// Coins minted by the account can also be transferred or paid to any address.
 
-module kraken_actions::currency;
+module account_actions::currency;
 
 // === Imports ===
 
@@ -18,12 +18,12 @@ use sui::{
     coin::{Coin, TreasuryCap, CoinMetadata},
     event,
 };
-use kraken_account::{
+use account_protocol::{
     account::Account,
     proposals::Proposal,
     executable::Executable
 };
-use kraken_actions::{
+use account_actions::{
     owned,
     transfers,
     payments,

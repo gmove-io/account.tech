@@ -2,7 +2,7 @@
 /// A payment has an amount to be paid at each interval, until the balance is empty.
 /// It can be cancelled at any time by the account members.
 
-module kraken_actions::payments;
+module account_actions::payments;
 
 // === Imports ===
 
@@ -11,7 +11,7 @@ use sui::{
     coin::{Self, Coin},
     event,
 };
-use kraken_account::{
+use account_protocol::{
     account::Account,
     proposals::Proposal,
     executable::Executable

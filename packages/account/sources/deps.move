@@ -1,22 +1,22 @@
 /// Dependencies are all the packages that an Account object can use.
 /// They are stored in a vector and can be updated only upon approval by members.
-/// KrakenMultisig and KrakenActions can be found at index 0 and 1.
+/// AccountProtocol and AccountActions can be found at index 0 and 1.
 /// 
 /// Not all packages are allowed to be used by a Account.
-/// The list of whitelisted packages is stored in the KrakenExtensions package.
+/// The list of whitelisted packages is stored in the AccountExtensions package.
 
-module kraken_account::deps;
+module account_protocol::deps;
 
 // === Imports ===
 
 use std::string::String;
-use kraken_extensions::extensions::Extensions;
+use account_extensions::extensions::Extensions;
 
 // === Aliases ===
 
-public use fun kraken_account::auth::assert_core_dep as Deps.assert_core_dep;
-public use fun kraken_account::auth::assert_dep as Deps.assert_dep;
-public use fun kraken_account::auth::assert_version as Deps.assert_version;
+public use fun account_protocol::auth::assert_core_dep as Deps.assert_core_dep;
+public use fun account_protocol::auth::assert_dep as Deps.assert_dep;
+public use fun account_protocol::auth::assert_version as Deps.assert_version;
 
 // === Errors ===
 
@@ -47,12 +47,12 @@ public fun new(extensions: &Extensions): Deps {
     let mut inner = vector[];
 
     inner.push_back(Dep { 
-        name: b"KrakenAccount".to_string(), 
+        name: b"AccountProtocol".to_string(), 
         package: packages[0], 
         version: versions[0] 
     });
     inner.push_back(Dep { 
-        name: b"KrakenActions".to_string(), 
+        name: b"AccountActions".to_string(), 
         package: packages[1], 
         version: versions[1] 
     });
@@ -60,7 +60,7 @@ public fun new(extensions: &Extensions): Deps {
     Deps { inner }
 }
 
-/// Protected because &mut Deps is only accessible from KrakenAccount and KrakenActions
+/// Protected because &mut Deps is only accessible from AccountProtocol and AccountActions
 public fun add(
     deps: &mut Deps,
     extensions: &Extensions,

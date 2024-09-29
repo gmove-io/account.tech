@@ -4,7 +4,7 @@
 /// Nfts can be listed for sale in the kiosk, and then purchased by anyone.
 /// Members can withdraw the profits from the kiosk to the Account.
 
-module kraken_actions::kiosk;
+module account_actions::kiosk;
 
 // === Imports ===
 
@@ -17,7 +17,7 @@ use sui::{
     vec_map::{Self, VecMap},
 };
 use kiosk::{kiosk_lock_rule, royalty_rule};
-use kraken_account::{
+use account_protocol::{
     account::Account,
     proposals::Proposal,
     executable::Executable

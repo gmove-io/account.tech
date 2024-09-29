@@ -3,7 +3,7 @@
 /// Upon locking, the user can define an optional timelock corresponding to the minimum delay between an upgrade proposal and its execution.
 /// The account can decide to make the policy more restrictive or destroy the Cap, to make the package immutable.
 
-module kraken_actions::upgrade_policies;
+module account_actions::upgrade_policies;
 
 // === Imports ===
 
@@ -14,7 +14,7 @@ use sui::{
     dynamic_field as df,
     event,
 };
-use kraken_account::{
+use account_protocol::{
     account::Account,
     proposals::Proposal,
     executable::Executable

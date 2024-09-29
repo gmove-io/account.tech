@@ -1,5 +1,5 @@
 #[test_only]
-module kraken_account::account_test_utils;
+module account_protocol::account_test_utils;
 
 use std::string::String;
 use sui::{
@@ -9,14 +9,14 @@ use sui::{
     coin::Coin,
     test_scenario::{Self as ts, Scenario, most_recent_id_for_address},
 };
-use kraken_account::{
+use account_protocol::{
     coin_operations,
     user::{Self, User, Invite},
     account::{Self, Account},
     proposals::Proposal,
     executable::Executable,
 };
-use kraken_extensions::extensions::{Self, Extensions, AdminCap};
+use account_extensions::extensions::{Self, Extensions, AdminCap};
 
 const OWNER: address = @0xBABE;
 
@@ -42,8 +42,8 @@ public fun start_world(): World {
     let mut extensions = scenario.take_shared<Extensions>();
     // initialize Clock, Account, Extensions
     let clock = clock::create_for_testing(scenario.ctx());
-    extensions.add(&cap, b"KrakenAccount".to_string(), @kraken_account, 1);
-    extensions.add(&cap, b"KrakenActions".to_string(), @0xCAFE, 1);
+    extensions.add(&cap, b"AccountProtocol".to_string(), @account_protocol, 1);
+    extensions.add(&cap, b"AccountActions".to_string(), @0xCAFE, 1);
     let account = account::new(
         &extensions,
         b"kraken".to_string(), 
@@ -98,7 +98,7 @@ public fun last_id_for_account<T: key>(world: &World): ID {
 }
 
 public fun role(module_name: vector<u8>): String {
-    let mut role = @kraken_account.to_string();
+    let mut role = @account_protocol.to_string();
     role.append_utf8(b"::");
     role.append_utf8(module_name);
     role.append_utf8(b"::Auth");

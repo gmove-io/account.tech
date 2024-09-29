@@ -1,5 +1,5 @@
 #[test_only]
-module kraken_actions::actions_test_utils;
+module account_actions::actions_test_utils;
 
 use std::string::String;
 use sui::{
@@ -12,13 +12,13 @@ use sui::{
     test_utils::destroy,
     test_scenario::{Self as ts, Scenario, most_recent_id_for_address},
 };
-use kraken_account::{
+use account_protocol::{
     account::{Self, Account},
     proposals::Proposal,
     executable::Executable,
     user::{Self, User},
 };
-use kraken_actions::{
+use account_actions::{
     owned,
     config,
     payments::{Self, Stream},
@@ -28,7 +28,7 @@ use kraken_actions::{
     treasury,
     kiosk as k_kiosk,
 };
-use kraken_extensions::extensions::{Self, Extensions, AdminCap};
+use account_extensions::extensions::{Self, Extensions, AdminCap};
 
 const OWNER: address = @0xBABE;
 
@@ -56,8 +56,8 @@ public fun start_world(): World {
 
     // initialize Clock, Account, Extensions
     let clock = clock::create_for_testing(scenario.ctx());
-    extensions.add(&cap, b"KrakenAccount".to_string(), @kraken_account, 1);
-    extensions.add(&cap, b"KrakenActions".to_string(), @kraken_actions, 1);
+    extensions.add(&cap, b"AccountProtocol".to_string(), @account_protocol, 1);
+    extensions.add(&cap, b"AccountActions".to_string(), @account_actions, 1);
     let mut account = account::new(
         &extensions,
         b"Kraken".to_string(), 
@@ -113,7 +113,7 @@ public fun last_id_for_account<T: key>(world: &World): ID {
 }
 
 public fun role(module_name: vector<u8>): String {
-    let mut role = @kraken_actions.to_string();
+    let mut role = @account_actions.to_string();
     role.append_utf8(b"::");
     role.append_utf8(module_name);
     role.append_utf8(b"::Auth");

@@ -1,7 +1,7 @@
 #[test_only]
-module kraken_actions::config_tests;
+module account_actions::config_tests;
 
-use kraken_actions::{
+use account_actions::{
     config,
     actions_test_utils::{Self, start_world},
 };
@@ -77,27 +77,27 @@ fun test_config_rules_end_to_end() {
 
 //     let key = b"deps proposal".to_string();
 
-//     assert!(world.account().deps().get_idx(@kraken_account) == 0);
+//     assert!(world.account().deps().get_idx(@account_protocol) == 0);
 //     assert!(world.account().deps().get_idx(@0xCAFE) == 1);
-//     assert!(world.account().deps().get_version(@kraken_account) == 1);
+//     assert!(world.account().deps().get_version(@account_protocol) == 1);
 //     assert!(world.account().deps().get_version(@0xCAFE) == 1);
 
 //     extensions::add(&world.extensions(), name, package, version)
 
 //     world.propose_config_deps(
 //         key, 
-//         vector[b"KrakenAccount".to_string(), b"KrakenActions".to_string(), b"External".to_string()],
-//         vector[@kraken_account, @0xCAFE, @0xAAA],
+//         vector[b"AccountProtocol".to_string(), b"AccountActions".to_string(), b"External".to_string()],
+//         vector[@account_protocol, @0xCAFE, @0xAAA],
 //         vector[2, 3, 1],
 //     );
 //     world.approve_proposal(key);
 //     let executable = world.execute_proposal(key);    
 //     config::execute_config_deps(executable, world.account());
 
-//     assert!(world.account().deps().get_idx(@kraken_account) == 0);
+//     assert!(world.account().deps().get_idx(@account_protocol) == 0);
 //     assert!(world.account().deps().get_idx(@0xCAFE) == 1);
 //     assert!(world.account().deps().get_idx(@0xAAA) == 2);
-//     assert!(world.account().deps().get_version(@kraken_account) == 2);
+//     assert!(world.account().deps().get_version(@account_protocol) == 2);
 //     assert!(world.account().deps().get_version(@0xCAFE) == 3);
 //     assert!(world.account().deps().get_version(@0xAAA) == 1);
 

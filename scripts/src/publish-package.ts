@@ -6,7 +6,7 @@ import * as path from "path";
 import { client, keypair, IObjectInfo, getId } from "./utils.js";
 
 /// Package name must be in PascalCase and named address must be in snake_case in Move.toml
-/// Example: packageName = "KrakenExtensions" -> packageNamedAddress = "kraken_extensions"
+/// Example: packageName = "AccountExtensions" -> packageNamedAddress = "account_extensions"
 ///
 /// When using --dev, the package will be published in testnet
 /// named addresses must be different in [dev-addresses] and [addresses]

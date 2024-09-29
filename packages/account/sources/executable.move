@@ -3,12 +3,12 @@
 /// A delegated witness pattern is used to ensure only the proposal interface that created it 
 /// can access the underlying actions and destroy it.
 
-module kraken_account::executable;
+module account_protocol::executable;
 
 // === Imports ===
 
 use sui::bag::Bag;
-use kraken_account::auth::Auth;
+use account_protocol::auth::Auth;
 
 // === Structs ===
 

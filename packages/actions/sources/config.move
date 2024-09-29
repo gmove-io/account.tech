@@ -12,7 +12,7 @@
 /// Account users can choose to use any version of any package and must explicitly migrate to the new version.
 /// This is closer to a trustless model where anyone with the UpgradeCap could update the dependencies maliciously.
 
-module kraken_actions::config;
+module account_actions::config;
 
 // === Imports ===
 
@@ -20,7 +20,7 @@ use std::string::String;
 use sui::{
     vec_map::{Self, VecMap},
 };
-use kraken_account::{
+use account_protocol::{
     account::Account,
     proposals::Proposal,
     executable::Executable,
@@ -28,7 +28,7 @@ use kraken_account::{
     members,
     thresholds::{Self, Thresholds},
 };
-use kraken_extensions::extensions::Extensions;
+use account_extensions::extensions::Extensions;
 
 // === Errors ===
 

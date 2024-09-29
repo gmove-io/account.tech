@@ -11,7 +11,7 @@
 ///      by passing the same witness that was used for instanciation. 
 ///      This prevents the actions or the proposal to be stored instead of executed.
 
-module kraken_account::account;
+module account_protocol::account;
 
 // === Imports ===
 
@@ -22,7 +22,7 @@ use sui::{
     dynamic_field as df,
     bag::Bag,
 };
-use kraken_account::{
+use account_protocol::{
     auth,
     deps::{Self, Deps},
     thresholds::{Self, Thresholds},
@@ -30,7 +30,7 @@ use kraken_account::{
     proposals::{Self, Proposals, Proposal},
     executable::{Self, Executable},
 };
-use kraken_extensions::extensions::Extensions;
+use account_extensions::extensions::Extensions;
 
 // === Errors ===
 
@@ -49,7 +49,7 @@ public struct Account has key {
     // human readable name to differentiate the multisig accounts
     name: String,
     // ids and versions of the packages this account is using
-    // idx 0: kraken_account, idx 1: kraken_actions
+    // idx 0: account_protocol, idx 1: account_actions
     deps: Deps,
     // members of the account
     members: Members,
@@ -128,7 +128,7 @@ public fun approve_proposal(
     account.assert_is_member(ctx);
 
     let proposal = account.proposals.get_mut(key);
-    // asserts that it uses the right KrakenAccount package version
+    // asserts that it uses the right AccountProtocol package version
     account.deps.assert_version(proposal.auth(), VERSION);
     let member = account.members.get(ctx.sender()); 
     proposal.approve(member, ctx);

@@ -3,7 +3,7 @@
 /// 
 /// Coins managed by treasuries can also be transferred or paid to any address.
 
-module kraken_actions::treasury;
+module account_actions::treasury;
 
 // === Imports ===
 
@@ -18,12 +18,12 @@ use sui::{
     transfer::Receiving,
     vec_map::{Self, VecMap},
 };
-use kraken_account::{
+use account_protocol::{
     account::Account,
     proposals::Proposal,
     executable::Executable
 };
-use kraken_actions::{
+use account_actions::{
     transfers,
     payments,
 };

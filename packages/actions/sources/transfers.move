@@ -1,10 +1,10 @@
 /// This module defines apis to transfer assets owned or managed by the account.
 /// The proposals can implement transfers for any action type (e.g. see owned or treasury).
 
-module kraken_actions::transfers;
+module account_actions::transfers;
 
 // === Imports ===
-use kraken_account::{
+use account_protocol::{
     account::Account,
     proposals::Proposal,
     executable::Executable

@@ -5,7 +5,7 @@
 /// Invited users can accept or refuse the invite, to add the Account id to their User account or not.
 /// This avoid the need for an indexer as all data can be easily found on-chain.
 
-module kraken_account::user;
+module account_protocol::user;
 
 // === Imports ===
 
@@ -14,7 +14,7 @@ use sui::{
     vec_set::{Self, VecSet},
     table::{Self, Table},
 };
-use kraken_account::account::Account;
+use account_protocol::account::Account;
 
 // === Errors ===
 

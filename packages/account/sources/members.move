@@ -3,7 +3,7 @@
 /// They can have an User ID, when there's none it means the member didn't join yet.
 /// They can also have roles, which are Auth.witness + opt(Auth.name).
 
-module kraken_account::members;
+module account_protocol::members;
 
 // === Imports ===
 
@@ -39,7 +39,7 @@ public fun new(): Members {
     Members { inner: vector[] }
 }
 
-// Protected because &mut Deps is only accessible from KrakenAccount and KrakenActions
+// Protected because &mut Deps is only accessible from AccountProtocol and AccountActions
 public fun add(
     members: &mut Members,
     addr: address,

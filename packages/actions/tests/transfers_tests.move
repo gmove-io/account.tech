@@ -1,14 +1,14 @@
 // TODO: fix (no more proposal in this module)
 
 // #[test_only]
-// module kraken_actions::transfers_tests;
+// module account_actions::transfers_tests;
 
 // use sui::{
 //     transfer::Receiving,
 //     test_scenario::{most_recent_receiving_ticket, take_from_address_by_id},
 //     test_utils::destroy
 // };
-// use kraken_actions::{
+// use account_actions::{
 //     actions_test_utils::{start_world, World},
 //     transfers
 // };

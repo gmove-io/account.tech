@@ -2,12 +2,12 @@
 /// - for proposal and actions execution (proposals should be destroyed by the module that created them)
 /// - for roles and associated approval & threshold (roles are derived from the witness and an optional name)
 /// - for objects managing assets (treasuries, kiosks, etc)
-/// as well as the verification of the dependencies (which are whitelisted in KrakenExtensions)
+/// as well as the verification of the dependencies (which are whitelisted in AccountExtensions)
 /// 
 /// A role is defined as a TypeName + an optional name
 /// -> package_id::module_name::struct_name::name or package_id::module_name::struct_name
 
-module kraken_account::auth;
+module account_protocol::auth;
 
 // === Imports ===
 
@@ -15,7 +15,7 @@ use std::{
     string::String,
     type_name::{Self, TypeName},
 };
-use kraken_account::{
+use account_protocol::{
     deps::Deps,
 };
 

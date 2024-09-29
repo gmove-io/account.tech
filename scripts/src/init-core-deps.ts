@@ -8,14 +8,14 @@ import { client, keypair, getId } from './utils.js';
         const tx = new Transaction();
         tx.setGasBudget(10000000);
 
-        const pkg = getId("KrakenExtensions")
+        const pkg = getId("AccountExtensions")
 
         tx.moveCall({
             target: `${pkg}::extensions::init_core_deps`,
             arguments: [
                 tx.object(getId("extensions::AdminCap")),
                 tx.object(getId("extensions::Extensions")),
-                tx.pure.vector("address", [getId("KrakenMultisig"), getId("KrakenActions")])
+                tx.pure.vector("address", [getId("AccountProtocol"), getId("AccountActions")])
             ],
         });
 

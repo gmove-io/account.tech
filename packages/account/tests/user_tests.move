@@ -1,8 +1,8 @@
 #[test_only]
-module kraken_account::user_tests;
+module account_protocol::user_tests;
 
 use sui::test_utils::destroy;
-use kraken_account::{
+use account_protocol::{
     account,
     members,
     account_test_utils::start_world,

@@ -1,5 +1,5 @@
 #[test_only]
-module kraken_actions::kiosk_tests;
+module account_actions::kiosk_tests;
 
 use sui::{
     kiosk,
@@ -10,7 +10,7 @@ use kiosk::{
     royalty_rule,
     kiosk_lock_rule
 };
-use kraken_actions::{
+use account_actions::{
     kiosk as k_kiosk,
     actions_test_utils::start_world
 };

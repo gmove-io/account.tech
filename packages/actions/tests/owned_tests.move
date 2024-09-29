@@ -1,11 +1,11 @@
 #[test_only]
-module kraken_actions::owned_tests;
+module account_actions::owned_tests;
 
 use sui::{
     test_utils::destroy,
     test_scenario::receiving_ticket_by_id
 };
-use kraken_actions::{
+use account_actions::{
     owned,
     actions_test_utils::start_world
 };
