@@ -43,7 +43,7 @@ fun test_create_proposal() {
     let mut world = start_world();
     let addr = world.account().addr();
 
-    let proposal = world.create_proposal(
+    let mut proposal = world.create_proposal(
         Witness {},
         b"".to_string(),
         b"key".to_string(),
@@ -52,8 +52,8 @@ fun test_create_proposal() {
         2,
     );
 
-    proposal.add_action(Action { value: 1 });
-    proposal.add_action(Action { value: 2 });   
+    proposal.add_action(Action { value: 1 }, Witness {});
+    proposal.add_action(Action { value: 2 }, Witness {}); 
 
     proposal.auth().assert_is_witness(Witness {});
     proposal.auth().assert_is_account(addr);
@@ -64,6 +64,7 @@ fun test_create_proposal() {
     assert!(proposal.total_weight() == 0);
     assert!(proposal.actions_length() == 2);
 
+    world.account().add_proposal(proposal, Witness {});  
     world.end();
 }
 
@@ -78,9 +79,10 @@ fun test_approve_proposal() {
     world.account().member_mut(ALICE).set_weight(2);
     world.account().member_mut(BOB).set_weight(3);
 
-    let proposal = world.create_proposal(Witness {}, b"".to_string(), key, b"".to_string(), 0, 0);
-    proposal.add_action(Action { value: 1 });
-    proposal.add_action(Action { value: 2 });   
+    let mut proposal = world.create_proposal(Witness {}, b"".to_string(), key, b"".to_string(), 0, 0);
+    proposal.add_action(Action { value: 1 }, Witness {});
+    proposal.add_action(Action { value: 2 }, Witness {});   
+    world.account().add_proposal(proposal, Witness {});
 
     world.scenario().next_tx(ALICE);
     world.approve_proposal(key);
@@ -106,9 +108,10 @@ fun test_remove_approval() {
     world.account().member_mut(ALICE).set_weight(2);
     world.account().member_mut(BOB).set_weight(3);
 
-    let proposal = world.create_proposal(Witness {}, b"".to_string(), key, b"".to_string(), 0, 0);
-    proposal.add_action(Action { value: 1 });
-    proposal.add_action(Action { value: 2 });   
+    let mut proposal = world.create_proposal(Witness {}, b"".to_string(), key, b"".to_string(), 0, 0);
+    proposal.add_action(Action { value: 1 }, Witness {});
+    proposal.add_action(Action { value: 2 }, Witness {});   
+    world.account().add_proposal(proposal, Witness {});
 
     world.scenario().next_tx(ALICE);
     world.approve_proposal(key);
@@ -162,7 +165,8 @@ fun test_execute_proposal_error_cant_be_executed_yet() {
     world.account().members_mut_for_testing().add(ALICE, 2, option::none(), vector[]);
     world.account().members_mut_for_testing().add(BOB, 3, option::none(), vector[]);
 
-    world.create_proposal(Witness {}, b"".to_string(), key, b"".to_string(), 5, 0);
+    let proposal = world.create_proposal(Witness {}, b"".to_string(), key, b"".to_string(), 5, 0);
+    world.account().add_proposal(proposal, Witness {});
     world.approve_proposal(key);
     let executable = world.execute_proposal(key);
 

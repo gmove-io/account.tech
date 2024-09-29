@@ -67,7 +67,7 @@ public fun propose_transfer(
     ctx: &mut TxContext
 ) {
     assert!(recipients.length() == objects.length(), EDifferentLength);
-    let proposal_mut = account.create_proposal(
+    let mut proposal = account.create_proposal(
         TransferProposal {},
         b"".to_string(),
         key,
@@ -78,9 +78,11 @@ public fun propose_transfer(
     );
 
     objects.zip_do!(recipients, |objs, recipient| {
-        new_withdraw(proposal_mut, objs);
-        transfers::new_transfer(proposal_mut, recipient);
+        new_withdraw(&mut proposal, objs, TransferProposal {});
+        transfers::new_transfer(&mut proposal, recipient, TransferProposal {});
     });
+
+    account.add_proposal(proposal, TransferProposal {});
 }
 
 // step 2: multiple members have to approve the proposal (account::approve_proposal)
@@ -128,7 +130,7 @@ public fun propose_pay(
     recipient: address,
     ctx: &mut TxContext
 ) {
-    let proposal_mut = account.create_proposal(
+    let mut proposal = account.create_proposal(
         PayProposal {},
         b"".to_string(),
         key,
@@ -138,8 +140,10 @@ public fun propose_pay(
         ctx
     );
     
-    new_withdraw(proposal_mut, vector[coin]);
-    payments::new_pay(proposal_mut, amount, interval, recipient);
+    new_withdraw(&mut proposal, vector[coin], PayProposal {});
+    payments::new_pay(&mut proposal, amount, interval, recipient, PayProposal {});
+
+    account.add_proposal(proposal, PayProposal {});
 }
 
 // step 2: multiple members have to approve the proposal (account::approve_proposal)
@@ -162,8 +166,12 @@ public fun execute_pay<C: drop>(
 
 // === [ACTION] Public functions ===
 
-public fun new_withdraw(proposal: &mut Proposal, objects: vector<ID>) {
-    proposal.add_action(WithdrawAction { objects });
+public fun new_withdraw<W: copy + drop>(
+    proposal: &mut Proposal, 
+    objects: vector<ID>, 
+    witness: W,
+) {
+    proposal.add_action(WithdrawAction { objects }, witness);
 }
 
 public fun withdraw<T: key + store, W: copy + drop>(
@@ -172,7 +180,7 @@ public fun withdraw<T: key + store, W: copy + drop>(
     receiving: Receiving<T>,
     witness: W,
 ): T {
-    let withdraw_mut: &mut WithdrawAction = executable.action_mut(witness, account.addr());
+    let withdraw_mut: &mut WithdrawAction = executable.action_mut(account.addr(), witness);
     let (_, idx) = withdraw_mut.objects.index_of(&transfer::receiving_object_id(&receiving));
     let id = withdraw_mut.objects.remove(idx);
 
@@ -183,14 +191,18 @@ public fun withdraw<T: key + store, W: copy + drop>(
     received
 }
 
-public fun destroy_withdraw<W: drop>(executable: &mut Executable, witness: W) {
+public fun destroy_withdraw<W: copy + drop>(executable: &mut Executable, witness: W) {
     let WithdrawAction { objects } = executable.remove_action(witness);
     assert!(objects.is_empty(), ERetrieveAllObjectsBefore);
 }
 
-public fun new_borrow(proposal: &mut Proposal, objects: vector<ID>) {
-    new_withdraw(proposal, objects);
-    proposal.add_action(ReturnAction { to_return: objects });
+public fun new_borrow<W: copy + drop>(
+    proposal: &mut Proposal, 
+    objects: vector<ID>, 
+    witness: W,
+) {
+    new_withdraw(proposal, objects, witness);
+    proposal.add_action(ReturnAction { to_return: objects }, witness);
 }
 
 public fun borrow<T: key + store, W: copy + drop>(
@@ -208,7 +220,7 @@ public fun put_back<T: key + store, W: copy + drop>(
     returned: T, 
     witness: W,
 ) {
-    let borrow_mut: &mut ReturnAction = executable.action_mut(witness, account.addr());
+    let borrow_mut: &mut ReturnAction = executable.action_mut(account.addr(), witness);
     let (exists_, idx) = borrow_mut.to_return.index_of(&object::id(&returned));
     assert!(exists_, EWrongObject);
 

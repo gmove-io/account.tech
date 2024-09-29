@@ -30,7 +30,8 @@ fun test_execute_proposal_error_threshold_not_reached() {
     world.account().members_mut_for_testing().add(ALICE, 2, option::none(), vector[]);
     world.account().members_mut_for_testing().add(BOB, 3, option::none(), vector[]);
 
-    world.create_proposal(Witness {}, b"".to_string(), key, b"".to_string(), 0, 0);
+    let proposal = world.create_proposal(Witness {}, b"".to_string(), key, b"".to_string(), 0, 0);
+    world.account().add_proposal(proposal, Witness {});
     let executable = world.execute_proposal(key);
 
     destroy(executable);

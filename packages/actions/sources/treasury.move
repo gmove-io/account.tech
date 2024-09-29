@@ -147,7 +147,7 @@ public fun propose_open(
     ctx: &mut TxContext
 ) {
     assert!(!treasury_exists(account, name), ETreasuryAlreadyExists);
-    let proposal_mut = account.create_proposal(
+    let mut proposal = account.create_proposal(
         OpenProposal {},
         name,
         key,
@@ -156,7 +156,9 @@ public fun propose_open(
         expiration_epoch,
         ctx
     );
-    new_open(proposal_mut, name);
+
+    new_open(&mut proposal, name, OpenProposal {});
+    account.add_proposal(proposal, OpenProposal {});
 }
 
 // step 2: multiple members have to approve the proposal (account::approve_proposal)
@@ -187,7 +189,7 @@ public fun propose_transfer(
     ctx: &mut TxContext
 ) {
     assert!(coin_amounts.length() == coin_types.length(), EDifferentLength);
-    let proposal_mut = account.create_proposal(
+    let mut proposal = account.create_proposal(
         TransferProposal {},
         b"".to_string(),
         key,
@@ -198,9 +200,11 @@ public fun propose_transfer(
     );
 
     coin_types.zip_do!(coin_amounts, |types, amounts| {
-        new_spend(proposal_mut, treasury_name, types, amounts);
-        transfers::new_transfer(proposal_mut, recipients.remove(0));
+        new_spend(&mut proposal, treasury_name, types, amounts, TransferProposal {});
+        transfers::new_transfer(&mut proposal, recipients.remove(0), TransferProposal {});
     });
+
+    account.add_proposal(proposal, TransferProposal {});
 }
 
 // step 2: multiple members have to approve the proposal (account::approve_proposal)
@@ -245,7 +249,7 @@ public fun propose_pay(
     recipient: address,
     ctx: &mut TxContext
 ) {
-    let proposal_mut = account.create_proposal(
+    let mut proposal = account.create_proposal(
         PayProposal {},
         b"".to_string(),
         key,
@@ -255,8 +259,9 @@ public fun propose_pay(
         ctx
     );
 
-    new_spend(proposal_mut, treasury_name, vector[coin_type], vector[coin_amount]);
-    payments::new_pay(proposal_mut, amount, interval, recipient);
+    new_spend(&mut proposal, treasury_name, vector[coin_type], vector[coin_amount], PayProposal {});
+    payments::new_pay(&mut proposal, amount, interval, recipient, PayProposal {});
+    account.add_proposal(proposal, PayProposal {});
 }
 
 // step 2: multiple members have to approve the proposal (account::approve_proposal)
@@ -278,8 +283,8 @@ public fun execute_pay<C: drop>(
 
 // === [ACTION] Public Functions ===
 
-public fun new_open(proposal: &mut Proposal, name: String) {
-    proposal.add_action(OpenAction { name });
+public fun new_open<W: copy + drop>(proposal: &mut Proposal, name: String, witness: W) {
+    proposal.add_action(OpenAction { name }, witness);
 }
 
 public fun open<W: copy + drop>(
@@ -288,7 +293,7 @@ public fun open<W: copy + drop>(
     witness: W,
     ctx: &mut TxContext
 ) {
-    let open_mut: &mut OpenAction = executable.action_mut(witness, account.addr());
+    let open_mut: &mut OpenAction = executable.action_mut(account.addr(), witness);
     account.add_managed_asset(ManageTreasury {}, TreasuryKey { name: open_mut.name }, Treasury { bag: bag::new(ctx) });
     open_mut.name = b"".to_string(); // reset to ensure execution
 }
@@ -298,14 +303,18 @@ public fun destroy_open<W: copy + drop>(executable: &mut Executable, witness: W)
     assert!(name.is_empty(), EOpenNotExecuted);
 }
 
-public fun new_spend(
+public fun new_spend<W: copy + drop>(
     proposal: &mut Proposal,
     name: String,
     coin_types: vector<String>,
-    amounts: vector<u64>
+    amounts: vector<u64>,
+    witness: W,
 ) {
     assert!(coin_types.length() == amounts.length(), EWrongLength);
-    proposal.add_action(SpendAction { name, coins_amounts_map: vec_map::from_keys_values(coin_types, amounts) });
+    proposal.add_action(
+        SpendAction { name, coins_amounts_map: vec_map::from_keys_values(coin_types, amounts) },
+        witness
+    );
 }
 
 public fun spend<W: copy + drop, C: drop>(
@@ -314,7 +323,7 @@ public fun spend<W: copy + drop, C: drop>(
     witness: W,
     ctx: &mut TxContext
 ): Coin<C> {
-    let spend_mut: &mut SpendAction = executable.action_mut(witness, account.addr());
+    let spend_mut: &mut SpendAction = executable.action_mut(account.addr(), witness);
     let (coin_type, amount) = spend_mut.coins_amounts_map.remove(&coin_type_string<C>());
     
     let treasury: &mut Treasury = account.borrow_managed_asset_mut(ManageTreasury {}, TreasuryKey { name: spend_mut.name });

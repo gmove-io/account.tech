@@ -137,8 +137,15 @@ public fun has_approved(proposal: &Proposal, addr: address): bool {
 
 // === Account-only functions ===
 
-/// Inserts an action to the proposal bag, safe because proposal_mut is only accessible upon creation
-public fun add_action<A: store>(proposal: &mut Proposal, action: A) {
+/// Inserts an action to the proposal bag
+/// safe because proposal_mut is only accessible upon creation
+public fun add_action<A: store, W: copy + drop>(
+    proposal: &mut Proposal, 
+    action: A, 
+    witness: W
+) {
+    proposal.auth.assert_is_witness(witness);
+
     let idx = proposal.actions.length();
     proposal.actions.add(idx, action);
 }

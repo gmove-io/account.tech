@@ -170,7 +170,7 @@ fun test_destroy_mint_error_mint_not_executed() {
     world.lock_treasury_cap(cap);
 
     world.scenario().next_tx(OWNER);
-    let proposal = world.create_proposal(
+    let mut proposal = world.create_proposal(
         Witness {},
         b"".to_string(),
         key, 
@@ -178,7 +178,8 @@ fun test_destroy_mint_error_mint_not_executed() {
         0, 
         0, 
     );
-    currency::new_mint<SUI>(proposal, 100);
+    currency::new_mint<SUI, Witness>(&mut proposal, 100, Witness {});
+    world.account().add_proposal(proposal, Witness {});
     world.approve_proposal(key);
 
     world.scenario().next_tx(OWNER);
@@ -202,7 +203,7 @@ fun test_destroy_burn_error_burn_not_executed() {
     let receiving_coin = most_recent_receiving_ticket(&world.account().addr().to_id());
     world.lock_treasury_cap(cap);
 
-    let proposal = world.create_proposal(
+    let mut proposal = world.create_proposal(
         Witness {},
         b"".to_string(),
         key, 
@@ -210,8 +211,9 @@ fun test_destroy_burn_error_burn_not_executed() {
         0, 
         0, 
     );
-    owned::new_withdraw(proposal, vector[receiving_coin.receiving_object_id()]);
-    currency::new_burn<SUI>(proposal, 100);
+    owned::new_withdraw(&mut proposal, vector[receiving_coin.receiving_object_id()], Witness {});
+    currency::new_burn<SUI, Witness>(&mut proposal, 100, Witness {});
+    world.account().add_proposal(proposal, Witness {});
     world.approve_proposal(key);
 
     let mut executable = world.execute_proposal(key);

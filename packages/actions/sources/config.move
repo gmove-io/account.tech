@@ -71,7 +71,7 @@ public fun propose_config_name(
     name: String,
     ctx: &mut TxContext
 ) {
-    let proposal_mut = account.create_proposal(
+    let mut proposal = account.create_proposal(
         ConfigNameProposal {},
         b"".to_string(),
         key,
@@ -80,7 +80,8 @@ public fun propose_config_name(
         expiration_epoch,
         ctx
     );
-    new_config_name(proposal_mut, name);
+    new_config_name(&mut proposal, name, ConfigNameProposal {});
+    account.add_proposal(proposal, ConfigNameProposal {});
 }
 
 // step 2: multiple members have to approve the proposal (account::approve_proposal)
@@ -115,7 +116,7 @@ public fun propose_config_rules(
 ) {
     verify_new_rules(addresses, weights, roles, global, role_names, role_thresholds);
     // verify new rules are valid
-    let proposal_mut = account.create_proposal(
+    let mut proposal = account.create_proposal(
         ConfigRulesProposal {},
         b"".to_string(),
         key,
@@ -125,8 +126,10 @@ public fun propose_config_rules(
         ctx
     );
     // must modify members before modifying thresholds to ensure they are reachable
-    new_config_members(proposal_mut, addresses, weights, roles);
-    new_config_thresholds(proposal_mut, global, role_names, role_thresholds);
+    new_config_members(&mut proposal, addresses, weights, roles, ConfigRulesProposal {});
+    new_config_thresholds(&mut proposal, global, role_names, role_thresholds, ConfigRulesProposal {});
+    
+    account.add_proposal(proposal, ConfigRulesProposal {});
 }
 
 // step 2: multiple members have to approve the proposal (account::approve_proposal)
@@ -155,7 +158,7 @@ public fun propose_config_deps(
     versions: vector<u64>,
     ctx: &mut TxContext
 ) {
-    let proposal_mut = account.create_proposal(
+    let mut proposal = account.create_proposal(
         ConfigDepsProposal {},
         b"".to_string(),
         key,
@@ -164,7 +167,8 @@ public fun propose_config_deps(
         expiration_epoch,
         ctx
     );
-    new_config_deps(proposal_mut, extensions, names, packages, versions);
+    new_config_deps(&mut proposal, extensions, names, packages, versions, ConfigDepsProposal {});
+    account.add_proposal(proposal, ConfigDepsProposal {});
 }
 
 // step 2: multiple members have to approve the proposal (account::approve_proposal)
@@ -181,8 +185,12 @@ public fun execute_config_deps(
 
 // === [ACTION] Public functions ===
 
-public fun new_config_name(proposal: &mut Proposal, name: String) {
-    proposal.add_action(ConfigAction { inner: name });
+public fun new_config_name<W: copy + drop>(
+    proposal: &mut Proposal, 
+    name: String, 
+    witness: W
+) {
+    proposal.add_action(ConfigAction { inner: name }, witness);
 }
 
 public fun config_name<W: copy + drop>(
@@ -194,11 +202,12 @@ public fun config_name<W: copy + drop>(
     *account.name_mut(executable, witness) = inner;
 }
 
-public fun new_config_members(
+public fun new_config_members<W: copy + drop>(
     proposal: &mut Proposal,
     addresses: vector<address>,
     weights: vector<u64>, 
     mut roles: vector<vector<String>>, // inner vectors can be empty
+    witness: W,
 ) { 
     assert!(
         addresses.length() == weights.length() && 
@@ -211,7 +220,7 @@ public fun new_config_members(
         members.add(addr, weight, option::none(), roles.remove(0));
     });
     
-    proposal.add_action(ConfigAction { inner: members });
+    proposal.add_action(ConfigAction { inner: members }, witness);
 }    
 
 public fun config_members<W: copy + drop>(
@@ -223,11 +232,12 @@ public fun config_members<W: copy + drop>(
     *account.members_mut(executable, witness) = inner;
 }
 
-public fun new_config_thresholds(
+public fun new_config_thresholds<W: copy + drop>(
     proposal: &mut Proposal,
     global: u64,
     role_names: vector<String>,
     role_thresholds: vector<u64>, 
+    witness: W,
 ) { 
     assert!(role_names.length() == role_thresholds.length(), ERolesNotSameLength);
     assert!(global != 0, EThresholdNull);
@@ -237,7 +247,7 @@ public fun new_config_thresholds(
         thresholds.add(role, threshold);
     });
 
-    proposal.add_action(ConfigAction { inner: thresholds });
+    proposal.add_action(ConfigAction { inner: thresholds }, witness);
 }    
 
 public fun config_thresholds<W: copy + drop>(
@@ -255,19 +265,20 @@ public fun config_thresholds<W: copy + drop>(
     *account.thresholds_mut(executable, witness) = inner;
 }
 
-public fun new_config_deps(
+public fun new_config_deps<W: copy + drop>(
     proposal: &mut Proposal,
     extensions: &Extensions,
     names: vector<String>,
     packages: vector<address>,
     mut versions: vector<u64>,
+    witness: W,
 ) {    
     let mut deps = deps::new(extensions);
     names.zip_do!(packages, |name, package| {
         let version = versions.remove(0);
         deps.add(extensions, name, package, version);
     });
-    proposal.add_action(ConfigAction { inner: deps });
+    proposal.add_action(ConfigAction { inner: deps }, witness);
 }
 
 public fun config_deps<W: copy + drop>(

@@ -169,7 +169,7 @@ public fun propose_take(
     recipient: address,
     ctx: &mut TxContext
 ) {
-    let proposal_mut = account.create_proposal(
+    let mut proposal = account.create_proposal(
         TakeProposal {},
         name,
         key,
@@ -178,7 +178,9 @@ public fun propose_take(
         expiration_epoch,
         ctx
     );
-    new_take(proposal_mut, nft_ids, recipient);
+
+    new_take(&mut proposal, nft_ids, recipient, TakeProposal {});
+    account.add_proposal(proposal, TakeProposal {});
 }
 
 // step 2: multiple members have to approve the proposal (account::approve_proposal)
@@ -215,7 +217,7 @@ public fun propose_list(
     prices: vector<u64>,
     ctx: &mut TxContext
 ) {
-    let proposal_mut = account.create_proposal(
+    let mut proposal = account.create_proposal(
         ListProposal {},
         name,
         key,
@@ -224,7 +226,9 @@ public fun propose_list(
         expiration_epoch,
         ctx
     );
-    new_list(proposal_mut, name, nft_ids, prices);
+
+    new_list(&mut proposal, name, nft_ids, prices, ListProposal {});
+    account.add_proposal(proposal, ListProposal {});
 }
 
 // step 2: multiple members have to approve the proposal (account::approve_proposal)
@@ -247,12 +251,13 @@ public fun complete_list(mut executable: Executable) {
 
 // === [ACTION] Public functions ===
 
-public fun new_take(
+public fun new_take<W: copy + drop>(
     proposal: &mut Proposal, 
     nft_ids: vector<ID>, 
-    recipient: address
+    recipient: address,
+    witness: W,
 ) {
-    proposal.add_action(TakeAction { nft_ids, recipient });
+    proposal.add_action(TakeAction { nft_ids, recipient }, witness);
 }
 
 public fun take<O: key + store, W: copy + drop>(
@@ -266,7 +271,7 @@ public fun take<O: key + store, W: copy + drop>(
     ctx: &mut TxContext
 ): TransferRequest<O> {
     let name = executable.auth().name();
-    let take_mut: &mut TakeAction = executable.action_mut(witness, account.addr());
+    let take_mut: &mut TakeAction = executable.action_mut(account.addr(), witness);
     let lock_mut = borrow_lock_mut(account, name);
     assert!(take_mut.recipient == ctx.sender(), EWrongReceiver);
 
@@ -295,14 +300,18 @@ public fun destroy_take<W: copy + drop>(executable: &mut Executable, witness: W)
     recipient
 }
 
-public fun new_list(
+public fun new_list<W: copy + drop>(
     proposal: &mut Proposal, 
     name: String, 
     nft_ids: vector<ID>, 
-    prices: vector<u64>
+    prices: vector<u64>,
+    witness: W,
 ) {
     assert!(nft_ids.length() == prices.length(), EWrongNftsPrices);
-    proposal.add_action(ListAction { name, nfts_prices_map: vec_map::from_keys_values(nft_ids, prices) });
+    proposal.add_action(
+        ListAction { name, nfts_prices_map: vec_map::from_keys_values(nft_ids, prices) }, 
+        witness
+    );
 }
 
 public fun list<O: key + store, W: copy + drop>(
@@ -312,7 +321,7 @@ public fun list<O: key + store, W: copy + drop>(
     witness: W,
 ) {
     let name = executable.auth().name();
-    let list_mut: &mut ListAction = executable.action_mut(witness, account.addr());
+    let list_mut: &mut ListAction = executable.action_mut(account.addr(), witness);
     let lock_mut = borrow_lock_mut(account, name);
 
     let (nft_id, price) = list_mut.nfts_prices_map.remove_entry_by_idx(0);

@@ -34,10 +34,10 @@ public(package) fun new(auth: Auth, actions: Bag): Executable {
 }
 
 /// Is only called from the proposal module, as well as the following functions
-public fun action_mut<W: drop, A: store>(
+public fun action_mut<A: store, W: copy + drop>(
     executable: &mut Executable, 
-    witness: W,
     account_addr: address,
+    witness: W,
 ): &mut A {
     executable.auth.assert_is_witness(witness);
     executable.auth.assert_is_account(account_addr);
@@ -47,7 +47,7 @@ public fun action_mut<W: drop, A: store>(
 }
 
 /// Needs to destroy all actions before destroying the executable
-public fun remove_action<W: drop, A: store>(
+public fun remove_action<A: store, W: copy + drop>(
     executable: &mut Executable, 
     witness: W,
 ): A {
@@ -60,7 +60,7 @@ public fun remove_action<W: drop, A: store>(
 }
 
 /// Completes the execution
-public fun destroy<W: drop>(
+public fun destroy<W: copy + drop>(
     executable: Executable, 
     witness: W
 ) {

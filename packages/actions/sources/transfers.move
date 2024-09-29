@@ -24,11 +24,12 @@ public struct TransferAction has store {
 
 // === [ACTION] Public functions ===
 
-public fun new_transfer(
+public fun new_transfer<W: copy + drop>(
     proposal: &mut Proposal, 
-    recipient: address
+    recipient: address,
+    witness: W,
 ) {
-    proposal.add_action(TransferAction { recipient });
+    proposal.add_action(TransferAction { recipient }, witness);
 }
 
 public fun transfer<T: key + store, W: copy + drop>(
@@ -38,7 +39,7 @@ public fun transfer<T: key + store, W: copy + drop>(
     witness: W,
     is_executed: bool,
 ) {
-    let transfer_mut: &mut TransferAction = executable.action_mut(witness, account.addr());
+    let transfer_mut: &mut TransferAction = executable.action_mut(account.addr(), witness);
     transfer::public_transfer(object, transfer_mut.recipient);
 
     if (is_executed)

@@ -170,7 +170,7 @@ public fun propose_upgrade(
     let lock = borrow_lock(account, name);
     let delay = lock.time_delay();
 
-    let proposal_mut = account.create_proposal(
+    let mut proposal = account.create_proposal(
         UpgradeProposal {},
         name,
         key,
@@ -180,7 +180,8 @@ public fun propose_upgrade(
         ctx
     );
 
-    new_upgrade(proposal_mut, digest);
+    new_upgrade(&mut proposal, digest, UpgradeProposal {});
+    account.add_proposal(proposal, UpgradeProposal {});
 }
 
 // step 2: multiple members have to approve the proposal (account::approve_proposal)
@@ -227,7 +228,7 @@ public fun propose_restrict(
     let delay = lock.time_delay();
     let current_policy = lock.upgrade_cap.policy();
 
-    let proposal_mut = account.create_proposal(
+    let mut proposal = account.create_proposal(
         RestrictProposal {},
         name,
         key,
@@ -236,7 +237,9 @@ public fun propose_restrict(
         expiration_epoch,
         ctx
     );
-    new_restrict(proposal_mut, current_policy, policy);
+
+    new_restrict(&mut proposal, current_policy, policy, RestrictProposal {});
+    account.add_proposal(proposal, RestrictProposal {});
 }
 
 // step 2: multiple members have to approve the proposal (account::approve_proposal)
@@ -254,8 +257,12 @@ public fun execute_restrict(
 
 // [ACTION] Public Functions ===
 
-public fun new_upgrade(proposal: &mut Proposal, digest: vector<u8>) {
-    proposal.add_action(UpgradeAction { digest });
+public fun new_upgrade<W: copy + drop>(
+    proposal: &mut Proposal, 
+    digest: vector<u8>, 
+    witness: W
+) {
+    proposal.add_action(UpgradeAction { digest }, witness);
 }    
 
 public fun upgrade<W: copy + drop>(
@@ -264,7 +271,7 @@ public fun upgrade<W: copy + drop>(
     witness: W,
 ): UpgradeTicket {
     let name = executable.auth().name();
-    let upgrade_mut: &mut UpgradeAction = executable.action_mut(witness, account.addr());
+    let upgrade_mut: &mut UpgradeAction = executable.action_mut(account.addr(), witness);
     let lock_mut = borrow_lock_mut(account, name);
 
     event::emit(Upgraded {
@@ -285,7 +292,12 @@ public fun destroy_upgrade<W: copy + drop>(executable: &mut Executable, witness:
     assert!(digest.is_empty(), EUpgradeNotExecuted);
 }
 
-public fun new_restrict(proposal: &mut Proposal, current_policy: u8, policy: u8) {    
+public fun new_restrict<W: copy + drop>(
+    proposal: &mut Proposal, 
+    current_policy: u8, 
+    policy: u8, 
+    witness: W
+) {    
     assert!(policy > current_policy, EPolicyShouldRestrict);
     assert!(
         policy == package::additive_policy() ||
@@ -294,7 +306,7 @@ public fun new_restrict(proposal: &mut Proposal, current_policy: u8, policy: u8)
         EInvalidPolicy
     );
 
-    proposal.add_action(RestrictAction { policy });
+    proposal.add_action(RestrictAction { policy }, witness);
 }    
 
 public fun restrict<W: copy + drop>(
@@ -303,7 +315,7 @@ public fun restrict<W: copy + drop>(
     witness: W,
 ) {
     let name = executable.auth().name();
-    let restrict_mut: &mut RestrictAction = executable.action_mut(witness, account.addr());
+    let restrict_mut: &mut RestrictAction = executable.action_mut(account.addr(), witness);
 
     let (package_id, policy) = if (restrict_mut.policy == package::additive_policy()) {
         let lock_mut: &mut UpgradeLock = account.borrow_managed_asset_mut(ManageUpgrades {}, UpgradeKey { name });

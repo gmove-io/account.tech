@@ -91,7 +91,7 @@ public fun share(account: Account) {
 // === Account-only functions ===
 
 /// Creates a new proposal that must be constructed in another module
-public fun create_proposal<W: drop>(
+public fun create_proposal<W: copy + drop>(
     account: &mut Account, 
     witness: W, // module's auth witness
     auth_name: String, // module's auth name
@@ -100,23 +100,28 @@ public fun create_proposal<W: drop>(
     execution_time: u64, // timestamp in ms
     expiration_epoch: u64, // epoch when we can delete the proposal
     ctx: &mut TxContext
-): &mut Proposal {
+): Proposal {
     account.assert_is_member(ctx);
     let auth = auth::construct(witness, auth_name, account.addr());
     account.deps.assert_version(&auth, VERSION);
 
-    let proposal = proposals::new_proposal(
+    proposals::new_proposal(
         auth,
         key,
         description,
         execution_time,
         expiration_epoch,
         ctx
-    );
+    )
+}
 
+public fun add_proposal<W: copy + drop>(
+    account: &mut Account, 
+    proposal: Proposal, 
+    witness: W
+) {
+    proposal.auth().assert_is_witness(witness);
     account.proposals.add(proposal);
-    // returns the proposal mutably for the caller to push actions into it
-    account.proposals.get_mut(key)
 }
 
 /// Increases the global threshold and the role threshold if the signer has the one from the proposal

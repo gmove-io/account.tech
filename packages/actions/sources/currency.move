@@ -126,7 +126,7 @@ public fun supply<C: drop>(lock: &CurrencyLock<C>): u64 {
 
 // === [PROPOSAL] Public functions ===
 
-// step 1: propose to mint an amount of a coin that will be transferred to the account
+// step 1: propose to mint an amount of a coin that will be transferred to the Account
 public fun propose_mint<C: drop>(
     account: &mut Account,
     key: String,
@@ -137,7 +137,8 @@ public fun propose_mint<C: drop>(
     ctx: &mut TxContext
 ) {
     assert!(has_lock<C>(account), ENoLock);
-    let proposal_mut = account.create_proposal(
+
+    let mut proposal = account.create_proposal(
         MintProposal {}, 
         type_to_name<C>(), // the coin type is the auth name 
         key, 
@@ -146,7 +147,8 @@ public fun propose_mint<C: drop>(
         expiration_epoch, 
         ctx
     );
-    new_mint<C>(proposal_mut, amount);
+    new_mint<C, MintProposal>(&mut proposal, amount, MintProposal {});
+    account.add_proposal(proposal, MintProposal {});
 }
 
 // step 2: multiple members have to approve the proposal (account::approve_proposal)
@@ -176,7 +178,8 @@ public fun propose_burn<C: drop>(
     ctx: &mut TxContext
 ) {
     assert!(has_lock<C>(account), ENoLock);
-    let proposal_mut = account.create_proposal(
+
+    let mut proposal = account.create_proposal(
         BurnProposal {}, 
         type_to_name<C>(), // the coin type is the auth name 
         key, 
@@ -185,8 +188,11 @@ public fun propose_burn<C: drop>(
         expiration_epoch, 
         ctx
     );
-    owned::new_withdraw(proposal_mut, vector[coin_id]);
-    new_burn<C>(proposal_mut, amount);
+
+    owned::new_withdraw(&mut proposal, vector[coin_id], BurnProposal {});
+    new_burn<C, BurnProposal>(&mut proposal, amount, BurnProposal {});
+
+    account.add_proposal(proposal, BurnProposal {});
 }
 
 // step 2: multiple members have to approve the proposal (account::approve_proposal)
@@ -219,7 +225,8 @@ public fun propose_update<C: drop>(
     ctx: &mut TxContext
 ) {
     assert!(has_lock<C>(account), ENoLock);
-    let proposal_mut = account.create_proposal(
+
+    let mut proposal = account.create_proposal(
         UpdateProposal {},
         type_to_name<C>(), // the coin type is the auth name 
         key,
@@ -228,7 +235,9 @@ public fun propose_update<C: drop>(
         expiration_epoch,
         ctx
     );
-    new_update<C>(proposal_mut, md_name, md_symbol, md_description, md_icon);
+
+    new_update<C, UpdateProposal>(&mut proposal, md_name, md_symbol, md_description, md_icon, UpdateProposal {});
+    account.add_proposal(proposal, UpdateProposal {});
 }
 
 // step 2: multiple members have to approve the proposal (account::approve_proposal)
@@ -257,7 +266,7 @@ public fun propose_transfer<C: drop>(
     ctx: &mut TxContext
 ) {
     assert!(amounts.length() == recipients.length(), EDifferentLength);
-    let proposal_mut = account.create_proposal(
+    let mut proposal = account.create_proposal(
         TransferProposal {},
         b"".to_string(),
         key,
@@ -268,9 +277,11 @@ public fun propose_transfer<C: drop>(
     );
 
     amounts.zip_do!(recipients, |amount, recipient| {
-        new_mint<C>(proposal_mut, amount);
-        transfers::new_transfer(proposal_mut, recipient);
+        new_mint<C, TransferProposal>(&mut proposal, amount, TransferProposal {});
+        transfers::new_transfer(&mut proposal, recipient, TransferProposal {});
     });
+
+    account.add_proposal(proposal, TransferProposal {});
 }
 
 // step 2: multiple members have to approve the proposal (account::approve_proposal)
@@ -312,7 +323,7 @@ public fun propose_pay<C: drop>(
     recipient: address,
     ctx: &mut TxContext
 ) {
-    let proposal_mut = account.create_proposal(
+    let mut proposal = account.create_proposal(
         PayProposal {},
         b"".to_string(),
         key,
@@ -322,8 +333,10 @@ public fun propose_pay<C: drop>(
         ctx
     );
 
-    new_mint<C>(proposal_mut, coin_amount);
-    payments::new_pay(proposal_mut, amount, interval, recipient);
+    new_mint<C, PayProposal>(&mut proposal, coin_amount, PayProposal {});
+    payments::new_pay(&mut proposal, amount, interval, recipient, PayProposal {});
+
+    account.add_proposal(proposal, PayProposal {});
 }
 
 // step 2: multiple members have to approve the proposal (account::approve_proposal)
@@ -345,17 +358,21 @@ public fun execute_pay<C: drop>(
 
 // === [ACTION] Public functions ===
 
-public fun new_mint<C: drop>(proposal: &mut Proposal, amount: u64) {
-    proposal.add_action(MintAction<C> { amount });
+public fun new_mint<C: drop, W: copy + drop>(
+    proposal: &mut Proposal, 
+    amount: u64,
+    witness: W,    
+) {
+    proposal.add_action(MintAction<C> { amount }, witness);
 }
 
-public fun mint<C: drop, W: drop>(
+public fun mint<C: drop, W: copy + drop>(
     executable: &mut Executable, 
     account: &mut Account,
     witness: W, 
     ctx: &mut TxContext
 ): Coin<C> {
-    let mint_mut: &mut MintAction<C> = executable.action_mut(witness, account.addr());
+    let mint_mut: &mut MintAction<C> = executable.action_mut(account.addr(), witness);
     
     event::emit(Minted {
         coin_type: type_to_name<C>(),
@@ -368,13 +385,17 @@ public fun mint<C: drop, W: drop>(
     coin
 }
 
-public fun destroy_mint<C: drop, W: drop>(executable: &mut Executable, witness: W) {
+public fun destroy_mint<C: drop, W: copy + drop>(executable: &mut Executable, witness: W) {
     let MintAction<C> { amount } = executable.remove_action(witness);
     assert!(amount == 0, EMintNotExecuted);
 }
 
-public fun new_burn<C: drop>(proposal: &mut Proposal, amount: u64) {
-    proposal.add_action(BurnAction<C> { amount });
+public fun new_burn<C: drop, W: copy + drop>(
+    proposal: &mut Proposal, 
+    amount: u64, 
+    witness: W
+) {
+    proposal.add_action(BurnAction<C> { amount }, witness);
 }
 
 public fun burn<C: drop, W: copy + drop>(
@@ -383,7 +404,7 @@ public fun burn<C: drop, W: copy + drop>(
     coin: Coin<C>,
     witness: W, 
 ) {
-    let burn_mut: &mut BurnAction<C> = executable.action_mut(witness, account.addr());
+    let burn_mut: &mut BurnAction<C> = executable.action_mut(account.addr(), witness);
     
     event::emit(Burned {
         coin_type: type_to_name<C>(),
@@ -401,15 +422,16 @@ public fun destroy_burn<C: drop, W: copy + drop>(executable: &mut Executable, wi
     assert!(amount == 0, EBurnNotExecuted);
 }
 
-public fun new_update<C: drop>(
+public fun new_update<C: drop, W: copy + drop>(
     proposal: &mut Proposal,
     name: Option<String>,
     symbol: Option<String>,
     description: Option<String>,
     icon_url: Option<String>,
+    witness: W,
 ) {
     assert!(name.is_some() || symbol.is_some() || description.is_some() || icon_url.is_some(), ENoChange);
-    proposal.add_action(UpdateAction<C> { name, symbol, description, icon_url });
+    proposal.add_action(UpdateAction<C> { name, symbol, description, icon_url }, witness);
 }
 
 public fun update<C: drop, W: copy + drop>(
@@ -418,7 +440,7 @@ public fun update<C: drop, W: copy + drop>(
     metadata: &mut CoinMetadata<C>,
     witness: W,
 ) {
-    let update_mut: &mut UpdateAction<C> = executable.action_mut(witness, account.addr());
+    let update_mut: &mut UpdateAction<C> = executable.action_mut(account.addr(), witness);
     let lock_mut = borrow_lock_mut<C>(account);
 
     if (update_mut.name.is_some()) {

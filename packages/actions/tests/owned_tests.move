@@ -27,8 +27,9 @@ fun test_withdraw_end_to_end() {
     transfer::public_transfer(object1, account_address);
 
     world.scenario().next_tx(OWNER);
-    let proposal = world.create_proposal(Witness {}, b"".to_string(), key, b"".to_string(), 0, 0);
-    owned::new_withdraw(proposal, vector[id1]);
+    let mut proposal = world.create_proposal(Witness {}, b"".to_string(), key, b"".to_string(), 0, 0);
+    owned::new_withdraw(&mut proposal, vector[id1], Witness {});
+    world.account().add_proposal(proposal, Witness {});
     world.approve_proposal(key);
 
     let mut executable = world.execute_proposal(key);
@@ -52,8 +53,9 @@ fun test_borrow_end_to_end() {
     transfer::public_transfer(object1, account_address);
 
     world.scenario().next_tx(OWNER);
-    let proposal = world.create_proposal(Witness {}, b"".to_string(), key, b"".to_string(), 0, 0);
-    owned::new_borrow(proposal, vector[id1]);
+    let mut proposal = world.create_proposal(Witness {}, b"".to_string(), key, b"".to_string(), 0, 0);
+    owned::new_borrow(&mut proposal, vector[id1], Witness {});
+    world.account().add_proposal(proposal, Witness {});
     world.approve_proposal(key);
 
     let mut executable = world.execute_proposal(key);
@@ -80,8 +82,9 @@ fun test_withdraw_error_wrong_object() {
     transfer::public_transfer(object2, account_address);
 
     world.scenario().next_tx(OWNER);
-    let proposal = world.create_proposal(Witness {}, b"".to_string(), key, b"".to_string(), 0, 0);
-    owned::new_withdraw(proposal, vector[id1]);
+    let mut proposal = world.create_proposal(Witness {}, b"".to_string(), key, b"".to_string(), 0, 0);
+    owned::new_withdraw(&mut proposal, vector[id1], Witness {});
+    world.account().add_proposal(proposal, Witness {});
     world.approve_proposal(key);
 
     let mut executable = world.execute_proposal(key);
@@ -104,8 +107,9 @@ fun test_withdraw_error_retrieve_all_objects_before() {
     transfer::public_transfer(object1, account_address);
 
     world.scenario().next_tx(OWNER);
-    let proposal = world.create_proposal(Witness {}, b"".to_string(), key, b"".to_string(), 0, 0);
-    owned::new_withdraw(proposal, vector[id1]);
+    let mut proposal = world.create_proposal(Witness {}, b"".to_string(), key, b"".to_string(), 0, 0);
+    owned::new_withdraw(&mut proposal, vector[id1], Witness {});
+    world.account().add_proposal(proposal, Witness {});
     world.approve_proposal(key);
 
     let mut executable = world.execute_proposal(key);
@@ -127,8 +131,9 @@ fun test_put_back_error_wrong_object() {
     transfer::public_transfer(object1, account_address);
 
     world.scenario().next_tx(OWNER);
-    let proposal = world.create_proposal(Witness {}, b"".to_string(), key, b"".to_string(), 0, 0);
-    owned::new_borrow(proposal, vector[id1]);
+    let mut proposal = world.create_proposal(Witness {}, b"".to_string(), key, b"".to_string(), 0, 0);
+    owned::new_borrow(&mut proposal, vector[id1], Witness {});
+    world.account().add_proposal(proposal, Witness {});
     world.approve_proposal(key);
 
     let mut executable = world.execute_proposal(key);
@@ -153,8 +158,9 @@ fun test_complete_borrow_error_return_all_objects_before() {
     transfer::public_transfer(object1, account_address);
 
     world.scenario().next_tx(OWNER);
-    let proposal = world.create_proposal(Witness {}, b"".to_string(), key, b"".to_string(), 0, 0);
-    owned::new_borrow(proposal, vector[id1]);
+    let mut proposal = world.create_proposal(Witness {}, b"".to_string(), key, b"".to_string(), 0, 0);
+    owned::new_borrow(&mut proposal, vector[id1], Witness {});
+    world.account().add_proposal(proposal, Witness {});
     world.approve_proposal(key);
 
     let mut executable = world.execute_proposal(key);

@@ -131,7 +131,7 @@ public fun new_account(world: &mut World): Account {
     )
 }
 
-public fun create_proposal<W: drop>(
+public fun create_proposal<W: copy + drop>(
     world: &mut World, 
     auth_witness: W,
     auth_name: String,
@@ -139,7 +139,7 @@ public fun create_proposal<W: drop>(
     description: String,
     execution_time: u64, // timestamp in ms
     expiration_epoch: u64,
-): &mut Proposal {
+): Proposal {
     world.account.create_proposal(
         auth_witness, 
         auth_name,

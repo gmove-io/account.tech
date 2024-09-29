@@ -122,13 +122,14 @@ public fun cancel_payment_stream<C: drop>(
 
 // === [ACTION] Public Functions ===
 
-public fun new_pay(
+public fun new_pay<W: copy + drop>(
     proposal: &mut Proposal, 
     amount: u64,
     interval: u64,
     recipient: address,
+    witness: W,
 ) {
-    proposal.add_action(PayAction { amount, interval, recipient });
+    proposal.add_action(PayAction { amount, interval, recipient }, witness);
 }
 
 public fun pay<C: drop, W: copy + drop>(
@@ -138,7 +139,7 @@ public fun pay<C: drop, W: copy + drop>(
     witness: W,
     ctx: &mut TxContext
 ) {    
-    let pay_mut: &mut PayAction = executable.action_mut(witness, account.addr());
+    let pay_mut: &mut PayAction = executable.action_mut(account.addr(), witness);
 
     let stream = Stream<C> { 
         id: object::new(ctx), 
