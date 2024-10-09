@@ -15,6 +15,7 @@ use sui::{
     table::{Self, Table},
 };
 use account_protocol::account::Account;
+use account_config::multisig::{Multisig, Approvals};
 
 // === Errors ===
 
@@ -24,6 +25,9 @@ const EMustLeaveAllAccounts: u64 = 2;
 const EAlreadyHasUser: u64 = 3;
 
 // === Struct ===
+
+/// [MEMBER] can manage their User account
+public struct Do() has drop;
 
 /// Shared object enforcing one account maximum per user
 public struct Registry has key {
@@ -72,14 +76,14 @@ public fun new(username: String, profile_picture: String, ctx: &mut TxContext): 
 // === [MEMBER] Public functions ===
 
 /// Fills user_id in Account, inserts account_id in User, aborts if already joined
-public fun join_account(user: &mut User, account: &mut Account, ctx: &TxContext) {
-    account.member_mut(ctx.sender()).register_user_id(user.id.to_inner());
+public fun join_account(user: &mut User, account: &mut Account<Multisig, Approvals>, ctx: &TxContext) {
+    account.config_mut(Do()).get_member_mut(ctx.sender()).register_user_id(user.id.to_inner());
     user.account_ids.insert(object::id(account)); 
 }
 
 /// Extracts and verifies user_id in Account, removes account_id from User, aborts if not member
-public fun leave_account(user: &mut User, account: &mut Account, ctx: &TxContext) {
-    account.member_mut(ctx.sender()).unregister_user_id();
+public fun leave_account(user: &mut User, account: &mut Account<Multisig, Approvals>, ctx: &TxContext) {
+    account.config_mut(Do()).get_member_mut(ctx.sender()).unregister_user_id();
     user.account_ids.remove(&object::id(account));
 }
 
@@ -97,11 +101,11 @@ public fun destroy(user: User) {
 }
 
 /// Invites can be sent by an Account member (upon Account creation for instance)
-public fun send_invite(account: &Account, recipient: address, ctx: &mut TxContext) {
+public fun send_invite(account: &Account<Multisig, Approvals>, recipient: address, ctx: &mut TxContext) {
     // user inviting must be member
-    account.assert_is_member(ctx);
+    account.config().assert_is_member(ctx);
     // invited user must be member
-    assert!(account.members().is_member(recipient), ENotMember);
+    assert!(account.config().is_member(recipient), ENotMember);
     let invite = Invite { 
         id: object::new(ctx), 
         account_id: object::id(account) 
@@ -110,7 +114,7 @@ public fun send_invite(account: &Account, recipient: address, ctx: &mut TxContex
 }
 
 /// Invited user can register the Account in his User account
-public fun accept_invite(user: &mut User, account: &mut Account, invite: Invite, ctx: &TxContext) {
+public fun accept_invite(user: &mut User, account: &mut Account<Multisig, Approvals>, invite: Invite, ctx: &TxContext) {
     let Invite { id, account_id } = invite;
     id.delete();
     assert!(account_id == object::id(account), EWrongAccount);

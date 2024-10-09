@@ -7,59 +7,34 @@ module account_protocol::proposals;
 
 use std::string::String;
 use sui::{
-    vec_set::{Self, VecSet}, 
     bag::{Self, Bag},
-    event,
+    clock::Clock,
 };
 use account_protocol::{
-    auth::Auth,
-    members::Member,
+    source::Source,
 };
 
 // === Errors ===
 
-const EAlreadyApproved: u64 = 0;
-const ENotApproved: u64 = 1;
+const ECantBeExecutedYet: u64 = 0;
+const EHasntExpired: u64 = 1;
 const EProposalNotFound: u64 = 2;
 const EProposalKeyAlreadyExists: u64 = 3;
-const EHasntExpired: u64 = 4;
-
-// === Events ===
-
-public struct Created has copy, drop, store {
-    auth_witness: String,
-    auth_name: String,
-    key: String,
-    description: String,
-}
-
-public struct Approved has copy, drop, store {
-    auth_witness: String,
-    auth_name: String,
-    key: String,
-    description: String,
-}
-
-public struct Executed has copy, drop, store {
-    auth_witness: String,
-    auth_name: String,
-    key: String,
-    description: String,
-}
 
 // === Structs ===
 
 /// Parent struct protecting the proposals
-public struct Proposals has store {
-    inner: vector<Proposal>
+public struct Proposals<Outcome> has store {
+    inner: vector<Proposal<Outcome>>
 }
 
-/// Child struct, proposal owning a single action requested to be executed
+/// Child struct, proposal owning a sequence of actions requested to be executed
+/// Outcome is a custom struct depending on the config
 /// can be executed if total_weight >= account.thresholds.global
 /// or role_weight >= account.thresholds.role
-public struct Proposal has store {
+public struct Proposal<Outcome> has store {
     // module that issued the proposal and must destroy it
-    auth: Auth,
+    source: Source,
     // name of the proposal, serves as a key, should be unique
     key: String,
     // what this proposal aims to do, for informational purpose
@@ -71,80 +46,71 @@ public struct Proposal has store {
     execution_time: u64,
     // heterogenous array of actions to be executed from last to first
     actions: Bag,
-    // total weight of all members that approved the proposal
-    total_weight: u64,
-    // sum of the weights of members who approved and have the role
-    role_weight: u64, 
-    // who has approved the proposal
-    approved: VecSet<address>,
+    // Generic struct storing vote related data, depends on the config
+    outcome: Outcome
+}
+
+/// Hot potato wrapping actions and outcome from a proposal that expired
+public struct Expired<Outcome> {
+    actions: Bag,
+    next_to_destroy: u64,
+    outcome: Outcome,
 }
 
 // === View functions ===
 
-public fun length(proposals: &Proposals): u64 {
+public fun length<Outcome>(proposals: &Proposals<Outcome>): u64 {
     proposals.inner.length()
 }
 
-public fun get_idx(proposals: &Proposals, key: String): u64 {
-    proposals.inner.find_index!(|proposal| proposal.key == key).destroy_some()
-}
-
-public fun contains(proposals: &Proposals, key: String): bool {
+public fun contains<Outcome>(proposals: &Proposals<Outcome>, key: String): bool {
     proposals.inner.any!(|proposal| proposal.key == key)
 }
 
-public fun get(proposals: &Proposals, key: String): &Proposal {
+public fun get_idx<Outcome>(proposals: &Proposals<Outcome>, key: String): u64 {
+    proposals.inner.find_index!(|proposal| proposal.key == key).destroy_some()
+}
+
+public fun get<Outcome>(proposals: &Proposals<Outcome>, key: String): &Proposal<Outcome> {
     assert!(proposals.contains(key), EProposalNotFound);
     let idx = proposals.get_idx(key);
     &proposals.inner[idx]
 }
 
-public fun auth(proposal: &Proposal): &Auth {
-    &proposal.auth
+public fun source<Outcome>(proposal: &Proposal<Outcome>): &Source {
+    &proposal.source
 }
 
-public fun description(proposal: &Proposal): String {
+public fun description<Outcome>(proposal: &Proposal<Outcome>): String {
     proposal.description
 }
 
-public fun expiration_epoch(proposal: &Proposal): u64 {
+public fun expiration_epoch<Outcome>(proposal: &Proposal<Outcome>): u64 {
     proposal.expiration_epoch
 }
 
-public fun execution_time(proposal: &Proposal): u64 {
+public fun execution_time<Outcome>(proposal: &Proposal<Outcome>): u64 {
     proposal.execution_time
 }
 
-public fun actions_length(proposal: &Proposal): u64 {
+public fun actions_length<Outcome>(proposal: &Proposal<Outcome>): u64 {
     proposal.actions.length()
 }
 
-public fun total_weight(proposal: &Proposal): u64 {
-    proposal.total_weight
+public fun outcome<Outcome>(proposal: &Proposal<Outcome>): &Outcome {
+    &proposal.outcome
 }
 
-public fun role_weight(proposal: &Proposal): u64 {
-    proposal.role_weight
-}
-
-public fun approved(proposal: &Proposal): vector<address> {
-    proposal.approved.into_keys()
-}
-
-public fun has_approved(proposal: &Proposal, addr: address): bool {
-    proposal.approved.contains(&addr)
-}
-
-// === Account-only functions ===
+// === Proposal functions ===
 
 /// Inserts an action to the proposal bag
-/// safe because proposal_mut is only accessible upon creation
-public fun add_action<A: store, W: copy + drop>(
-    proposal: &mut Proposal, 
+public fun add_action<Outcome, A: store, W: drop>(
+    proposal: &mut Proposal<Outcome>, 
     action: A, 
     witness: W
 ) {
-    proposal.auth.assert_is_witness(witness);
+    // ensures the function is called within the same proposal as the one that created Proposal
+    proposal.source().assert_is_constructor(witness);
 
     let idx = proposal.actions.length();
     proposal.actions.add(idx, action);
@@ -154,119 +120,86 @@ public fun add_action<A: store, W: copy + drop>(
 
 /// The following functions are only used in the `account` module
 
-public(package) fun new(): Proposals {
-    Proposals { inner: vector[] }
+public(package) fun empty<Outcome>(): Proposals<Outcome> {
+    Proposals<Outcome> { inner: vector[] }
 }
 
-public(package) fun new_proposal(
-    auth: Auth,
+public(package) fun new_proposal<Outcome>(
+    source: Source,
     key: String,
     description: String,
     execution_time: u64, // timestamp in ms
     expiration_epoch: u64,
+    outcome: Outcome,
     ctx: &mut TxContext
-): Proposal {
-    Proposal { 
-        auth,
+): Proposal<Outcome> {
+    Proposal<Outcome> { 
+        source,
         key,
         description,
         execution_time,
         expiration_epoch,
         actions: bag::new(ctx),
-        total_weight: 0,
-        role_weight: 0,
-        approved: vec_set::empty(), 
+        outcome
     }
 }
 
-public(package) fun get_mut(proposals: &mut Proposals, key: String): &mut Proposal {
+public(package) fun add<Outcome>(
+    proposals: &mut Proposals<Outcome>,
+    proposal: Proposal<Outcome>,
+) {
+    assert!(!proposals.contains(proposal.key), EProposalKeyAlreadyExists);
+    proposals.inner.push_back(proposal);
+}
+
+/// Removes an proposal being executed if the execution_time is reached
+/// Outcome must be validated in AccountConfig to be destroyed
+public(package) fun remove<Outcome>(
+    proposals: &mut Proposals<Outcome>,
+    key: String,
+    clock: &Clock,
+): (Source, Bag, Outcome) {
+    let idx = proposals.get_idx(key);
+    let Proposal { execution_time, source, actions, outcome, .. } = proposals.inner.remove(idx);
+    assert!(clock.timestamp_ms() >= execution_time, ECantBeExecutedYet);
+
+    (source, actions, outcome)
+}
+
+public(package) fun get_mut<Outcome>(proposals: &mut Proposals<Outcome>, key: String): &mut Proposal<Outcome> {
     assert!(proposals.contains(key), EProposalNotFound);
     let idx = proposals.get_idx(key);
     &mut proposals.inner[idx]
 }
 
-public(package) fun add(
-    proposals: &mut Proposals,
-    proposal: Proposal,
-) {
-    assert!(!proposals.contains(proposal.key), EProposalKeyAlreadyExists);
-
-    event::emit(Created {
-        auth_witness: proposal.auth.witness().into_string().to_string(),
-        auth_name: proposal.auth.name(),
-        key: proposal.key,
-        description: proposal.description,
-    });
-
-    proposals.inner.push_back(proposal);
+public(package) fun outcome_mut<Outcome>(proposal: &mut Proposal<Outcome>): &mut Outcome {
+    &mut proposal.outcome
 }
 
-public(package) fun remove(
-    proposals: &mut Proposals,
-    key: String,
-): (Auth, Bag) {
-    let idx = proposals.get_idx(key);
-    let Proposal { auth, actions, description, .. } = proposals.inner.remove(idx);
-
-    event::emit(Executed {
-        auth_witness: auth.witness().into_string().to_string(),
-        auth_name: auth.name(),
-        key,
-        description,
-    });
-
-    (auth, actions)
-}
-
-public(package) fun delete(
-    proposals: &mut Proposals,
+public(package) fun delete<Outcome>(
+    proposals: &mut Proposals<Outcome>,
     key: String,
     ctx: &TxContext
-): (Auth, Bag) {
+): (Source, Expired<Outcome>) {
     let idx = proposals.get_idx(key);
-    let Proposal { auth, expiration_epoch, actions, .. } = proposals.inner.remove(idx);
+    let Proposal<Outcome> { source, expiration_epoch, actions, outcome, .. } = proposals.inner.remove(idx);
     assert!(expiration_epoch <= ctx.epoch(), EHasntExpired);
 
-    (auth, actions)
+    (source, Expired { actions, next_to_destroy: 0, outcome })
 }
 
-public(package) fun approve(
-    proposal: &mut Proposal, 
-    member: &Member, 
-    ctx: &TxContext
-) {
-    assert!(!proposal.has_approved(ctx.sender()), EAlreadyApproved);
+/// After calling `account::delete_proposal`, delete each action in its own module
+public fun remove_expired_action<Outcome, A: store>(expired: &mut Expired<Outcome>) : A {
+    let action = expired.actions.remove(expired.next_to_destroy);
+    expired.next_to_destroy = expired.next_to_destroy + 1;
     
-    event::emit(Approved {
-        auth_witness: proposal.auth.witness().into_string().to_string(),
-        auth_name: proposal.auth.name(),
-        key: proposal.key,
-        description: proposal.description,
-    });
-
-    let role = proposal.auth().into_role();
-    let has_role = member.has_role(role);
-
-    let weight = member.weight();
-    proposal.approved.insert(ctx.sender()); // throws if already approved
-    proposal.total_weight = proposal.total_weight + weight;
-    if (has_role)
-        proposal.role_weight = proposal.role_weight + weight;
+    action
 }
 
-public(package) fun disapprove(
-    proposal: &mut Proposal, 
-    member: &Member, 
-    ctx: &TxContext
-) {
-    assert!(proposal.has_approved(ctx.sender()), ENotApproved);
-    let role = proposal.auth().into_role();
-    let has_role = member.has_role(role);
+/// When the actions bag is empty, call this function from the right AccountConfig module
+public fun remove_expired_outcome<Outcome>(expired: Expired<Outcome>) : Outcome {
+    let Expired { actions, outcome, .. } = expired;
+    actions.destroy_empty();
 
-    let weight = member.weight();
-    proposal.approved.remove(&ctx.sender()); // throws if already approved
-    proposal.total_weight = proposal.total_weight - weight;
-    if (has_role)
-        proposal.role_weight = proposal.role_weight - weight;
+    outcome
 }
-

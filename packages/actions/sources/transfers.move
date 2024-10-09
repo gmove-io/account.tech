@@ -6,8 +6,8 @@ module account_actions::transfers;
 // === Imports ===
 use account_protocol::{
     account::Account,
-    proposals::Proposal,
-    executable::Executable
+    proposals::{Proposal, Expired},
+    executable::Executable,
 };
 
 // === Errors ===
@@ -24,17 +24,17 @@ public struct TransferAction has store {
 
 // === [ACTION] Public functions ===
 
-public fun new_transfer<W: copy + drop>(
-    proposal: &mut Proposal, 
+public fun new_transfer<Outcome, W: drop>(
+    proposal: &mut Proposal<Outcome>, 
     recipient: address,
     witness: W,
 ) {
     proposal.add_action(TransferAction { recipient }, witness);
 }
 
-public fun transfer<T: key + store, W: copy + drop>(
+public fun transfer<Config, Outcome, T: key + store, W: drop>(
     executable: &mut Executable, 
-    account: &mut Account, 
+    account: &mut Account<Config, Outcome>, 
     object: T,
     witness: W,
     is_executed: bool,
@@ -46,7 +46,7 @@ public fun transfer<T: key + store, W: copy + drop>(
         transfer_mut.recipient = @0xF; // reset to ensure it is executed once
 }
 
-public fun destroy_transfer<W: copy + drop>(
+public fun destroy_transfer<W: drop>(
     executable: &mut Executable, 
     witness: W
 ) {
@@ -54,13 +54,6 @@ public fun destroy_transfer<W: copy + drop>(
     assert!(recipient == @0xF, ETransferNotExecuted);
 }
 
-// === [CORE DEPS] Public functions ===
-
-public fun delete_transfer_action<W: copy + drop>(
-    action: TransferAction, 
-    account: &Account, 
-    witness: W
-) {
-    account.deps().assert_core_dep(witness);
-    let TransferAction { .. } = action;
+public fun delete_transfer_action<Outcome>(expired: Expired<Outcome>) {
+    let TransferAction { .. } = expired.remove_expired_action();
 }

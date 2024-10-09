@@ -9,18 +9,19 @@ module account_protocol::deps;
 
 // === Imports ===
 
-use std::string::String;
+use std::{
+    type_name,
+    string::String
+};
+use sui::address;
 use account_extensions::extensions::Extensions;
-
-// === Aliases ===
-
-public use fun account_protocol::auth::assert_core_dep as Deps.assert_core_dep;
-public use fun account_protocol::auth::assert_dep as Deps.assert_dep;
-public use fun account_protocol::auth::assert_version as Deps.assert_version;
 
 // === Errors ===
 
 const EDepNotFound: u64 = 0;
+const EDepAlreadyExists: u64 = 1;
+const ENotDep: u64 = 2;
+const ENotCoreDep: u64 = 3;
 
 // === Structs ===
 
@@ -34,7 +35,7 @@ public struct Dep has copy, store, drop {
     // name of the package
     name: String,
     // id of the package
-    package: address,
+    addr: address,
     // version of the package
     version: u64,
 }
@@ -43,17 +44,17 @@ public struct Dep has copy, store, drop {
 
 /// Creates a new Deps struct with the core dependencies
 public fun new(extensions: &Extensions): Deps {
-    let (packages, versions) = extensions.get_latest_core_deps();
+    let (addresses, versions) = extensions.get_latest_core_deps();
     let mut inner = vector[];
 
     inner.push_back(Dep { 
         name: b"AccountProtocol".to_string(), 
-        package: packages[0], 
+        addr: addresses[0], 
         version: versions[0] 
     });
     inner.push_back(Dep { 
         name: b"AccountActions".to_string(), 
-        package: packages[1], 
+        addr: addresses[1], 
         version: versions[1] 
     });
 
@@ -65,53 +66,83 @@ public fun add(
     deps: &mut Deps,
     extensions: &Extensions,
     name: String,
-    package: address, 
+    addr: address, 
     version: u64
 ) {
-    extensions.assert_extension_exists(name, package, version);
-    deps.inner.push_back(Dep { name, package, version });
+    assert!(!contains_name(deps, name), EDepAlreadyExists);
+    assert!(!contains_addr(deps, addr), EDepAlreadyExists);
+    extensions.assert_is_extension(name, addr, version);
+
+    deps.inner.push_back(Dep { name, addr, version });
 }
 
 // === View functions ===
 
-public fun get_version(deps: &Deps, package: address): u64 {
-    let idx = deps.get_idx(package);
-    deps.inner[idx].version
+/// Asserts that the auth has been issued from kraken (account or actions) packages
+public fun assert_is_dep<W: drop>(deps: &Deps, _: W) {
+    let witness_package = address::from_bytes(type_name::get<W>().get_address().into_bytes());
+    assert!(deps.contains_addr(witness_package), ENotDep);
 }
 
-public fun get_idx(deps: &Deps, package: address): u64 {
-    let opt = deps.inner.find_index!(|dep| dep.package == package);
+/// Asserts that the auth has been issued from kraken core (account or actions) packages
+public fun assert_is_core_dep<W: drop>(deps: &Deps, _: W) {
+    let witness_package = address::from_bytes(type_name::get<W>().get_address().into_bytes());
+    let idx = deps.get_idx_for_addr(witness_package);
+    assert!(idx == 0 || idx == 1 || idx == 2, ENotCoreDep);
+}
+
+public fun get_from_name(deps: &Deps, name: String): &Dep {
+    let opt = deps.inner.find_index!(|dep| dep.name == name);
+    assert!(opt.is_some(), EDepNotFound);
+    let idx = opt.destroy_some();
+
+    &deps.inner[idx]
+}
+
+public fun get_from_addr(deps: &Deps, addr: address): &Dep {
+    let opt = deps.inner.find_index!(|dep| dep.addr == addr);
+    assert!(opt.is_some(), EDepNotFound);
+    let idx = opt.destroy_some();
+    
+    &deps.inner[idx]
+}
+
+public fun get_idx_for_addr(deps: &Deps, addr: address): u64 {
+    let opt = deps.inner.find_index!(|dep| dep.addr == addr);
     assert!(opt.is_some(), EDepNotFound);
     opt.destroy_some()
 }
 
-public fun contains(deps: &Deps, package: String): bool {
-    deps.inner.any!(|dep| dep.package.to_string() == package)
+public fun name(dep: &Dep): String {
+    dep.name
 }
 
-// === Package functions ===
-
-public(package) fun get_package_version_from_string(deps: &Deps, package: String): u64 {
-    let idx = deps.get_package_idx_from_string(package);
-    deps.inner[idx].version
+public fun addr(dep: &Dep): address {
+    dep.addr
 }
 
-public(package) fun get_package_idx_from_string(deps: &Deps, package: String): u64 {
-    let opt = deps.inner.find_index!(|dep| dep.package.to_string() == package);
-    assert!(opt.is_some(), EDepNotFound);
-    opt.destroy_some()
+public fun version(dep: &Dep): u64 {
+    dep.version
+}
+
+public fun contains_name(deps: &Deps, name: String): bool {
+    deps.inner.any!(|dep| dep.name == name)
+}
+
+public fun contains_addr(deps: &Deps, addr: address): bool {
+    deps.inner.any!(|dep| dep.addr == addr)
 }
 
 // === Test functions ===
 
-#[test_only]
-public fun update(deps: &mut Deps, package: address, version: u64) {
-    let idx = deps.get_idx(package);
-    deps.inner[idx].version = version;
-}
+// #[test_only]
+// public fun update(deps: &mut Deps, package: address, version: u64) {
+//     let idx = deps.get_idx(package);
+//     deps.inner[idx].version = version;
+// }
 
-#[test_only]
-public fun remove(deps: &mut Deps, package: address) {
-    let idx = deps.get_idx(package);
-    deps.inner.remove(idx);
-}
+// #[test_only]
+// public fun remove(deps: &mut Deps, package: address) {
+//     let idx = deps.get_idx(package);
+//     deps.inner.remove(idx);
+// }

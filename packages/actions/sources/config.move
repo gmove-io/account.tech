@@ -17,16 +17,13 @@ module account_actions::config;
 // === Imports ===
 
 use std::string::String;
-use sui::{
-    vec_map::{Self, VecMap},
-};
 use account_protocol::{
     account::Account,
-    proposals::Proposal,
+    proposals::{Proposal, Expired},
     executable::Executable,
-    deps,
-    members,
-    thresholds::{Self, Thresholds},
+    deps::{Self, Deps},
+    metadata::{Self, Metadata},
+    auth::Auth,
 };
 use account_extensions::extensions::Extensions;
 
@@ -36,8 +33,9 @@ const EThresholdTooHigh: u64 = 0;
 const EThresholdNull: u64 = 1;
 const EMembersNotSameLength: u64 = 2;
 const ERolesNotSameLength: u64 = 3;
-const EThresholdNotLastAction: u64 = 4;
-const ERoleDoesntExist: u64 = 5;
+const ERoleDoesntExist: u64 = 4;
+const EMetadataNotSameLength: u64 = 5;
+const EMetadataNameMissing: u64 = 6;
 
 // === Structs ===
 
@@ -48,31 +46,38 @@ const ERoleDoesntExist: u64 = 5;
 /// Finally, they are used to parse the actions of the proposal off-chain.
 
 /// [PROPOSAL] modifies the name of the account
-public struct ConfigNameProposal has copy, drop {}
-/// [PROPOSAL] modifies the members and thresholds of the account
-public struct ConfigRulesProposal has copy, drop {}
+public struct ConfigMetadataProposal() has drop;
 /// [PROPOSAL] modifies the dependencies of the account
-public struct ConfigDepsProposal has copy, drop {}
+public struct ConfigDepsProposal() has drop;
 
-/// [ACTION] wraps a account field into a generic action
-public struct ConfigAction<T> has store {
-    inner: T,
+/// [ACTION] wraps the metadata account field into an action
+public struct ConfigMetadataAction has store {
+    metadata: Metadata,
+}
+/// [ACTION] wraps the deps account field into an action
+public struct ConfigDepsAction has store {
+    deps: Deps,
 }
 
 // === [PROPOSAL] Public functions ===
 
 // step 1: propose to change the name
-public fun propose_config_name(
-    account: &mut Account, 
+public fun propose_config_metadata<Config, Outcome>(
+    auth: Auth,
+    account: &mut Account<Config, Outcome>, 
+    outcome: Outcome,
     key: String,
     description: String,
     execution_time: u64,
     expiration_epoch: u64,
-    name: String,
+    keys: vector<String>,
+    values: vector<String>,
     ctx: &mut TxContext
 ) {
     let mut proposal = account.create_proposal(
-        ConfigNameProposal {},
+        auth,
+        outcome,
+        ConfigMetadataProposal(),
         b"".to_string(),
         key,
         description,
@@ -80,74 +85,27 @@ public fun propose_config_name(
         expiration_epoch,
         ctx
     );
-    new_config_name(&mut proposal, name, ConfigNameProposal {});
-    account.add_proposal(proposal, ConfigNameProposal {});
+    new_config_metadata(&mut proposal, keys, values, ConfigMetadataProposal());
+    account.add_proposal(proposal, ConfigMetadataProposal());
 }
 
 // step 2: multiple members have to approve the proposal (account::approve_proposal)
-// step 3: execute the proposal and return the action (account::execute_proposal)
+// step 3: execute the proposal and return the action (AccountConfig::module::execute_proposal)
 
 // step 4: execute the action and modify Account object
-public fun execute_config_name(
+public fun execute_config_metadata<Config, Outcome>(
     mut executable: Executable,
-    account: &mut Account, 
+    account: &mut Account<Config, Outcome>, 
 ) {
-    config_name(&mut executable, account, ConfigNameProposal {});
-    executable.destroy(ConfigNameProposal {});
-}
-
-// step 1: propose to modify account rules (everything touching weights)
-// threshold has to be valid (reachable and different from 0 for global)
-public fun propose_config_rules(
-    account: &mut Account, 
-    key: String,
-    description: String,
-    execution_time: u64,
-    expiration_epoch: u64,
-    // members 
-    addresses: vector<address>,
-    weights: vector<u64>,
-    roles: vector<vector<String>>,
-    // thresholds 
-    global: u64,
-    role_names: vector<String>,
-    role_thresholds: vector<u64>,
-    ctx: &mut TxContext
-) {
-    verify_new_rules(addresses, weights, roles, global, role_names, role_thresholds);
-    // verify new rules are valid
-    let mut proposal = account.create_proposal(
-        ConfigRulesProposal {},
-        b"".to_string(),
-        key,
-        description,
-        execution_time,
-        expiration_epoch,
-        ctx
-    );
-    // must modify members before modifying thresholds to ensure they are reachable
-    new_config_members(&mut proposal, addresses, weights, roles, ConfigRulesProposal {});
-    new_config_thresholds(&mut proposal, global, role_names, role_thresholds, ConfigRulesProposal {});
-    
-    account.add_proposal(proposal, ConfigRulesProposal {});
-}
-
-// step 2: multiple members have to approve the proposal (account::approve_proposal)
-// step 3: execute the proposal and return the action (account::execute_proposal)
-
-// step 4: execute the action and modify Account object
-public fun execute_config_rules(
-    mut executable: Executable,
-    account: &mut Account, 
-) {
-    config_members(&mut executable, account, ConfigRulesProposal {});
-    config_thresholds(&mut executable, account, ConfigRulesProposal {});
-    executable.destroy(ConfigRulesProposal {});
+    config_metadata(&mut executable, account, ConfigMetadataProposal());
+    executable.destroy(ConfigMetadataProposal());
 }
 
 // step 1: propose to update the dependencies
-public fun propose_config_deps(
-    account: &mut Account, 
+public fun propose_config_deps<Config, Outcome>(
+    auth: Auth,
+    account: &mut Account<Config, Outcome>, 
+    outcome: Outcome,
     key: String,
     description: String,
     execution_time: u64,
@@ -159,7 +117,9 @@ public fun propose_config_deps(
     ctx: &mut TxContext
 ) {
     let mut proposal = account.create_proposal(
-        ConfigDepsProposal {},
+        auth,
+        outcome,
+        ConfigDepsProposal(),
         b"".to_string(),
         key,
         description,
@@ -167,106 +127,54 @@ public fun propose_config_deps(
         expiration_epoch,
         ctx
     );
-    new_config_deps(&mut proposal, extensions, names, packages, versions, ConfigDepsProposal {});
-    account.add_proposal(proposal, ConfigDepsProposal {});
+    new_config_deps(&mut proposal, extensions, names, packages, versions, ConfigDepsProposal());
+    account.add_proposal(proposal, ConfigDepsProposal());
 }
 
 // step 2: multiple members have to approve the proposal (account::approve_proposal)
-// step 3: execute the proposal and return the action (account::execute_proposal)
+// step 3: execute the proposal and return the action (AccountConfig::module::execute_proposal)
 
 // step 4: execute the action and modify Account object
-public fun execute_config_deps(
+public fun execute_config_deps<Config, Outcome>(
     mut executable: Executable,
-    account: &mut Account, 
+    account: &mut Account<Config, Outcome>, 
 ) {
-    config_deps(&mut executable, account, ConfigDepsProposal {});
-    executable.destroy(ConfigDepsProposal {});
+    config_deps(&mut executable, account, ConfigDepsProposal());
+    executable.destroy(ConfigDepsProposal());
 }
 
 // === [ACTION] Public functions ===
 
-public fun new_config_name<W: copy + drop>(
-    proposal: &mut Proposal, 
-    name: String, 
+public fun new_config_metadata<Outcome, W: drop>(
+    proposal: &mut Proposal<Outcome>, 
+    keys: vector<String>,
+    values: vector<String>,
     witness: W
 ) {
-    proposal.add_action(ConfigAction { inner: name }, witness);
-}
+    assert!(keys.length() == values.length(), EMetadataNotSameLength);
+    assert!(keys[0] == b"name".to_string(), EMetadataNameMissing);
 
-public fun config_name<W: copy + drop>(
-    executable: &mut Executable,
-    account: &mut Account, 
-    witness: W,
-) {
-    let ConfigAction { inner } = executable.remove_action(witness);
-    *account.name_mut(executable, witness) = inner;
-}
-
-public fun new_config_members<W: copy + drop>(
-    proposal: &mut Proposal,
-    addresses: vector<address>,
-    weights: vector<u64>, 
-    mut roles: vector<vector<String>>, // inner vectors can be empty
-    witness: W,
-) { 
-    assert!(
-        addresses.length() == weights.length() && 
-        addresses.length() == roles.length(), 
-        EMembersNotSameLength
+    proposal.add_action(
+        ConfigMetadataAction { metadata: metadata::from_keys_values(keys, values) }, 
+        witness
     );
-
-    let mut members = members::new();
-    addresses.zip_do!(weights, |addr, weight| {
-        members.add(addr, weight, option::none(), roles.remove(0));
-    });
-    
-    proposal.add_action(ConfigAction { inner: members }, witness);
-}    
-
-public fun config_members<W: copy + drop>(
-    executable: &mut Executable,
-    account: &mut Account, 
-    witness: W,
-) {
-    let ConfigAction { inner } = executable.remove_action(witness);
-    *account.members_mut(executable, witness) = inner;
 }
 
-public fun new_config_thresholds<W: copy + drop>(
-    proposal: &mut Proposal,
-    global: u64,
-    role_names: vector<String>,
-    role_thresholds: vector<u64>, 
-    witness: W,
-) { 
-    assert!(role_names.length() == role_thresholds.length(), ERolesNotSameLength);
-    assert!(global != 0, EThresholdNull);
-
-    let mut thresholds = thresholds::new(global);
-    role_names.zip_do!(role_thresholds, |role, threshold| {
-        thresholds.add(role, threshold);
-    });
-
-    proposal.add_action(ConfigAction { inner: thresholds }, witness);
-}    
-
-public fun config_thresholds<W: copy + drop>(
+public fun config_metadata<Config, Outcome, W: drop>(
     executable: &mut Executable,
-    account: &mut Account,
+    account: &mut Account<Config, Outcome>, 
     witness: W,
 ) {
-    // threshold modification must be the last action to be executed to ensure it is reachable
-    assert!(
-        executable.action_index<ConfigAction<Thresholds>>() + 1 - executable.next_to_destroy() == executable.actions_length(), 
-        EThresholdNotLastAction
-    );
-    
-    let ConfigAction { inner } = executable.remove_action(witness);
-    *account.thresholds_mut(executable, witness) = inner;
+    let ConfigMetadataAction { metadata } = executable.remove_action(witness);
+    *account.metadata_mut(witness) = metadata;
 }
 
-public fun new_config_deps<W: copy + drop>(
-    proposal: &mut Proposal,
+public fun delete_config_metadata_action<Outcome>(expired: Expired<Outcome>) {
+    let ConfigMetadataAction { .. } = expired.remove_expired_action();
+}
+
+public fun new_config_deps<Outcome, W: drop>(
+    proposal: &mut Proposal<Outcome>,
     extensions: &Extensions,
     names: vector<String>,
     packages: vector<address>,
@@ -278,62 +186,20 @@ public fun new_config_deps<W: copy + drop>(
         let version = versions.remove(0);
         deps.add(extensions, name, package, version);
     });
-    proposal.add_action(ConfigAction { inner: deps }, witness);
+    proposal.add_action(ConfigDepsAction { deps }, witness);
 }
 
-public fun config_deps<W: copy + drop>(
+public fun config_deps<Config, Outcome, W: drop>(
     executable: &mut Executable,
-    account: &mut Account, 
+    account: &mut Account<Config, Outcome>, 
     witness: W,
 ) {
-    let ConfigAction { inner } = executable.remove_action(witness);
-    *account.deps_mut(executable, witness) = inner;
+    let ConfigDepsAction { deps } = executable.remove_action(witness);
+    *account.deps_mut(witness) = deps;
 }
 
-// === [CORE DEPS] Public functions ===
-
-public fun delete_config_action<T: drop, W: copy + drop>(
-    action: ConfigAction<T>, 
-    account: &Account,
-    witness: W,
-) {
-    account.deps().assert_core_dep(witness);
-    let ConfigAction { .. } = action;
+public fun delete_config_deps_action<Outcome>(expired: Expired<Outcome>) {
+    let ConfigDepsAction { .. } = expired.remove_expired_action();
 }
 
 // === Private functions ===
-
-fun verify_new_rules(
-    // members 
-    addresses: vector<address>,
-    weights: vector<u64>,
-    roles: vector<vector<String>>,
-    // thresholds 
-    global: u64,
-    role_names: vector<String>,
-    role_thresholds: vector<u64>,
-) {
-    let total_weight = weights.fold!(0, |acc, weight| acc + weight);    
-    assert!(addresses.length() == weights.length() && addresses.length() == roles.length(), EMembersNotSameLength);
-    assert!(role_names.length() == role_thresholds.length(), ERolesNotSameLength);
-    assert!(total_weight >= global, EThresholdTooHigh);
-    assert!(global != 0, EThresholdNull);
-
-    let mut weights_for_role: VecMap<String, u64> = vec_map::empty();
-    weights.zip_do!(roles, |weight, roles_for_addr| {
-        roles_for_addr.do!(|role| {
-            if (weights_for_role.contains(&role)) {
-                *weights_for_role.get_mut(&role) = weight;
-            } else {
-                weights_for_role.insert(role, weight);
-            }
-        });
-    });
-
-    while (!weights_for_role.is_empty()) {
-        let (role, weight) = weights_for_role.pop();
-        let (role_exists, idx) = role_names.index_of(&role);
-        assert!(role_exists, ERoleDoesntExist);
-        assert!(weight >= role_thresholds[idx], EThresholdTooHigh);
-    };
-}

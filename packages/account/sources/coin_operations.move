@@ -15,24 +15,24 @@ use account_protocol::account::Account;
 // === Structs ===
 
 /// Delegated witness authorizing access to the inner Account
-public struct ManageCoins has copy, drop {}
+public struct Do() has drop;
 
 // === [MEMBER] Public functions ===
 
 /// Members can merge and split coins, no need for approvals
 /// Returns the IDs to use in a following proposal, conserve the order
-public fun merge_and_split<T: drop>(
-    account: &mut Account, 
+public fun merge_and_split<Config, Outcome, T: drop>(
+    account: &mut Account<Config, Outcome>, 
     to_merge: vector<Receiving<Coin<T>>>, // there can be only one coin if we just want to split
     to_split: vector<u64>, // there can be no amount if we just want to merge
     ctx: &mut TxContext
 ): vector<ID> { 
-    account.assert_is_member(ctx);
+    // account.assert_is_member(ctx);
 
     // receive all coins
     let mut coins = vector::empty();
     to_merge.do!(|item| {
-        let coin = account.receive(ManageCoins {}, item);
+        let coin = account.receive(Do(), item);
         coins.push_back(coin);
     });
 
@@ -54,8 +54,8 @@ fun merge<T: drop>(
     merged
 }
 
-fun split<T: drop>(
-    account: &Account, 
+fun split<Config, Outcome, T: drop>(
+    account: &Account<Config, Outcome>, 
     mut coin: Coin<T>,
     amounts: vector<u64>, 
     ctx: &mut TxContext

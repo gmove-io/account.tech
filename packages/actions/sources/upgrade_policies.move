@@ -16,8 +16,9 @@ use sui::{
 };
 use account_protocol::{
     account::Account,
-    proposals::Proposal,
-    executable::Executable
+    proposals::{Proposal, Expired},
+    executable::Executable,
+    auth::Auth,
 };
 
 // === Error ===
@@ -112,19 +113,20 @@ public fun has_rule<K: copy + drop + store>(
 }
 
 /// Attaches the UpgradeLock as a Dynamic Field to the account
-public fun lock_cap(
+public fun lock_cap<Config, Outcome>(
+    auth: Auth,
     lock: UpgradeLock,
-    account: &mut Account,
+    account: &mut Account<Config, Outcome>,
     name: String,
-    ctx: &mut TxContext
 ) {
-    account.assert_is_member(ctx);
+    auth.verify(account.addr());
     account.add_managed_asset(ManageUpgrades {}, UpgradeKey { name }, lock);
 }
 
 /// Locks a cap with a timelock rule
-public fun lock_cap_with_timelock(
-    account: &mut Account,
+public fun lock_cap_with_timelock<Config, Outcome>(
+    auth: Auth,
+    account: &mut Account<Config, Outcome>,
     name: String,
     delay_ms: u64,
     upgrade_cap: UpgradeCap,
@@ -132,18 +134,27 @@ public fun lock_cap_with_timelock(
 ) {
     let mut lock = new_lock(upgrade_cap, ctx);
     add_rule(&mut lock, TimeLockKey {}, TimeLock { delay_ms });
-    lock.lock_cap(account, name, ctx);
+    lock_cap(auth, lock, account, name);
 }
 
-public fun has_lock(account: &Account, name: String): bool {
+public fun has_lock<Config, Outcome>(
+    account: &mut Account<Config, Outcome>, 
+    name: String
+): bool {
     account.has_managed_asset(UpgradeKey { name })
 }
 
-public fun borrow_lock(account: &Account, name: String): &UpgradeLock {
+public fun borrow_lock<Config, Outcome>(
+    account: &mut Account<Config, Outcome>, 
+    name: String
+): &UpgradeLock {
     account.borrow_managed_asset(ManageUpgrades {}, UpgradeKey { name })
 }
 
-public fun borrow_lock_mut(account: &mut Account, name: String): &mut UpgradeLock {
+public fun borrow_lock_mut<Config, Outcome>(
+    account: &mut Account<Config, Outcome>, 
+    name: String
+): &mut UpgradeLock {
     account.borrow_managed_asset_mut(ManageUpgrades {}, UpgradeKey { name })
 }
 
@@ -156,8 +167,10 @@ public fun upgrade_cap(lock: &UpgradeLock): &UpgradeCap {
 // step 1: propose an UpgradeAction by passing the digest of the package build
 // execution_time is automatically set to now + timelock
 // if timelock = 0, it means that upgrade can be executed at any time
-public fun propose_upgrade(
-    account: &mut Account, 
+public fun propose_upgrade<Config, Outcome>(
+    auth: Auth,
+    account: &mut Account<Config, Outcome>, 
+    outcome: Outcome,
     key: String,
     description: String,
     expiration_epoch: u64,
@@ -171,6 +184,8 @@ public fun propose_upgrade(
     let delay = lock.time_delay();
 
     let mut proposal = account.create_proposal(
+        auth,
+        outcome,
         UpgradeProposal {},
         name,
         key,
@@ -188,9 +203,9 @@ public fun propose_upgrade(
 // step 3: execute the proposal and return the action (account::execute_proposal)
 
 // step 4: destroy UpgradeAction and return the UpgradeTicket for upgrading
-public fun execute_upgrade(
+public fun execute_upgrade<Config, Outcome>(
     executable: &mut Executable,
-    account: &mut Account,
+    account: &mut Account<Config, Outcome>,
 ): UpgradeTicket {
     upgrade(executable, account, UpgradeProposal {})
 }    
@@ -198,12 +213,12 @@ public fun execute_upgrade(
 // step 5: consume the ticket to upgrade  
 
 // step 6: consume the receipt to commit the upgrade
-public fun confirm_upgrade(
+public fun confirm_upgrade<Config, Outcome>(
     mut executable: Executable,
-    account: &mut Account,
+    account: &mut Account<Config, Outcome>,
     receipt: UpgradeReceipt,
 ) {
-    let name = executable.auth().name();
+    let name = executable.source().role_name();
     let lock_mut = borrow_lock_mut(account, name);
     package::commit_upgrade(&mut lock_mut.upgrade_cap, receipt);
     
@@ -213,8 +228,10 @@ public fun confirm_upgrade(
 
 // step 1: propose an UpgradeAction by passing the digest of the package build
 // execution_time is automatically set to now + timelock
-public fun propose_restrict(
-    account: &mut Account, 
+public fun propose_restrict<Config, Outcome>(
+    auth: Auth,
+    account: &mut Account<Config, Outcome>, 
+    outcome: Outcome,
     key: String,
     description: String,
     expiration_epoch: u64,
@@ -229,6 +246,8 @@ public fun propose_restrict(
     let current_policy = lock.upgrade_cap.policy();
 
     let mut proposal = account.create_proposal(
+        auth, 
+        outcome,
         RestrictProposal {},
         name,
         key,
@@ -246,9 +265,9 @@ public fun propose_restrict(
 // step 3: execute the proposal and return the action (account::execute_proposal)
 
 // step 4: restrict the upgrade policy
-public fun execute_restrict(
+public fun execute_restrict<Config, Outcome>(
     mut executable: Executable,
-    account: &mut Account,
+    account: &mut Account<Config, Outcome>,
 ) {
     restrict(&mut executable, account, RestrictProposal {});
     destroy_restrict(&mut executable, RestrictProposal {});
@@ -257,20 +276,20 @@ public fun execute_restrict(
 
 // [ACTION] Public Functions ===
 
-public fun new_upgrade<W: copy + drop>(
-    proposal: &mut Proposal, 
+public fun new_upgrade<Outcome, W: drop>(
+    proposal: &mut Proposal<Outcome>, 
     digest: vector<u8>, 
     witness: W
 ) {
     proposal.add_action(UpgradeAction { digest }, witness);
 }    
 
-public fun upgrade<W: copy + drop>(
+public fun upgrade<Config, Outcome, W: drop>(
     executable: &mut Executable,
-    account: &mut Account,
+    account: &mut Account<Config, Outcome>,
     witness: W,
 ): UpgradeTicket {
-    let name = executable.auth().name();
+    let name = executable.source().role_name();
     let upgrade_mut: &mut UpgradeAction = executable.action_mut(account.addr(), witness);
     let lock_mut = borrow_lock_mut(account, name);
 
@@ -287,13 +306,13 @@ public fun upgrade<W: copy + drop>(
     ticket
 }    
 
-public fun destroy_upgrade<W: copy + drop>(executable: &mut Executable, witness: W) {
+public fun destroy_upgrade<W: drop>(executable: &mut Executable, witness: W) {
     let UpgradeAction { digest, .. } = executable.remove_action(witness);
     assert!(digest.is_empty(), EUpgradeNotExecuted);
 }
 
-public fun new_restrict<W: copy + drop>(
-    proposal: &mut Proposal, 
+public fun new_restrict<Outcome, W: drop>(
+    proposal: &mut Proposal<Outcome>, 
     current_policy: u8, 
     policy: u8, 
     witness: W
@@ -309,12 +328,12 @@ public fun new_restrict<W: copy + drop>(
     proposal.add_action(RestrictAction { policy }, witness);
 }    
 
-public fun restrict<W: copy + drop>(
+public fun restrict<Config, Outcome, W: drop>(
     executable: &mut Executable,
-    account: &mut Account,
+    account: &mut Account<Config, Outcome>,
     witness: W,
 ) {
-    let name = executable.auth().name();
+    let name = executable.source().role_name();
     let restrict_mut: &mut RestrictAction = executable.action_mut(account.addr(), witness);
 
     let (package_id, policy) = if (restrict_mut.policy == package::additive_policy()) {
@@ -342,20 +361,13 @@ public fun restrict<W: copy + drop>(
     restrict_mut.policy = 0;
 }
 
-public fun destroy_restrict<W: copy + drop>(executable: &mut Executable, witness: W) {
+public fun destroy_restrict<W: drop>(executable: &mut Executable, witness: W) {
     let RestrictAction { policy, .. } = executable.remove_action(witness);
     assert!(policy == 0, ERestrictNotExecuted);
 }
 
-// === [CORE DEPS] Public functions ===
-
-public fun delete_upgrade_action<W: copy + drop>(
-    action: UpgradeAction, 
-    account: &Account, 
-    witness: W
-) {
-    account.deps().assert_core_dep(witness);
-    let UpgradeAction { .. } = action;
+public fun delete_upgrade_action<Outcome>(expired: Expired<Outcome>) {
+    let UpgradeAction { .. } = expired.remove_expired_action();
 }
 
 // === Private Functions ===

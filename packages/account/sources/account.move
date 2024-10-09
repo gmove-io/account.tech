@@ -1,4 +1,4 @@
-/// This is the core module managing the account Account.
+/// This is the core module managing the account Account<Config>.
 /// It provides the apis to create, approve and execute proposals with actions.
 /// 
 /// The flow is as follows:
@@ -20,15 +20,15 @@ use sui::{
     transfer::Receiving,
     clock::Clock, 
     dynamic_field as df,
-    bag::Bag,
 };
 use account_protocol::{
-    auth,
+    version,
+    source,
+    metadata::{Self, Metadata},
     deps::{Self, Deps},
-    thresholds::{Self, Thresholds},
-    members::{Self, Members, Member},
-    proposals::{Self, Proposals, Proposal},
+    proposals::{Self, Proposals, Proposal, Expired},
     executable::{Self, Executable},
+    auth::Auth,
 };
 use account_extensions::extensions::Extensions;
 
@@ -37,232 +37,199 @@ use account_extensions::extensions::Extensions;
 const ECantBeExecutedYet: u64 = 0;
 const ECallerIsNotMember: u64 = 1;
 
-// === Constants ===
-
-const VERSION: u64 = 1;
-
 // === Structs ===
 
 /// Shared multisig Account object 
-public struct Account has key {
+public struct Account<Config, Outcome> has key {
     id: UID,
-    // human readable name to differentiate the multisig accounts
-    name: String,
+    // arbitrary data that can be proposed and added by members
+    // first field is a human readable name to differentiate the multisig accounts
+    metadata: Metadata,
     // ids and versions of the packages this account is using
     // idx 0: account_protocol, idx 1: account_actions
     deps: Deps,
-    // members of the account
-    members: Members,
-    // manage global threshold and role -> threshold
-    thresholds: Thresholds,
     // open proposals, key should be a unique descriptive name
-    proposals: Proposals,
+    proposals: Proposals<Outcome>,
+    // config can be anything (e.g. Multisig, coin-based DAO, etc.)
+    config: Config,
 }
 
 // === Public mutative functions ===
 
-/// Init and returns a new Account object
-/// Creator is added by default with weight and global threshold of 1
-public fun new(
+/// Creates a new Account object, called from AccountConfig
+public fun new<Config, Outcome>(
     extensions: &Extensions,
     name: String, 
-    account_id: ID, 
+    config: Config, 
     ctx: &mut TxContext
-): Account {
-    let mut members = members::new();
-    members.add(ctx.sender(), 1, option::some(account_id), vector[]);
-    
-    Account { 
+): Account<Config, Outcome> {
+    Account<Config, Outcome> { 
         id: object::new(ctx),
-        name,
+        metadata: metadata::new(name),
         deps: deps::new(extensions),
-        thresholds: thresholds::new(1),
-        members,
-        proposals: proposals::new(),
+        proposals: proposals::empty(),
+        config,
     }
 }
 
-/// Must be initialized by the creator before being shared
+/// Can be initialized by the creator before being shared
 #[allow(lint(share_owned))]
-public fun share(account: Account) {
+public fun share<Config: store, Outcome: store>(
+    account: Account<Config, Outcome>
+) {
     transfer::share_object(account);
 }
 
-// === Account-only functions ===
+// === Proposal functions ===
 
 /// Creates a new proposal that must be constructed in another module
-public fun create_proposal<W: copy + drop>(
-    account: &mut Account, 
-    witness: W, // module's auth witness
-    auth_name: String, // module's auth name
+/// Only packages (instantiating the witness) allowed in extensions can create an source
+public fun create_proposal<Config, Outcome, W: drop>(
+    account: &mut Account<Config, Outcome>, 
+    auth: Auth, // proves that the caller is a member
+    outcome: Outcome, // vote settings
+    witness: W, // module's source witness (proposal/role witness)
+    w_name: String, // module's source name (role name)
     key: String, // proposal key
     description: String,
     execution_time: u64, // timestamp in ms
     expiration_epoch: u64, // epoch when we can delete the proposal
     ctx: &mut TxContext
-): Proposal {
-    account.assert_is_member(ctx);
-    let auth = auth::construct(witness, auth_name, account.addr());
-    account.deps.assert_version(&auth, VERSION);
+): Proposal<Outcome> {
+    // ensures the caller is authorized for this account
+    auth.verify(account.addr());
+    let source = source::construct(
+        account.addr(), 
+        version::get_type!(),
+        witness, 
+        w_name
+    );
+    // only an account dependency can create a proposal
+    source.assert_is_dep_with_version(account.deps(), version::get());
 
     proposals::new_proposal(
-        auth,
+        source,
         key,
         description,
         execution_time,
         expiration_epoch,
+        outcome,
         ctx
     )
 }
 
-public fun add_proposal<W: copy + drop>(
-    account: &mut Account, 
-    proposal: Proposal, 
+/// Adds a proposal to the account
+/// must be called by the same proposal interface that created it
+public fun add_proposal<Config, Outcome, W: drop>(
+    account: &mut Account<Config, Outcome>, 
+    proposal: Proposal<Outcome>, 
     witness: W
 ) {
-    proposal.auth().assert_is_witness(witness);
+    proposal.source().assert_is_constructor(witness);
+    proposal.source().assert_is_dep_with_version(account.deps(), version::get());
+    
     account.proposals.add(proposal);
 }
 
-/// Increases the global threshold and the role threshold if the signer has the one from the proposal
-public fun approve_proposal(
-    account: &mut Account, 
-    key: String, 
-    ctx: &mut TxContext
-) {
-    account.assert_is_member(ctx);
-
-    let proposal = account.proposals.get_mut(key);
-    // asserts that it uses the right AccountProtocol package version
-    account.deps.assert_version(proposal.auth(), VERSION);
-    let member = account.members.get(ctx.sender()); 
-    proposal.approve(member, ctx);
-}
-
-/// The signer removes his agreement
-public fun remove_approval(
-    account: &mut Account, 
-    key: String, 
-    ctx: &mut TxContext
-) {
-    let proposal = account.proposals.get_mut(key);
-    account.deps.assert_version(proposal.auth(), VERSION);
-    let member = account.members.get(ctx.sender()); 
-    proposal.disapprove(member, ctx);
-}
-
-/// Returns an executable if the number of signers is >= (global || role) threshold
-/// Anyone can execute a proposal, this allows to automate the execution of proposals
-public fun execute_proposal(
-    account: &mut Account, 
+/// Returns an Executable with the Proposal Outcome that must be validated in AccountCOnfig
+public fun execute_proposal<Config, Outcome, W: drop>(
+    account: &mut Account<Config, Outcome>, 
     key: String, 
     clock: &Clock,
-): Executable {
-    let proposal = account.proposals.get(key);
-    assert!(clock.timestamp_ms() >= proposal.execution_time(), ECantBeExecutedYet);
-    account.thresholds.assert_reached(proposal);
+    witness: W,
+): (Executable, Outcome) {
+    let (source, actions, outcome) = account.proposals.remove(key, clock);
 
-    let (auth, actions) = account.proposals.remove(key);
-    account.deps.assert_version(&auth, VERSION);
+    source.assert_is_constructor(witness);
+    source.assert_is_dep_with_version(account.deps(), version::get());
 
-    executable::new(auth, actions)
+    (executable::new(source, actions), outcome)
 }
 
 /// Removes a proposal if it has expired
 /// Needs to delete each action in the bag within their own module
-public fun delete_proposal(
-    account: &mut Account, 
+public fun delete_proposal<Config: drop, Outcome: drop>(
+    account: &mut Account<Config, Outcome>, 
     key: String, 
     ctx: &mut TxContext
-): Bag {
-    let (auth, actions) = account.proposals.delete(key, ctx);
-    account.deps.assert_version(&auth, VERSION);
+): Expired<Outcome> {
+    let (source, expired) = account.proposals.delete(key, ctx);
 
-    actions
+    source.assert_is_dep_with_version(account.deps(), version::get());
+
+    expired
 }
 
 // === View functions ===
 
-public fun addr(account: &Account): address {
+public fun addr<Config, Outcome>(account: &Account<Config, Outcome>): address {
     account.id.uid_to_inner().id_to_address()
 }
 
-public fun name(account: &Account): String {
-    account.name
+public fun metadata<Config, Outcome>(account: &Account<Config, Outcome>): &Metadata {
+    &account.metadata
 }
 
-public fun deps(account: &Account): &Deps {
+public fun deps<Config, Outcome>(account: &Account<Config, Outcome>): &Deps {
     &account.deps
 }
 
-public fun members(account: &Account): &Members {
-    &account.members
-}
-
-public fun member(account: &Account, addr: address): &Member {
-    account.members.get(addr)
-}
-
-public fun thresholds(account: &Account): &Thresholds {
-    &account.thresholds
-}
-
-public fun proposals(account: &Account): &Proposals {
+public fun proposals<Config, Outcome>(account: &Account<Config, Outcome>): &Proposals<Outcome> {
     &account.proposals
 }
 
-public fun proposal(account: &Account, key: String): &Proposal {
+public fun proposal<Config, Outcome>(account: &Account<Config, Outcome>, key: String): &Proposal<Outcome> {
     account.proposals.get(key)
 }
 
-public fun assert_is_member(account: &Account, ctx: &TxContext) {
-    assert!(account.members.is_member(ctx.sender()), ECallerIsNotMember);
+public fun config<Config, Outcome>(account: &Account<Config, Outcome>): &Config {
+    &account.config
 }
 
 // === Deps-only functions ===
 
 /// Managed assets:
-/// Those are objects attached as dynamic fields to the account object
+/// Objects attached as dynamic fields to the account object
 
-public fun add_managed_asset<K: copy + drop + store, A: store, W: copy + drop>(
-    account: &mut Account, 
+public fun add_managed_asset<Config, Outcome, K: copy + drop + store, A: store, W: drop>(
+    account: &mut Account<Config, Outcome>, 
     witness: W,
     key: K, 
     asset: A,
 ) {
-    account.deps.assert_dep(witness);
+    account.deps.assert_is_dep(witness);
     df::add(&mut account.id, key, asset);
 }
 
-public fun borrow_managed_asset<K: copy + drop + store, A: store, W: copy + drop>(
-    account: &Account, 
+public fun borrow_managed_asset<Config, Outcome, K: copy + drop + store, A: store, W: drop>(
+    account: &Account<Config, Outcome>,
     witness: W,
     key: K, 
 ): &A {
-    account.deps.assert_dep(witness);
+    account.deps.assert_is_dep(witness);
     df::borrow(&account.id, key)
 }
 
-public fun borrow_managed_asset_mut<K: copy + drop + store, A: store, W: copy + drop>(
-    account: &mut Account, 
+public fun borrow_managed_asset_mut<Config, Outcome, K: copy + drop + store, A: store, W: drop>(
+    account: &mut Account<Config, Outcome>, 
     witness: W,
     key: K, 
 ): &mut A {
-    account.deps.assert_dep(witness);
+    account.deps.assert_is_dep(witness);
     df::borrow_mut(&mut account.id, key)
 }
 
-public fun remove_managed_asset<K: copy + drop + store, A: store, W: copy + drop>(
-    account: &mut Account, 
+public fun remove_managed_asset<Config, Outcome, K: copy + drop + store, A: store, W: drop>(
+    account: &mut Account<Config, Outcome>, 
     witness: W,
     key: K, 
 ): A {
-    account.deps.assert_dep(witness);
+    account.deps.assert_is_dep(witness);
     df::remove(&mut account.id, key)
 }
 
-public fun has_managed_asset<K: copy + drop + store>(
-    account: &Account, 
+public fun has_managed_asset<Config, Outcome, K: copy + drop + store>(
+    account: &Account<Config, Outcome>, 
     key: K, 
 ): bool {
     df::exists_(&account.id, key)
@@ -271,110 +238,76 @@ public fun has_managed_asset<K: copy + drop + store>(
 // === Core Deps only functions ===
 
 /// Owned objects:
-/// Those are objects owned by the account
+/// Objects owned by the account
 
-public fun receive<T: key + store, W: copy + drop>(
-    account: &mut Account, 
+public fun receive<Config, Outcome, T: key + store, W: drop>(
+    account: &mut Account<Config, Outcome>, 
     witness: W,
     receiving: Receiving<T>,
 ): T {
-    account.deps.assert_core_dep(witness);
+    account.deps.assert_is_core_dep(witness);
     transfer::public_receive(&mut account.id, receiving)
 }
 
 /// Fields:
-/// Those are the fields of the account object
+/// Fields of the account object
 
-public fun name_mut<W: copy + drop>(
-    account: &mut Account, 
-    executable: &Executable,
+public fun metadata_mut<Config, Outcome, W: drop>(
+    account: &mut Account<Config, Outcome>, 
     witness: W,
-): &mut String {
-    executable.auth().assert_is_witness(witness);
-    executable.auth().assert_is_account(account.addr());
-    account.deps.assert_core_dep(witness);
-    &mut account.name
+): &mut Metadata {
+    account.deps.assert_is_core_dep(witness);
+    &mut account.metadata
 }
 
-public fun deps_mut<W: copy + drop>(
-    account: &mut Account, 
-    executable: &Executable,
+public fun deps_mut<Config, Outcome, W: drop>(
+    account: &mut Account<Config, Outcome>, 
     witness: W,
 ): &mut Deps {
-    executable.auth().assert_is_witness(witness);
-    executable.auth().assert_is_account(account.addr());
-    account.deps.assert_core_dep(witness);
+    account.deps.assert_is_core_dep(witness);
     &mut account.deps
 }
 
-public fun thresholds_mut<W: copy + drop>(
-    account: &mut Account, 
-    executable: &Executable,
+public fun proposals_mut<Config, Outcome, W: drop>(
+    account: &mut Account<Config, Outcome>, 
     witness: W,
-): &mut Thresholds {
-    executable.auth().assert_is_witness(witness);
-    executable.auth().assert_is_account(account.addr());
-    account.deps.assert_core_dep(witness);
-    &mut account.thresholds
+): &mut Proposals<Outcome> {
+    account.deps.assert_is_core_dep(witness);
+    &mut account.proposals
 }
 
-public fun members_mut<W: copy + drop>(
-    account: &mut Account, 
-    executable: &Executable,
+public fun config_mut<Config, Outcome, W: drop>(
+    account: &mut Account<Config, Outcome>, 
     witness: W,
-): &mut Members {
-    executable.auth().assert_is_witness(witness);
-    executable.auth().assert_is_account(account.addr());
-    account.deps.assert_core_dep(witness);
-    &mut account.members
+): &mut Config {
+    account.deps.assert_is_core_dep(witness);
+    &mut account.config
 }
 
-// === Package functions ===
-
-/// Only accessible from account module
-public(package) fun member_mut(
-    account: &mut Account, 
-    addr: address,
-): &mut Member {
-    account.members.get_mut(addr)
+/// Only called in AccountConfig
+public fun outcome_mut<Config, Outcome, W: drop>(
+    account: &mut Account<Config, Outcome>, 
+    key: String,
+    witness: W,
+): &mut Outcome {
+    account.deps.assert_is_core_dep(witness);
+    account.proposals.get_mut(key).outcome_mut()
 }
 
 // === Test functions ===
 
 #[test_only]
-public fun deps_mut_for_testing(
-    account: &mut Account, 
+public macro fun deps_mut_for_testing(
+    $account: &mut Account<_, _>, 
 ): &mut Deps {
+    let account = $account;
     &mut account.deps
 }
 
 #[test_only]
-public fun name_mut_for_testing(
-    account: &mut Account, 
+public macro fun name_mut_for_testing(
+    $account: &mut Account<_, _>, 
 ): &mut String {
+    let account = $account;
     &mut account.name
 }
-
-#[test_only]
-public fun thresholds_mut_for_testing(
-    account: &mut Account, 
-): &mut Thresholds {
-    &mut account.thresholds
-}
-
-#[test_only]
-public fun members_mut_for_testing(
-    account: &mut Account, 
-): &mut Members {
-    &mut account.members
-}
-
-#[test_only]
-public fun member_mut_for_testing(
-    account: &mut Account, 
-    addr: address,
-): &mut Member {
-    account.members.get_mut(addr)
-}
-
-

@@ -19,8 +19,9 @@ use sui::{
 use kiosk::{kiosk_lock_rule, royalty_rule};
 use account_protocol::{
     account::Account,
-    proposals::Proposal,
-    executable::Executable
+    proposals::{Proposal, Expired},
+    executable::Executable,
+    auth::Auth,
 };
 
 // === Errors ===
@@ -34,7 +35,6 @@ const EListAllNftsBefore: u64 = 4;
 
 /// Dynamic Field key for the KioskOwnerLock
 public struct KioskOwnerKey has copy, drop, store { name: String }
-
 /// Dynamic Field wrapper restricting access to a KioskOwnerCap
 public struct KioskOwnerLock has store {
     // the cap to lock
@@ -42,11 +42,15 @@ public struct KioskOwnerLock has store {
 }
 
 /// [MEMBER] can create a Kiosk and lock the KioskOwnerCap in the Account to restrict taking and listing operations
-public struct ManageKiosk has copy, drop {}
+public struct Do() has drop;
+/// [MEMBER] can place into a Kiosk
+public struct Place() has drop;
+/// [MEMBER] can delist from a Kiosk
+public struct Delist() has drop;
 /// [PROPOSAL] take nfts from a kiosk managed by a account
-public struct TakeProposal has copy, drop {}
+public struct TakeProposal() has drop;
 /// [PROPOSAL] list nfts in a kiosk managed by a account
-public struct ListProposal has copy, drop {}
+public struct ListProposal() has drop;
 
 /// [ACTION] transfer nfts from the account's kiosk to another one
 public struct TakeAction has store {
@@ -55,7 +59,6 @@ public struct TakeAction has store {
     // owner of the receiver kiosk
     recipient: address,
 }
-
 /// [ACTION] list nfts for purchase
 public struct ListAction has store {
     // name of the account's kiosk
@@ -69,52 +72,65 @@ public struct ListAction has store {
 /// Creates a new Kiosk and locks the KioskOwnerCap in the Account
 /// Only a member can create a Kiosk
 #[allow(lint(share_owned))]
-public fun new(account: &mut Account, name: String, ctx: &mut TxContext) {
-    account.assert_is_member(ctx);
+public fun new<Config, Outcome>(
+    auth: Auth,
+    account: &mut Account<Config, Outcome>, 
+    name: String, 
+    ctx: &mut TxContext
+) {
+    auth.verify(account.addr());
+
     let (mut kiosk, kiosk_owner_cap) = kiosk::new(ctx);
     kiosk.set_owner_custom(&kiosk_owner_cap, account.addr());
 
     let kiosk_owner_lock = KioskOwnerLock { kiosk_owner_cap };
-    account.add_managed_asset(ManageKiosk {}, KioskOwnerKey { name }, kiosk_owner_lock);
+    account.add_managed_asset(Do(), KioskOwnerKey { name }, kiosk_owner_lock);
 
     transfer::public_share_object(kiosk);
 }
 
-public fun borrow_lock(account: &Account, name: String): &KioskOwnerLock {
-    account.borrow_managed_asset(ManageKiosk {}, KioskOwnerKey { name })
+public fun borrow_lock<Config, Outcome>(
+    account: &Account<Config, Outcome>, 
+    name: String
+): &KioskOwnerLock {
+    account.borrow_managed_asset(Do(), KioskOwnerKey { name })
 }
 
-public fun borrow_lock_mut(account: &mut Account, name: String): &mut KioskOwnerLock {
-    account.borrow_managed_asset_mut(ManageKiosk {}, KioskOwnerKey { name })
+public fun borrow_lock_mut<Config, Outcome>(
+    account: &mut Account<Config, Outcome>, 
+    name: String
+): &mut KioskOwnerLock {
+    account.borrow_managed_asset_mut(Do(), KioskOwnerKey { name })
 }
 
 /// Deposits from another Kiosk, no need for proposal.
 /// Optional royalty and lock rules are automatically resolved for the type.
 /// The rest of the rules must be confirmed via the frontend.
-public fun place<O: key + store>(
-    account: &mut Account, 
+public fun place<Config, Outcome, Nft: key + store>(
+    auth: Auth,
+    account: &mut Account<Config, Outcome>, 
     account_kiosk: &mut Kiosk, 
     sender_kiosk: &mut Kiosk, 
     sender_cap: &KioskOwnerCap, 
     name: String,
     nft_id: ID,
-    policy: &mut TransferPolicy<O>,
+    policy: &mut TransferPolicy<Nft>,
     ctx: &mut TxContext
-): TransferRequest<O> {
-    account.assert_is_member(ctx);
+): TransferRequest<Nft> {
+    auth.verify_with_role<Place>(account.addr(), name);
     let lock_mut = borrow_lock_mut(account, name);
 
-    sender_kiosk.list<O>(sender_cap, nft_id, 0);
-    let (nft, mut request) = sender_kiosk.purchase<O>(nft_id, coin::zero<SUI>(ctx));
+    sender_kiosk.list<Nft>(sender_cap, nft_id, 0);
+    let (nft, mut request) = sender_kiosk.purchase<Nft>(nft_id, coin::zero<SUI>(ctx));
 
-    if (policy.has_rule<O, kiosk_lock_rule::Rule>()) {
+    if (policy.has_rule<Nft, kiosk_lock_rule::Rule>()) {
         account_kiosk.lock(&lock_mut.kiosk_owner_cap, policy, nft);
         kiosk_lock_rule::prove(&mut request, account_kiosk);
     } else {
         account_kiosk.place(&lock_mut.kiosk_owner_cap, nft);
     };
 
-    if (policy.has_rule<O, royalty_rule::Rule>()) {
+    if (policy.has_rule<Nft, royalty_rule::Rule>()) {
         royalty_rule::pay(policy, &mut request, coin::zero<SUI>(ctx));
     }; 
 
@@ -122,27 +138,28 @@ public fun place<O: key + store>(
     request
 }
 
-/// Members can delist nfts
-public fun delist<O: key + store>(
-    account: &mut Account, 
+/// Members with role can delist nfts
+public fun delist<Config, Outcome, Nft: key + store>(
+    auth: Auth,
+    account: &mut Account<Config, Outcome>, 
     kiosk: &mut Kiosk, 
     name: String,
     nft: ID,
-    ctx: &mut TxContext
 ) {
-    account.assert_is_member(ctx);
+    auth.verify_with_role<Delist>(account.addr(), name);
     let lock_mut = borrow_lock_mut(account, name);
-    kiosk.delist<O>(&lock_mut.kiosk_owner_cap, nft);
+    kiosk.delist<Nft>(&lock_mut.kiosk_owner_cap, nft);
 }
 
 /// Members can withdraw the profits to the account
-public fun withdraw_profits(
-    account: &mut Account,
+public fun withdraw_profits<Config, Outcome>(
+    auth: Auth,
+    account: &mut Account<Config, Outcome>,
     kiosk: &mut Kiosk,
     name: String,
     ctx: &mut TxContext
 ) {
-    account.assert_is_member(ctx);
+    auth.verify(account.addr());
     let lock_mut = borrow_lock_mut(account, name);
 
     let profits_mut = kiosk.profits_mut(&lock_mut.kiosk_owner_cap);
@@ -158,8 +175,10 @@ public fun withdraw_profits(
 // === [PROPOSAL] Public functions ===
 
 // step 1: propose to transfer nfts to another kiosk
-public fun propose_take(
-    account: &mut Account,
+public fun propose_take<Config, Outcome>(
+    auth: Auth,
+    account: &mut Account<Config, Outcome>,
+    outcome: Outcome,
     key: String,
     description: String,
     execution_time: u64,
@@ -170,7 +189,9 @@ public fun propose_take(
     ctx: &mut TxContext
 ) {
     let mut proposal = account.create_proposal(
-        TakeProposal {},
+        auth, 
+        outcome,
+        TakeProposal(),
         name,
         key,
         description,
@@ -179,35 +200,37 @@ public fun propose_take(
         ctx
     );
 
-    new_take(&mut proposal, nft_ids, recipient, TakeProposal {});
-    account.add_proposal(proposal, TakeProposal {});
+    new_take(&mut proposal, nft_ids, recipient, TakeProposal());
+    account.add_proposal(proposal, TakeProposal());
 }
 
 // step 2: multiple members have to approve the proposal (account::approve_proposal)
 // step 3: execute the proposal and return the action (account::execute_proposal)
 
 // step 4: the recipient (anyone) must loop over this function to take the nfts in any of his Kiosks
-public fun execute_take<O: key + store>(
+public fun execute_take<Config, Outcome, Nft: key + store>(
     executable: &mut Executable,
-    account: &mut Account,
+    account: &mut Account<Config, Outcome>,
     account_kiosk: &mut Kiosk, 
     recipient_kiosk: &mut Kiosk, 
     recipient_cap: &KioskOwnerCap, 
-    policy: &mut TransferPolicy<O>,
+    policy: &mut TransferPolicy<Nft>,
     ctx: &mut TxContext
-): TransferRequest<O> {
-    take(executable, account, account_kiosk, recipient_kiosk, recipient_cap, policy, TakeProposal {}, ctx)
+): TransferRequest<Nft> {
+    take(executable, account, account_kiosk, recipient_kiosk, recipient_cap, policy, TakeProposal(), ctx)
 }
 
 // step 5: destroy the executable
 public fun complete_take(mut executable: Executable) {
-    destroy_take(&mut executable, TakeProposal {});
-    executable.destroy(TakeProposal {});
+    destroy_take(&mut executable, TakeProposal());
+    executable.destroy(TakeProposal());
 }
 
 // step 1: propose to list nfts
-public fun propose_list(
-    account: &mut Account,
+public fun propose_list<Config, Outcome>(
+    auth: Auth,
+    account: &mut Account<Config, Outcome>,
+    outcome: Outcome,
     key: String,
     description: String,
     execution_time: u64,
@@ -218,7 +241,9 @@ public fun propose_list(
     ctx: &mut TxContext
 ) {
     let mut proposal = account.create_proposal(
-        ListProposal {},
+        auth,
+        outcome,
+        ListProposal(),
         name,
         key,
         description,
@@ -227,32 +252,32 @@ public fun propose_list(
         ctx
     );
 
-    new_list(&mut proposal, name, nft_ids, prices, ListProposal {});
-    account.add_proposal(proposal, ListProposal {});
+    new_list(&mut proposal, name, nft_ids, prices, ListProposal());
+    account.add_proposal(proposal, ListProposal());
 }
 
 // step 2: multiple members have to approve the proposal (account::approve_proposal)
 // step 3: execute the proposal and return the action (account::execute_proposal)
 
 // step 4: list last nft in action
-public fun execute_list<O: key + store>(
+public fun execute_list<Config, Outcome, Nft: key + store>(
     executable: &mut Executable,
-    account: &mut Account,
+    account: &mut Account<Config, Outcome>,
     kiosk: &mut Kiosk,
 ) {
-    list<O, ListProposal>(executable, account, kiosk, ListProposal {});
+    list<Config, Outcome, Nft, ListProposal>(executable, account, kiosk, ListProposal());
 }
 
 // step 5: destroy the executable
 public fun complete_list(mut executable: Executable) {
-    destroy_list(&mut executable, ListProposal {});
-    executable.destroy(ListProposal {});
+    destroy_list(&mut executable, ListProposal());
+    executable.destroy(ListProposal());
 }
 
 // === [ACTION] Public functions ===
 
-public fun new_take<W: copy + drop>(
-    proposal: &mut Proposal, 
+public fun new_take<Outcome, W: drop>(
+    proposal: &mut Proposal<Outcome>, 
     nft_ids: vector<ID>, 
     recipient: address,
     witness: W,
@@ -260,33 +285,33 @@ public fun new_take<W: copy + drop>(
     proposal.add_action(TakeAction { nft_ids, recipient }, witness);
 }
 
-public fun take<O: key + store, W: copy + drop>(
+public fun take<Config, Outcome, Nft: key + store, W: drop>(
     executable: &mut Executable,
-    account: &mut Account,
+    account: &mut Account<Config, Outcome>,
     account_kiosk: &mut Kiosk, 
     recipient_kiosk: &mut Kiosk, 
     recipient_cap: &KioskOwnerCap, 
-    policy: &mut TransferPolicy<O>,
+    policy: &mut TransferPolicy<Nft>,
     witness: W,
     ctx: &mut TxContext
-): TransferRequest<O> {
-    let name = executable.auth().name();
+): TransferRequest<Nft> {
+    let name = executable.source().role_name();
     let take_mut: &mut TakeAction = executable.action_mut(account.addr(), witness);
     let lock_mut = borrow_lock_mut(account, name);
     assert!(take_mut.recipient == ctx.sender(), EWrongReceiver);
 
     let nft_id = take_mut.nft_ids.remove(0);
-    account_kiosk.list<O>(&lock_mut.kiosk_owner_cap, nft_id, 0);
-    let (nft, mut request) = account_kiosk.purchase<O>(nft_id, coin::zero<SUI>(ctx));
+    account_kiosk.list<Nft>(&lock_mut.kiosk_owner_cap, nft_id, 0);
+    let (nft, mut request) = account_kiosk.purchase<Nft>(nft_id, coin::zero<SUI>(ctx));
 
-    if (policy.has_rule<O, kiosk_lock_rule::Rule>()) {
+    if (policy.has_rule<Nft, kiosk_lock_rule::Rule>()) {
         recipient_kiosk.lock(recipient_cap, policy, nft);
         kiosk_lock_rule::prove(&mut request, recipient_kiosk);
     } else {
         recipient_kiosk.place(recipient_cap, nft);
     };
 
-    if (policy.has_rule<O, royalty_rule::Rule>()) {
+    if (policy.has_rule<Nft, royalty_rule::Rule>()) {
         royalty_rule::pay(policy, &mut request, coin::zero<SUI>(ctx));
     }; 
 
@@ -294,14 +319,18 @@ public fun take<O: key + store, W: copy + drop>(
     request
 }
 
-public fun destroy_take<W: copy + drop>(executable: &mut Executable, witness: W): address {
+public fun destroy_take<W: drop>(executable: &mut Executable, witness: W): address {
     let TakeAction { nft_ids, recipient, .. } = executable.remove_action(witness);
     assert!(nft_ids.is_empty(), ETransferAllNftsBefore);
     recipient
 }
 
-public fun new_list<W: copy + drop>(
-    proposal: &mut Proposal, 
+public fun delete_take_action<Outcome>(expired: Expired<Outcome>) {
+    let TakeAction { .. } = expired.remove_expired_action();
+}
+
+public fun new_list<Outcome, W: drop>(
+    proposal: &mut Proposal<Outcome>, 
     name: String, 
     nft_ids: vector<ID>, 
     prices: vector<u64>,
@@ -314,41 +343,25 @@ public fun new_list<W: copy + drop>(
     );
 }
 
-public fun list<O: key + store, W: copy + drop>(
+public fun list<Config, Outcome, Nft: key + store, W: drop>(
     executable: &mut Executable,
-    account: &mut Account,
+    account: &mut Account<Config, Outcome>,
     kiosk: &mut Kiosk,
     witness: W,
 ) {
-    let name = executable.auth().name();
+    let name = executable.source().role_name();
     let list_mut: &mut ListAction = executable.action_mut(account.addr(), witness);
     let lock_mut = borrow_lock_mut(account, name);
 
     let (nft_id, price) = list_mut.nfts_prices_map.remove_entry_by_idx(0);
-    kiosk.list<O>(&lock_mut.kiosk_owner_cap, nft_id, price);
+    kiosk.list<Nft>(&lock_mut.kiosk_owner_cap, nft_id, price);
 }
 
-public fun destroy_list<W: copy + drop>(executable: &mut Executable, witness: W) {
+public fun destroy_list<W: drop>(executable: &mut Executable, witness: W) {
     let ListAction { nfts_prices_map, .. } = executable.remove_action(witness);
     assert!(nfts_prices_map.is_empty(), EListAllNftsBefore);
 }
 
-// === [CORE DEPS] Public functions ===
-
-public fun delete_take_action<W: copy + drop>(
-    action: TakeAction, 
-    account: &Account, 
-    witness: W
-) {
-    account.deps().assert_core_dep(witness);
-    let TakeAction { .. } = action;
-}
-
-public fun delete_list_action<W: copy + drop>(
-    action: ListAction, 
-    account: &Account, 
-    witness: W
-) {
-    account.deps().assert_core_dep(witness);
-    let ListAction { .. } = action;
+public fun delete_list_action<Outcome>(expired: Expired<Outcome>) {
+    let ListAction { .. } = expired.remove_expired_action();
 }

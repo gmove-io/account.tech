@@ -9,12 +9,12 @@ module account_actions::payments;
 use sui::{
     balance::Balance,
     coin::{Self, Coin},
-    event,
 };
 use account_protocol::{
     account::Account,
-    proposals::Proposal,
-    executable::Executable
+    proposals::{Proposal, Expired},
+    executable::Executable,
+    auth::Auth,
 };
 
 // === Errors ===
@@ -23,15 +23,6 @@ const ECompletePaymentBefore: u64 = 0;
 const EPayTooEarly: u64 = 1;
 const EPayNotExecuted: u64 = 2;
 const EWrongStream: u64 = 3;
-
-// === Events ===
-
-public struct StreamCreated has copy, drop, store {
-    stream_id: ID,
-    amount: u64,
-    interval: u64,
-    recipient: address,
-}
 
 // === Structs ===
 
@@ -105,12 +96,14 @@ public fun destroy_empty_stream<C: drop>(stream: Stream<C>) {
 }
 
 // step 6 (bis): account member can cancel the payment (member only)
-public fun cancel_payment_stream<C: drop>(
+public fun cancel_payment_stream<Config, Outcome, C: drop>(
+    auth: Auth,
     stream: Stream<C>, 
-    account: &Account,
+    account: &Account<Config, Outcome>,
     ctx: &mut TxContext
 ) {
-    account.assert_is_member(ctx);
+    auth.verify(account.addr());
+
     let Stream { id, balance, .. } = stream;
     id.delete();
 
@@ -122,8 +115,8 @@ public fun cancel_payment_stream<C: drop>(
 
 // === [ACTION] Public Functions ===
 
-public fun new_pay<W: copy + drop>(
-    proposal: &mut Proposal, 
+public fun new_pay<Outcome, W: drop>(
+    proposal: &mut Proposal<Outcome>, 
     amount: u64,
     interval: u64,
     recipient: address,
@@ -132,9 +125,9 @@ public fun new_pay<W: copy + drop>(
     proposal.add_action(PayAction { amount, interval, recipient }, witness);
 }
 
-public fun pay<C: drop, W: copy + drop>(
+public fun pay<Config, Outcome, C: drop, W: drop>(
     executable: &mut Executable, 
-    account: &mut Account, 
+    account: &mut Account<Config, Outcome>, 
     coin: Coin<C>,
     witness: W,
     ctx: &mut TxContext
@@ -150,22 +143,19 @@ public fun pay<C: drop, W: copy + drop>(
         recipient: pay_mut.recipient
     };
 
-    event::emit(StreamCreated {
-        stream_id: stream.id.to_inner(),
-        amount: stream.amount,
-        interval: stream.interval,
-        recipient: stream.recipient
-    });
-
     transfer::share_object(stream);
     pay_mut.amount = 0; // reset to ensure action is executed only once
 }
 
-public fun destroy_pay<W: copy + drop>(executable: &mut Executable, witness: W): address {
+public fun destroy_pay<W: drop>(executable: &mut Executable, witness: W): address {
     let PayAction { amount, recipient, .. } = executable.remove_action(witness);
     assert!(amount == 0, EPayNotExecuted);
 
     recipient
+}
+
+public fun delete_pay_action<Outcome>(expired: Expired<Outcome>) {
+    let PayAction { .. } = expired.remove_expired_action();
 }
 
 // === View Functions ===
@@ -188,15 +178,4 @@ public fun last_epoch<C: drop>(self: &Stream<C>): u64 {
 
 public fun recipient<C: drop>(self: &Stream<C>): address {
     self.recipient
-}
-
-// === [CORE DEPS] Public functions ===
-
-public fun delete_pay_action<W: copy + drop>(
-    action: PayAction, 
-    account: &Account, 
-    witness: W
-) {
-    account.deps().assert_core_dep(witness);
-    let PayAction { .. } = action;
 }
