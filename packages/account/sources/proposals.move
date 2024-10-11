@@ -20,6 +20,7 @@ const ECantBeExecutedYet: u64 = 0;
 const EHasntExpired: u64 = 1;
 const EProposalNotFound: u64 = 2;
 const EProposalKeyAlreadyExists: u64 = 3;
+const EActionNotFound: u64 = 4;
 
 // === Structs ===
 
@@ -190,8 +191,8 @@ public(package) fun delete<Outcome>(
 
 /// After calling `account::delete_proposal`, delete each action in its own module
 public fun remove_expired_action<Outcome, A: store>(expired: &mut Expired<Outcome>) : A {
-    let action = expired.actions.remove(expired.next_to_destroy);
-    expired.next_to_destroy = expired.next_to_destroy + 1;
+    let idx = action_index<Outcome, A>(expired);
+    let action = expired.actions.remove(idx);
     
     action
 }
@@ -202,4 +203,17 @@ public fun remove_expired_outcome<Outcome>(expired: Expired<Outcome>) : Outcome 
     actions.destroy_empty();
 
     outcome
+}
+
+// === Private functions ===
+
+fun action_index<Outcome, A: store>(expired: &Expired<Outcome>): u64 {
+    let mut idx = 0;
+    expired.actions.length().do!(|i| {
+        if (expired.actions.contains_with_type<u64, A>(i)) idx = i;
+        // returns length if not found
+    });
+    assert!(idx != expired.actions.length(), EActionNotFound);
+
+    idx
 }

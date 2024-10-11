@@ -297,17 +297,8 @@ public fun outcome_mut<Config, Outcome, W: drop>(
 // === Test functions ===
 
 #[test_only]
-public macro fun deps_mut_for_testing(
-    $account: &mut Account<_, _>, 
+public fun deps_mut_for_testing<Config, Outcome>(
+    account: &mut Account<Config, Outcome>, 
 ): &mut Deps {
-    let account = $account;
     &mut account.deps
-}
-
-#[test_only]
-public macro fun name_mut_for_testing(
-    $account: &mut Account<_, _>, 
-): &mut String {
-    let account = $account;
-    &mut account.name
 }
