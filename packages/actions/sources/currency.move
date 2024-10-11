@@ -32,7 +32,7 @@ use account_actions::{
 // === Errors ===
 
 #[error]
-const ENoChange: vector<u8> = b"Update proposal must change something";
+const ENoChange: vector<u8> = b"Proposal must change something";
 #[error]
 const EWrongValue: vector<u8> = b"Coin has the wrong value";
 #[error]
@@ -47,21 +47,48 @@ const ENoLock: vector<u8> = b"No lock for this coin type";
 const EAmountsRecipentsNotSameLength: vector<u8> = b"Transfer amounts and recipients are not the same length";
 #[error]
 const EMintDisabled: vector<u8> = b"Mint disabled";
+#[error]
+const EBurnDisabled: vector<u8> = b"Burn disabled";
+#[error]
+const ECannotReenable: vector<u8> = b"Cannot reenable a permission";
+#[error]
+const EDisableNotExecuted: vector<u8> = b"Disable proposal not executed";
+#[error]
+const ECannotUpdateName: vector<u8> = b"Cannot update name";
+#[error]
+const ECannotUpdateSymbol: vector<u8> = b"Cannot update symbol";
+#[error]
+const ECannotUpdateDescription: vector<u8> = b"Cannot update description";
+#[error]
+const ECannotUpdateIcon: vector<u8> = b"Cannot update icon";
 
 // === Structs ===    
 
 /// Dynamic Field key for the CurrencyLock
 public struct CurrencyKey<phantom C: drop> has copy, drop, store {}
-/// Dynamic Field wrapper restricting access to a TreasuryCap
+/// Dynamic Field wrapper restricting access to a TreasuryCap, permissions are disabled forever if set
 public struct CurrencyLock<phantom C: drop> has store {
-    // coins can be minted or no, coins can always be burnt by the owners
-    can_mint: bool,
     // the cap to lock
     treasury_cap: TreasuryCap<C>,
+    // coin can have a fixed supply, can_mint must be true 
+    max_supply: Option<u64>,
+    // total amount minted
+    total_minted: u64,
+    // total amount burnt
+    total_burnt: u64,
+    // permissions
+    can_mint: bool,
+    can_burn: bool,
+    can_update_name: bool,
+    can_update_symbol: bool,
+    can_update_description: bool,
+    can_update_icon: bool,
 }
 
 /// [MEMBER] can lock a TreasuryCap in the Account to restrict minting and burning operations
 public struct Do() has drop;
+/// [PROPOSAL] disables one or more permissions
+public struct DisableProposal() has drop;
 /// [PROPOSAL] mints new coins from a locked TreasuryCap
 public struct MintProposal() has drop;
 /// [PROPOSAL] burns coins from the account using a locked TreasuryCap
@@ -73,7 +100,16 @@ public struct TransferProposal() has drop;
 /// [PROPOSAL] pays from a minted coin
 public struct PayProposal() has drop;
 
-/// [ACTION] mint new coins
+/// [ACTION] disables permissions marked as false
+public struct DisableAction<phantom C: drop> has store {
+    can_mint: bool,
+    can_burn: bool,
+    can_update_name: bool,
+    can_update_symbol: bool,
+    can_update_description: bool,
+    can_update_icon: bool,
+}
+/// [ACTION] mints new coins
 public struct MintAction<phantom C: drop> has store {
     amount: u64,
 }
@@ -97,11 +133,22 @@ public fun lock_cap<Config, Outcome, C: drop>(
     auth: Auth,
     account: &mut Account<Config, Outcome>,
     treasury_cap: TreasuryCap<C>,
-    can_mint: bool,
+    max_supply: Option<u64>,
 ) {
     auth.verify(account.addr());
 
-    let treasury_lock = CurrencyLock { can_mint, treasury_cap };
+    let treasury_lock = CurrencyLock { 
+        treasury_cap,
+        max_supply,
+        total_minted: 0,
+        total_burnt: 0,
+        can_mint: true,
+        can_burn: true,
+        can_update_name: true,
+        can_update_symbol: true,
+        can_update_description: true,
+        can_update_icon: true,
+    };
     account.add_managed_asset(Do(), CurrencyKey<C> {}, treasury_lock);
 }
 
@@ -117,21 +164,103 @@ public fun borrow_lock<Config, Outcome, C: drop>(
     account.borrow_managed_asset(Do(), CurrencyKey<C> {})
 }
 
-public fun borrow_lock_mut<Config, Outcome, C: drop>(
-    account: &mut Account<Config, Outcome>
-): &mut CurrencyLock<C> {
-    account.borrow_managed_asset_mut(Do(), CurrencyKey<C> {})
+// getters
+public fun supply<C: drop>(lock: &CurrencyLock<C>): u64 {
+    lock.treasury_cap.total_supply()
+}
+
+public fun total_minted<C: drop>(lock: &CurrencyLock<C>): u64 {
+    lock.total_minted
+}
+
+public fun total_burnt<C: drop>(lock: &CurrencyLock<C>): u64 {
+    lock.total_burnt
 }
 
 public fun can_mint<C: drop>(lock: &CurrencyLock<C>): bool {
     lock.can_mint
 }
 
-public fun supply<C: drop>(lock: &CurrencyLock<C>): u64 {
-    lock.treasury_cap.total_supply()
+public fun can_burn<C: drop>(lock: &CurrencyLock<C>): bool {
+    lock.can_mint
+}
+
+public fun can_update_name<C: drop>(lock: &CurrencyLock<C>): bool {
+    lock.can_update_name
+}
+
+public fun can_update_symbol<C: drop>(lock: &CurrencyLock<C>): bool {
+    lock.can_update_symbol
+}
+
+public fun can_update_description<C: drop>(lock: &CurrencyLock<C>): bool {
+    lock.can_update_description
+}
+
+public fun can_update_icon<C: drop>(lock: &CurrencyLock<C>): bool {
+    lock.can_update_icon
 }
 
 // === [PROPOSAL] Public functions ===
+
+// step 1: propose to mint an amount of a coin that will be transferred to the Account
+public fun propose_disable<Config, Outcome, C: drop>(
+    auth: Auth,
+    account: &mut Account<Config, Outcome>,
+    outcome: Outcome,
+    key: String,
+    description: String,
+    execution_time: u64,
+    expiration_epoch: u64,
+    can_mint: bool,
+    can_burn: bool,
+    can_update_name: bool,
+    can_update_symbol: bool,
+    can_update_description: bool,
+    can_update_icon: bool,
+    ctx: &mut TxContext
+) {
+    assert!(has_lock<Config, Outcome, C>(account), ENoLock);
+
+    let mut proposal = account.create_proposal(
+        auth,
+        outcome,
+        DisableProposal(), 
+        type_to_name<C>(), // the coin type is the auth name 
+        key, 
+        description, 
+        execution_time, 
+        expiration_epoch, 
+        ctx
+    );
+
+    new_disable<Outcome, C, DisableProposal>(
+        &mut proposal, 
+        borrow_lock<Config, Outcome, C>(account), 
+        can_mint,
+        can_burn,
+        can_update_name,
+        can_update_symbol,
+        can_update_description,
+        can_update_icon,
+        DisableProposal()
+    );
+    account.add_proposal(proposal, DisableProposal());
+}
+
+// step 2: multiple members have to approve the proposal (account::approve_proposal)
+// step 3: execute the proposal and return the action (AccountConfig::module::execute_proposal)
+
+// step 4: mint the coins and send them to the account
+public fun execute_disable<Config, Outcome, C: drop>(
+    mut executable: Executable,
+    account: &mut Account<Config, Outcome>,
+) {
+    disable<Config, Outcome, C, DisableProposal>(&mut executable, account, DisableProposal());
+
+    destroy_disable<C, DisableProposal>(&mut executable, DisableProposal());
+    executable.destroy(DisableProposal());
+}
 
 // step 1: propose to mint an amount of a coin that will be transferred to the Account
 public fun propose_mint<Config, Outcome, C: drop>(
@@ -212,7 +341,12 @@ public fun propose_burn<Config, Outcome, C: drop>(
     );
 
     owned::new_withdraw(&mut proposal, vector[coin_id], BurnProposal());
-    new_burn<Outcome, C, BurnProposal>(&mut proposal, amount, BurnProposal());
+    new_burn<Outcome, C, BurnProposal>(
+        &mut proposal, 
+        borrow_lock<Config, Outcome, C>(account), 
+        amount, 
+        BurnProposal()
+    );
 
     account.add_proposal(proposal, BurnProposal());
 }
@@ -265,6 +399,7 @@ public fun propose_update<Config, Outcome, C: drop>(
 
     new_update<Outcome, C, UpdateProposal>(
         &mut proposal, 
+        borrow_lock<Config, Outcome, C>(account),
         md_name, 
         md_symbol, 
         md_description, 
@@ -412,6 +547,61 @@ public fun execute_pay<Config, Outcome, C: drop>(
 
 // === [ACTION] Public functions ===
 
+public fun new_disable<Outcome, C: drop, W: drop>(
+    proposal: &mut Proposal<Outcome>,
+    lock: &CurrencyLock<C>,
+    can_mint: bool,
+    can_burn: bool,
+    can_update_name: bool,
+    can_update_symbol: bool,
+    can_update_description: bool,
+    can_update_icon: bool,
+    witness: W,
+) {
+    assert!(!can_mint || !can_burn || !can_update_name || !can_update_symbol || !can_update_description || !can_update_icon, ENoChange);
+    // if disabled, must remain false
+    if (!lock.can_mint) assert!(!can_mint, ECannotReenable);
+    if (!lock.can_burn) assert!(!can_burn, ECannotReenable);
+    if (!lock.can_update_name) assert!(!can_update_name, ECannotReenable);
+    if (!lock.can_update_symbol) assert!(!can_update_symbol, ECannotReenable);
+    if (!lock.can_update_description) assert!(!can_update_description, ECannotReenable);
+    if (!lock.can_update_icon) assert!(!can_update_icon, ECannotReenable);
+
+    proposal.add_action(DisableAction<C> { can_mint, can_burn, can_update_name, can_update_symbol, can_update_description, can_update_icon }, witness);
+}
+
+public fun disable<Config, Outcome, C: drop, W: drop>(
+    executable: &mut Executable,
+    account: &mut Account<Config, Outcome>,
+    witness: W,
+) {
+    let disable_mut: &mut DisableAction<C> = executable.action_mut(account.addr(), witness);
+    let lock_mut: &mut CurrencyLock<C> = account.borrow_managed_asset_mut(Do(), CurrencyKey<C> {});
+
+    lock_mut.can_mint = disable_mut.can_mint;
+    lock_mut.can_burn = disable_mut.can_burn;
+    lock_mut.can_update_name = disable_mut.can_update_name;
+    lock_mut.can_update_symbol = disable_mut.can_update_symbol;
+    lock_mut.can_update_description = disable_mut.can_update_description;
+    lock_mut.can_update_icon = disable_mut.can_update_icon;
+    // resetting all action permissions to true (only case impossible) to ensure it has been executed
+    disable_mut.can_mint = true;
+    disable_mut.can_burn = true;
+    disable_mut.can_update_name = true;
+    disable_mut.can_update_symbol = true;
+    disable_mut.can_update_description = true;
+    disable_mut.can_update_icon = true;
+}
+
+public fun destroy_disable<C: drop, W: drop>(executable: &mut Executable, witness: W) {
+    let DisableAction<C> { can_mint, can_burn, can_update_name, can_update_symbol, can_update_description, can_update_icon } = executable.remove_action(witness);
+    assert!(can_mint && can_burn && can_update_name && can_update_symbol && can_update_description && can_update_icon, EDisableNotExecuted);
+}
+
+public fun delete_disable_action<Outcome, C: drop>(expired: &mut Expired<Outcome>) {
+    let DisableAction<C> { .. } = expired.remove_expired_action();
+}
+
 public fun new_mint<Outcome, C: drop, W: drop>(
     proposal: &mut Proposal<Outcome>, 
     lock: &CurrencyLock<C>,
@@ -430,7 +620,7 @@ public fun mint<Config, Outcome, C: drop, W: drop>(
 ): Coin<C> {
     let mint_mut: &mut MintAction<C> = executable.action_mut(account.addr(), witness);
     
-    let lock_mut = borrow_lock_mut<Config, Outcome, C>(account);
+    let lock_mut: &mut CurrencyLock<C> = account.borrow_managed_asset_mut(Do(), CurrencyKey<C> {});
     let coin = lock_mut.treasury_cap.mint(mint_mut.amount, ctx);
     mint_mut.amount = 0; // reset to ensure it has been executed
     coin
@@ -447,9 +637,11 @@ public fun delete_mint_action<Outcome, C: drop>(expired: &mut Expired<Outcome>) 
 
 public fun new_burn<Outcome, C: drop, W: drop>(
     proposal: &mut Proposal<Outcome>, 
+    lock: &CurrencyLock<C>,
     amount: u64, 
     witness: W
 ) {
+    assert!(lock.can_burn, EBurnDisabled);
     proposal.add_action(BurnAction<C> { amount }, witness);
 }
 
@@ -461,7 +653,7 @@ public fun burn<Config, Outcome, C: drop, W: drop>(
 ) {
     let burn_mut: &mut BurnAction<C> = executable.action_mut(account.addr(), witness);
     
-    let lock_mut = borrow_lock_mut<Config, Outcome, C>(account);
+    let lock_mut: &mut CurrencyLock<C> = account.borrow_managed_asset_mut(Do(), CurrencyKey<C> {});
     assert!(burn_mut.amount == coin.value(), EWrongValue);
     lock_mut.treasury_cap.burn(coin);
     burn_mut.amount = 0; // reset to ensure it has been executed
@@ -478,6 +670,7 @@ public fun delete_burn_action<Outcome, C: drop>(expired: &mut Expired<Outcome>) 
 
 public fun new_update<Outcome, C: drop, W: drop>(
     proposal: &mut Proposal<Outcome>,
+    lock: &CurrencyLock<C>,
     name: Option<String>,
     symbol: Option<String>,
     description: Option<String>,
@@ -485,6 +678,11 @@ public fun new_update<Outcome, C: drop, W: drop>(
     witness: W,
 ) {
     assert!(name.is_some() || symbol.is_some() || description.is_some() || icon_url.is_some(), ENoChange);
+    if (!lock.can_update_name) assert!(name.is_none(), ECannotUpdateName);
+    if (!lock.can_update_symbol) assert!(symbol.is_none(), ECannotUpdateSymbol);
+    if (!lock.can_update_description) assert!(description.is_none(), ECannotUpdateDescription);
+    if (!lock.can_update_icon) assert!(icon_url.is_none(), ECannotUpdateIcon);
+
     proposal.add_action(UpdateAction<C> { name, symbol, description, icon_url }, witness);
 }
 
@@ -495,7 +693,7 @@ public fun update<Config, Outcome, C: drop, W: drop>(
     witness: W,
 ) {
     let update_mut: &mut UpdateAction<C> = executable.action_mut(account.addr(), witness);
-    let lock_mut = borrow_lock_mut<Config, Outcome, C>(account);
+    let lock_mut: &mut CurrencyLock<C> = account.borrow_managed_asset_mut(Do(), CurrencyKey<C> {});
 
     if (update_mut.name.is_some()) {
         lock_mut.treasury_cap.update_name(metadata, update_mut.name.extract());

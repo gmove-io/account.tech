@@ -36,7 +36,7 @@ public struct Do() has drop;
 /// Shared object enforcing one account maximum per user
 public struct Registry has key {
     id: UID,
-    // address to User mapping
+    // address to User ID mapping
     users: Table<address, ID>,
 }
 
