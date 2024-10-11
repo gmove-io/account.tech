@@ -59,7 +59,6 @@ public fun destroy<W: drop>(
     let Executable { 
         source, 
         actions,
-        ..
     } = executable;
     
     source.assert_is_constructor(witness);

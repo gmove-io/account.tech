@@ -16,7 +16,7 @@ rev = "framework/mainnet"
 local = "../../deps/kiosk"
 
 [dependencies.AccountProtocol]
-local = "../account"
+local = "../protocol"
 
 [dependencies.AccountExtensions]
 local = "../extensions"
@@ -30,7 +30,7 @@ rev = "testnet"
 local = "../../deps/kiosk"
 
 [dev-dependencies.AccountProtocol]
-local = "../account"
+local = "../protocol"
 
 [dev-dependencies.AccountExtensions]
 local = "../extensions"

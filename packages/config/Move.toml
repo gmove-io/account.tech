@@ -13,7 +13,7 @@ subdir = "crates/sui-framework/packages/sui-framework"
 rev = "framework/mainnet"
 
 [dependencies.AccountProtocol]
-local = "../account"
+local = "../protocol"
 
 [dependencies.AccountExtensions]
 local = "../extensions"
@@ -24,7 +24,7 @@ subdir = "crates/sui-framework/packages/sui-framework"
 rev = "testnet"
 
 [dev-dependencies.AccountProtocol]
-local = "../account"
+local = "../protocol"
 
 [dev-dependencies.AccountExtensions]
 local = "../extensions"
