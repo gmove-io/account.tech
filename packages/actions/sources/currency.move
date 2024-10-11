@@ -31,14 +31,22 @@ use account_actions::{
 
 // === Errors ===
 
-const ENoChange: u64 = 0;
-const EUpdateNotExecuted: u64 = 1;
-const EWrongValue: u64 = 2;
-const EMintNotExecuted: u64 = 3;
-const EBurnNotExecuted: u64 = 4;
-const ENoLock: u64 = 5;
-const EDifferentLength: u64 = 6;
-const EMintDisabled: u64 = 7;
+#[error]
+const ENoChange: vector<u8> = b"Update proposal must change something";
+#[error]
+const EWrongValue: vector<u8> = b"Coin has the wrong value";
+#[error]
+const EMintNotExecuted: vector<u8> = b"Mint proposal not executed";
+#[error]
+const EBurnNotExecuted: vector<u8> = b"Burn proposal not executed";
+#[error]
+const EUpdateNotExecuted: vector<u8> = b"Update proposal not executed";
+#[error]
+const ENoLock: vector<u8> = b"No lock for this coin type";
+#[error]
+const EAmountsRecipentsNotSameLength: vector<u8> = b"Transfer amounts and recipients are not the same length";
+#[error]
+const EMintDisabled: vector<u8> = b"Mint disabled";
 
 // === Structs ===    
 
@@ -57,7 +65,7 @@ public struct Do() has drop;
 /// [PROPOSAL] mints new coins from a locked TreasuryCap
 public struct MintProposal() has drop;
 /// [PROPOSAL] burns coins from the account using a locked TreasuryCap
-public struct BurnProposal() has drop;
+public struct BurnProposal() has copy, drop;
 /// [PROPOSAL] updates the CoinMetadata associated with a locked TreasuryCap
 public struct UpdateProposal() has drop;
 /// [PROPOSAL] transfers from a minted coin 
@@ -294,7 +302,7 @@ public fun propose_transfer<Config, Outcome, C: drop>(
     recipients: vector<address>,
     ctx: &mut TxContext
 ) {
-    assert!(amounts.length() == recipients.length(), EDifferentLength);
+    assert!(amounts.length() == recipients.length(), EAmountsRecipentsNotSameLength);
 
     let mut proposal = account.create_proposal(
         auth,
@@ -433,7 +441,7 @@ public fun destroy_mint<C: drop, W: drop>(executable: &mut Executable, witness: 
     assert!(amount == 0, EMintNotExecuted);
 }
 
-public fun delete_mint_action<Outcome, C: drop>(expired: Expired<Outcome>) {
+public fun delete_mint_action<Outcome, C: drop>(expired: &mut Expired<Outcome>) {
     let MintAction<C> { .. } = expired.remove_expired_action();
 }
 
@@ -464,7 +472,7 @@ public fun destroy_burn<C: drop, W: drop>(executable: &mut Executable, witness: 
     assert!(amount == 0, EBurnNotExecuted);
 }
 
-public fun delete_burn_action<Outcome, C: drop>(expired: Expired<Outcome>) {
+public fun delete_burn_action<Outcome, C: drop>(expired: &mut Expired<Outcome>) {
     let BurnAction<C> { .. } = expired.remove_expired_action();
 }
 
@@ -509,7 +517,7 @@ public fun destroy_update<C: drop, W: drop>(executable: &mut Executable, witness
     assert!(name.is_none() && symbol.is_none() && description.is_none() && icon_url.is_none(), EUpdateNotExecuted);
 }
 
-public fun delete_update_action<Outcome, C: drop>(expired: Expired<Outcome>) {
+public fun delete_update_action<Outcome, C: drop>(expired: &mut Expired<Outcome>) {
     let UpdateAction<C> { .. } = expired.remove_expired_action();
 }
 

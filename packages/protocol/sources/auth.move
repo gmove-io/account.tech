@@ -13,9 +13,10 @@ use account_extensions::extensions::Extensions;
 
 // === Errors ===
 
-const EWrongWitness: u64 = 0;
-const EWrongAccount: u64 = 1;
-const EWrongRole: u64 = 2;
+#[error]
+const EWrongAccount: vector<u8> = b"Account didn't create the auth";
+#[error]
+const EWrongRole: vector<u8> = b"Role doesn't match";
 
 // === Structs ===
 
@@ -67,7 +68,7 @@ public fun verify_with_role<Role>(
     addr: address,
     name: String,
 ) {
-    let r = type_name::get<Role>().into_string().to_string();  
+    let mut r = type_name::get<Role>().into_string().to_string();  
     r.append(name);
     
     let Auth { role, account_addr } = auth;

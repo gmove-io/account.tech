@@ -4,8 +4,10 @@ use std::string::String;
 
 // === Errors ===
 
-const EExtensionNotFound: u64 = 0;
-const ENotCoreDep: u64 = 1;
+#[error]
+const EExtensionNotFound: vector<u8> = b"Extension not found";
+#[error]
+const ENotCoreDep: vector<u8> = b"Package is not a core dependency";
 
 // === Structs ===
 

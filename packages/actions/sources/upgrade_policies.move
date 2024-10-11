@@ -23,11 +23,16 @@ use account_protocol::{
 
 // === Error ===
 
-const EPolicyShouldRestrict: u64 = 1;
-const EInvalidPolicy: u64 = 2;
-const EUpgradeNotExecuted: u64 = 3;
-const ERestrictNotExecuted: u64 = 4;
-const ENoLock: u64 = 5;
+#[error]
+const EPolicyShouldRestrict: vector<u8> = b"Policy should be restrictive";
+#[error]
+const EInvalidPolicy: vector<u8> = b"Invalid policy number";
+#[error]
+const EUpgradeNotExecuted: vector<u8> = b"Upgrade not executed";
+#[error]
+const ERestrictNotExecuted: vector<u8> = b"Restrict not executed";
+#[error]
+const ENoLock: vector<u8> = b"No lock with this name";
 
 // === Events ===
 
@@ -45,7 +50,6 @@ public struct Restricted has copy, drop, store {
 
 /// Dynamic field key for the UpgradeLock
 public struct UpgradeKey has copy, drop, store { name: String }
-
 /// Dynamic field wrapper restricting access to an UpgradeCap, with optional timelock
 public struct UpgradeLock has key, store {
     id: UID,
@@ -57,7 +61,6 @@ public struct UpgradeLock has key, store {
 
 /// Dynamic field key for TimeLock
 public struct TimeLockKey has copy, drop, store {}
-
 /// Dynamic field timelock config for the UpgradeLock
 public struct TimeLock has store {
     delay_ms: u64,
@@ -75,7 +78,6 @@ public struct UpgradeAction has store {
     // digest of the package build we want to publish
     digest: vector<u8>,
 }
-
 /// [ACTION] restricts a locked UpgradeCap
 public struct RestrictAction has store {
     // downgrades to this policy
@@ -311,6 +313,10 @@ public fun destroy_upgrade<W: drop>(executable: &mut Executable, witness: W) {
     assert!(digest.is_empty(), EUpgradeNotExecuted);
 }
 
+public fun delete_upgrade_action<Outcome>(expired: &mut Expired<Outcome>) {
+    let UpgradeAction { .. } = expired.remove_expired_action();
+}
+
 public fun new_restrict<Outcome, W: drop>(
     proposal: &mut Proposal<Outcome>, 
     current_policy: u8, 
@@ -366,8 +372,8 @@ public fun destroy_restrict<W: drop>(executable: &mut Executable, witness: W) {
     assert!(policy == 0, ERestrictNotExecuted);
 }
 
-public fun delete_upgrade_action<Outcome>(expired: Expired<Outcome>) {
-    let UpgradeAction { .. } = expired.remove_expired_action();
+public fun delete_restrict_action<Outcome>(expired: &mut Expired<Outcome>) {
+    let RestrictAction { .. } = expired.remove_expired_action();
 }
 
 // === Private Functions ===

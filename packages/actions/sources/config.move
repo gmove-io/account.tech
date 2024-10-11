@@ -29,13 +29,10 @@ use account_extensions::extensions::Extensions;
 
 // === Errors ===
 
-const EThresholdTooHigh: u64 = 0;
-const EThresholdNull: u64 = 1;
-const EMembersNotSameLength: u64 = 2;
-const ERolesNotSameLength: u64 = 3;
-const ERoleDoesntExist: u64 = 4;
-const EMetadataNotSameLength: u64 = 5;
-const EMetadataNameMissing: u64 = 6;
+#[error]
+const EMetadataNotSameLength: vector<u8> = b"The keys and values are not the same length";
+#[error]
+const EMetadataNameMissing: vector<u8> = b"New metadata must set a name for the Account";
 
 // === Structs ===
 
@@ -45,6 +42,8 @@ const EMetadataNameMissing: u64 = 6;
 /// Those structs also define the different roles that members can have.
 /// Finally, they are used to parse the actions of the proposal off-chain.
 
+/// proof of core dependency
+public struct CoreDep() has drop;
 /// [PROPOSAL] modifies the name of the account
 public struct ConfigMetadataProposal() has drop;
 /// [PROPOSAL] modifies the dependencies of the account
@@ -166,10 +165,10 @@ public fun config_metadata<Config, Outcome, W: drop>(
     witness: W,
 ) {
     let ConfigMetadataAction { metadata } = executable.remove_action(witness);
-    *account.metadata_mut(witness) = metadata;
+    *account.metadata_mut(CoreDep()) = metadata;
 }
 
-public fun delete_config_metadata_action<Outcome>(expired: Expired<Outcome>) {
+public fun delete_config_metadata_action<Outcome>(expired: &mut Expired<Outcome>) {
     let ConfigMetadataAction { .. } = expired.remove_expired_action();
 }
 
@@ -195,10 +194,10 @@ public fun config_deps<Config, Outcome, W: drop>(
     witness: W,
 ) {
     let ConfigDepsAction { deps } = executable.remove_action(witness);
-    *account.deps_mut(witness) = deps;
+    *account.deps_mut(CoreDep()) = deps;
 }
 
-public fun delete_config_deps_action<Outcome>(expired: Expired<Outcome>) {
+public fun delete_config_deps_action<Outcome>(expired: &mut Expired<Outcome>) {
     let ConfigDepsAction { .. } = expired.remove_expired_action();
 }
 

@@ -8,7 +8,7 @@ const VERSION: u64 = 1;
 
 // === Structs ===
 
-public struct V1() has copy, drop, store;
+public struct V1() has drop;
 
 public struct Version has drop, store {
     current: u64

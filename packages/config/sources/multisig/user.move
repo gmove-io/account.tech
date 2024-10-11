@@ -19,10 +19,14 @@ use account_config::multisig::{Multisig, Approvals};
 
 // === Errors ===
 
-const ENotMember: u64 = 0;
-const EWrongAccount: u64 = 1;
-const EMustLeaveAllAccounts: u64 = 2;
-const EAlreadyHasUser: u64 = 3;
+#[error]
+const ENotMember: vector<u8> = b"User is not a member of the account";
+#[error]
+const EWrongAccount: vector<u8> = b"Not invited to this account";
+#[error]
+const EMustLeaveAllAccounts: vector<u8> = b"User must leave all accounts before destroying their User object";
+#[error]
+const EAlreadyHasUser: vector<u8> = b"User already has a User object";
 
 // === Struct ===
 

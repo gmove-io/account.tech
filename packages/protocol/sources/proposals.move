@@ -16,11 +16,16 @@ use account_protocol::{
 
 // === Errors ===
 
-const ECantBeExecutedYet: u64 = 0;
-const EHasntExpired: u64 = 1;
-const EProposalNotFound: u64 = 2;
-const EProposalKeyAlreadyExists: u64 = 3;
-const EActionNotFound: u64 = 4;
+#[error]
+const ECantBeExecutedYet: vector<u8> = b"Proposal hasn't reached execution time";
+#[error]
+const EHasntExpired: vector<u8> = b"Proposal hasn't reached expiration epoch";
+#[error]
+const EProposalNotFound: vector<u8> = b"Proposal not found for key";
+#[error]
+const EProposalKeyAlreadyExists: vector<u8> = b"Proposal key already exists";
+#[error]
+const EActionNotFound: vector<u8> = b"Action not found for type";
 
 // === Structs ===
 

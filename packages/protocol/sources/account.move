@@ -32,11 +32,6 @@ use account_protocol::{
 };
 use account_extensions::extensions::Extensions;
 
-// === Errors ===
-
-const ECantBeExecutedYet: u64 = 0;
-const ECallerIsNotMember: u64 = 1;
-
 // === Structs ===
 
 /// Shared multisig Account object 

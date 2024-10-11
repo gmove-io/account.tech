@@ -12,7 +12,8 @@ use account_protocol::source::Source;
 
 // === Errors ===
 
-const EActionNotFound: u64 = 0;
+#[error]
+const EActionNotFound: vector<u8> = b"Action not found for type";
 
 // === Structs ===
 

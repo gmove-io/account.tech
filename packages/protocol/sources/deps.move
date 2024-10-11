@@ -18,10 +18,14 @@ use account_extensions::extensions::Extensions;
 
 // === Errors ===
 
-const EDepNotFound: u64 = 0;
-const EDepAlreadyExists: u64 = 1;
-const ENotDep: u64 = 2;
-const ENotCoreDep: u64 = 3;
+#[error]
+const EDepNotFound: vector<u8> = b"Dependency not found in the account";
+#[error]
+const EDepAlreadyExists: vector<u8> = b"Dependency already exists in the account";
+#[error]
+const ENotDep: vector<u8> = b"Witness package is not a dependency";
+#[error]
+const ENotCoreDep: vector<u8> = b"Witness package is not a core dependency";
 
 // === Structs ===
 

@@ -30,10 +30,14 @@ use account_actions::{
 
 // === Errors ===
 
-const EWrongObject: u64 = 0;
-const EReturnAllObjectsBefore: u64 = 1;
-const ERetrieveAllObjectsBefore: u64 = 2;
-const EDifferentLength: u64 = 3;
+#[error]
+const EWrongObject: vector<u8> = b"Wrong object provided";
+#[error]
+const EReturnAllObjectsBefore: vector<u8> = b"Return all objects before destroying the action";
+#[error]
+const ERetrieveAllObjectsBefore: vector<u8> = b"Retrieve all objects before destroying the action";
+#[error]
+const EObjectsRecipientsNotSameLength: vector<u8> = b"Recipients and objects vectors must have the same length";
 
 // === Structs ===
 
@@ -47,7 +51,6 @@ public struct WithdrawAction has store {
     // the owned objects we want to access
     objects: vector<ID>,
 }
-
 /// [ACTION] enforces accessed objects to be sent back to the account, depends on WithdrawAction
 public struct ReturnAction has store {
     // list of objects to put back into the account
@@ -69,7 +72,7 @@ public fun propose_transfer<Config, Outcome>(
     recipients: vector<address>,
     ctx: &mut TxContext
 ) {
-    assert!(recipients.length() == objects.length(), EDifferentLength);
+    assert!(recipients.length() == objects.length(), EObjectsRecipientsNotSameLength);
     let mut proposal = account.create_proposal(
         auth,
         outcome,
@@ -183,7 +186,7 @@ public fun new_withdraw<Outcome, W: drop>(
     proposal.add_action(WithdrawAction { objects }, witness);
 }
 
-public fun withdraw<Config, Outcome, T: key + store, W: drop>(
+public fun withdraw<Config, Outcome, T: key + store, W: copy + drop>(
     executable: &mut Executable,
     account: &mut Account<Config, Outcome>, 
     receiving: Receiving<T>,
@@ -205,11 +208,11 @@ public fun destroy_withdraw<W: drop>(executable: &mut Executable, witness: W) {
     assert!(objects.is_empty(), ERetrieveAllObjectsBefore);
 }
 
-public fun delete_withdraw_action<Outcome>(expired: Expired<Outcome>) {
+public fun delete_withdraw_action<Outcome>(expired: &mut Expired<Outcome>) {
     let WithdrawAction { .. } = expired.remove_expired_action();
 }
 
-public fun new_borrow<Outcome, W: drop>(
+public fun new_borrow<Outcome, W: copy + drop>(
     proposal: &mut Proposal<Outcome>, 
     objects: vector<ID>, 
     witness: W,
@@ -218,7 +221,7 @@ public fun new_borrow<Outcome, W: drop>(
     proposal.add_action(ReturnAction { to_return: objects }, witness);
 }
 
-public fun borrow<Config, Outcome, T: key + store, W: drop>(
+public fun borrow<Config, Outcome, T: key + store, W: copy + drop>(
     executable: &mut Executable,
     account: &mut Account<Config, Outcome>, 
     receiving: Receiving<T>,
@@ -241,12 +244,12 @@ public fun put_back<Config, Outcome, T: key + store, W: drop>(
     transfer::public_transfer(returned, account.addr());
 }
 
-public fun destroy_borrow<W: drop>(executable: &mut Executable, witness: W) {
+public fun destroy_borrow<W: copy + drop>(executable: &mut Executable, witness: W) {
     destroy_withdraw(executable, witness);
     let ReturnAction { to_return } = executable.remove_action(witness);
     assert!(to_return.is_empty(), EReturnAllObjectsBefore);
 }
 
-public fun delete_return_action<Outcome>(expired: Expired<Outcome>) {
+public fun delete_return_action<Outcome>(expired: &mut Expired<Outcome>) {
     let ReturnAction { .. } = expired.remove_expired_action();
 }

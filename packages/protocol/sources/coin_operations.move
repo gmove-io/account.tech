@@ -10,7 +10,10 @@ use sui::{
     coin::{Self, Coin},
     transfer::Receiving
 };
-use account_protocol::account::Account;
+use account_protocol::{
+    account::Account,
+    auth::Auth
+};
 
 // === Structs ===
 
@@ -22,6 +25,7 @@ public struct Do() has drop;
 /// Members can merge and split coins, no need for approvals
 /// Returns the IDs to use in a following proposal, conserve the order
 public fun merge_and_split<Config, Outcome, T: drop>(
+    _auth: &Auth, // must be an authorized member, done before proposal
     account: &mut Account<Config, Outcome>, 
     to_merge: vector<Receiving<Coin<T>>>, // there can be only one coin if we just want to split
     to_split: vector<u64>, // there can be no amount if we just want to merge

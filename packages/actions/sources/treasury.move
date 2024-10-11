@@ -31,19 +31,23 @@ use account_actions::{
 
 // === Errors ===
 
-const ETreasuryDoesntExist: u64 = 0;
-const EOpenNotExecuted: u64 = 1;
-const ETreasuryAlreadyExists: u64 = 2;
-const EWrongLength: u64 = 3;
-const EWithdrawNotExecuted: u64 = 4;
-const EDifferentLength: u64 = 5;
-const ETreasuryNotEmpty: u64 = 6;
+#[error]
+const ETreasuryDoesntExist: vector<u8> = b"No Treasury with this name";
+#[error]
+const EOpenNotExecuted: vector<u8> = b"Open not executed";
+#[error]
+const ETreasuryAlreadyExists: vector<u8> = b"A treasury already exists with this name";
+#[error]
+const ETypesAmountsNotSameLength: vector<u8> = b"Types and amounts vectors not same length";
+#[error]
+const EWithdrawNotExecuted: vector<u8> = b"Withdraw not executed";
+#[error]
+const ETreasuryNotEmpty: vector<u8> = b"Treasury must be emptied before closing";
 
 // === Structs ===
 
 /// Dynamic Field key for the Treasury
 public struct TreasuryKey has copy, drop, store { name: String }
-
 /// Dynamic field holding a budget with different coin types, key is name
 public struct Treasury has store {
     // heterogeneous array of Balances, String -> Balance<C>
@@ -66,7 +70,6 @@ public struct OpenAction has store {
     // label for the treasury and role
     name: String,
 }
-
 /// [ACTION] action to be used with specific proposals making good use of the returned coins, similar as owned::withdraw
 public struct SpendAction has store {
     // name of the treasury to withdraw from
@@ -206,7 +209,6 @@ public fun propose_transfer<Config, Outcome>(
     mut recipients: vector<address>,
     ctx: &mut TxContext
 ) {
-    assert!(coin_amounts.length() == coin_types.length(), EDifferentLength);
     let mut proposal = account.create_proposal(
         auth,
         outcome,
@@ -338,7 +340,7 @@ public fun new_spend<Outcome, W: drop>(
     amounts: vector<u64>,
     witness: W,
 ) {
-    assert!(coin_types.length() == amounts.length(), EWrongLength);
+    assert!(coin_types.length() == amounts.length(), ETypesAmountsNotSameLength);
     proposal.add_action(
         SpendAction { name, coins_amounts_map: vec_map::from_keys_values(coin_types, amounts) },
         witness
@@ -371,6 +373,6 @@ public fun destroy_spend<W: drop>(executable: &mut Executable, witness: W) {
     assert!(coins_amounts_map.is_empty(), EWithdrawNotExecuted);
 }
 
-public fun delete_spend_action<Outcome>(expired: Expired<Outcome>) {
+public fun delete_spend_action<Outcome>(expired: &mut Expired<Outcome>) {
     let SpendAction { .. } = expired.remove_expired_action();
 }

@@ -28,7 +28,8 @@ use account_protocol::{
 
 // === Errors ===
 
-const ENoLock: u64 = 0;
+#[error]
+const ENoLock: vector<u8> = b"No Lock for this Cap type";
 
 // === Structs ===    
 
@@ -142,7 +143,7 @@ public fun destroy_access<Cap, W: drop>(executable: &mut Executable, witness: W)
     let AccessAction<Cap> {} = executable.remove_action(witness);
 }
 
-public fun delete_access_action<Outcome, Cap>(expired: Expired<Outcome>) {
+public fun delete_access_action<Outcome, Cap>(expired: &mut Expired<Outcome>) {
     let AccessAction<Cap> { .. } = expired.remove_expired_action();
 }
 

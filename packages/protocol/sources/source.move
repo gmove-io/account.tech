@@ -20,9 +20,12 @@ use account_protocol::deps::Deps;
 
 // === Errors ===
 
-const EWrongWitness: u64 = 0;
-const EWrongAccount: u64 = 1;
-const EWrongVersion: u64 = 2;
+#[error]
+const EWrongWitness: vector<u8> = b"Witness is not the one used for creating the proposal";
+#[error]
+const EWrongAccount: vector<u8> = b"Account address doesn't match the source";
+#[error]
+const EWrongVersion: vector<u8> = b"Witness version is not the expected one";
 
 // === Structs ===
 
@@ -89,14 +92,14 @@ public fun role_name(source: &Source): String {
 // === Package functions ===
 
 /// Constructs an source from a Witness, an (optional) name and a account id
-public(package) fun construct<Version, Role>(
+public(package) fun construct<V: drop, W: drop>(
     account_addr: address,
-    _version: Version, 
-    _role: Role, 
+    _version: V, 
+    _role: W, 
     role_name: String, 
 ): Source {
-    let version_type = type_name::get<Version>();
-    let role_type = type_name::get<Role>();
+    let version_type = type_name::get<V>();
+    let role_type = type_name::get<W>();
     
     Source { account_addr, version_type, role_type, role_name }
 }

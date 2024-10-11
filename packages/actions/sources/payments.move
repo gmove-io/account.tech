@@ -19,10 +19,14 @@ use account_protocol::{
 
 // === Errors ===
 
-const ECompletePaymentBefore: u64 = 0;
-const EPayTooEarly: u64 = 1;
-const EPayNotExecuted: u64 = 2;
-const EWrongStream: u64 = 3;
+#[error]
+const ECompletePaymentBefore: vector<u8> = b"Stream must be emptied before destruction";
+#[error]
+const EPayTooEarly: vector<u8> = b"Cannot disburse payment yet";
+#[error]
+const EPayNotExecuted: vector<u8> = b"Pay not executed";
+#[error]
+const EWrongStream: vector<u8> = b"Wrong stream for this Cap";
 
 // === Structs ===
 
@@ -154,7 +158,7 @@ public fun destroy_pay<W: drop>(executable: &mut Executable, witness: W): addres
     recipient
 }
 
-public fun delete_pay_action<Outcome>(expired: Expired<Outcome>) {
+public fun delete_pay_action<Outcome>(expired: &mut Expired<Outcome>) {
     let PayAction { .. } = expired.remove_expired_action();
 }
 

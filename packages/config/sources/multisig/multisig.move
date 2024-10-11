@@ -20,40 +20,28 @@ use account_protocol::{
 
 // === Errors ===
 
-const EMemberNotFound: u64 = 0;
-const ECallerIsNotMember: u64 = 1;
-const ERoleNotFound: u64 = 2;
-const EThresholdNotReached: u64 = 3;
-const ENotApproved: u64 = 4;
-const ERoleDoesntExist: u64 = 5;
-const EThresholdTooHigh: u64 = 6;
-const EThresholdNull: u64 = 7;
-const EMembersNotSameLength: u64 = 8;
-const ERolesNotSameLength: u64 = 9;
-const EAlreadyApproved: u64 = 10;
-
-// === Events ===
-
-// public struct Created has copy, drop, store {
-//     auth_witness: String,
-//     auth_name: String,
-//     key: String,
-//     description: String,
-// }
-
-// public struct Approved has copy, drop, store {
-//     auth_witness: String,
-//     auth_name: String,
-//     key: String,
-//     description: String,
-// }
-
-// public struct Executed has copy, drop, store {
-//     auth_witness: String,
-//     auth_name: String,
-//     key: String,
-//     description: String,
-// }
+#[error]
+const EMemberNotFound: vector<u8> = b"No member for this address";
+#[error]
+const ECallerIsNotMember: vector<u8> = b"Caller is not member";
+#[error]
+const ERoleNotFound: vector<u8> = b"Role not found";
+#[error]
+const EThresholdNotReached: vector<u8> = b"Threshold not reached";
+#[error]
+const ENotApproved: vector<u8> = b"Caller has not approved";
+#[error]
+const ERoleNotAdded: vector<u8> = b"Role not added so member cannot have it";
+#[error]
+const EThresholdTooHigh: vector<u8> = b"Threshold is too high";
+#[error]
+const EThresholdNull: vector<u8> = b"The global threshold cannot be null";
+#[error]
+const EMembersNotSameLength: vector<u8> = b"Members and roles vectors are not the same length";
+#[error]
+const ERolesNotSameLength: vector<u8> = b"The role vectors are not the same length";
+#[error]
+const EAlreadyApproved: vector<u8> = b"Proposal is already approved by the caller";
 
 // === Structs ===
 
@@ -405,7 +393,7 @@ fun verify_new_rules(
     while (!weights_for_role.is_empty()) {
         let (role, weight) = weights_for_role.pop();
         let (role_exists, idx) = role_names.index_of(&role);
-        assert!(role_exists, ERoleDoesntExist);
+        assert!(role_exists, ERoleNotAdded);
         assert!(weight >= role_thresholds[idx], EThresholdTooHigh);
     };
 }

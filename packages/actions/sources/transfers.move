@@ -12,7 +12,8 @@ use account_protocol::{
 
 // === Errors ===
 
-const ETransferNotExecuted: u64 = 0;
+#[error]
+const ETransferNotExecuted: vector<u8> = b"Transfer not executed";
 
 // === Structs ===
 
@@ -54,6 +55,6 @@ public fun destroy_transfer<W: drop>(
     assert!(recipient == @0xF, ETransferNotExecuted);
 }
 
-public fun delete_transfer_action<Outcome>(expired: Expired<Outcome>) {
+public fun delete_transfer_action<Outcome>(expired: &mut Expired<Outcome>) {
     let TransferAction { .. } = expired.remove_expired_action();
 }

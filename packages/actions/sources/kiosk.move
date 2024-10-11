@@ -26,10 +26,16 @@ use account_protocol::{
 
 // === Errors ===
 
-const EWrongReceiver: u64 = 1;
-const ETransferAllNftsBefore: u64 = 2;
-const EWrongNftsPrices: u64 = 3;
-const EListAllNftsBefore: u64 = 4;
+#[error]
+const EWrongReceiver: vector<u8> = b"Caller is not the approved recipient";
+#[error]
+const ETransferAllNftsBefore: vector<u8> = b"Transfer all nfts before destroying the action";
+#[error]
+const ENftsPricesNotSameLength: vector<u8> = b"Nfts prices vectors must have the same length";
+#[error]
+const EListAllNftsBefore: vector<u8> = b"List all nfts before destroying the action";
+#[error]
+const ENoLock: vector<u8> = b"No Kiosk found with this name";
 
 // === Structs ===    
 
@@ -87,6 +93,13 @@ public fun new<Config, Outcome>(
     account.add_managed_asset(Do(), KioskOwnerKey { name }, kiosk_owner_lock);
 
     transfer::public_share_object(kiosk);
+}
+
+public fun has_lock<Config, Outcome>(
+    account: &Account<Config, Outcome>,
+    name: String
+): bool {
+    account.has_managed_asset(KioskOwnerKey { name })
 }
 
 public fun borrow_lock<Config, Outcome>(
@@ -188,6 +201,8 @@ public fun propose_take<Config, Outcome>(
     recipient: address,
     ctx: &mut TxContext
 ) {
+    assert!(has_lock(account, name), ENoLock);
+
     let mut proposal = account.create_proposal(
         auth, 
         outcome,
@@ -240,6 +255,8 @@ public fun propose_list<Config, Outcome>(
     prices: vector<u64>,
     ctx: &mut TxContext
 ) {
+    assert!(has_lock(account, name), ENoLock);
+
     let mut proposal = account.create_proposal(
         auth,
         outcome,
@@ -325,7 +342,7 @@ public fun destroy_take<W: drop>(executable: &mut Executable, witness: W): addre
     recipient
 }
 
-public fun delete_take_action<Outcome>(expired: Expired<Outcome>) {
+public fun delete_take_action<Outcome>(expired: &mut Expired<Outcome>) {
     let TakeAction { .. } = expired.remove_expired_action();
 }
 
@@ -336,7 +353,7 @@ public fun new_list<Outcome, W: drop>(
     prices: vector<u64>,
     witness: W,
 ) {
-    assert!(nft_ids.length() == prices.length(), EWrongNftsPrices);
+    assert!(nft_ids.length() == prices.length(), ENftsPricesNotSameLength);
     proposal.add_action(
         ListAction { name, nfts_prices_map: vec_map::from_keys_values(nft_ids, prices) }, 
         witness
@@ -362,6 +379,6 @@ public fun destroy_list<W: drop>(executable: &mut Executable, witness: W) {
     assert!(nfts_prices_map.is_empty(), EListAllNftsBefore);
 }
 
-public fun delete_list_action<Outcome>(expired: Expired<Outcome>) {
+public fun delete_list_action<Outcome>(expired: &mut Expired<Outcome>) {
     let ListAction { .. } = expired.remove_expired_action();
 }
