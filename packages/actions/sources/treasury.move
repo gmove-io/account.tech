@@ -54,8 +54,6 @@ public struct Treasury has store {
     bag: Bag
 }
 
-/// [MEMBER] can close a treasury and deposit coins into it
-public struct Do() has drop;
 /// [MEMBER] can deposit coins into a treasury
 public struct Deposit() has drop;
 /// [PROPOSAL] opens a treasury for the account
@@ -123,7 +121,7 @@ public fun deposit<Config, Outcome, C: drop>(
     assert!(treasury_exists(account, name), ETreasuryDoesntExist);
 
     let treasury: &mut Treasury = 
-        account.borrow_managed_asset_mut(Deposit(), TreasuryKey { name });
+        account.borrow_managed_asset_mut(TreasuryKey { name });
     let coin_type = coin_type_string<C>();
 
     if (treasury.coin_type_exists(coin_type)) {
@@ -143,7 +141,7 @@ public fun close<Config, Outcome>(
     auth.verify(account.addr());
 
     let Treasury { bag } = 
-        account.remove_managed_asset(Do(), TreasuryKey { name });
+        account.remove_managed_asset(TreasuryKey { name });
     assert!(bag.is_empty(), ETreasuryNotEmpty);
     bag.destroy_empty();
 }
@@ -324,7 +322,7 @@ public fun open<Config, Outcome, W: drop>(
     ctx: &mut TxContext
 ) {
     let open_mut: &mut OpenAction = executable.action_mut(account.addr(), witness);
-    account.add_managed_asset(Do(), TreasuryKey { name: open_mut.name }, Treasury { bag: bag::new(ctx) });
+    account.add_managed_asset(TreasuryKey { name: open_mut.name }, Treasury { bag: bag::new(ctx) });
     open_mut.name = b"".to_string(); // reset to ensure execution
 }
 
@@ -356,7 +354,7 @@ public fun spend<Config, Outcome, W: drop, C: drop>(
     let spend_mut: &mut SpendAction = executable.action_mut(account.addr(), witness);
     let (coin_type, amount) = spend_mut.coins_amounts_map.remove(&coin_type_string<C>());
     
-    let treasury: &mut Treasury = account.borrow_managed_asset_mut(Do(), TreasuryKey { name: spend_mut.name });
+    let treasury: &mut Treasury = account.borrow_managed_asset_mut(TreasuryKey { name: spend_mut.name });
     let balance: &mut Balance<C> = treasury.bag.borrow_mut(coin_type);
     let coin = coin::take(balance, amount, ctx);
 

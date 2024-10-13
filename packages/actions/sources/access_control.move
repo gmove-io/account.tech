@@ -30,6 +30,8 @@ use account_protocol::{
 
 #[error]
 const ENoLock: vector<u8> = b"No Lock for this Cap type";
+#[error]
+const EWrongAccount: vector<u8> = b"This Cap has not been borrowed from this acccount";
 
 // === Structs ===    
 
@@ -40,17 +42,16 @@ public struct AccessLock<Cap: store> has store {
     cap: Cap,
 }
 
-/// [MEMBER] can lock a custom Cap in the Account to restrict access to certain functions
-public struct Do() has drop;
 /// [PROPOSAL] issues an Access<Cap>, Cap being the type of a Cap held by the Account
 public struct AccessProposal() has drop;
 
 /// [ACTION] mint new coins
 public struct AccessAction<phantom Cap> has store {}
 
-/// This struct is created upon approval to grant access to certain functions gated by an Access<Cap> type
-/// Similar to a cap but issued by an Account, with copy and drop to be used multiple times within a single PTB
-public struct Access<phantom Cap> has copy, drop {}
+/// This struct is created upon approval to ensure the cap is returned
+public struct Borrow<phantom Cap> {
+    account_addr: address
+}
 
 // === [MEMBER] Public functions ===
 
@@ -61,9 +62,7 @@ public fun lock_cap<Config, Outcome, Cap: store>(
     cap: Cap,
 ) {
     auth.verify(account.addr());
-
-    let lock = AccessLock { cap };
-    account.add_managed_asset(Do(), AccessKey<Cap> {}, lock);
+    account.add_managed_asset(AccessKey<Cap> {}, AccessLock { cap });
 }
 
 public fun has_lock<Config, Outcome, Cap>(
@@ -91,7 +90,7 @@ public fun propose_access<Config, Outcome, Cap>(
         auth,
         outcome,
         AccessProposal(), 
-        type_to_name<Cap>(), // the coin type is the auth name 
+        type_to_name<Cap>(), // the cap type is the witness role name 
         key, 
         description, 
         execution_time, 
@@ -107,16 +106,23 @@ public fun propose_access<Config, Outcome, Cap>(
 // step 3: execute the proposal and return the action (AccountConfig::module::execute_proposal)
 
 // step 4: mint the coins and send them to the account
-public fun execute_access<Config, Outcome, Cap>(
-    mut executable: Executable,
+public fun execute_access<Config, Outcome, Cap: store>(
+    executable: &mut Executable,
     account: &mut Account<Config, Outcome>,
-): Access<Cap> {
-    let access = access<Config, Outcome, Cap, AccessProposal>(&mut executable, account, AccessProposal());
+): (Borrow<Cap>, Cap) {
+    access_cap<Config, Outcome, Cap, AccessProposal>(executable, account, AccessProposal())
+}
 
+// step 5: return the cap to destroy Borrow, the action and executable
+public fun complete_access<Config, Outcome, Cap: store>(
+    mut executable: Executable, 
+    account: &mut Account<Config, Outcome>,
+    borrow: Borrow<Cap>, 
+    cap: Cap
+) {
+    return_cap(account, borrow, cap);
     destroy_access<Cap, AccessProposal>(&mut executable, AccessProposal());
     executable.destroy(AccessProposal());
-
-    access
 }
 
 // === [ACTION] Public functions ===
@@ -128,15 +134,28 @@ public fun new_access<Outcome, Cap, W: drop>(
     proposal.add_action(AccessAction<Cap> {}, witness);
 }
 
-public fun access<Config, Outcome, Cap, W: drop>(
+public fun access_cap<Config, Outcome, Cap: store, W: drop>(
     executable: &mut Executable, 
     account: &mut Account<Config, Outcome>,
     witness: W, 
-): Access<Cap> {
-    let _access_mut: &mut AccessAction<Cap> = executable.action_mut(account.addr(), witness);
+): (Borrow<Cap>, Cap) {
     assert!(has_lock<Config, Outcome, Cap>(account), ENoLock);
-    
-    Access<Cap> {}
+    // check to be sure this cap type has been approved
+    let _access_mut: &mut AccessAction<Cap> = executable.action_mut(account.addr(), witness);
+    let AccessLock<Cap> { cap } = account.remove_managed_asset(AccessKey<Cap> {});
+
+    (Borrow<Cap> { account_addr: account.addr() }, cap)
+}
+
+public fun return_cap<Config, Outcome, Cap: store>(
+    account: &mut Account<Config, Outcome>,
+    borrow: Borrow<Cap>,
+    cap: Cap,
+) {
+    let Borrow<Cap> { account_addr } = borrow;
+    assert!(account_addr == account.addr(), EWrongAccount);
+
+    account.add_managed_asset(AccessKey<Cap> {}, AccessLock { cap });
 }
 
 public fun destroy_access<Cap, W: drop>(executable: &mut Executable, witness: W) {

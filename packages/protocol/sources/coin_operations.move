@@ -17,8 +17,8 @@ use account_protocol::{
 
 // === Structs ===
 
-/// Delegated witness authorizing access to the inner Account
-public struct Do() has drop;
+/// Witness authorizing access to the inner Account
+public struct CoreDep() has drop;
 
 // === [MEMBER] Public functions ===
 
@@ -36,7 +36,7 @@ public fun merge_and_split<Config, Outcome, T: drop>(
     // receive all coins
     let mut coins = vector::empty();
     to_merge.do!(|item| {
-        let coin = account.receive(Do(), item);
+        let coin = account.receive(CoreDep(), item);
         coins.push_back(coin);
     });
 

@@ -127,7 +127,7 @@ public fun add_proposal<Config, Outcome, W: drop>(
 }
 
 /// Returns an Executable with the Proposal Outcome that must be validated in AccountCOnfig
-public fun execute_proposal<Config, Outcome, W: drop>(
+public fun execute_proposal<Config, Outcome, W: copy + drop>(
     account: &mut Account<Config, Outcome>, 
     key: String, 
     clock: &Clock,
@@ -185,41 +185,39 @@ public fun config<Config, Outcome>(account: &Account<Config, Outcome>): &Config 
 
 /// Managed assets:
 /// Objects attached as dynamic fields to the account object
+/// Keys must be custom types defined in the same module where the function is called
+/// The key type is checked against dependencies
 
-public fun add_managed_asset<Config, Outcome, K: copy + drop + store, A: store, W: drop>(
+public fun add_managed_asset<Config, Outcome, K: copy + drop + store, A: store>(
     account: &mut Account<Config, Outcome>, 
-    witness: W,
     key: K, 
     asset: A,
 ) {
-    account.deps.assert_is_dep(witness);
+    account.deps.assert_is_dep(key);
     df::add(&mut account.id, key, asset);
 }
 
-public fun borrow_managed_asset<Config, Outcome, K: copy + drop + store, A: store, W: drop>(
+public fun borrow_managed_asset<Config, Outcome, K: copy + drop + store, A: store>(
     account: &Account<Config, Outcome>,
-    witness: W,
     key: K, 
 ): &A {
-    account.deps.assert_is_dep(witness);
+    account.deps.assert_is_dep(key);
     df::borrow(&account.id, key)
 }
 
-public fun borrow_managed_asset_mut<Config, Outcome, K: copy + drop + store, A: store, W: drop>(
+public fun borrow_managed_asset_mut<Config, Outcome, K: copy + drop + store, A: store>(
     account: &mut Account<Config, Outcome>, 
-    witness: W,
     key: K, 
 ): &mut A {
-    account.deps.assert_is_dep(witness);
+    account.deps.assert_is_dep(key);
     df::borrow_mut(&mut account.id, key)
 }
 
-public fun remove_managed_asset<Config, Outcome, K: copy + drop + store, A: store, W: drop>(
+public fun remove_managed_asset<Config, Outcome, K: copy + drop + store, A: store>(
     account: &mut Account<Config, Outcome>, 
-    witness: W,
     key: K, 
 ): A {
-    account.deps.assert_is_dep(witness);
+    account.deps.assert_is_dep(key);
     df::remove(&mut account.id, key)
 }
 

@@ -12,7 +12,6 @@ use sui::{
     package::{Self, UpgradeCap, UpgradeTicket, UpgradeReceipt},
     clock::Clock,
     dynamic_field as df,
-    event,
 };
 use account_protocol::{
     account::Account,
@@ -34,18 +33,6 @@ const ERestrictNotExecuted: vector<u8> = b"Restrict not executed";
 #[error]
 const ENoLock: vector<u8> = b"No lock with this name";
 
-// === Events ===
-
-public struct Upgraded has copy, drop, store {
-    package_id: ID,
-    digest: vector<u8>,
-}
-
-public struct Restricted has copy, drop, store {
-    package_id: ID,
-    policy: u8,
-}
-
 // === Structs ===
 
 /// Dynamic field key for the UpgradeLock
@@ -66,12 +53,10 @@ public struct TimeLock has store {
     delay_ms: u64,
 }
 
-/// [MEMBER] can lock an UpgradeCap and borrow it
-public struct ManageUpgrades has copy, drop {}
 /// [PROPOSAL] upgrades a package
-public struct UpgradeProposal has copy, drop {}
+public struct UpgradeProposal() has drop;
 /// [PROPOSAL] restricts a locked UpgradeCap
-public struct RestrictProposal has copy, drop {}
+public struct RestrictProposal() has drop;
 
 /// [ACTION] upgrades a package
 public struct UpgradeAction has store {
@@ -122,7 +107,7 @@ public fun lock_cap<Config, Outcome>(
     name: String,
 ) {
     auth.verify(account.addr());
-    account.add_managed_asset(ManageUpgrades {}, UpgradeKey { name }, lock);
+    account.add_managed_asset(UpgradeKey { name }, lock);
 }
 
 /// Locks a cap with a timelock rule
@@ -150,14 +135,14 @@ public fun borrow_lock<Config, Outcome>(
     account: &mut Account<Config, Outcome>, 
     name: String
 ): &UpgradeLock {
-    account.borrow_managed_asset(ManageUpgrades {}, UpgradeKey { name })
+    account.borrow_managed_asset(UpgradeKey { name })
 }
 
 public fun borrow_lock_mut<Config, Outcome>(
     account: &mut Account<Config, Outcome>, 
     name: String
 ): &mut UpgradeLock {
-    account.borrow_managed_asset_mut(ManageUpgrades {}, UpgradeKey { name })
+    account.borrow_managed_asset_mut(UpgradeKey { name })
 }
 
 public fun upgrade_cap(lock: &UpgradeLock): &UpgradeCap {
@@ -188,7 +173,7 @@ public fun propose_upgrade<Config, Outcome>(
     let mut proposal = account.create_proposal(
         auth,
         outcome,
-        UpgradeProposal {},
+        UpgradeProposal(),
         name,
         key,
         description,
@@ -197,8 +182,8 @@ public fun propose_upgrade<Config, Outcome>(
         ctx
     );
 
-    new_upgrade(&mut proposal, digest, UpgradeProposal {});
-    account.add_proposal(proposal, UpgradeProposal {});
+    new_upgrade(&mut proposal, digest, UpgradeProposal());
+    account.add_proposal(proposal, UpgradeProposal());
 }
 
 // step 2: multiple members have to approve the proposal (account::approve_proposal)
@@ -209,7 +194,7 @@ public fun execute_upgrade<Config, Outcome>(
     executable: &mut Executable,
     account: &mut Account<Config, Outcome>,
 ): UpgradeTicket {
-    upgrade(executable, account, UpgradeProposal {})
+    upgrade(executable, account, UpgradeProposal())
 }    
 
 // step 5: consume the ticket to upgrade  
@@ -224,8 +209,8 @@ public fun confirm_upgrade<Config, Outcome>(
     let lock_mut = borrow_lock_mut(account, name);
     package::commit_upgrade(&mut lock_mut.upgrade_cap, receipt);
     
-    destroy_upgrade(&mut executable, UpgradeProposal {});
-    executable.destroy(UpgradeProposal {});
+    destroy_upgrade(&mut executable, UpgradeProposal());
+    executable.destroy(UpgradeProposal());
 }
 
 // step 1: propose an UpgradeAction by passing the digest of the package build
@@ -250,7 +235,7 @@ public fun propose_restrict<Config, Outcome>(
     let mut proposal = account.create_proposal(
         auth, 
         outcome,
-        RestrictProposal {},
+        RestrictProposal(),
         name,
         key,
         description,
@@ -259,8 +244,8 @@ public fun propose_restrict<Config, Outcome>(
         ctx
     );
 
-    new_restrict(&mut proposal, current_policy, policy, RestrictProposal {});
-    account.add_proposal(proposal, RestrictProposal {});
+    new_restrict(&mut proposal, current_policy, policy, RestrictProposal());
+    account.add_proposal(proposal, RestrictProposal());
 }
 
 // step 2: multiple members have to approve the proposal (account::approve_proposal)
@@ -271,9 +256,9 @@ public fun execute_restrict<Config, Outcome>(
     mut executable: Executable,
     account: &mut Account<Config, Outcome>,
 ) {
-    restrict(&mut executable, account, RestrictProposal {});
-    destroy_restrict(&mut executable, RestrictProposal {});
-    executable.destroy(RestrictProposal {});
+    restrict(&mut executable, account, RestrictProposal());
+    destroy_restrict(&mut executable, RestrictProposal());
+    executable.destroy(RestrictProposal());
 }
 
 // [ACTION] Public Functions ===
@@ -294,11 +279,6 @@ public fun upgrade<Config, Outcome, W: drop>(
     let name = executable.source().role_name();
     let upgrade_mut: &mut UpgradeAction = executable.action_mut(account.addr(), witness);
     let lock_mut = borrow_lock_mut(account, name);
-
-    event::emit(Upgraded {
-        package_id: lock_mut.upgrade_cap.package(),
-        digest: upgrade_mut.digest,
-    });
 
     let policy = lock_mut.upgrade_cap.policy();
     let ticket = lock_mut.upgrade_cap.authorize_upgrade(policy, upgrade_mut.digest);
@@ -342,27 +322,18 @@ public fun restrict<Config, Outcome, W: drop>(
     let name = executable.source().role_name();
     let restrict_mut: &mut RestrictAction = executable.action_mut(account.addr(), witness);
 
-    let (package_id, policy) = if (restrict_mut.policy == package::additive_policy()) {
-        let lock_mut: &mut UpgradeLock = account.borrow_managed_asset_mut(ManageUpgrades {}, UpgradeKey { name });
+    if (restrict_mut.policy == package::additive_policy()) {
+        let lock_mut: &mut UpgradeLock = account.borrow_managed_asset_mut(UpgradeKey { name });
         lock_mut.upgrade_cap.only_additive_upgrades();
-        (lock_mut.upgrade_cap.package(), restrict_mut.policy)
     } else if (restrict_mut.policy == package::dep_only_policy()) {
-        let lock_mut: &mut UpgradeLock = account.borrow_managed_asset_mut(ManageUpgrades {}, UpgradeKey { name });
+        let lock_mut: &mut UpgradeLock = account.borrow_managed_asset_mut(UpgradeKey { name });
         lock_mut.upgrade_cap.only_dep_upgrades();
-        (lock_mut.upgrade_cap.package(), restrict_mut.policy)
     } else {
-        let lock: UpgradeLock = account.remove_managed_asset(ManageUpgrades {}, UpgradeKey { name });
-        let (package_id, policy) = (lock.upgrade_cap.package(), restrict_mut.policy);
-        let UpgradeLock { id, upgrade_cap } = lock;
+        let UpgradeLock { id, upgrade_cap } = account.remove_managed_asset(UpgradeKey { name });
         package::make_immutable(upgrade_cap);
         id.delete();
-        (package_id, policy)
     };
-
-    event::emit(Restricted {
-        package_id,
-        policy,
-    });
+    
     // consume policy to ensure this function has been called exactly once
     restrict_mut.policy = 0;
 }

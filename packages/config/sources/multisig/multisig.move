@@ -45,8 +45,8 @@ const EAlreadyApproved: vector<u8> = b"Proposal is already approved by the calle
 
 // === Structs ===
 
-/// [MEMBER] interacts with proposal
-public struct Do() has drop;
+/// Witness authorizing access to the inner Account
+public struct CoreDep() has drop;
 /// [PROPOSAL] modifies the members and thresholds of the account
 public struct ConfigMultisigProposal() has drop;
 
@@ -141,7 +141,7 @@ public fun authenticate(
 ): Auth {
     account.config().assert_is_member(ctx);
 
-    auth::new(extensions, role, account.addr(), Do())
+    auth::new(extensions, role, account.addr(), CoreDep())
 }
 
 public fun approve_proposal(
@@ -158,7 +158,7 @@ public fun approve_proposal(
     let member = account.config().get_member(ctx.sender());
     let has_role = member.has_role(role);
 
-    let outcome_mut = account.outcome_mut(key, Do());
+    let outcome_mut = account.outcome_mut(key, CoreDep());
     outcome_mut.approved.insert(ctx.sender()); // throws if already approved
     outcome_mut.total_weight = outcome_mut.total_weight + member.weight;
     if (has_role)
@@ -179,7 +179,7 @@ public fun disapprove_proposal(
     let member = account.config().get_member(ctx.sender());
     let has_role = member.has_role(role);
 
-    let outcome_mut = account.outcome_mut(key, Do());
+    let outcome_mut = account.outcome_mut(key, CoreDep());
     outcome_mut.approved.remove(&ctx.sender()); // throws if already approved
     outcome_mut.total_weight = outcome_mut.total_weight - member.weight;
     if (has_role)
@@ -193,7 +193,7 @@ public fun execute_proposal(
     key: String, 
     clock: &Clock,
 ): Executable {
-    let (executable, outcome) = account.execute_proposal(key, clock, Do());
+    let (executable, outcome) = account.execute_proposal(key, clock, CoreDep());
     // account.deps().assert_version(&source, VERSION);
     outcome.validate(account.config(), executable.source());
 
@@ -243,7 +243,7 @@ public fun propose_config_multisig(
     // must modify members before modifying thresholds to ensure they are reachable
 
     let mut config = Multisig { members: vector[], global: 0, roles: vector[] };
-    addresses.zip_do!(weights, |addr, weight| {
+    addresses.zip_CoreDep!(weights, |addr, weight| {
         config.members.push_back(Member {
             addr,
             weight,
@@ -253,7 +253,7 @@ public fun propose_config_multisig(
     });
 
     config.global = global;
-    role_names.zip_do!(role_thresholds, |role, threshold| {
+    role_names.zip_CoreDep!(role_thresholds, |role, threshold| {
         config.roles.push_back(Role { name: role, threshold });
     });
 
@@ -380,8 +380,8 @@ fun verify_new_rules(
     assert!(global != 0, EThresholdNull);
 
     let mut weights_for_role: VecMap<String, u64> = vec_map::empty();
-    weights.zip_do!(roles, |weight, roles_for_addr| {
-        roles_for_addr.do!(|role| {
+    weights.zip_CoreDep!(roles, |weight, roles_for_addr| {
+        roles_for_addr.CoreDep!(|role| {
             if (weights_for_role.contains(&role)) {
                 *weights_for_role.get_mut(&role) = weight;
             } else {
@@ -437,7 +437,7 @@ fun validate(
 //     member: &mut Member,
 //     roles: vector<String>,
 // ) {
-//     roles.do!(|role| {
+//     roles.CoreDep!(|role| {
 //         member.roles.insert(role);
 //     });
 // }
@@ -447,7 +447,7 @@ fun validate(
 //     member: &mut Member,
 //     roles: vector<String>,
 // ) {
-//     roles.do!(|role| {
+//     roles.CoreDep!(|role| {
 //         member.roles.remove(&role);
 //     });
 // }

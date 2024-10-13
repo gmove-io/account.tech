@@ -85,8 +85,6 @@ public struct CurrencyLock<phantom C: drop> has store {
     can_update_icon: bool,
 }
 
-/// [MEMBER] can lock a TreasuryCap in the Account to restrict minting and burning operations
-public struct Do() has drop;
 /// [PROPOSAL] disables one or more permissions
 public struct DisableProposal() has drop;
 /// [PROPOSAL] mints new coins from a locked TreasuryCap
@@ -149,7 +147,7 @@ public fun lock_cap<Config, Outcome, C: drop>(
         can_update_description: true,
         can_update_icon: true,
     };
-    account.add_managed_asset(Do(), CurrencyKey<C> {}, treasury_lock);
+    account.add_managed_asset(CurrencyKey<C> {}, treasury_lock);
 }
 
 public fun has_lock<Config, Outcome, C: drop>(
@@ -161,7 +159,7 @@ public fun has_lock<Config, Outcome, C: drop>(
 public fun borrow_lock<Config, Outcome, C: drop>(
     account: &Account<Config, Outcome>
 ): &CurrencyLock<C> {
-    account.borrow_managed_asset(Do(), CurrencyKey<C> {})
+    account.borrow_managed_asset(CurrencyKey<C> {})
 }
 
 // getters
@@ -576,7 +574,7 @@ public fun disable<Config, Outcome, C: drop, W: drop>(
     witness: W,
 ) {
     let disable_mut: &mut DisableAction<C> = executable.action_mut(account.addr(), witness);
-    let lock_mut: &mut CurrencyLock<C> = account.borrow_managed_asset_mut(Do(), CurrencyKey<C> {});
+    let lock_mut: &mut CurrencyLock<C> = account.borrow_managed_asset_mut(CurrencyKey<C> {});
 
     lock_mut.can_mint = disable_mut.can_mint;
     lock_mut.can_burn = disable_mut.can_burn;
@@ -620,7 +618,7 @@ public fun mint<Config, Outcome, C: drop, W: drop>(
 ): Coin<C> {
     let mint_mut: &mut MintAction<C> = executable.action_mut(account.addr(), witness);
     
-    let lock_mut: &mut CurrencyLock<C> = account.borrow_managed_asset_mut(Do(), CurrencyKey<C> {});
+    let lock_mut: &mut CurrencyLock<C> = account.borrow_managed_asset_mut(CurrencyKey<C> {});
     let coin = lock_mut.treasury_cap.mint(mint_mut.amount, ctx);
     mint_mut.amount = 0; // reset to ensure it has been executed
     coin
@@ -653,7 +651,7 @@ public fun burn<Config, Outcome, C: drop, W: drop>(
 ) {
     let burn_mut: &mut BurnAction<C> = executable.action_mut(account.addr(), witness);
     
-    let lock_mut: &mut CurrencyLock<C> = account.borrow_managed_asset_mut(Do(), CurrencyKey<C> {});
+    let lock_mut: &mut CurrencyLock<C> = account.borrow_managed_asset_mut(CurrencyKey<C> {});
     assert!(burn_mut.amount == coin.value(), EWrongValue);
     lock_mut.treasury_cap.burn(coin);
     burn_mut.amount = 0; // reset to ensure it has been executed
@@ -693,7 +691,7 @@ public fun update<Config, Outcome, C: drop, W: drop>(
     witness: W,
 ) {
     let update_mut: &mut UpdateAction<C> = executable.action_mut(account.addr(), witness);
-    let lock_mut: &mut CurrencyLock<C> = account.borrow_managed_asset_mut(Do(), CurrencyKey<C> {});
+    let lock_mut: &mut CurrencyLock<C> = account.borrow_managed_asset_mut(CurrencyKey<C> {});
 
     if (update_mut.name.is_some()) {
         lock_mut.treasury_cap.update_name(metadata, update_mut.name.extract());

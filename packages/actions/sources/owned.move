@@ -33,8 +33,6 @@ use account_actions::{
 #[error]
 const EWrongObject: vector<u8> = b"Wrong object provided";
 #[error]
-const EReturnAllObjectsBefore: vector<u8> = b"Return all objects before destroying the action";
-#[error]
 const ERetrieveAllObjectsBefore: vector<u8> = b"Retrieve all objects before destroying the action";
 #[error]
 const EObjectsRecipientsNotSameLength: vector<u8> = b"Recipients and objects vectors must have the same length";

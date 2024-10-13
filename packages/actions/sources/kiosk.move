@@ -47,8 +47,6 @@ public struct KioskOwnerLock has store {
     kiosk_owner_cap: KioskOwnerCap,
 }
 
-/// [MEMBER] can create a Kiosk and lock the KioskOwnerCap in the Account to restrict taking and listing operations
-public struct Do() has drop;
 /// [MEMBER] can place into a Kiosk
 public struct Place() has drop;
 /// [MEMBER] can delist from a Kiosk
@@ -90,7 +88,7 @@ public fun new<Config, Outcome>(
     kiosk.set_owner_custom(&kiosk_owner_cap, account.addr());
 
     let kiosk_owner_lock = KioskOwnerLock { kiosk_owner_cap };
-    account.add_managed_asset(Do(), KioskOwnerKey { name }, kiosk_owner_lock);
+    account.add_managed_asset(KioskOwnerKey { name }, kiosk_owner_lock);
 
     transfer::public_share_object(kiosk);
 }
@@ -106,14 +104,14 @@ public fun borrow_lock<Config, Outcome>(
     account: &Account<Config, Outcome>, 
     name: String
 ): &KioskOwnerLock {
-    account.borrow_managed_asset(Do(), KioskOwnerKey { name })
+    account.borrow_managed_asset(KioskOwnerKey { name })
 }
 
 public fun borrow_lock_mut<Config, Outcome>(
     account: &mut Account<Config, Outcome>, 
     name: String
 ): &mut KioskOwnerLock {
-    account.borrow_managed_asset_mut(Do(), KioskOwnerKey { name })
+    account.borrow_managed_asset_mut(KioskOwnerKey { name })
 }
 
 /// Deposits from another Kiosk, no need for proposal.
