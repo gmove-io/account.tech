@@ -111,10 +111,7 @@ public fun cancel_payment_stream<Config, Outcome, C: drop>(
     let Stream { id, balance, .. } = stream;
     id.delete();
 
-    transfer::public_transfer(
-        coin::from_balance(balance, ctx), 
-        account.addr()
-    );
+    account.keep(coin::from_balance(balance, ctx));
 }
 
 // === [ACTION] Public Functions ===

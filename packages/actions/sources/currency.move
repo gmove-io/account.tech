@@ -305,7 +305,7 @@ public fun execute_mint<Config, Outcome, C: drop>(
     ctx: &mut TxContext
 ) {
     let coin = mint<Config, Outcome, C, MintProposal>(&mut executable, account, MintProposal(), ctx);
-    transfer::public_transfer(coin, account.addr());
+    account.keep(coin);
 
     destroy_mint<C, MintProposal>(&mut executable, MintProposal());
     executable.destroy(MintProposal());

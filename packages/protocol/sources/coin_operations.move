@@ -67,10 +67,10 @@ fun split<Config, Outcome, T: drop>(
     let ids = amounts.map!(|amount| {
         let split = coin.split(amount, ctx);
         let id = object::id(&split);
-        transfer::public_transfer(split, account.addr());
+        account.keep(split);
         id
     });
-    transfer::public_transfer(coin, account.addr());
+    account.keep(coin);
 
     ids
 }

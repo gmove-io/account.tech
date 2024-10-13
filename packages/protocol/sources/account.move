@@ -69,10 +69,12 @@ public fun new<Config, Outcome>(
 
 /// Can be initialized by the creator before being shared
 #[allow(lint(share_owned))]
-public fun share<Config: store, Outcome: store>(
-    account: Account<Config, Outcome>
-) {
+public fun share<Config: store, Outcome: store>(account: Account<Config, Outcome>) {
     transfer::share_object(account);
+}
+
+public fun keep<Config, Outcome, T: key + store>(account: &Account<Config, Outcome>, obj: T) {
+    transfer::public_transfer(obj, account.addr());
 }
 
 // === Proposal functions ===

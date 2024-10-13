@@ -177,10 +177,7 @@ public fun withdraw_profits<Config, Outcome>(
     let profits_value = profits_mut.value();
     let profits = profits_mut.split(profits_value);
 
-    transfer::public_transfer(
-        coin::from_balance<SUI>(profits, ctx), 
-        account.addr()
-    );
+    account.keep(coin::from_balance<SUI>(profits, ctx));
 }
 
 // === [PROPOSAL] Public functions ===
