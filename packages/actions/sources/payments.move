@@ -31,10 +31,10 @@ const EWrongStream: vector<u8> = b"Wrong stream for this Cap";
 // === Structs ===
 
 /// Balance for a payment is locked and sent automatically from backend or claimed manually by the recipient
-public struct Stream<phantom C: drop> has key {
+public struct Stream<phantom CoinType> has key {
     id: UID,
     // remaining balance to be sent
-    balance: Balance<C>,
+    balance: Balance<CoinType>,
     // amount to pay at each due date
     amount: u64,
     // number of epochs between each payment
@@ -70,13 +70,13 @@ public struct PayAction has store {
 // step 4: loop over `execute_transfer` it in PTB from the module implementing it
 
 // step 5: bearer of ClaimCap can claim the payment
-public fun claim<C: drop>(stream: &mut Stream<C>, cap: &ClaimCap, ctx: &mut TxContext) {
+public fun claim<CoinType>(stream: &mut Stream<CoinType>, cap: &ClaimCap, ctx: &mut TxContext) {
     assert!(cap.stream_id == stream.id.to_inner(), EWrongStream);
     stream.disburse(ctx);
 }
 
 // step 5(bis): backend send the coin to the recipient until balance is empty
-public fun disburse<C: drop>(stream: &mut Stream<C>, ctx: &mut TxContext) {
+public fun disburse<CoinType>(stream: &mut Stream<CoinType>, ctx: &mut TxContext) {
     assert!(ctx.epoch() > stream.last_epoch + stream.interval, EPayTooEarly);
 
     let amount = if (stream.balance.value() < stream.amount) {
@@ -91,7 +91,7 @@ public fun disburse<C: drop>(stream: &mut Stream<C>, ctx: &mut TxContext) {
 }
 
 // step 6: destroy the stream when balance is empty
-public fun destroy_empty_stream<C: drop>(stream: Stream<C>) {
+public fun destroy_empty_stream<CoinType>(stream: Stream<CoinType>) {
     let Stream { id, balance, .. } = stream;
     
     assert!(balance.value() == 0, ECompletePaymentBefore);
@@ -100,9 +100,9 @@ public fun destroy_empty_stream<C: drop>(stream: Stream<C>) {
 }
 
 // step 6 (bis): account member can cancel the payment (member only)
-public fun cancel_payment_stream<Config, Outcome, C: drop>(
+public fun cancel_payment_stream<Config, Outcome, CoinType>(
     auth: Auth,
-    stream: Stream<C>, 
+    stream: Stream<CoinType>, 
     account: &Account<Config, Outcome>,
     ctx: &mut TxContext
 ) {
@@ -126,16 +126,16 @@ public fun new_pay<Outcome, W: drop>(
     proposal.add_action(PayAction { amount, interval, recipient }, witness);
 }
 
-public fun pay<Config, Outcome, C: drop, W: drop>(
+public fun pay<Config, Outcome, CoinType, W: drop>(
     executable: &mut Executable, 
     account: &mut Account<Config, Outcome>, 
-    coin: Coin<C>,
+    coin: Coin<CoinType>,
     witness: W,
     ctx: &mut TxContext
 ) {    
     let pay_mut: &mut PayAction = executable.action_mut(account.addr(), witness);
 
-    let stream = Stream<C> { 
+    let stream = Stream<CoinType> { 
         id: object::new(ctx), 
         balance: coin.into_balance(), 
         amount: pay_mut.amount,
@@ -161,22 +161,22 @@ public fun delete_pay_action<Outcome>(expired: &mut Expired<Outcome>) {
 
 // === View Functions ===
 
-public fun balance<C: drop>(self: &Stream<C>): u64 {
+public fun balance<CoinType>(self: &Stream<CoinType>): u64 {
     self.balance.value()
 }
 
-public fun amount<C: drop>(self: &Stream<C>): u64 {
+public fun amount<CoinType>(self: &Stream<CoinType>): u64 {
     self.amount
 }
 
-public fun interval<C: drop>(self: &Stream<C>): u64 {
+public fun interval<CoinType>(self: &Stream<CoinType>): u64 {
     self.interval
 }
 
-public fun last_epoch<C: drop>(self: &Stream<C>): u64 {
+public fun last_epoch<CoinType>(self: &Stream<CoinType>): u64 {
     self.last_epoch
 }
 
-public fun recipient<C: drop>(self: &Stream<C>): address {
+public fun recipient<CoinType>(self: &Stream<CoinType>): address {
     self.recipient
 }
