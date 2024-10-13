@@ -68,7 +68,7 @@ public struct ListAction has store {
     // name of the account's kiosk
     name: String,
     // id of the nfts to list to the prices
-    nfts_prices_map: VecMap<ID, u64>
+    nft_prices: VecMap<ID, u64>
 }
 
 // === [MEMBER] Public functions ===
@@ -343,7 +343,7 @@ public fun new_list<Outcome, W: drop>(
 ) {
     assert!(nft_ids.length() == prices.length(), ENftsPricesNotSameLength);
     proposal.add_action(
-        ListAction { name, nfts_prices_map: vec_map::from_keys_values(nft_ids, prices) }, 
+        ListAction { name, nft_prices: vec_map::from_keys_values(nft_ids, prices) }, 
         witness
     );
 }
@@ -358,13 +358,13 @@ public fun list<Config, Outcome, Nft: key + store, W: drop>(
     let list_mut: &mut ListAction = executable.action_mut(account.addr(), witness);
     let lock_mut: &mut KioskOwnerLock = account.borrow_managed_asset_mut(KioskOwnerKey { name });
 
-    let (nft_id, price) = list_mut.nfts_prices_map.remove_entry_by_idx(0);
+    let (nft_id, price) = list_mut.nft_prices.remove_entry_by_idx(0);
     kiosk.list<Nft>(&lock_mut.kiosk_owner_cap, nft_id, price);
 }
 
 public fun destroy_list<W: drop>(executable: &mut Executable, witness: W) {
-    let ListAction { nfts_prices_map, .. } = executable.remove_action(witness);
-    assert!(nfts_prices_map.is_empty(), EListAllNftsBefore);
+    let ListAction { nft_prices, .. } = executable.remove_action(witness);
+    assert!(nft_prices.is_empty(), EListAllNftsBefore);
 }
 
 public fun delete_list_action<Outcome>(expired: &mut Expired<Outcome>) {

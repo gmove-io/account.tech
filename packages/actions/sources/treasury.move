@@ -73,7 +73,7 @@ public struct SpendAction has store {
     // name of the treasury to withdraw from
     name: String,
     // coin types to amounts
-    coins_amounts_map: VecMap<String, u64>,
+    coin_amounts: VecMap<String, u64>,
 }
 
 // === View Functions ===
@@ -241,9 +241,9 @@ public fun execute_transfer<Config, Outcome, C: drop>(
     let mut is_executed = false;
     let spend: &SpendAction = executable.action();
 
-    if (spend.coins_amounts_map.is_empty()) {
-        let SpendAction { coins_amounts_map, .. } = executable.remove_action(TransferProposal());
-        coins_amounts_map.destroy_empty();
+    if (spend.coin_amounts.is_empty()) {
+        let SpendAction { coin_amounts, .. } = executable.remove_action(TransferProposal());
+        coin_amounts.destroy_empty();
         is_executed = true;
     };
 
@@ -340,7 +340,7 @@ public fun new_spend<Outcome, W: drop>(
 ) {
     assert!(coin_types.length() == amounts.length(), ETypesAmountsNotSameLength);
     proposal.add_action(
-        SpendAction { name, coins_amounts_map: vec_map::from_keys_values(coin_types, amounts) },
+        SpendAction { name, coin_amounts: vec_map::from_keys_values(coin_types, amounts) },
         witness
     );
 }
@@ -352,7 +352,7 @@ public fun spend<Config, Outcome, W: drop, C: drop>(
     ctx: &mut TxContext
 ): Coin<C> {
     let spend_mut: &mut SpendAction = executable.action_mut(account.addr(), witness);
-    let (coin_type, amount) = spend_mut.coins_amounts_map.remove(&coin_type_string<C>());
+    let (coin_type, amount) = spend_mut.coin_amounts.remove(&coin_type_string<C>());
     
     let treasury: &mut Treasury = account.borrow_managed_asset_mut(TreasuryKey { name: spend_mut.name });
     let balance: &mut Balance<C> = treasury.bag.borrow_mut(coin_type);
@@ -367,8 +367,8 @@ public fun spend<Config, Outcome, W: drop, C: drop>(
 }
 
 public fun destroy_spend<W: drop>(executable: &mut Executable, witness: W) {
-    let SpendAction { coins_amounts_map, .. } = executable.remove_action(witness);
-    assert!(coins_amounts_map.is_empty(), EWithdrawNotExecuted);
+    let SpendAction { coin_amounts, .. } = executable.remove_action(witness);
+    assert!(coin_amounts.is_empty(), EWithdrawNotExecuted);
 }
 
 public fun delete_spend_action<Outcome>(expired: &mut Expired<Outcome>) {
