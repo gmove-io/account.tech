@@ -136,7 +136,7 @@ public fun execute_proposal<Config, Outcome, W: drop>(
     let (source, actions, outcome) = account.proposals.remove(key, clock);
 
     source.assert_is_constructor(witness);
-    source.assert_is_dep_with_version(account.deps(), version::get());
+    account.deps().assert_is_core_dep(witness);
 
     (executable::new(source, actions), outcome)
 }

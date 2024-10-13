@@ -51,11 +51,6 @@ public struct WithdrawAction has store {
     // the owned objects we want to access
     objects: vector<ID>,
 }
-/// [ACTION] enforces accessed objects to be sent back to the account, depends on WithdrawAction
-public struct ReturnAction has store {
-    // list of objects to put back into the account
-    to_return: vector<ID>,
-}
 
 // === [PROPOSAL] Public functions ===
 
@@ -210,46 +205,4 @@ public fun destroy_withdraw<W: drop>(executable: &mut Executable, witness: W) {
 
 public fun delete_withdraw_action<Outcome>(expired: &mut Expired<Outcome>) {
     let WithdrawAction { .. } = expired.remove_expired_action();
-}
-
-public fun new_borrow<Outcome, W: copy + drop>(
-    proposal: &mut Proposal<Outcome>, 
-    objects: vector<ID>, 
-    witness: W,
-) {
-    new_withdraw(proposal, objects, witness);
-    proposal.add_action(ReturnAction { to_return: objects }, witness);
-}
-
-public fun borrow<Config, Outcome, T: key + store, W: copy + drop>(
-    executable: &mut Executable,
-    account: &mut Account<Config, Outcome>, 
-    receiving: Receiving<T>,
-    witness: W,
-): T {
-    withdraw(executable, account, receiving, witness)
-}
-
-public fun put_back<Config, Outcome, T: key + store, W: drop>(
-    executable: &mut Executable,
-    account: &Account<Config, Outcome>, 
-    returned: T, 
-    witness: W,
-) {
-    let borrow_mut: &mut ReturnAction = executable.action_mut(account.addr(), witness);
-    let (exists_, idx) = borrow_mut.to_return.index_of(&object::id(&returned));
-    assert!(exists_, EWrongObject);
-
-    borrow_mut.to_return.remove(idx);
-    transfer::public_transfer(returned, account.addr());
-}
-
-public fun destroy_borrow<W: copy + drop>(executable: &mut Executable, witness: W) {
-    destroy_withdraw(executable, witness);
-    let ReturnAction { to_return } = executable.remove_action(witness);
-    assert!(to_return.is_empty(), EReturnAllObjectsBefore);
-}
-
-public fun delete_return_action<Outcome>(expired: &mut Expired<Outcome>) {
-    let ReturnAction { .. } = expired.remove_expired_action();
 }

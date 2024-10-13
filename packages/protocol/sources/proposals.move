@@ -36,8 +36,6 @@ public struct Proposals<Outcome> has store {
 
 /// Child struct, proposal owning a sequence of actions requested to be executed
 /// Outcome is a custom struct depending on the config
-/// can be executed if total_weight >= account.thresholds.global
-/// or role_weight >= account.thresholds.role
 public struct Proposal<Outcome> has store {
     // module that issued the proposal and must destroy it
     source: Source,
@@ -45,11 +43,11 @@ public struct Proposal<Outcome> has store {
     key: String,
     // what this proposal aims to do, for informational purpose
     description: String,
-    // the proposal can be deleted from this epoch
-    expiration_epoch: u64,
     // proposer can add a timestamp_ms before which the proposal can't be executed
     // can be used to schedule actions via a backend
     execution_time: u64,
+    // the proposal can be deleted from this epoch
+    expiration_epoch: u64,
     // heterogenous array of actions to be executed from last to first
     actions: Bag,
     // Generic struct storing vote related data, depends on the config
