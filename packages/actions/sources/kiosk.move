@@ -107,13 +107,6 @@ public fun borrow_lock<Config, Outcome>(
     account.borrow_managed_asset(KioskOwnerKey { name })
 }
 
-public fun borrow_lock_mut<Config, Outcome>(
-    account: &mut Account<Config, Outcome>, 
-    name: String
-): &mut KioskOwnerLock {
-    account.borrow_managed_asset_mut(KioskOwnerKey { name })
-}
-
 /// Deposits from another Kiosk, no need for proposal.
 /// Optional royalty and lock rules are automatically resolved for the type.
 /// The rest of the rules must be confirmed via the frontend.
@@ -129,7 +122,7 @@ public fun place<Config, Outcome, Nft: key + store>(
     ctx: &mut TxContext
 ): TransferRequest<Nft> {
     auth.verify_with_role<Place>(account.addr(), name);
-    let lock_mut = borrow_lock_mut(account, name);
+    let lock_mut: &mut KioskOwnerLock = account.borrow_managed_asset_mut(KioskOwnerKey { name });
 
     sender_kiosk.list<Nft>(sender_cap, nft_id, 0);
     let (nft, mut request) = sender_kiosk.purchase<Nft>(nft_id, coin::zero<SUI>(ctx));
@@ -158,7 +151,7 @@ public fun delist<Config, Outcome, Nft: key + store>(
     nft: ID,
 ) {
     auth.verify_with_role<Delist>(account.addr(), name);
-    let lock_mut = borrow_lock_mut(account, name);
+    let lock_mut: &mut KioskOwnerLock = account.borrow_managed_asset_mut(KioskOwnerKey { name });
     kiosk.delist<Nft>(&lock_mut.kiosk_owner_cap, nft);
 }
 
@@ -171,7 +164,7 @@ public fun withdraw_profits<Config, Outcome>(
     ctx: &mut TxContext
 ) {
     auth.verify(account.addr());
-    let lock_mut = borrow_lock_mut(account, name);
+    let lock_mut: &mut KioskOwnerLock = account.borrow_managed_asset_mut(KioskOwnerKey { name });
 
     let profits_mut = kiosk.profits_mut(&lock_mut.kiosk_owner_cap);
     let profits_value = profits_mut.value();
@@ -309,7 +302,7 @@ public fun take<Config, Outcome, Nft: key + store, W: drop>(
 ): TransferRequest<Nft> {
     let name = executable.source().role_name();
     let take_mut: &mut TakeAction = executable.action_mut(account.addr(), witness);
-    let lock_mut = borrow_lock_mut(account, name);
+    let lock_mut: &mut KioskOwnerLock = account.borrow_managed_asset_mut(KioskOwnerKey { name });
     assert!(take_mut.recipient == ctx.sender(), EWrongReceiver);
 
     let nft_id = take_mut.nft_ids.remove(0);
@@ -363,7 +356,7 @@ public fun list<Config, Outcome, Nft: key + store, W: drop>(
 ) {
     let name = executable.source().role_name();
     let list_mut: &mut ListAction = executable.action_mut(account.addr(), witness);
-    let lock_mut = borrow_lock_mut(account, name);
+    let lock_mut: &mut KioskOwnerLock = account.borrow_managed_asset_mut(KioskOwnerKey { name });
 
     let (nft_id, price) = list_mut.nfts_prices_map.remove_entry_by_idx(0);
     kiosk.list<Nft>(&lock_mut.kiosk_owner_cap, nft_id, price);

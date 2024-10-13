@@ -138,13 +138,6 @@ public fun borrow_lock<Config, Outcome>(
     account.borrow_managed_asset(UpgradeKey { name })
 }
 
-public fun borrow_lock_mut<Config, Outcome>(
-    account: &mut Account<Config, Outcome>, 
-    name: String
-): &mut UpgradeLock {
-    account.borrow_managed_asset_mut(UpgradeKey { name })
-}
-
 public fun upgrade_cap(lock: &UpgradeLock): &UpgradeCap {
     &lock.upgrade_cap
 } 
@@ -206,7 +199,7 @@ public fun confirm_upgrade<Config, Outcome>(
     receipt: UpgradeReceipt,
 ) {
     let name = executable.source().role_name();
-    let lock_mut = borrow_lock_mut(account, name);
+    let lock_mut: &mut UpgradeLock = account.borrow_managed_asset_mut(UpgradeKey { name });
     package::commit_upgrade(&mut lock_mut.upgrade_cap, receipt);
     
     destroy_upgrade(&mut executable, UpgradeProposal());
@@ -278,7 +271,7 @@ public fun upgrade<Config, Outcome, W: drop>(
 ): UpgradeTicket {
     let name = executable.source().role_name();
     let upgrade_mut: &mut UpgradeAction = executable.action_mut(account.addr(), witness);
-    let lock_mut = borrow_lock_mut(account, name);
+    let lock_mut: &mut UpgradeLock = account.borrow_managed_asset_mut(UpgradeKey { name });
 
     let policy = lock_mut.upgrade_cap.policy();
     let ticket = lock_mut.upgrade_cap.authorize_upgrade(policy, upgrade_mut.digest);
