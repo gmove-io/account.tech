@@ -25,7 +25,7 @@ use sui::{
     dynamic_field as df,
 };
 use account_protocol::{
-    source,
+    issuer,
     metadata::{Self, Metadata},
     deps::{Self, Deps},
     proposals::{Self, Proposals, Proposal, Expired},
@@ -82,14 +82,14 @@ public fun keep<Config, Outcome, T: key + store>(account: &Account<Config, Outco
 // === Proposal functions ===
 
 /// Creates a new proposal that must be constructed in another module
-/// Only packages (instantiating the witness) allowed in extensions can create an source
+/// Only packages (instantiating the witness) allowed in extensions can create an issuer
 public fun create_proposal<Config, Outcome, W: drop>(
     account: &mut Account<Config, Outcome>, 
     auth: Auth, // proves that the caller is a member
     outcome: Outcome, // vote settings
     version: TypeName,
-    witness: W, // module's source witness (proposal/role witness)
-    w_name: String, // module's source name (role name)
+    witness: W, // module's issuer witness (proposal/role witness)
+    w_name: String, // module's issuer name (role name)
     key: String, // proposal key
     description: String,
     execution_time: u64, // timestamp in ms
@@ -101,7 +101,7 @@ public fun create_proposal<Config, Outcome, W: drop>(
     // only an account dependency can create a proposal
     account.deps().assert_is_dep(version);
 
-    let source = source::construct(
+    let issuer = issuer::construct(
         account.addr(), 
         version,
         witness, 
@@ -109,7 +109,7 @@ public fun create_proposal<Config, Outcome, W: drop>(
     );
 
     proposals::new_proposal(
-        source,
+        issuer,
         key,
         description,
         execution_time,
@@ -128,7 +128,7 @@ public fun add_proposal<Config, Outcome, W: drop>(
     witness: W
 ) {
     account.deps().assert_is_dep(version);  
-    proposal.source().assert_is_constructor(witness);  
+    proposal.issuer().assert_is_constructor(witness);  
     account.proposals.add(proposal);
 }
 
@@ -142,9 +142,9 @@ public fun execute_proposal<Config, Outcome>(
     ctx: &mut TxContext,
 ): (Executable, Outcome) {
     account.deps().assert_is_core_dep(version);
-    let (source, actions, outcome) = account.proposals.remove(key, clock);
+    let (issuer, actions, outcome) = account.proposals.remove(key, clock);
 
-    (executable::new(account.deps, source, actions, ctx), outcome)
+    (executable::new(account.deps, issuer, actions, ctx), outcome)
 }
 
 /// Removes a proposal if it has expired

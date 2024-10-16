@@ -16,7 +16,7 @@ use account_protocol::{
     account::{Self, Account},
     executable::Executable,
     proposals::Expired,
-    source::Source,
+    issuer::Issuer,
     auth::{Self, Auth},
 };
 use account_config::version;
@@ -188,7 +188,7 @@ public fun approve_proposal(
         EAlreadyApproved
     );
 
-    let role = account.proposal(key).source().full_role();
+    let role = account.proposal(key).issuer().full_role();
     let member = account.config().get_member(ctx.sender());
     let has_role = member.has_role(role);
 
@@ -209,7 +209,7 @@ public fun disapprove_proposal(
         ENotApproved
     );
     
-    let role = account.proposal(key).source().full_role();
+    let role = account.proposal(key).issuer().full_role();
     let member = account.config().get_member(ctx.sender());
     let has_role = member.has_role(role);
 
@@ -229,7 +229,7 @@ public fun execute_proposal(
     ctx: &mut TxContext
 ): Executable {
     let (executable, outcome) = account.execute_proposal(key, clock, version::current(), ctx);
-    outcome.validate(account.config(), executable.source());
+    outcome.validate(account.config(), executable.issuer());
 
     executable
 }
@@ -446,10 +446,10 @@ fun verify_new_rules(
 fun validate(
     outcome: Approvals, 
     multisig: &Multisig, 
-    source: &Source,
+    issuer: &Issuer,
 ) {
     let Approvals { total_weight, role_weight, .. } = outcome;
-    let role = source.full_role();
+    let role = issuer.full_role();
 
     assert!(
         total_weight >= multisig.global ||

@@ -303,7 +303,7 @@ public fun take<Config, Outcome, Nft: key + store, W: copy + drop>(
     witness: W,
     ctx: &mut TxContext
 ): TransferRequest<Nft> {
-    let name = executable.source().role_name();
+    let name = executable.issuer().role_name();
     let take_action = executable.load<TakeAction, W>(account.addr(), version, witness);
     let lock_mut: &mut KioskOwnerLock = account.borrow_managed_asset_mut(KioskOwnerKey { name }, version);
     assert!(take_action.recipient == ctx.sender(), EWrongReceiver);
@@ -358,7 +358,7 @@ public fun list<Config, Outcome, Nft: key + store, W: copy + drop>(
     version: TypeName,
     witness: W,
 ) {
-    let name = executable.source().role_name();
+    let name = executable.issuer().role_name();
     let list_action = executable.load<ListAction, W>(account.addr(), version, witness);
     let lock_mut: &mut KioskOwnerLock = account.borrow_managed_asset_mut(KioskOwnerKey { name }, version);
 

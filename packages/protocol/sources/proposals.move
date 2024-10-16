@@ -11,7 +11,7 @@ use sui::{
     clock::Clock,
 };
 use account_protocol::{
-    source::Source,
+    issuer::Issuer,
 };
 
 // === Errors ===
@@ -38,7 +38,7 @@ public struct Proposals<Outcome> has store {
 /// Outcome is a custom struct depending on the config
 public struct Proposal<Outcome> has store {
     // module that issued the proposal and must destroy it
-    source: Source,
+    issuer: Issuer,
     // name of the proposal, serves as a key, should be unique
     key: String,
     // what this proposal aims to do, for informational purpose
@@ -80,8 +80,8 @@ public fun get<Outcome>(proposals: &Proposals<Outcome>, key: String): &Proposal<
     &proposals.inner[idx]
 }
 
-public fun source<Outcome>(proposal: &Proposal<Outcome>): &Source {
-    &proposal.source
+public fun issuer<Outcome>(proposal: &Proposal<Outcome>): &Issuer {
+    &proposal.issuer
 }
 
 public fun description<Outcome>(proposal: &Proposal<Outcome>): String {
@@ -113,7 +113,7 @@ public fun add_action<Outcome, A: store, W: drop>(
     witness: W
 ) {
     // ensures the function is called within the same proposal as the one that created Proposal
-    proposal.source().assert_is_constructor(witness);
+    proposal.issuer().assert_is_constructor(witness);
 
     let idx = proposal.actions.length();
     proposal.actions.add(idx, action);
@@ -128,7 +128,7 @@ public(package) fun empty<Outcome>(): Proposals<Outcome> {
 }
 
 public(package) fun new_proposal<Outcome>(
-    source: Source,
+    issuer: Issuer,
     key: String,
     description: String,
     execution_time: u64, // timestamp in ms
@@ -137,7 +137,7 @@ public(package) fun new_proposal<Outcome>(
     ctx: &mut TxContext
 ): Proposal<Outcome> {
     Proposal<Outcome> { 
-        source,
+        issuer,
         key,
         description,
         execution_time,
@@ -161,12 +161,12 @@ public(package) fun remove<Outcome>(
     proposals: &mut Proposals<Outcome>,
     key: String,
     clock: &Clock,
-): (Source, Bag, Outcome) {
+): (Issuer, Bag, Outcome) {
     let idx = proposals.get_idx(key);
-    let Proposal { execution_time, source, actions, outcome, .. } = proposals.inner.remove(idx);
+    let Proposal { execution_time, issuer, actions, outcome, .. } = proposals.inner.remove(idx);
     assert!(clock.timestamp_ms() >= execution_time, ECantBeExecutedYet);
 
-    (source, actions, outcome)
+    (issuer, actions, outcome)
 }
 
 public(package) fun get_mut<Outcome>(proposals: &mut Proposals<Outcome>, key: String): &mut Proposal<Outcome> {

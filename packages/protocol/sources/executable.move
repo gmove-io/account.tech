@@ -13,7 +13,7 @@ module account_protocol::executable;
 use std::type_name::TypeName;
 use sui::bag::{Self, Bag};
 use account_protocol::{
-    source::Source,
+    issuer::Issuer,
     deps::Deps,
 };
 
@@ -29,7 +29,7 @@ public struct Executable {
     // copied deps from the Account
     deps: Deps,
     // module that issued the proposal and must destroy it
-    source: Source,
+    issuer: Issuer,
     // Bag start index, to reduce gas costs for large bags
     pending_start: u64,
     // actions to be executed in order, heterogenous array
@@ -52,8 +52,8 @@ public fun load<Action: store, W: drop>(
     witness: W,
 ): &mut Action {
     executable.deps.assert_is_dep(version);
-    executable.source.assert_is_constructor(witness);
-    executable.source.assert_is_account(account_addr);
+    executable.issuer.assert_is_constructor(witness);
+    executable.issuer.assert_is_account(account_addr);
 
     let idx = pending_action_index<Action>(executable);
     executable.pending.borrow_mut(idx)
@@ -66,7 +66,7 @@ public fun process<Action: store, W: drop>(
     witness: W,
 ) {
     executable.deps.assert_is_dep(version);
-    executable.source.assert_is_constructor(witness);
+    executable.issuer.assert_is_constructor(witness);
 
     let action: Action = executable.completed.remove(executable.pending_start);
     let length = executable.completed.length();
@@ -82,7 +82,7 @@ public fun cleanup<Action: store, W: drop>(
     witness: W,
 ): Action {
     executable.deps.assert_is_dep(version);
-    executable.source.assert_is_constructor(witness);
+    executable.issuer.assert_is_constructor(witness);
 
     executable.completed_start = executable.completed_start + 1;
     let action = executable.completed.remove(executable.completed_start);
@@ -98,14 +98,14 @@ public fun terminate<W: drop>(
 ) {
     let Executable { 
         deps,
-        source, 
+        issuer, 
         pending,
         completed,
         ..
     } = executable;
     
     deps.assert_is_dep(version);
-    source.assert_is_constructor(witness);
+    issuer.assert_is_constructor(witness);
     pending.destroy_empty();
     completed.destroy_empty();
 }
@@ -116,8 +116,8 @@ public fun deps(executable: &Executable): &Deps {
     &executable.deps
 }
 
-public fun source(executable: &Executable): &Source {
-    &executable.source
+public fun issuer(executable: &Executable): &Issuer {
+    &executable.issuer
 }
 
 public fun pending_action_index<Action: store>(executable: &Executable): u64 {
@@ -164,10 +164,10 @@ public fun action_is_completed<Action: store>(executable: &Executable): bool {
 // === Package functions ===
 
 /// Is only called from the account module
-public(package) fun new(deps: Deps, source: Source, pending: Bag, ctx: &mut TxContext): Executable {
+public(package) fun new(deps: Deps, issuer: Issuer, pending: Bag, ctx: &mut TxContext): Executable {
     Executable { 
         deps,
-        source,
+        issuer,
         pending_start: 0,
         pending,
         completed_start: 0,
