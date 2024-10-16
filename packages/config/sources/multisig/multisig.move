@@ -8,6 +8,8 @@ use sui::{
     vec_set::{Self, VecSet},
     vec_map::{Self, VecMap},
     clock::Clock,
+    package,
+    display,
 };
 use account_extensions::extensions::Extensions;
 use account_protocol::{
@@ -45,6 +47,8 @@ const ERolesNotSameLength: vector<u8> = b"The role vectors are not the same leng
 const EAlreadyApproved: vector<u8> = b"Proposal is already approved by the caller";
 
 // === Structs ===
+
+public struct MULTISIG has drop {}
 
 /// Witness authorizing access to the inner Account
 public struct CoreDep() has drop;
@@ -96,6 +100,35 @@ public struct Approvals has store {
 }
 
 // === Public functions ===
+
+fun init(otw: MULTISIG, ctx: &mut TxContext) {
+    let publisher = package::claim(otw, ctx);
+
+    let fields = vector[
+        b"name".to_string(),
+        b"description".to_string(),
+        b"link".to_string(),
+        b"image_url".to_string(),
+        b"thumbnail_url".to_string(),
+        b"project_url".to_string(),
+        b"creator".to_string(),
+    ];
+    let values = vector[
+        b"Multisig: {name}".to_string(),
+        b"Multisig Smart Account".to_string(),
+        b"https://account.tech/{id}".to_string(),
+        b"image_url.jpg".to_string(),
+        b"thumbnail_url.jpg".to_string(),
+        b"https://account.tech".to_string(),
+        b"Good Move".to_string(),
+    ];
+
+    let mut display = display::new_with_fields<Account<Multisig, Approvals>>(&publisher, fields, values, ctx);
+    display.update_version();
+
+    transfer::public_transfer(display, ctx.sender());
+    transfer::public_transfer(publisher, ctx.sender());
+}
 
 /// Init and returns a new Account object
 /// Creator is added by default with weight and global threshold of 1
