@@ -16,7 +16,10 @@ module account_actions::config;
 
 // === Imports ===
 
-use std::string::String;
+use std::{
+    type_name::TypeName,
+    string::String,
+};
 use account_protocol::{
     account::Account,
     proposals::{Proposal, Expired},
@@ -26,6 +29,7 @@ use account_protocol::{
     auth::Auth,
 };
 use account_extensions::extensions::Extensions;
+use account_actions::version;
 
 // === Errors ===
 
@@ -33,6 +37,8 @@ use account_extensions::extensions::Extensions;
 const EMetadataNotSameLength: vector<u8> = b"The keys and values are not the same length";
 #[error]
 const EMetadataNameMissing: vector<u8> = b"New metadata must set a name for the Account";
+#[error]
+const ENameCannotBeEmpty: vector<u8> = b"Name cannot be empty";
 
 // === Structs ===
 
@@ -45,9 +51,9 @@ const EMetadataNameMissing: vector<u8> = b"New metadata must set a name for the 
 /// proof of core dependency
 public struct CoreDep() has drop;
 /// [PROPOSAL] modifies the name of the account
-public struct ConfigMetadataProposal() has drop;
+public struct ConfigMetadataProposal() has copy, drop;
 /// [PROPOSAL] modifies the dependencies of the account
-public struct ConfigDepsProposal() has drop;
+public struct ConfigDepsProposal() has copy, drop;
 
 /// [ACTION] wraps the metadata account field into an action
 public struct ConfigMetadataAction has store {
@@ -76,6 +82,7 @@ public fun propose_config_metadata<Config, Outcome>(
     let mut proposal = account.create_proposal(
         auth,
         outcome,
+        version::current(),
         ConfigMetadataProposal(),
         b"".to_string(),
         key,
@@ -84,8 +91,9 @@ public fun propose_config_metadata<Config, Outcome>(
         expiration_epoch,
         ctx
     );
+
     new_config_metadata(&mut proposal, keys, values, ConfigMetadataProposal());
-    account.add_proposal(proposal, ConfigMetadataProposal());
+    account.add_proposal(proposal, version::current(), ConfigMetadataProposal());
 }
 
 // step 2: multiple members have to approve the proposal (account::approve_proposal)
@@ -96,8 +104,9 @@ public fun execute_config_metadata<Config, Outcome>(
     mut executable: Executable,
     account: &mut Account<Config, Outcome>, 
 ) {
-    config_metadata(&mut executable, account, ConfigMetadataProposal());
-    executable.destroy(ConfigMetadataProposal());
+    config_metadata(&mut executable, account, version::current(), ConfigMetadataProposal());
+    destroy_config_metadata(&mut executable, version::current(), ConfigMetadataProposal());
+    executable.terminate(version::current(), ConfigMetadataProposal());
 }
 
 // step 1: propose to update the dependencies
@@ -118,6 +127,7 @@ public fun propose_config_deps<Config, Outcome>(
     let mut proposal = account.create_proposal(
         auth,
         outcome,
+        version::current(),
         ConfigDepsProposal(),
         b"".to_string(),
         key,
@@ -126,8 +136,9 @@ public fun propose_config_deps<Config, Outcome>(
         expiration_epoch,
         ctx
     );
+
     new_config_deps(&mut proposal, extensions, names, packages, versions, ConfigDepsProposal());
-    account.add_proposal(proposal, ConfigDepsProposal());
+    account.add_proposal(proposal, version::current(), ConfigDepsProposal());
 }
 
 // step 2: multiple members have to approve the proposal (account::approve_proposal)
@@ -138,8 +149,9 @@ public fun execute_config_deps<Config, Outcome>(
     mut executable: Executable,
     account: &mut Account<Config, Outcome>, 
 ) {
-    config_deps(&mut executable, account, ConfigDepsProposal());
-    executable.destroy(ConfigDepsProposal());
+    config_deps(&mut executable, account, version::current(), ConfigDepsProposal());
+    destroy_config_deps(&mut executable, version::current(), ConfigDepsProposal());
+    executable.terminate(version::current(), ConfigDepsProposal());
 }
 
 // === [ACTION] Public functions ===
@@ -152,6 +164,7 @@ public fun new_config_metadata<Outcome, W: drop>(
 ) {
     assert!(keys.length() == values.length(), EMetadataNotSameLength);
     assert!(keys[0] == b"name".to_string(), EMetadataNameMissing);
+    assert!(values[0] != b"".to_string(), ENameCannotBeEmpty);
 
     proposal.add_action(
         ConfigMetadataAction { metadata: metadata::from_keys_values(keys, values) }, 
@@ -159,13 +172,24 @@ public fun new_config_metadata<Outcome, W: drop>(
     );
 }
 
-public fun config_metadata<Config, Outcome, W: drop>(
+public fun config_metadata<Config, Outcome, W: copy + drop>(
     executable: &mut Executable,
     account: &mut Account<Config, Outcome>, 
+    version: TypeName,
     witness: W,
 ) {
-    let ConfigMetadataAction { metadata } = executable.remove_action(witness);
-    *account.metadata_mut(CoreDep()) = metadata;
+    let config_metadata_action = executable.load<ConfigMetadataAction, W>(account.addr(), version, witness);
+    *account.metadata_mut(version) = config_metadata_action.metadata;
+    
+    executable.process<ConfigMetadataAction, W>(version, witness);
+}
+
+public fun destroy_config_metadata<W: drop>(
+    executable: &mut Executable,
+    version: TypeName,
+    witness: W,
+) {
+    let ConfigMetadataAction { .. } = executable.cleanup(version, witness);
 }
 
 public fun delete_config_metadata_action<Outcome>(expired: &mut Expired<Outcome>) {
@@ -188,13 +212,24 @@ public fun new_config_deps<Outcome, W: drop>(
     proposal.add_action(ConfigDepsAction { deps }, witness);
 }
 
-public fun config_deps<Config, Outcome, W: drop>(
+public fun config_deps<Config, Outcome, W: copy + drop>(
     executable: &mut Executable,
     account: &mut Account<Config, Outcome>, 
+    version: TypeName,
     witness: W,
 ) {
-    let ConfigDepsAction { deps } = executable.remove_action(witness);
-    *account.deps_mut(CoreDep()) = deps;
+    let config_deps_action = executable.load<ConfigDepsAction, W>(account.addr(), version, witness);    
+    *account.deps_mut(version) = config_deps_action.deps;
+
+    executable.process<ConfigDepsAction, W>(version, witness);
+}
+
+public fun destroy_config_deps<W: drop>(
+    executable: &mut Executable,
+    version: TypeName,
+    witness: W,
+) {
+    let ConfigDepsAction { .. } = executable.cleanup(version, witness);
 }
 
 public fun delete_config_deps_action<Outcome>(expired: &mut Expired<Outcome>) {

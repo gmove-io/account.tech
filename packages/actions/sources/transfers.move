@@ -4,16 +4,13 @@
 module account_actions::transfers;
 
 // === Imports ===
+
+use std::type_name::TypeName;
 use account_protocol::{
     account::Account,
     proposals::{Proposal, Expired},
     executable::Executable,
 };
-
-// === Errors ===
-
-#[error]
-const ETransferNotExecuted: vector<u8> = b"Transfer not executed";
 
 // === Structs ===
 
@@ -33,26 +30,26 @@ public fun new_transfer<Outcome, W: drop>(
     proposal.add_action(TransferAction { recipient }, witness);
 }
 
-public fun transfer<Config, Outcome, T: key + store, W: drop>(
+public fun transfer<Config, Outcome, T: key + store, W: copy + drop>(
     executable: &mut Executable, 
     account: &mut Account<Config, Outcome>, 
     object: T,
+    version: TypeName,
     witness: W,
     is_executed: bool,
 ) {
-    let transfer_mut: &mut TransferAction = executable.action_mut(account.addr(), witness);
-    transfer::public_transfer(object, transfer_mut.recipient);
+    let transfer_action = executable.load<TransferAction, W>(account.addr(), version, witness);
+    transfer::public_transfer(object, transfer_action.recipient);
 
-    if (is_executed)
-        transfer_mut.recipient = @0xF; // reset to ensure it is executed once
+    if (is_executed) executable.process<TransferAction, W>(version, witness);
 }
 
 public fun destroy_transfer<W: drop>(
     executable: &mut Executable, 
-    witness: W
+    version: TypeName,
+    witness: W,
 ) {
-    let TransferAction { recipient } = executable.remove_action(witness);
-    assert!(recipient == @0xF, ETransferNotExecuted);
+    let TransferAction { .. } = executable.cleanup(version, witness);
 }
 
 public fun delete_transfer_action<Outcome>(expired: &mut Expired<Outcome>) {

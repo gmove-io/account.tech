@@ -10,7 +10,7 @@ module account_protocol::deps;
 // === Imports ===
 
 use std::{
-    type_name,
+    type_name::TypeName,
     string::String
 };
 use sui::address;
@@ -23,19 +23,19 @@ const EDepNotFound: vector<u8> = b"Dependency not found in the account";
 #[error]
 const EDepAlreadyExists: vector<u8> = b"Dependency already exists in the account";
 #[error]
-const ENotDep: vector<u8> = b"Witness package is not a dependency";
+const ENotDep: vector<u8> = b"Version package is not a dependency";
 #[error]
-const ENotCoreDep: vector<u8> = b"Witness package is not a core dependency";
+const ENotCoreDep: vector<u8> = b"Version package is not a core dependency";
 
 // === Structs ===
 
 /// Parent struct protecting the deps
-public struct Deps has store, drop {
+public struct Deps has copy, drop, store {
     inner: vector<Dep>,
 }
 
 /// Child struct storing the name, package and version of a dependency
-public struct Dep has copy, store, drop {
+public struct Dep has copy, drop, store {
     // name of the package
     name: String,
     // id of the package
@@ -57,9 +57,14 @@ public fun new(extensions: &Extensions): Deps {
         version: versions[0] 
     });
     inner.push_back(Dep { 
-        name: b"AccountActions".to_string(), 
+        name: b"AccountConfig".to_string(), 
         addr: addresses[1], 
         version: versions[1] 
+    });
+    inner.push_back(Dep { 
+        name: b"AccountActions".to_string(), 
+        addr: addresses[2], 
+        version: versions[2] 
     });
 
     Deps { inner }
@@ -82,16 +87,16 @@ public fun add(
 
 // === View functions ===
 
-/// Asserts that the auth has been issued from kraken (account or actions) packages
-public fun assert_is_dep<W: drop>(deps: &Deps, _: W) {
-    let witness_package = address::from_bytes(type_name::get<W>().get_address().into_bytes());
-    assert!(deps.contains_addr(witness_package), ENotDep);
+/// Asserts that the Version witness type has been issued from one of the Account dependencies
+public fun assert_is_dep(deps: &Deps, version_type: TypeName) {
+    let package = address::from_bytes(version_type.get_address().into_bytes());
+    assert!(deps.contains_addr(package), ENotDep);
 }
 
-/// Asserts that the auth has been issued from kraken core (account or actions) packages
-public fun assert_is_core_dep<W: drop>(deps: &Deps, _: W) {
-    let witness_package = address::from_bytes(type_name::get<W>().get_address().into_bytes());
-    let idx = deps.get_idx_for_addr(witness_package);
+/// Asserts that the Version witness typeis instantiated from AccountProtocol AccountConfig or AccountActions
+public fun assert_is_core_dep(deps: &Deps, version_type: TypeName) {
+    let package = address::from_bytes(version_type.get_address().into_bytes());
+    let idx = deps.get_idx_for_addr(package);
     assert!(idx == 0 || idx == 1 || idx == 2, ENotCoreDep);
 }
 
@@ -115,6 +120,10 @@ public fun get_idx_for_addr(deps: &Deps, addr: address): u64 {
     let opt = deps.inner.find_index!(|dep| dep.addr == addr);
     assert!(opt.is_some(), EDepNotFound);
     opt.destroy_some()
+}
+
+public fun length(deps: &Deps): u64 {
+    deps.inner.length()
 }
 
 public fun name(dep: &Dep): String {

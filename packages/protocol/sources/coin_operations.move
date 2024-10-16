@@ -12,7 +12,8 @@ use sui::{
 };
 use account_protocol::{
     account::Account,
-    auth::Auth
+    auth::Auth,
+    version,
 };
 
 // === Structs ===
@@ -36,7 +37,7 @@ public fun merge_and_split<Config, Outcome, T: drop>(
     // receive all coins
     let mut coins = vector::empty();
     to_merge.do!(|item| {
-        let coin = account.receive(CoreDep(), item);
+        let coin = account.receive(item, version::current());
         coins.push_back(coin);
     });
 

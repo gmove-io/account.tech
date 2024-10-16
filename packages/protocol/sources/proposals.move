@@ -57,7 +57,6 @@ public struct Proposal<Outcome> has store {
 /// Hot potato wrapping actions and outcome from a proposal that expired
 public struct Expired<Outcome> {
     actions: Bag,
-    next_to_destroy: u64,
     outcome: Outcome,
 }
 
@@ -184,12 +183,12 @@ public(package) fun delete<Outcome>(
     proposals: &mut Proposals<Outcome>,
     key: String,
     ctx: &TxContext
-): (Source, Expired<Outcome>) {
+): Expired<Outcome> {
     let idx = proposals.get_idx(key);
-    let Proposal<Outcome> { source, expiration_epoch, actions, outcome, .. } = proposals.inner.remove(idx);
+    let Proposal<Outcome> { expiration_epoch, actions, outcome, .. } = proposals.inner.remove(idx);
     assert!(expiration_epoch <= ctx.epoch(), EHasntExpired);
 
-    (source, Expired { actions, next_to_destroy: 0, outcome })
+    Expired { actions, outcome }
 }
 
 /// After calling `account::delete_proposal`, delete each action in its own module

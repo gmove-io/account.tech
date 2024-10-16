@@ -6,6 +6,7 @@ module account_actions::payments;
 
 // === Imports ===
 
+use std::type_name::TypeName;
 use sui::{
     balance::Balance,
     coin::{Self, Coin},
@@ -23,8 +24,6 @@ use account_protocol::{
 const ECompletePaymentBefore: vector<u8> = b"Stream must be emptied before destruction";
 #[error]
 const EPayTooEarly: vector<u8> = b"Cannot disburse payment yet";
-#[error]
-const EPayNotExecuted: vector<u8> = b"Pay not executed";
 #[error]
 const EWrongStream: vector<u8> = b"Wrong stream for this Cap";
 
@@ -126,33 +125,30 @@ public fun new_pay<Outcome, W: drop>(
     proposal.add_action(PayAction { amount, interval, recipient }, witness);
 }
 
-public fun pay<Config, Outcome, CoinType, W: drop>(
+public fun pay<Config, Outcome, CoinType, W: copy + drop>(
     executable: &mut Executable, 
     account: &mut Account<Config, Outcome>, 
     coin: Coin<CoinType>,
+    version: TypeName,
     witness: W,
     ctx: &mut TxContext
 ) {    
-    let pay_mut: &mut PayAction = executable.action_mut(account.addr(), witness);
+    let pay_action = executable.load<PayAction, W>(account.addr(), version, witness);
 
-    let stream = Stream<CoinType> { 
+    transfer::share_object(Stream<CoinType> { 
         id: object::new(ctx), 
         balance: coin.into_balance(), 
-        amount: pay_mut.amount,
-        interval: pay_mut.interval,
+        amount: pay_action.amount,
+        interval: pay_action.interval,
         last_epoch: 0,
-        recipient: pay_mut.recipient
-    };
-
-    transfer::share_object(stream);
-    pay_mut.amount = 0; // reset to ensure action is executed only once
+        recipient: pay_action.recipient
+    });
+    
+    executable.process<PayAction, W>(version, witness);
 }
 
-public fun destroy_pay<W: drop>(executable: &mut Executable, witness: W): address {
-    let PayAction { amount, recipient, .. } = executable.remove_action(witness);
-    assert!(amount == 0, EPayNotExecuted);
-
-    recipient
+public fun destroy_pay<W: drop>(executable: &mut Executable, version: TypeName, witness: W) {
+    let PayAction { .. } = executable.cleanup(version, witness);
 }
 
 public fun delete_pay_action<Outcome>(expired: &mut Expired<Outcome>) {

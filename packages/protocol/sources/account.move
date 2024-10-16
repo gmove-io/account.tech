@@ -15,14 +15,16 @@ module account_protocol::account;
 
 // === Imports ===
 
-use std::string::String;
+use std::{
+    string::String,
+    type_name::TypeName,
+};
 use sui::{
     transfer::Receiving,
     clock::Clock, 
     dynamic_field as df,
 };
 use account_protocol::{
-    version,
     source,
     metadata::{Self, Metadata},
     deps::{Self, Deps},
@@ -85,6 +87,7 @@ public fun create_proposal<Config, Outcome, W: drop>(
     account: &mut Account<Config, Outcome>, 
     auth: Auth, // proves that the caller is a member
     outcome: Outcome, // vote settings
+    version: TypeName,
     witness: W, // module's source witness (proposal/role witness)
     w_name: String, // module's source name (role name)
     key: String, // proposal key
@@ -95,14 +98,15 @@ public fun create_proposal<Config, Outcome, W: drop>(
 ): Proposal<Outcome> {
     // ensures the caller is authorized for this account
     auth.verify(account.addr());
+    // only an account dependency can create a proposal
+    account.deps().assert_is_dep(version);
+
     let source = source::construct(
         account.addr(), 
-        version::get_type!(),
+        version,
         witness, 
         w_name
     );
-    // only an account dependency can create a proposal
-    source.assert_is_dep_with_version(account.deps(), version::get());
 
     proposals::new_proposal(
         source,
@@ -120,39 +124,40 @@ public fun create_proposal<Config, Outcome, W: drop>(
 public fun add_proposal<Config, Outcome, W: drop>(
     account: &mut Account<Config, Outcome>, 
     proposal: Proposal<Outcome>, 
+    version: TypeName,
     witness: W
 ) {
-    proposal.source().assert_is_constructor(witness);
-    proposal.source().assert_is_dep_with_version(account.deps(), version::get());
-    
+    account.deps().assert_is_dep(version);  
+    proposal.source().assert_is_constructor(witness);  
     account.proposals.add(proposal);
 }
 
+/// Called by CoreDep only, AccountConfig
 /// Returns an Executable with the Proposal Outcome that must be validated in AccountCOnfig
-public fun execute_proposal<Config, Outcome, W: copy + drop>(
-    account: &mut Account<Config, Outcome>, 
+public fun execute_proposal<Config, Outcome>(
+    account: &mut Account<Config, Outcome>,
     key: String, 
     clock: &Clock,
-    witness: W,
+    version: TypeName,
+    ctx: &mut TxContext,
 ): (Executable, Outcome) {
+    account.deps().assert_is_core_dep(version);
     let (source, actions, outcome) = account.proposals.remove(key, clock);
 
-    source.assert_is_constructor(witness);
-    account.deps().assert_is_core_dep(witness);
-
-    (executable::new(source, actions), outcome)
+    (executable::new(account.deps, source, actions, ctx), outcome)
 }
 
 /// Removes a proposal if it has expired
 /// Needs to delete each action in the bag within their own module
-public fun delete_proposal<Config: drop, Outcome: drop>(
+public fun delete_proposal<Config: drop, Outcome>(
     account: &mut Account<Config, Outcome>, 
     key: String, 
+    version: TypeName,
     ctx: &mut TxContext
 ): Expired<Outcome> {
-    let (source, expired) = account.proposals.delete(key, ctx);
+    let expired = account.proposals.delete(key, ctx);
 
-    source.assert_is_dep_with_version(account.deps(), version::get());
+    account.deps().assert_is_core_dep(version);
 
     expired
 }
@@ -194,32 +199,36 @@ public fun add_managed_asset<Config, Outcome, K: copy + drop + store, A: store>(
     account: &mut Account<Config, Outcome>, 
     key: K, 
     asset: A,
+    version: TypeName,
 ) {
-    account.deps.assert_is_dep(key);
+    account.deps.assert_is_dep(version);
     df::add(&mut account.id, key, asset);
 }
 
 public fun borrow_managed_asset<Config, Outcome, K: copy + drop + store, A: store>(
     account: &Account<Config, Outcome>,
     key: K, 
+    version: TypeName,
 ): &A {
-    account.deps.assert_is_dep(key);
+    account.deps.assert_is_dep(version);
     df::borrow(&account.id, key)
 }
 
 public fun borrow_managed_asset_mut<Config, Outcome, K: copy + drop + store, A: store>(
     account: &mut Account<Config, Outcome>, 
     key: K, 
+    version: TypeName,
 ): &mut A {
-    account.deps.assert_is_dep(key);
+    account.deps.assert_is_dep(version);
     df::borrow_mut(&mut account.id, key)
 }
 
 public fun remove_managed_asset<Config, Outcome, K: copy + drop + store, A: store>(
     account: &mut Account<Config, Outcome>, 
     key: K, 
+    version: TypeName,
 ): A {
-    account.deps.assert_is_dep(key);
+    account.deps.assert_is_dep(version);
     df::remove(&mut account.id, key)
 }
 
@@ -235,57 +244,57 @@ public fun has_managed_asset<Config, Outcome, K: copy + drop + store>(
 /// Owned objects:
 /// Objects owned by the account
 
-public fun receive<Config, Outcome, T: key + store, W: drop>(
+public fun receive<Config, Outcome, T: key + store>(
     account: &mut Account<Config, Outcome>, 
-    witness: W,
     receiving: Receiving<T>,
+    version: TypeName,
 ): T {
-    account.deps.assert_is_core_dep(witness);
+    account.deps.assert_is_core_dep(version);
     transfer::public_receive(&mut account.id, receiving)
 }
 
 /// Fields:
 /// Fields of the account object
 
-public fun metadata_mut<Config, Outcome, W: drop>(
+public fun metadata_mut<Config, Outcome>(
     account: &mut Account<Config, Outcome>, 
-    witness: W,
+    version: TypeName,
 ): &mut Metadata {
-    account.deps.assert_is_core_dep(witness);
+    account.deps.assert_is_core_dep(version);
     &mut account.metadata
 }
 
-public fun deps_mut<Config, Outcome, W: drop>(
+public fun deps_mut<Config, Outcome>(
     account: &mut Account<Config, Outcome>, 
-    witness: W,
+    version: TypeName,
 ): &mut Deps {
-    account.deps.assert_is_core_dep(witness);
+    account.deps.assert_is_core_dep(version);
     &mut account.deps
 }
 
-public fun proposals_mut<Config, Outcome, W: drop>(
+public fun proposals_mut<Config, Outcome>(
     account: &mut Account<Config, Outcome>, 
-    witness: W,
+    version: TypeName,
 ): &mut Proposals<Outcome> {
-    account.deps.assert_is_core_dep(witness);
+    account.deps.assert_is_core_dep(version);
     &mut account.proposals
 }
 
-public fun config_mut<Config, Outcome, W: drop>(
+public fun config_mut<Config, Outcome>(
     account: &mut Account<Config, Outcome>, 
-    witness: W,
+    version: TypeName,
 ): &mut Config {
-    account.deps.assert_is_core_dep(witness);
+    account.deps.assert_is_core_dep(version);
     &mut account.config
 }
 
 /// Only called in AccountConfig
-public fun outcome_mut<Config, Outcome, W: drop>(
+public fun outcome_mut<Config, Outcome>(
     account: &mut Account<Config, Outcome>, 
     key: String,
-    witness: W,
+    version: TypeName,
 ): &mut Outcome {
-    account.deps.assert_is_core_dep(witness);
+    account.deps.assert_is_core_dep(version);
     account.proposals.get_mut(key).outcome_mut()
 }
 

@@ -12,7 +12,7 @@ use sui::vec_map::{Self, VecMap};
 // === Structs ===
 
 /// Parent struct protecting the metadata
-public struct Metadata has store, drop {
+public struct Metadata has copy, drop, store {
     inner: VecMap<String, String>
 }
 
@@ -32,4 +32,9 @@ public fun from_keys_values(keys: vector<String>, values: vector<String>): Metad
     Metadata {
         inner: vec_map::from_keys_values(keys, values)
     }
+}
+
+/// Gets the value for the key
+public fun get(metadata: &Metadata, key: String): String {
+    *metadata.inner.get(&key)
 }

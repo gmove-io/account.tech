@@ -1,6 +1,6 @@
 /// This module tracks the version of the package
 
-module account_protocol::version;
+module account_config::version;
 
 // === Imports ===
 

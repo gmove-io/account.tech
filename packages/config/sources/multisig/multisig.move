@@ -17,6 +17,7 @@ use account_protocol::{
     source::Source,
     auth::{Self, Auth},
 };
+use account_config::version;
 
 // === Errors ===
 
@@ -158,7 +159,7 @@ public fun approve_proposal(
     let member = account.config().get_member(ctx.sender());
     let has_role = member.has_role(role);
 
-    let outcome_mut = account.outcome_mut(key, CoreDep());
+    let outcome_mut = account.outcome_mut(key, version::current());
     outcome_mut.approved.insert(ctx.sender()); // throws if already approved
     outcome_mut.total_weight = outcome_mut.total_weight + member.weight;
     if (has_role)
@@ -179,7 +180,7 @@ public fun disapprove_proposal(
     let member = account.config().get_member(ctx.sender());
     let has_role = member.has_role(role);
 
-    let outcome_mut = account.outcome_mut(key, CoreDep());
+    let outcome_mut = account.outcome_mut(key, version::current());
     outcome_mut.approved.remove(&ctx.sender()); // throws if already approved
     outcome_mut.total_weight = outcome_mut.total_weight - member.weight;
     if (has_role)
@@ -192,12 +193,20 @@ public fun execute_proposal(
     account: &mut Account<Multisig, Approvals>, 
     key: String, 
     clock: &Clock,
+    ctx: &mut TxContext
 ): Executable {
-    let (executable, outcome) = account.execute_proposal(key, clock, CoreDep());
-    // account.deps().assert_version(&source, VERSION);
+    let (executable, outcome) = account.execute_proposal(key, clock, version::current(), ctx);
     outcome.validate(account.config(), executable.source());
 
     executable
+}
+
+public fun delete_proposal(
+    account: &mut Account<Multisig, Approvals>, 
+    key: String,
+    ctx: &mut TxContext
+): Expired<Approvals> {
+    account.delete_proposal(key, version::current(), ctx)
 }
 
 // === [PROPOSAL] Public functions ===
@@ -232,6 +241,7 @@ public fun propose_config_multisig(
     let mut proposal = account.create_proposal(
         auth,
         outcome,
+        version::current(),
         ConfigMultisigProposal(),
         b"".to_string(),
         key,
@@ -243,7 +253,7 @@ public fun propose_config_multisig(
     // must modify members before modifying thresholds to ensure they are reachable
 
     let mut config = Multisig { members: vector[], global: 0, roles: vector[] };
-    addresses.zip_CoreDep!(weights, |addr, weight| {
+    addresses.zip_do!(weights, |addr, weight| {
         config.members.push_back(Member {
             addr,
             weight,
@@ -253,12 +263,12 @@ public fun propose_config_multisig(
     });
 
     config.global = global;
-    role_names.zip_CoreDep!(role_thresholds, |role, threshold| {
+    role_names.zip_do!(role_thresholds, |role, threshold| {
         config.roles.push_back(Role { name: role, threshold });
     });
 
     proposal.add_action(ConfigMultisigAction { config }, ConfigMultisigProposal());
-    account.add_proposal(proposal, ConfigMultisigProposal());
+    account.add_proposal(proposal, version::current(), ConfigMultisigProposal());
 }
 
 // step 2: multiple members have to approve the proposal (account::approve_proposal)
@@ -268,9 +278,11 @@ public fun execute_config_multisig(
     mut executable: Executable,
     account: &mut Account<Multisig, Approvals>, 
 ) {
-    let ConfigMultisigAction { config } = executable.remove_action(ConfigMultisigProposal());
-    *account.config_mut(ConfigMultisigProposal()) = config;
-    executable.destroy(ConfigMultisigProposal());
+    executable.process<ConfigMultisigAction, ConfigMultisigProposal>(version::current(), ConfigMultisigProposal());
+    let ConfigMultisigAction { config } = executable.cleanup(version::current(), ConfigMultisigProposal());
+
+    *account.config_mut(version::current()) = config;
+    executable.terminate(version::current(), ConfigMultisigProposal());
 }
 
 public fun delete_config_multisig_action(expired: &mut Expired<Approvals>) {
@@ -380,8 +392,8 @@ fun verify_new_rules(
     assert!(global != 0, EThresholdNull);
 
     let mut weights_for_role: VecMap<String, u64> = vec_map::empty();
-    weights.zip_CoreDep!(roles, |weight, roles_for_addr| {
-        roles_for_addr.CoreDep!(|role| {
+    weights.zip_do!(roles, |weight, roles_for_addr| {
+        roles_for_addr.do!(|role| {
             if (weights_for_role.contains(&role)) {
                 *weights_for_role.get_mut(&role) = weight;
             } else {

@@ -12,7 +12,10 @@ module account_actions::owned;
 
 // === Imports ===
 
-use std::string::String;
+use std::{
+    string::String,
+    type_name::TypeName
+};
 use sui::{
     transfer::Receiving,
     coin::Coin
@@ -26,6 +29,7 @@ use account_protocol::{
 use account_actions::{
     transfers,
     payments,
+    version,
 };
 
 // === Errors ===
@@ -33,16 +37,14 @@ use account_actions::{
 #[error]
 const EWrongObject: vector<u8> = b"Wrong object provided";
 #[error]
-const ERetrieveAllObjectsBefore: vector<u8> = b"Retrieve all objects before destroying the action";
-#[error]
 const EObjectsRecipientsNotSameLength: vector<u8> = b"Recipients and objects vectors must have the same length";
 
 // === Structs ===
 
 /// [PROPOSAL] transfers multiple objects
-public struct TransferProposal has copy, drop {}
+public struct TransferProposal() has copy, drop;
 /// [PROPOSAL] streams an amount of coin to be paid at specific intervals
-public struct PayProposal has copy, drop {}
+public struct PayProposal() has copy, drop;
 
 /// [ACTION] guards access to account owned objects which can only be received via this action
 public struct WithdrawAction has store {
@@ -69,7 +71,8 @@ public fun propose_transfer<Config, Outcome>(
     let mut proposal = account.create_proposal(
         auth,
         outcome,
-        TransferProposal {},
+        version::current(),
+        TransferProposal(),
         b"".to_string(),
         key,
         description,
@@ -79,11 +82,11 @@ public fun propose_transfer<Config, Outcome>(
     );
 
     objects.zip_do!(recipients, |objs, recipient| {
-        new_withdraw(&mut proposal, objs, TransferProposal {});
-        transfers::new_transfer(&mut proposal, recipient, TransferProposal {});
+        new_withdraw(&mut proposal, objs, TransferProposal());
+        transfers::new_transfer(&mut proposal, recipient, TransferProposal());
     });
 
-    account.add_proposal(proposal, TransferProposal {});
+    account.add_proposal(proposal, version::current(), TransferProposal());
 }
 
 // step 2: multiple members have to approve the proposal (account::approve_proposal)
@@ -95,27 +98,22 @@ public fun execute_transfer<Config, Outcome, T: key + store>(
     account: &mut Account<Config, Outcome>, 
     receiving: Receiving<T>,
 ) {
-    let object = withdraw(executable, account, receiving, TransferProposal {});
-    
+    let object = withdraw(executable, account, receiving, version::current(), TransferProposal());
     let mut is_executed = false;
-    let withdraw: &WithdrawAction = executable.action();
     
-    if (withdraw.objects.is_empty()) {
-        let WithdrawAction { objects } = executable.remove_action(TransferProposal {});
-        objects.destroy_empty();
+    if (executable.action_is_completed<WithdrawAction>()) {
+        destroy_withdraw(executable, version::current(), TransferProposal());
         is_executed = true;
     };
 
-    transfers::transfer(executable, account, object, TransferProposal {}, is_executed);
+    transfers::transfer(executable, account, object, version::current(), TransferProposal(), is_executed);
 
-    if (is_executed) {
-        transfers::destroy_transfer(executable, TransferProposal {});
-    }
+    if (is_executed) transfers::destroy_transfer(executable, version::current(), TransferProposal());
 }
 
 // step 5: complete transfers and destroy the executable
 public fun complete_transfers(executable: Executable) {
-    executable.destroy(TransferProposal {});
+    executable.terminate(version::current(), TransferProposal());
 }
 
 // step 1: propose to create a Stream with a specific amount to be paid at each interval
@@ -136,7 +134,8 @@ public fun propose_pay<Config, Outcome>(
     let mut proposal = account.create_proposal(
         auth,
         outcome,
-        PayProposal {},
+        version::current(),
+        PayProposal(),
         b"".to_string(),
         key,
         description,
@@ -145,10 +144,10 @@ public fun propose_pay<Config, Outcome>(
         ctx
     );
     
-    new_withdraw(&mut proposal, vector[coin], PayProposal {});
-    payments::new_pay(&mut proposal, amount, interval, recipient, PayProposal {});
+    new_withdraw(&mut proposal, vector[coin], PayProposal());
+    payments::new_pay(&mut proposal, amount, interval, recipient, PayProposal());
 
-    account.add_proposal(proposal, PayProposal {});
+    account.add_proposal(proposal, version::current(), PayProposal());
 }
 
 // step 2: multiple members have to approve the proposal (account::approve_proposal)
@@ -161,12 +160,12 @@ public fun execute_pay<Config, Outcome, C: drop>(
     receiving: Receiving<Coin<C>>,
     ctx: &mut TxContext
 ) {
-    let coin: Coin<C> = withdraw(&mut executable, account, receiving, PayProposal {});
-    payments::pay(&mut executable, account, coin, PayProposal {}, ctx);
+    let coin: Coin<C> = withdraw(&mut executable, account, receiving, version::current(), PayProposal());
+    payments::pay(&mut executable, account, coin, version::current(), PayProposal(), ctx);
 
-    destroy_withdraw(&mut executable, PayProposal {});
-    payments::destroy_pay(&mut executable, PayProposal {});
-    executable.destroy(PayProposal {});
+    destroy_withdraw(&mut executable, version::current(), PayProposal());
+    payments::destroy_pay(&mut executable, version::current(), PayProposal());
+    executable.terminate(version::current(), PayProposal());
 }
 
 // === [ACTION] Public functions ===
@@ -183,22 +182,24 @@ public fun withdraw<Config, Outcome, T: key + store, W: copy + drop>(
     executable: &mut Executable,
     account: &mut Account<Config, Outcome>, 
     receiving: Receiving<T>,
+    version: TypeName,
     witness: W,
 ): T {
-    let withdraw_mut: &mut WithdrawAction = executable.action_mut(account.addr(), witness);
-    let (_, idx) = withdraw_mut.objects.index_of(&transfer::receiving_object_id(&receiving));
-    let id = withdraw_mut.objects.remove(idx);
+    let withdraw_action = executable.load<WithdrawAction, W>(account.addr(), version, witness);
+    let (_, idx) = withdraw_action.objects.index_of(&transfer::receiving_object_id(&receiving));
+    let id = withdraw_action.objects.remove(idx);
 
-    let received = account.receive(witness, receiving);
+    let received = account.receive(receiving, version);
     let received_id = object::id(&received);
     assert!(received_id == id, EWrongObject);
+
+    if (withdraw_action.objects.is_empty()) executable.process<WithdrawAction, W>(version, witness);
 
     received
 }
 
-public fun destroy_withdraw<W: drop>(executable: &mut Executable, witness: W) {
-    let WithdrawAction { objects } = executable.remove_action(witness);
-    assert!(objects.is_empty(), ERetrieveAllObjectsBefore);
+public fun destroy_withdraw<W: drop>(executable: &mut Executable, version: TypeName, witness: W) {
+    let WithdrawAction { .. } = executable.cleanup(version, witness);
 }
 
 public fun delete_withdraw_action<Outcome>(expired: &mut Expired<Outcome>) {

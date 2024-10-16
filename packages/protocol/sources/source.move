@@ -15,8 +15,6 @@ use std::{
     string::String,
     type_name::{Self, TypeName},
 };
-use sui::address;
-use account_protocol::deps::Deps;
 
 // === Errors ===
 
@@ -24,8 +22,6 @@ use account_protocol::deps::Deps;
 const EWrongWitness: vector<u8> = b"Witness is not the one used for creating the proposal";
 #[error]
 const EWrongAccount: vector<u8> = b"Account address doesn't match the source";
-#[error]
-const EWrongVersion: vector<u8> = b"Witness version is not the expected one";
 
 // === Structs ===
 
@@ -33,8 +29,6 @@ const EWrongVersion: vector<u8> = b"Witness version is not the expected one";
 public struct Source has store, drop {
     // address of the account that created the source
     account_addr: address,
-    /// type_name of the current package Version type
-    version_type: TypeName,
     // type_name of the role_type that instantiated the source (proposal witness)
     role_type: TypeName,
     // name of the source (can be empty)
@@ -54,12 +48,6 @@ public fun assert_is_constructor<W: drop>(source: &Source, _: W) {
     assert!(source.role_type == role_type, EWrongWitness);
 }
 
-/// Asserts that the dependency is the expected version
-public fun assert_is_dep_with_version(source: &Source, deps: &Deps, version: u64) {
-    let version_package = address::from_bytes(source.version_type.get_address().into_bytes());
-    assert!(deps.get_from_addr(version_package).version() == version, EWrongVersion);
-}
-
 /// Converts a source into a role
 /// role is package::module::struct::name or package::module::struct
 public fun full_role(source: &Source): String {
@@ -75,10 +63,6 @@ public fun full_role(source: &Source): String {
 
 public fun account_addr(source: &Source): address {
     source.account_addr
-}
-
-public fun version_type(source: &Source): TypeName {
-    source.version_type
 }
 
 public fun role_type(source: &Source): TypeName {
@@ -98,8 +82,7 @@ public(package) fun construct<V: drop, W: drop>(
     _role: W, 
     role_name: String, 
 ): Source {
-    let version_type = type_name::get<V>();
     let role_type = type_name::get<W>();
     
-    Source { account_addr, version_type, role_type, role_name }
+    Source { account_addr, role_type, role_name }
 }

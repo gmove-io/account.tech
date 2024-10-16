@@ -10,8 +10,9 @@ module account_actions::currency;
 // === Imports ===
 
 use std::{
-    type_name,
-    string::{Self, String}
+    type_name::{Self, TypeName},
+    string::String,
+    ascii,
 };
 use sui::{
     transfer::Receiving,
@@ -27,6 +28,7 @@ use account_actions::{
     owned,
     transfers,
     payments,
+    version,
 };
 
 // === Errors ===
@@ -35,12 +37,6 @@ use account_actions::{
 const ENoChange: vector<u8> = b"Proposal must change something";
 #[error]
 const EWrongValue: vector<u8> = b"Coin has the wrong value";
-#[error]
-const EMintNotExecuted: vector<u8> = b"Mint proposal not executed";
-#[error]
-const EBurnNotExecuted: vector<u8> = b"Burn proposal not executed";
-#[error]
-const EUpdateNotExecuted: vector<u8> = b"Update proposal not executed";
 #[error]
 const ENoLock: vector<u8> = b"No lock for this coin type";
 #[error]
@@ -51,8 +47,6 @@ const EMintDisabled: vector<u8> = b"Mint disabled";
 const EBurnDisabled: vector<u8> = b"Burn disabled";
 #[error]
 const ECannotReenable: vector<u8> = b"Cannot reenable a permission";
-#[error]
-const EDisableNotExecuted: vector<u8> = b"Disable proposal not executed";
 #[error]
 const ECannotUpdateName: vector<u8> = b"Cannot update name";
 #[error]
@@ -86,17 +80,17 @@ public struct CurrencyLock<phantom CoinType> has store {
 }
 
 /// [PROPOSAL] disables one or more permissions
-public struct DisableProposal() has drop;
+public struct DisableProposal() has copy, drop;
 /// [PROPOSAL] mints new coins from a locked TreasuryCap
-public struct MintProposal() has drop;
+public struct MintProposal() has copy, drop;
 /// [PROPOSAL] burns coins from the account using a locked TreasuryCap
 public struct BurnProposal() has copy, drop;
 /// [PROPOSAL] updates the CoinMetadata associated with a locked TreasuryCap
-public struct UpdateProposal() has drop;
+public struct UpdateProposal() has copy, drop;
 /// [PROPOSAL] transfers from a minted coin 
-public struct TransferProposal() has drop;
+public struct TransferProposal() has copy, drop;
 /// [PROPOSAL] pays from a minted coin
-public struct PayProposal() has drop;
+public struct PayProposal() has copy, drop;
 
 /// [ACTION] disables permissions marked as false
 public struct DisableAction<phantom CoinType> has store {
@@ -118,9 +112,9 @@ public struct BurnAction<phantom CoinType> has store {
 /// [ACTION] updates a CoinMetadata object using a locked TreasuryCap 
 public struct UpdateAction<phantom CoinType> has store { 
     name: Option<String>,
-    symbol: Option<String>,
+    symbol: Option<ascii::String>,
     description: Option<String>,
-    icon_url: Option<String>,
+    icon_url: Option<ascii::String>,
 }
 
 // === [MEMBER] Public functions ===
@@ -147,7 +141,7 @@ public fun lock_cap<Config, Outcome, CoinType>(
         can_update_description: true,
         can_update_icon: true,
     };
-    account.add_managed_asset(CurrencyKey<CoinType> {}, treasury_lock);
+    account.add_managed_asset(CurrencyKey<CoinType> {}, treasury_lock, version::current());
 }
 
 public fun has_lock<Config, Outcome, CoinType>(
@@ -159,7 +153,7 @@ public fun has_lock<Config, Outcome, CoinType>(
 public fun borrow_lock<Config, Outcome, CoinType>(
     account: &Account<Config, Outcome>
 ): &CurrencyLock<CoinType> {
-    account.borrow_managed_asset(CurrencyKey<CoinType> {})
+    account.borrow_managed_asset(CurrencyKey<CoinType> {}, version::current())
 }
 
 // getters
@@ -223,6 +217,7 @@ public fun propose_disable<Config, Outcome, CoinType>(
     let mut proposal = account.create_proposal(
         auth,
         outcome,
+        version::current(),
         DisableProposal(), 
         type_to_name<CoinType>(), // the coin type is the auth name 
         key, 
@@ -243,7 +238,7 @@ public fun propose_disable<Config, Outcome, CoinType>(
         can_update_icon,
         DisableProposal()
     );
-    account.add_proposal(proposal, DisableProposal());
+    account.add_proposal(proposal, version::current(), DisableProposal());
 }
 
 // step 2: multiple members have to approve the proposal (account::approve_proposal)
@@ -254,10 +249,10 @@ public fun execute_disable<Config, Outcome, CoinType>(
     mut executable: Executable,
     account: &mut Account<Config, Outcome>,
 ) {
-    disable<Config, Outcome, CoinType, DisableProposal>(&mut executable, account, DisableProposal());
+    disable<Config, Outcome, CoinType, DisableProposal>(&mut executable, account, version::current(), DisableProposal());
 
-    destroy_disable<CoinType, DisableProposal>(&mut executable, DisableProposal());
-    executable.destroy(DisableProposal());
+    destroy_disable<CoinType, DisableProposal>(&mut executable, version::current(), DisableProposal());
+    executable.terminate(version::current(), DisableProposal());
 }
 
 // step 1: propose to mint an amount of a coin that will be transferred to the Account
@@ -277,6 +272,7 @@ public fun propose_mint<Config, Outcome, CoinType>(
     let mut proposal = account.create_proposal(
         auth,
         outcome,
+        version::current(),
         MintProposal(), 
         type_to_name<CoinType>(), // the coin type is the auth name 
         key, 
@@ -292,7 +288,7 @@ public fun propose_mint<Config, Outcome, CoinType>(
         amount, 
         MintProposal()
     );
-    account.add_proposal(proposal, MintProposal());
+    account.add_proposal(proposal, version::current(), MintProposal());
 }
 
 // step 2: multiple members have to approve the proposal (account::approve_proposal)
@@ -304,11 +300,11 @@ public fun execute_mint<Config, Outcome, CoinType>(
     account: &mut Account<Config, Outcome>,
     ctx: &mut TxContext
 ) {
-    let coin = mint<Config, Outcome, CoinType, MintProposal>(&mut executable, account, MintProposal(), ctx);
+    let coin = mint<Config, Outcome, CoinType, MintProposal>(&mut executable, account, version::current(), MintProposal(), ctx);
     account.keep(coin);
 
-    destroy_mint<CoinType, MintProposal>(&mut executable, MintProposal());
-    executable.destroy(MintProposal());
+    destroy_mint<CoinType, MintProposal>(&mut executable, version::current(), MintProposal());
+    executable.terminate(version::current(), MintProposal());
 }
 
 // step 1: propose to burn an amount of a coin owned by the account
@@ -329,6 +325,7 @@ public fun propose_burn<Config, Outcome, CoinType>(
     let mut proposal = account.create_proposal(
         auth,
         outcome,
+        version::current(),
         BurnProposal(), 
         type_to_name<CoinType>(), // the coin type is the auth name 
         key, 
@@ -346,7 +343,7 @@ public fun propose_burn<Config, Outcome, CoinType>(
         BurnProposal()
     );
 
-    account.add_proposal(proposal, BurnProposal());
+    account.add_proposal(proposal, version::current(), BurnProposal());
 }
 
 // step 2: multiple members have to approve the proposal (account::approve_proposal)
@@ -358,12 +355,12 @@ public fun execute_burn<Config, Outcome, CoinType>(
     account: &mut Account<Config, Outcome>,
     receiving: Receiving<Coin<CoinType>>,
 ) {
-    let coin = owned::withdraw(&mut executable, account, receiving, BurnProposal());
-    burn<Config, Outcome, CoinType, BurnProposal>(&mut executable, account, coin, BurnProposal());
+    let coin = owned::withdraw(&mut executable, account, receiving, version::current(), BurnProposal());
+    burn<Config, Outcome, CoinType, BurnProposal>(&mut executable, account, coin, version::current(), BurnProposal());
 
-    owned::destroy_withdraw(&mut executable, BurnProposal());
-    destroy_burn<CoinType, BurnProposal>(&mut executable, BurnProposal());
-    executable.destroy(BurnProposal());
+    owned::destroy_withdraw(&mut executable, version::current(), BurnProposal());
+    destroy_burn<CoinType, BurnProposal>(&mut executable, version::current(), BurnProposal());
+    executable.terminate(version::current(), BurnProposal());
 }
 
 // step 1: propose to update the CoinMetadata
@@ -376,9 +373,9 @@ public fun propose_update<Config, Outcome, CoinType>(
     execution_time: u64,
     expiration_epoch: u64,
     md_name: Option<String>,
-    md_symbol: Option<String>,
+    md_symbol: Option<ascii::String>,
     md_description: Option<String>,
-    md_icon: Option<String>,
+    md_icon: Option<ascii::String>,
     ctx: &mut TxContext
 ) {
     assert!(has_lock<Config, Outcome, CoinType>(account), ENoLock);
@@ -386,6 +383,7 @@ public fun propose_update<Config, Outcome, CoinType>(
     let mut proposal = account.create_proposal(
         auth,
         outcome,
+        version::current(),
         UpdateProposal(),
         type_to_name<CoinType>(), // the coin type is the auth name 
         key,
@@ -404,7 +402,7 @@ public fun propose_update<Config, Outcome, CoinType>(
         md_icon, 
         UpdateProposal()
     );
-    account.add_proposal(proposal, UpdateProposal());
+    account.add_proposal(proposal, version::current(), UpdateProposal());
 }
 
 // step 2: multiple members have to approve the proposal (account::approve_proposal)
@@ -416,10 +414,10 @@ public fun execute_update<Config, Outcome, CoinType>(
     account: &mut Account<Config, Outcome>,
     metadata: &mut CoinMetadata<CoinType>,
 ) {
-    update(&mut executable, account, metadata, UpdateProposal());
+    update(&mut executable, account, metadata, version::current(), UpdateProposal());
 
-    destroy_update<CoinType, UpdateProposal>(&mut executable, UpdateProposal());
-    executable.destroy(UpdateProposal());
+    destroy_update<CoinType, UpdateProposal>(&mut executable, version::current(), UpdateProposal());
+    executable.terminate(version::current(), UpdateProposal());
 }
 
 // step 1: propose to send managed coins
@@ -440,6 +438,7 @@ public fun propose_transfer<Config, Outcome, CoinType>(
     let mut proposal = account.create_proposal(
         auth,
         outcome,
+        version::current(),
         TransferProposal(),
         b"".to_string(),
         key,
@@ -459,7 +458,7 @@ public fun propose_transfer<Config, Outcome, CoinType>(
         transfers::new_transfer(&mut proposal, recipient, TransferProposal());
     });
 
-    account.add_proposal(proposal, TransferProposal());
+    account.add_proposal(proposal, version::current(), TransferProposal());
 }
 
 // step 2: multiple members have to approve the proposal (account::approve_proposal)
@@ -471,21 +470,11 @@ public fun execute_transfer<Config, Outcome, CoinType>(
     account: &mut Account<Config, Outcome>, 
     ctx: &mut TxContext
 ) {
-    let coin: Coin<CoinType> = mint(executable, account, TransferProposal(), ctx);
+    let coin: Coin<CoinType> = mint(executable, account, version::current(), TransferProposal(), ctx);
+    destroy_mint<CoinType, TransferProposal>(executable, version::current(), TransferProposal());
 
-    let mut is_executed = false;
-    let mint: &MintAction<CoinType> = executable.action();
-
-    if (mint.amount == 0) {
-        let MintAction<CoinType> { .. } = executable.remove_action(TransferProposal());
-        is_executed = true;
-    };
-
-    transfers::transfer(executable, account, coin, TransferProposal(), is_executed);
-
-    if (is_executed) {
-        transfers::destroy_transfer(executable, TransferProposal());
-    }
+    transfers::transfer(executable, account, coin, version::current(), TransferProposal(), true);
+    transfers::destroy_transfer(executable, version::current(), TransferProposal());
 }
 
 // step 1: propose to pay from a minted coin
@@ -506,6 +495,7 @@ public fun propose_pay<Config, Outcome, CoinType>(
     let mut proposal = account.create_proposal(
         auth,
         outcome,
+        version::current(),
         PayProposal(),
         b"".to_string(),
         key,
@@ -522,8 +512,7 @@ public fun propose_pay<Config, Outcome, CoinType>(
         PayProposal()
     );
     payments::new_pay(&mut proposal, amount, interval, recipient, PayProposal());
-
-    account.add_proposal(proposal, PayProposal());
+    account.add_proposal(proposal, version::current(), PayProposal());
 }
 
 // step 2: multiple members have to approve the proposal (account::approve_proposal)
@@ -535,12 +524,12 @@ public fun execute_pay<Config, Outcome, CoinType>(
     account: &mut Account<Config, Outcome>, 
     ctx: &mut TxContext
 ) {
-    let coin: Coin<CoinType> = mint(&mut executable, account, PayProposal(), ctx);
-    payments::pay(&mut executable, account, coin, PayProposal(), ctx);
+    let coin: Coin<CoinType> = mint(&mut executable, account, version::current(), PayProposal(), ctx);
+    payments::pay(&mut executable, account, coin, version::current(), PayProposal(), ctx);
 
-    destroy_mint<CoinType, PayProposal>(&mut executable, PayProposal());
-    payments::destroy_pay(&mut executable, PayProposal());
-    executable.destroy(PayProposal());
+    destroy_mint<CoinType, PayProposal>(&mut executable, version::current(), PayProposal());
+    payments::destroy_pay(&mut executable, version::current(), PayProposal());
+    executable.terminate(version::current(), PayProposal());
 }
 
 // === [ACTION] Public functions ===
@@ -568,32 +557,27 @@ public fun new_disable<Outcome, CoinType, W: drop>(
     proposal.add_action(DisableAction<CoinType> { can_mint, can_burn, can_update_name, can_update_symbol, can_update_description, can_update_icon }, witness);
 }
 
-public fun disable<Config, Outcome, CoinType, W: drop>(
+public fun disable<Config, Outcome, CoinType, W: copy + drop>(
     executable: &mut Executable,
     account: &mut Account<Config, Outcome>,
+    version: TypeName,
     witness: W,
 ) {
-    let disable_mut: &mut DisableAction<CoinType> = executable.action_mut(account.addr(), witness);
-    let lock_mut: &mut CurrencyLock<CoinType> = account.borrow_managed_asset_mut(CurrencyKey<CoinType> {});
+    let disable_action = executable.load<DisableAction<CoinType>, W>(account.addr(), version, witness);
+    let lock_mut: &mut CurrencyLock<CoinType> = account.borrow_managed_asset_mut(CurrencyKey<CoinType> {}, version);
 
-    lock_mut.can_mint = disable_mut.can_mint;
-    lock_mut.can_burn = disable_mut.can_burn;
-    lock_mut.can_update_name = disable_mut.can_update_name;
-    lock_mut.can_update_symbol = disable_mut.can_update_symbol;
-    lock_mut.can_update_description = disable_mut.can_update_description;
-    lock_mut.can_update_icon = disable_mut.can_update_icon;
-    // resetting all action permissions to true (only case impossible) to ensure it has been executed
-    disable_mut.can_mint = true;
-    disable_mut.can_burn = true;
-    disable_mut.can_update_name = true;
-    disable_mut.can_update_symbol = true;
-    disable_mut.can_update_description = true;
-    disable_mut.can_update_icon = true;
+    lock_mut.can_mint = disable_action.can_mint;
+    lock_mut.can_burn = disable_action.can_burn;
+    lock_mut.can_update_name = disable_action.can_update_name;
+    lock_mut.can_update_symbol = disable_action.can_update_symbol;
+    lock_mut.can_update_description = disable_action.can_update_description;
+    lock_mut.can_update_icon = disable_action.can_update_icon;
+
+    executable.process<DisableAction<CoinType>, W>(version, witness);
 }
 
-public fun destroy_disable<CoinType, W: drop>(executable: &mut Executable, witness: W) {
-    let DisableAction<CoinType> { can_mint, can_burn, can_update_name, can_update_symbol, can_update_description, can_update_icon } = executable.remove_action(witness);
-    assert!(can_mint && can_burn && can_update_name && can_update_symbol && can_update_description && can_update_icon, EDisableNotExecuted);
+public fun destroy_disable<CoinType, W: drop>(executable: &mut Executable, version: TypeName, witness: W) {
+    let DisableAction<CoinType> { .. } = executable.cleanup(version, witness);
 }
 
 public fun delete_disable_action<Outcome, CoinType>(expired: &mut Expired<Outcome>) {
@@ -610,23 +594,25 @@ public fun new_mint<Outcome, CoinType, W: drop>(
     proposal.add_action(MintAction<CoinType> { amount }, witness);
 }
 
-public fun mint<Config, Outcome, CoinType, W: drop>(
+public fun mint<Config, Outcome, CoinType, W: copy + drop>(
     executable: &mut Executable, 
     account: &mut Account<Config, Outcome>,
+    version: TypeName,
     witness: W, 
     ctx: &mut TxContext
 ): Coin<CoinType> {
-    let mint_mut: &mut MintAction<CoinType> = executable.action_mut(account.addr(), witness);
+    let mint_action = executable.load<MintAction<CoinType>, W>(account.addr(), version, witness);
     
-    let lock_mut: &mut CurrencyLock<CoinType> = account.borrow_managed_asset_mut(CurrencyKey<CoinType> {});
-    let coin = lock_mut.treasury_cap.mint(mint_mut.amount, ctx);
-    mint_mut.amount = 0; // reset to ensure it has been executed
+    let lock_mut: &mut CurrencyLock<CoinType> = account.borrow_managed_asset_mut(CurrencyKey<CoinType> {}, version);
+    let coin = lock_mut.treasury_cap.mint(mint_action.amount, ctx);
+
+    executable.process<MintAction<CoinType>, W>(version, witness);
+
     coin
 }
 
-public fun destroy_mint<CoinType, W: drop>(executable: &mut Executable, witness: W) {
-    let MintAction<CoinType> { amount } = executable.remove_action(witness);
-    assert!(amount == 0, EMintNotExecuted);
+public fun destroy_mint<CoinType, W: drop>(executable: &mut Executable, version: TypeName, witness: W) {
+    let MintAction<CoinType> { .. } = executable.cleanup(version, witness);
 }
 
 public fun delete_mint_action<Outcome, CoinType>(expired: &mut Expired<Outcome>) {
@@ -643,23 +629,24 @@ public fun new_burn<Outcome, CoinType, W: drop>(
     proposal.add_action(BurnAction<CoinType> { amount }, witness);
 }
 
-public fun burn<Config, Outcome, CoinType, W: drop>(
+public fun burn<Config, Outcome, CoinType, W: copy + drop>(
     executable: &mut Executable, 
     account: &mut Account<Config, Outcome>,
     coin: Coin<CoinType>,
+    version: TypeName,
     witness: W, 
 ) {
-    let burn_mut: &mut BurnAction<CoinType> = executable.action_mut(account.addr(), witness);
+    let burn_action = executable.load<BurnAction<CoinType>, W>(account.addr(), version, witness);
+    assert!(burn_action.amount == coin.value(), EWrongValue);
     
-    let lock_mut: &mut CurrencyLock<CoinType> = account.borrow_managed_asset_mut(CurrencyKey<CoinType> {});
-    assert!(burn_mut.amount == coin.value(), EWrongValue);
+    let lock_mut: &mut CurrencyLock<CoinType> = account.borrow_managed_asset_mut(CurrencyKey<CoinType> {}, version);
     lock_mut.treasury_cap.burn(coin);
-    burn_mut.amount = 0; // reset to ensure it has been executed
+
+    executable.process<BurnAction<CoinType>, W>(version, witness);
 }
 
-public fun destroy_burn<CoinType, W: drop>(executable: &mut Executable, witness: W) {
-    let BurnAction<CoinType> { amount } = executable.remove_action(witness);
-    assert!(amount == 0, EBurnNotExecuted);
+public fun destroy_burn<CoinType, W: drop>(executable: &mut Executable, version: TypeName, witness: W) {
+    let BurnAction<CoinType> { .. } = executable.cleanup(version, witness);
 }
 
 public fun delete_burn_action<Outcome, CoinType>(expired: &mut Expired<Outcome>) {
@@ -670,9 +657,9 @@ public fun new_update<Outcome, CoinType, W: drop>(
     proposal: &mut Proposal<Outcome>,
     lock: &CurrencyLock<CoinType>,
     name: Option<String>,
-    symbol: Option<String>,
+    symbol: Option<ascii::String>,
     description: Option<String>,
-    icon_url: Option<String>,
+    icon_url: Option<ascii::String>,
     witness: W,
 ) {
     assert!(name.is_some() || symbol.is_some() || description.is_some() || icon_url.is_some(), ENoChange);
@@ -684,33 +671,28 @@ public fun new_update<Outcome, CoinType, W: drop>(
     proposal.add_action(UpdateAction<CoinType> { name, symbol, description, icon_url }, witness);
 }
 
-public fun update<Config, Outcome, CoinType, W: drop>(
+public fun update<Config, Outcome, CoinType, W: copy + drop>(
     executable: &mut Executable,
     account: &mut Account<Config, Outcome>,
     metadata: &mut CoinMetadata<CoinType>,
+    version: TypeName,
     witness: W,
 ) {
-    let update_mut: &mut UpdateAction<CoinType> = executable.action_mut(account.addr(), witness);
-    let lock_mut: &mut CurrencyLock<CoinType> = account.borrow_managed_asset_mut(CurrencyKey<CoinType> {});
+    let update_action = executable.load<UpdateAction<CoinType>, W>(account.addr(), version, witness);
+    let lock_mut: &mut CurrencyLock<CoinType> = account.borrow_managed_asset_mut(CurrencyKey<CoinType> {}, version);
 
-    if (update_mut.name.is_some()) {
-        lock_mut.treasury_cap.update_name(metadata, update_mut.name.extract());
-    };
-    if (update_mut.symbol.is_some()) {
-        lock_mut.treasury_cap.update_symbol(metadata, string::to_ascii(update_mut.symbol.extract()));
-    };
-    if (update_mut.description.is_some()) {
-        lock_mut.treasury_cap.update_description(metadata, update_mut.description.extract());
-    };
-    if (update_mut.icon_url.is_some()) {
-        lock_mut.treasury_cap.update_icon_url(metadata, string::to_ascii(update_mut.icon_url.extract()));
-    };
-    // all fields are set to none now
+    let (name, symbol, description, icon_url) = (metadata.get_name(), metadata.get_symbol(), metadata.get_description(), metadata.get_icon_url().extract().inner_url());
+
+    lock_mut.treasury_cap.update_name(metadata, update_action.name.get_with_default(name));
+    lock_mut.treasury_cap.update_symbol(metadata, update_action.symbol.get_with_default(symbol));
+    lock_mut.treasury_cap.update_description(metadata, update_action.description.get_with_default(description));
+    lock_mut.treasury_cap.update_icon_url(metadata, update_action.icon_url.get_with_default(icon_url));
+
+    executable.process<UpdateAction<CoinType>, W>(version, witness);
 }
 
-public fun destroy_update<CoinType, W: drop>(executable: &mut Executable, witness: W) {
-    let UpdateAction<CoinType> { name, symbol, description, icon_url, .. } = executable.remove_action(witness);
-    assert!(name.is_none() && symbol.is_none() && description.is_none() && icon_url.is_none(), EUpdateNotExecuted);
+public fun destroy_update<CoinType, W: drop>(executable: &mut Executable, version: TypeName, witness: W) {
+    let UpdateAction<CoinType> { .. } = executable.cleanup(version, witness);
 }
 
 public fun delete_update_action<Outcome, CoinType>(expired: &mut Expired<Outcome>) {

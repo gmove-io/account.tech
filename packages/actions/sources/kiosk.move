@@ -8,7 +8,10 @@ module account_actions::kiosk;
 
 // === Imports ===
 
-use std::string::String;
+use std::{
+    string::String,
+    type_name::TypeName,
+};
 use sui::{
     coin,
     sui::SUI,
@@ -23,17 +26,14 @@ use account_protocol::{
     executable::Executable,
     auth::Auth,
 };
+use account_actions::version;
 
 // === Errors ===
 
 #[error]
 const EWrongReceiver: vector<u8> = b"Caller is not the approved recipient";
 #[error]
-const ETransferAllNftsBefore: vector<u8> = b"Transfer all nfts before destroying the action";
-#[error]
 const ENftsPricesNotSameLength: vector<u8> = b"Nfts prices vectors must have the same length";
-#[error]
-const EListAllNftsBefore: vector<u8> = b"List all nfts before destroying the action";
 #[error]
 const ENoLock: vector<u8> = b"No Kiosk found with this name";
 
@@ -52,9 +52,9 @@ public struct Place() has drop;
 /// [MEMBER] can delist from a Kiosk
 public struct Delist() has drop;
 /// [PROPOSAL] take nfts from a kiosk managed by a account
-public struct TakeProposal() has drop;
+public struct TakeProposal() has copy, drop;
 /// [PROPOSAL] list nfts in a kiosk managed by a account
-public struct ListProposal() has drop;
+public struct ListProposal() has copy, drop;
 
 /// [ACTION] transfer nfts from the account's kiosk to another one
 public struct TakeAction has store {
@@ -88,7 +88,7 @@ public fun new<Config, Outcome>(
     kiosk.set_owner_custom(&kiosk_owner_cap, account.addr());
 
     let kiosk_owner_lock = KioskOwnerLock { kiosk_owner_cap };
-    account.add_managed_asset(KioskOwnerKey { name }, kiosk_owner_lock);
+    account.add_managed_asset(KioskOwnerKey { name }, kiosk_owner_lock, version::current());
 
     transfer::public_share_object(kiosk);
 }
@@ -104,7 +104,7 @@ public fun borrow_lock<Config, Outcome>(
     account: &Account<Config, Outcome>, 
     name: String
 ): &KioskOwnerLock {
-    account.borrow_managed_asset(KioskOwnerKey { name })
+    account.borrow_managed_asset(KioskOwnerKey { name }, version::current())
 }
 
 /// Deposits from another Kiosk, no need for proposal.
@@ -122,7 +122,7 @@ public fun place<Config, Outcome, Nft: key + store>(
     ctx: &mut TxContext
 ): TransferRequest<Nft> {
     auth.verify_with_role<Place>(account.addr(), name);
-    let lock_mut: &mut KioskOwnerLock = account.borrow_managed_asset_mut(KioskOwnerKey { name });
+    let lock_mut: &mut KioskOwnerLock = account.borrow_managed_asset_mut(KioskOwnerKey { name }, version::current());
 
     sender_kiosk.list<Nft>(sender_cap, nft_id, 0);
     let (nft, mut request) = sender_kiosk.purchase<Nft>(nft_id, coin::zero<SUI>(ctx));
@@ -151,7 +151,7 @@ public fun delist<Config, Outcome, Nft: key + store>(
     nft: ID,
 ) {
     auth.verify_with_role<Delist>(account.addr(), name);
-    let lock_mut: &mut KioskOwnerLock = account.borrow_managed_asset_mut(KioskOwnerKey { name });
+    let lock_mut: &mut KioskOwnerLock = account.borrow_managed_asset_mut(KioskOwnerKey { name }, version::current());
     kiosk.delist<Nft>(&lock_mut.kiosk_owner_cap, nft);
 }
 
@@ -164,7 +164,7 @@ public fun withdraw_profits<Config, Outcome>(
     ctx: &mut TxContext
 ) {
     auth.verify(account.addr());
-    let lock_mut: &mut KioskOwnerLock = account.borrow_managed_asset_mut(KioskOwnerKey { name });
+    let lock_mut: &mut KioskOwnerLock = account.borrow_managed_asset_mut(KioskOwnerKey { name }, version::current());
 
     let profits_mut = kiosk.profits_mut(&lock_mut.kiosk_owner_cap);
     let profits_value = profits_mut.value();
@@ -194,6 +194,7 @@ public fun propose_take<Config, Outcome>(
     let mut proposal = account.create_proposal(
         auth, 
         outcome,
+        version::current(),
         TakeProposal(),
         name,
         key,
@@ -204,7 +205,7 @@ public fun propose_take<Config, Outcome>(
     );
 
     new_take(&mut proposal, nft_ids, recipient, TakeProposal());
-    account.add_proposal(proposal, TakeProposal());
+    account.add_proposal(proposal, version::current(), TakeProposal());
 }
 
 // step 2: multiple members have to approve the proposal (account::approve_proposal)
@@ -220,13 +221,13 @@ public fun execute_take<Config, Outcome, Nft: key + store>(
     policy: &mut TransferPolicy<Nft>,
     ctx: &mut TxContext
 ): TransferRequest<Nft> {
-    take(executable, account, account_kiosk, recipient_kiosk, recipient_cap, policy, TakeProposal(), ctx)
+    take(executable, account, account_kiosk, recipient_kiosk, recipient_cap, policy, version::current(), TakeProposal(), ctx)
 }
 
 // step 5: destroy the executable
 public fun complete_take(mut executable: Executable) {
-    destroy_take(&mut executable, TakeProposal());
-    executable.destroy(TakeProposal());
+    destroy_take(&mut executable, version::current(), TakeProposal());
+    executable.terminate(version::current(), TakeProposal());
 }
 
 // step 1: propose to list nfts
@@ -248,6 +249,7 @@ public fun propose_list<Config, Outcome>(
     let mut proposal = account.create_proposal(
         auth,
         outcome,
+        version::current(),
         ListProposal(),
         name,
         key,
@@ -258,7 +260,7 @@ public fun propose_list<Config, Outcome>(
     );
 
     new_list(&mut proposal, name, nft_ids, prices, ListProposal());
-    account.add_proposal(proposal, ListProposal());
+    account.add_proposal(proposal, version::current(), ListProposal());
 }
 
 // step 2: multiple members have to approve the proposal (account::approve_proposal)
@@ -270,13 +272,13 @@ public fun execute_list<Config, Outcome, Nft: key + store>(
     account: &mut Account<Config, Outcome>,
     kiosk: &mut Kiosk,
 ) {
-    list<Config, Outcome, Nft, ListProposal>(executable, account, kiosk, ListProposal());
+    list<Config, Outcome, Nft, ListProposal>(executable, account, kiosk, version::current(), ListProposal());
 }
 
 // step 5: destroy the executable
 public fun complete_list(mut executable: Executable) {
-    destroy_list(&mut executable, ListProposal());
-    executable.destroy(ListProposal());
+    destroy_list(&mut executable, version::current(), ListProposal());
+    executable.terminate(version::current(), ListProposal());
 }
 
 // === [ACTION] Public functions ===
@@ -290,22 +292,23 @@ public fun new_take<Outcome, W: drop>(
     proposal.add_action(TakeAction { nft_ids, recipient }, witness);
 }
 
-public fun take<Config, Outcome, Nft: key + store, W: drop>(
+public fun take<Config, Outcome, Nft: key + store, W: copy + drop>(
     executable: &mut Executable,
     account: &mut Account<Config, Outcome>,
     account_kiosk: &mut Kiosk, 
     recipient_kiosk: &mut Kiosk, 
     recipient_cap: &KioskOwnerCap, 
     policy: &mut TransferPolicy<Nft>,
+    version: TypeName,
     witness: W,
     ctx: &mut TxContext
 ): TransferRequest<Nft> {
     let name = executable.source().role_name();
-    let take_mut: &mut TakeAction = executable.action_mut(account.addr(), witness);
-    let lock_mut: &mut KioskOwnerLock = account.borrow_managed_asset_mut(KioskOwnerKey { name });
-    assert!(take_mut.recipient == ctx.sender(), EWrongReceiver);
+    let take_action = executable.load<TakeAction, W>(account.addr(), version, witness);
+    let lock_mut: &mut KioskOwnerLock = account.borrow_managed_asset_mut(KioskOwnerKey { name }, version);
+    assert!(take_action.recipient == ctx.sender(), EWrongReceiver);
 
-    let nft_id = take_mut.nft_ids.remove(0);
+    let nft_id = take_action.nft_ids.remove(0);
     account_kiosk.list<Nft>(&lock_mut.kiosk_owner_cap, nft_id, 0);
     let (nft, mut request) = account_kiosk.purchase<Nft>(nft_id, coin::zero<SUI>(ctx));
 
@@ -320,14 +323,14 @@ public fun take<Config, Outcome, Nft: key + store, W: drop>(
         royalty_rule::pay(policy, &mut request, coin::zero<SUI>(ctx));
     }; 
 
+    if (take_action.nft_ids.is_empty()) executable.process<TakeAction, W>(version, witness);
+
     // the request can be filled with arbitrary rules and must be confirmed afterwards
     request
 }
 
-public fun destroy_take<W: drop>(executable: &mut Executable, witness: W): address {
-    let TakeAction { nft_ids, recipient, .. } = executable.remove_action(witness);
-    assert!(nft_ids.is_empty(), ETransferAllNftsBefore);
-    recipient
+public fun destroy_take<W: drop>(executable: &mut Executable, version: TypeName, witness: W) {
+    let TakeAction { .. } = executable.cleanup(version, witness);
 }
 
 public fun delete_take_action<Outcome>(expired: &mut Expired<Outcome>) {
@@ -348,23 +351,25 @@ public fun new_list<Outcome, W: drop>(
     );
 }
 
-public fun list<Config, Outcome, Nft: key + store, W: drop>(
+public fun list<Config, Outcome, Nft: key + store, W: copy + drop>(
     executable: &mut Executable,
     account: &mut Account<Config, Outcome>,
-    kiosk: &mut Kiosk,
+    kiosk: &mut Kiosk,  
+    version: TypeName,
     witness: W,
 ) {
     let name = executable.source().role_name();
-    let list_mut: &mut ListAction = executable.action_mut(account.addr(), witness);
-    let lock_mut: &mut KioskOwnerLock = account.borrow_managed_asset_mut(KioskOwnerKey { name });
+    let list_action = executable.load<ListAction, W>(account.addr(), version, witness);
+    let lock_mut: &mut KioskOwnerLock = account.borrow_managed_asset_mut(KioskOwnerKey { name }, version);
 
-    let (nft_id, price) = list_mut.nft_prices.remove_entry_by_idx(0);
+    let (nft_id, price) = list_action.nft_prices.remove_entry_by_idx(0);
     kiosk.list<Nft>(&lock_mut.kiosk_owner_cap, nft_id, price);
+
+    if (list_action.nft_prices.is_empty()) executable.process<ListAction, W>(version, witness);
 }
 
-public fun destroy_list<W: drop>(executable: &mut Executable, witness: W) {
-    let ListAction { nft_prices, .. } = executable.remove_action(witness);
-    assert!(nft_prices.is_empty(), EListAllNftsBefore);
+public fun destroy_list<W: drop>(executable: &mut Executable, version: TypeName, witness: W) {
+    let ListAction { .. } = executable.cleanup(version, witness);
 }
 
 public fun delete_list_action<Outcome>(expired: &mut Expired<Outcome>) {
