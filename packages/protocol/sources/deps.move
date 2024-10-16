@@ -13,7 +13,10 @@ use std::{
     type_name::TypeName,
     string::String
 };
-use sui::address;
+use sui::{
+    address,
+    package::UpgradeCap,
+};
 use account_extensions::extensions::Extensions;
 
 // === Errors ===
@@ -26,6 +29,8 @@ const EDepAlreadyExists: vector<u8> = b"Dependency already exists in the account
 const ENotDep: vector<u8> = b"Version package is not a dependency";
 #[error]
 const ENotCoreDep: vector<u8> = b"Version package is not a core dependency";
+#[error]
+const EWrongUpgradeCap: vector<u8> = b"Upgrade cap is not the same as the package";
 
 // === Structs ===
 
@@ -85,6 +90,21 @@ public fun add(
     deps.inner.push_back(Dep { name, addr, version });
 }
 
+/// Adds a dependency which is a package owned by a member
+public fun add_with_upgrade_cap(
+    deps: &mut Deps,
+    upgrade_cap: &UpgradeCap,
+    name: String,
+    addr: address, 
+    version: u64
+) {
+    assert!(!contains_name(deps, name), EDepAlreadyExists);
+    assert!(!contains_addr(deps, addr), EDepAlreadyExists);
+    assert!(upgrade_cap.package() == addr.to_id(), EWrongUpgradeCap);
+
+    deps.inner.push_back(Dep { name, addr, version });
+}
+
 // === View functions ===
 
 /// Asserts that the Version witness type has been issued from one of the Account dependencies
@@ -93,7 +113,7 @@ public fun assert_is_dep(deps: &Deps, version_type: TypeName) {
     assert!(deps.contains_addr(package), ENotDep);
 }
 
-/// Asserts that the Version witness typeis instantiated from AccountProtocol AccountConfig or AccountActions
+/// Asserts that the Version witness type is instantiated from AccountProtocol AccountConfig or AccountActions
 public fun assert_is_core_dep(deps: &Deps, version_type: TypeName) {
     let package = address::from_bytes(version_type.get_address().into_bytes());
     let idx = deps.get_idx_for_addr(package);

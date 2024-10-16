@@ -29,7 +29,10 @@ use account_protocol::{
     auth::Auth,
 };
 use account_extensions::extensions::Extensions;
-use account_actions::version;
+use account_actions::{
+    version,
+    upgrade_policies,
+};
 
 // === Errors ===
 
@@ -39,6 +42,8 @@ const EMetadataNotSameLength: vector<u8> = b"The keys and values are not the sam
 const EMetadataNameMissing: vector<u8> = b"New metadata must set a name for the Account";
 #[error]
 const ENameCannotBeEmpty: vector<u8> = b"Name cannot be empty";
+#[error]
+const EUpgradeCapDoesntExist: vector<u8> = b"Upgrade Cap does not exist";
 
 // === Structs ===
 
@@ -137,7 +142,7 @@ public fun propose_config_deps<Config, Outcome>(
         ctx
     );
 
-    new_config_deps(&mut proposal, extensions, names, packages, versions, ConfigDepsProposal());
+    new_config_deps(&mut proposal, account, extensions, names, packages, versions, ConfigDepsProposal());
     account.add_proposal(proposal, version::current(), ConfigDepsProposal());
 }
 
@@ -196,8 +201,9 @@ public fun delete_config_metadata_action<Outcome>(expired: &mut Expired<Outcome>
     let ConfigMetadataAction { .. } = expired.remove_expired_action();
 }
 
-public fun new_config_deps<Outcome, W: drop>(
+public fun new_config_deps<Config, Outcome, W: drop>(
     proposal: &mut Proposal<Outcome>,
+    account: &Account<Config, Outcome>,
     extensions: &Extensions,
     names: vector<String>,
     packages: vector<address>,
@@ -205,10 +211,19 @@ public fun new_config_deps<Outcome, W: drop>(
     witness: W,
 ) {    
     let mut deps = deps::new(extensions);
+
     names.zip_do!(packages, |name, package| {
         let version = versions.remove(0);
-        deps.add(extensions, name, package, version);
+
+        if (extensions.is_extension(name, package, version)) {
+            deps.add(extensions, name, package, version);
+        } else {
+            assert!(upgrade_policies::has_lock(account, package), EUpgradeCapDoesntExist);
+            let cap = upgrade_policies::borrow_lock(account, package).upgrade_cap();
+            deps.add_with_upgrade_cap(cap, name, package, version);
+        };
     });
+
     proposal.add_action(ConfigDepsAction { deps }, witness);
 }
 

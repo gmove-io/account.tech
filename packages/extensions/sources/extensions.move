@@ -84,6 +84,18 @@ public fun get_core_deps_addresses(
     addresses
 }
 
+public fun is_extension(
+    extensions: &Extensions, 
+    name: String,
+    addr: address,
+    version: u64,
+): bool {
+    let idx = extensions.get_idx_for_name(name); // throws if not found
+
+    extensions.inner[idx].history.any!(|extension| extension.addr == addr) &&
+    extensions.inner[idx].history.any!(|extension| extension.version == version)
+}
+
 public fun assert_is_extension(
     extensions: &Extensions, 
     name: String,
