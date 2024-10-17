@@ -16,6 +16,7 @@ use std::{
 use sui::{
     address,
     package::UpgradeCap,
+    hex,
 };
 use account_extensions::extensions::Extensions;
 
@@ -109,13 +110,13 @@ public fun add_with_upgrade_cap(
 
 /// Asserts that the Version witness type has been issued from one of the Account dependencies
 public fun assert_is_dep(deps: &Deps, version_type: TypeName) {
-    let package = address::from_bytes(version_type.get_address().into_bytes());
+    let package = address::from_bytes(hex::decode(version_type.get_address().into_bytes()));
     assert!(deps.contains_addr(package), ENotDep);
 }
 
 /// Asserts that the Version witness type is instantiated from AccountProtocol AccountConfig or AccountActions
 public fun assert_is_core_dep(deps: &Deps, version_type: TypeName) {
-    let package = address::from_bytes(version_type.get_address().into_bytes());
+    let package = address::from_bytes(hex::decode(version_type.get_address().into_bytes()));
     let idx = deps.get_idx_for_addr(package);
     assert!(idx == 0 || idx == 1 || idx == 2, ENotCoreDep);
 }
