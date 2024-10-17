@@ -155,6 +155,16 @@ public(package) fun add<Outcome>(
     proposals.inner.push_back(proposal);
 }
 
+public(package) fun get_mut<Outcome>(proposals: &mut Proposals<Outcome>, key: String): &mut Proposal<Outcome> {
+    assert!(proposals.contains(key), EProposalNotFound);
+    let idx = proposals.get_idx(key);
+    &mut proposals.inner[idx]
+}
+
+public(package) fun outcome_mut<Outcome>(proposal: &mut Proposal<Outcome>): &mut Outcome {
+    &mut proposal.outcome
+}
+
 /// Removes an proposal being executed if the execution_time is reached
 /// Outcome must be validated in AccountConfig to be destroyed
 public(package) fun remove<Outcome>(
@@ -167,16 +177,6 @@ public(package) fun remove<Outcome>(
     assert!(clock.timestamp_ms() >= execution_time, ECantBeExecutedYet);
 
     (issuer, actions, outcome)
-}
-
-public(package) fun get_mut<Outcome>(proposals: &mut Proposals<Outcome>, key: String): &mut Proposal<Outcome> {
-    assert!(proposals.contains(key), EProposalNotFound);
-    let idx = proposals.get_idx(key);
-    &mut proposals.inner[idx]
-}
-
-public(package) fun outcome_mut<Outcome>(proposal: &mut Proposal<Outcome>): &mut Outcome {
-    &mut proposal.outcome
 }
 
 public(package) fun delete<Outcome>(
