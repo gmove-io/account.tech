@@ -175,7 +175,7 @@ public fun authenticate(
 ): Auth {
     account.config().assert_is_member(ctx);
 
-    auth::new(extensions, role, account.addr(), CoreDep())
+    auth::new(extensions, role, account.addr(), version::current())
 }
 
 public fun approve_proposal(

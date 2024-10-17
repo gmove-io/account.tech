@@ -16,19 +16,14 @@ use account_protocol::{
     version,
 };
 
-// === Structs ===
-
-/// Witness authorizing access to the inner Account
-public struct CoreDep() has drop;
-
 // === [MEMBER] Public functions ===
 
 /// Members can merge and split coins, no need for approvals
 /// Returns the IDs to use in a following proposal, conserve the order
-public fun merge_and_split<Config, Outcome, T: drop>(
+public fun merge_and_split<Config, Outcome, CoinType>(
     _auth: &Auth, // must be an authorized member, done before proposal
     account: &mut Account<Config, Outcome>, 
-    to_merge: vector<Receiving<Coin<T>>>, // there can be only one coin if we just want to split
+    to_merge: vector<Receiving<Coin<CoinType>>>, // there can be only one coin if we just want to split
     to_split: vector<u64>, // there can be no amount if we just want to merge
     ctx: &mut TxContext
 ): vector<ID> { 
@@ -47,11 +42,11 @@ public fun merge_and_split<Config, Outcome, T: drop>(
     ids
 }
 
-fun merge<T: drop>(
-    coins: vector<Coin<T>>, 
+fun merge<CoinType>(
+    coins: vector<Coin<CoinType>>, 
     ctx: &mut TxContext
-): Coin<T> {
-    let mut merged = coin::zero<T>(ctx);
+): Coin<CoinType> {
+    let mut merged = coin::zero<CoinType>(ctx);
     coins.do!(|coin| {
         merged.join(coin);
     });
@@ -59,9 +54,9 @@ fun merge<T: drop>(
     merged
 }
 
-fun split<Config, Outcome, T: drop>(
+fun split<Config, Outcome, CoinType>(
     account: &Account<Config, Outcome>, 
-    mut coin: Coin<T>,
+    mut coin: Coin<CoinType>,
     amounts: vector<u64>, 
     ctx: &mut TxContext
 ): vector<ID> {
