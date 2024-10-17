@@ -6,9 +6,12 @@ module account_protocol::auth;
 
 use std::{
     string::String,
-    type_name,
+    type_name::{Self, TypeName},
 };
-use sui::address;
+use sui::{
+    address,
+    hex,
+};
 use account_extensions::extensions::Extensions;
 
 // === Errors ===
@@ -42,13 +45,13 @@ public fun account_addr(auth: &Auth): address {
 
 // === Core extensions functions ===
 
-public fun new<W: drop>(
+public fun new(
     extensions: &Extensions,
     role: String, 
     account_addr: address,
-    _: W,
+    version: TypeName,
 ): Auth {
-    let addr = address::from_bytes(type_name::get<W>().get_address().into_bytes());
+    let addr = address::from_bytes(hex::decode(version.get_address().into_bytes()));
     extensions.assert_is_core_extension(addr);
 
     Auth { role, account_addr }
@@ -69,6 +72,7 @@ public fun verify_with_role<Role>(
     name: String,
 ) {
     let mut r = type_name::get<Role>().into_string().to_string();  
+    r.append_utf8(b"::");
     r.append(name);
     
     let Auth { role, account_addr } = auth;

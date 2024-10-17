@@ -3,7 +3,10 @@ module account_protocol::issuer_tests;
 
 // === Imports ===
 
-use std::type_name;
+use std::{
+    type_name,
+    string::String,
+};
 use sui::{
     test_utils::destroy,
     test_scenario::{Self as ts, Scenario},
@@ -51,6 +54,12 @@ fun end(scenario: Scenario, extensions: Extensions, account: Account<bool, bool>
     ts::end(scenario);
 }
 
+fun full_role(): String {
+    let mut full_role = @account_protocol.to_string();
+    full_role.append_utf8(b"::issuer_tests::DummyProposal::Degen");
+    full_role
+}
+
 // === Tests ===
 
 #[test]
@@ -62,9 +71,7 @@ fun test_issuer() {
     issuer.assert_is_account(account.addr());
     issuer.assert_is_constructor(DummyProposal());
     // getters 
-    let mut full_role = @account_protocol.to_string();
-    full_role.append_utf8(b"::issuer_tests::DummyProposal::Degen");
-    assert!(issuer.full_role() == full_role);
+    assert!(issuer.full_role() == full_role());
     assert!(issuer.account_addr() == account.addr());
     assert!(issuer.role_type() == type_name::get<DummyProposal>());
     assert!(issuer.role_name() == b"Degen".to_string());
@@ -85,11 +92,13 @@ fun test_error_wrong_witness() {
 
 #[test, expected_failure(abort_code = issuer::EWrongAccount)]
 fun test_error_wrong_account() {
-    let (scenario, extensions, account) = start();
+    let (mut scenario, extensions, account) = start();
 
     let issuer = issuer::construct(account.addr(), version::current(), DummyProposal(), b"Degen".to_string());
     // assertions
-    issuer.assert_is_account(account.addr());
+    let account2 = account::new<bool, bool>(&extensions, b"Main".to_string(), true, scenario.ctx());
+    issuer.assert_is_account(account2.addr());
 
+    destroy(account2);
     end(scenario, extensions, account);
 }
