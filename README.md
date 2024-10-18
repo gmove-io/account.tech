@@ -44,7 +44,7 @@ DAO Smart Accounts will come next.
 
 ## Architecture
 
-![account_architecture_graph](./assets/accountdottech_architecture.png)
+![account.tech architecture graph](./assets/accountdottech_architecture.png)
 
 ### Core Packages 
 
@@ -92,7 +92,7 @@ This design allows us to manage the packages with a special `Account` object whi
 
 ## Usage
 
-![proposal_flow_graph](./assets/proposal_flow.png)
+![proposal flow graph](./assets/proposal_flow.png)
 
 ### Proposal Flow
 
