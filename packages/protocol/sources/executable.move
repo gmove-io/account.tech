@@ -21,6 +21,14 @@ use account_protocol::{
 
 #[error]
 const EActionNotFound: vector<u8> = b"Action not found for type";
+#[error]
+const EActionNotPending: vector<u8> = b"Action does not exist in pending bag";
+#[error]
+const EActionNotCompleted: vector<u8> = b"Action does not exist in completed bag";
+#[error]
+const EPendingNotEmpty: vector<u8> = b"Pending actions have not been processed";
+#[error]
+const ECompletedNotEmpty: vector<u8> = b"Completed actions have not been cleaned up";
 
 // === Structs ===
 
@@ -68,7 +76,8 @@ public fun process<Action: store, W: drop>(
     executable.deps.assert_is_dep(version);
     executable.issuer.assert_is_constructor(witness);
 
-    let action: Action = executable.completed.remove(executable.pending_start);
+    assert!(executable.pending.contains_with_type<u64, Action>(executable.pending_start), EActionNotPending);
+    let action: Action = executable.pending.remove(executable.pending_start);
     let length = executable.completed.length();
 
     executable.completed.add(length, action);
@@ -84,8 +93,9 @@ public fun cleanup<Action: store, W: drop>(
     executable.deps.assert_is_dep(version);
     executable.issuer.assert_is_constructor(witness);
 
-    executable.completed_start = executable.completed_start + 1;
+    assert!(executable.completed.contains_with_type<u64, Action>(executable.completed_start), EActionNotCompleted);
     let action = executable.completed.remove(executable.completed_start);
+    executable.completed_start = executable.completed_start + 1;
 
     action
 }
@@ -103,6 +113,9 @@ public fun terminate<W: drop>(
         completed,
         ..
     } = executable;
+
+    assert!(pending.is_empty(), EPendingNotEmpty);
+    assert!(completed.is_empty(), ECompletedNotEmpty);
     
     deps.assert_is_dep(version);
     issuer.assert_is_constructor(witness);
@@ -120,38 +133,6 @@ public fun issuer(executable: &Executable): &Issuer {
     &executable.issuer
 }
 
-public fun pending_action_index<Action: store>(executable: &Executable): u64 {
-    let mut idx = executable.pending_start;
-    executable.pending.length().do!(|i| {
-        if (executable.pending.contains_with_type<u64, Action>(i)) idx = i;
-        // returns length if not found
-    });
-    assert!(idx != executable.pending_start + executable.pending.length(), EActionNotFound);
-
-    idx
-}
-
-public fun pending_action<Action: store>(executable: &Executable): &Action {
-    let idx = pending_action_index<Action>(executable);
-    executable.pending.borrow(idx)
-}
-
-public fun completed_action_index<Action: store>(executable: &Executable): u64 {
-    let mut idx = executable.completed_start;
-    executable.completed.length().do!(|i| {
-        if (executable.completed.contains_with_type<u64, Action>(i)) idx = i;
-        // returns length if not found
-    });
-    assert!(idx != executable.completed_start + executable.completed.length(), EActionNotFound);
-
-    idx
-}
-
-public fun completed_action<Action: store>(executable: &Executable): &Action {
-    let idx = completed_action_index<Action>(executable);
-    executable.completed.borrow(idx)
-}
-
 public fun action_is_completed<Action: store>(executable: &Executable): bool {
     let mut idx = executable.completed_start;
     executable.completed.length().do!(|i| {
@@ -159,6 +140,19 @@ public fun action_is_completed<Action: store>(executable: &Executable): bool {
         // returns length if not found
     });
     idx != executable.completed_start + executable.completed.length()
+}
+
+// === Private functions ===
+
+fun pending_action_index<Action: store>(executable: &Executable): u64 {
+    let mut idx = executable.pending.length();
+    executable.pending.length().do!(|i| {
+        if (executable.pending.contains_with_type<u64, Action>(i)) idx = i;
+        // returns length if not found
+    });
+    assert!(idx != executable.pending_start + executable.pending.length(), EActionNotFound);
+
+    idx
 }
 
 // === Package functions ===

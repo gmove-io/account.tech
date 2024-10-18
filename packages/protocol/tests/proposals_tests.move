@@ -21,7 +21,6 @@ const OWNER: address = @0xCAFE;
 // === Structs ===
 
 public struct DummyProposal() has drop;
-public struct WrongWitness() has drop;
 
 public struct DummyAction has store {}
 
