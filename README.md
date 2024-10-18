@@ -1,6 +1,6 @@
 # Kraken - Account Abstraction on Sui
 
-![kraken_banner](./assets/kraken_banner.png)
+![account.tech logo](./assets/accountdottech_logo.png)
 
 ## Project Overview
 
@@ -161,4 +161,4 @@ Contributions are welcome! If you have suggestions for improvements or new featu
 This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
 
 
-![kraken_logo](./assets/kraken_logo.jpg)
+![Good Move logo](./assets/goodmove_logo.png)
