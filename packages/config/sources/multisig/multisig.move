@@ -192,7 +192,7 @@ public fun approve_proposal(
     let member = account.config().get_member(ctx.sender());
     let has_role = member.has_role(role);
 
-    let outcome_mut = account.outcome_mut(key, version::current());
+    let outcome_mut = account.proposal_mut(key, version::current()).outcome_mut();
     outcome_mut.approved.insert(ctx.sender()); // throws if already approved
     outcome_mut.total_weight = outcome_mut.total_weight + member.weight;
     if (has_role)
@@ -213,7 +213,7 @@ public fun disapprove_proposal(
     let member = account.config().get_member(ctx.sender());
     let has_role = member.has_role(role);
 
-    let outcome_mut = account.outcome_mut(key, version::current());
+    let outcome_mut = account.proposal_mut(key, version::current()).outcome_mut();
     outcome_mut.approved.remove(&ctx.sender()); // throws if already approved
     outcome_mut.total_weight = outcome_mut.total_weight - member.weight;
     if (has_role)

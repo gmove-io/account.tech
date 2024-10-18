@@ -1,191 +1,510 @@
-// #[test_only]
-// module account_protocol::account_tests;
+#[test_only]
+module account_protocol::account_tests;
 
-// use sui::test_utils::destroy;
-// use account_protocol::{
-//     account,
-//     auth,
-//     members,
-//     account_test_utils::start_world
-// };
+// === Imports ===
 
-// const OWNER: address = @0xBABE;
-// const ALICE: address = @0xa11e7;
-// const BOB: address = @0x10;
+use std::{
+    type_name::{Self, TypeName},
+    string::String,
+};
+use sui::{
+    test_utils::destroy,
+    test_scenario::{Self as ts, Scenario},
+    clock,
+};
+use account_protocol::{
+    account::{Self, Account},
+    auth,
+    version,
+    deps,
+    issuer,
+};
+use account_extensions::extensions::{Self, Extensions, AdminCap};
 
-// public struct Witness has copy, drop {}
+// === Constants ===
 
-// public struct Witness2 has copy, drop {}
+const OWNER: address = @0xCAFE;
 
-// public struct Action has store {
-//     value: u64
-// }
+// === Structs ===
 
-// // test expiration & execution time
+public struct DummyProposal() has drop;
+public struct WrongWitness() has drop;
 
-// #[test]
-// fun test_new_account() {
-//     let mut world = start_world();
+public struct Key has copy, drop, store {}
+public struct Value has store {
+    inner: bool
+}
 
-//     let sender = world.scenario().ctx().sender();
-//     let account = world.account();
+public struct Object has key, store {
+    id: UID,
+}
 
-//     assert!(account.name() == b"kraken".to_string());
-//     assert!(account.thresholds().get_global_threshold() == 1);
-//     assert!(account.members().addresses() == vector[sender]);
-//     assert!(account.proposals().length() == 0);
+// === Helpers ===
 
-//     world.end();
-// } 
+fun start(): (Scenario, Extensions, Account<bool, bool>) {
+    let mut scenario = ts::begin(OWNER);
+    // publish package
+    extensions::init_for_testing(scenario.ctx());
+    // retrieve objects
+    scenario.next_tx(OWNER);
+    let mut extensions = scenario.take_shared<Extensions>();
+    let cap = scenario.take_from_sender<AdminCap>();
+    // add core deps
+    extensions.add(&cap, b"AccountProtocol".to_string(), @account_protocol, 1);
+    extensions.add(&cap, b"AccountConfig".to_string(), @0x1, 1);
+    extensions.add(&cap, b"AccountActions".to_string(), @0x2, 1);
+    // Account generic types are dummy types (bool, bool)
+    let account = account::new(&extensions, b"Main".to_string(), true, scenario.ctx());
+    // create world
+    destroy(cap);
+    (scenario, extensions, account)
+}
 
-// #[test]
-// fun test_create_proposal() {
-//     let mut world = start_world();
-//     let addr = world.account().addr();
+fun end(scenario: Scenario, extensions: Extensions, account: Account<bool, bool>) {
+    destroy(extensions);
+    destroy(account);
+    ts::end(scenario);
+}
 
-//     let mut proposal = world.create_proposal(
-//         Witness {},
-//         b"".to_string(),
-//         b"key".to_string(),
-//         b"proposal".to_string(),
-//         5,
-//         2,
-//     );
+fun full_role(): String {
+    let mut full_role = @account_protocol.to_string();
+    full_role.append_utf8(b"::account_tests::DummyProposal::Degen");
+    full_role
+}
 
-//     proposal.add_action(Action { value: 1 }, Witness {});
-//     proposal.add_action(Action { value: 2 }, Witness {}); 
+fun wrong_version(): TypeName {
+    type_name::get<Extensions>()
+}
 
-//     proposal.auth().assert_is_witness(Witness {});
-//     proposal.auth().assert_is_account(addr);
-//     assert!(proposal.approved() == vector[]);
-//     assert!(proposal.description() == b"proposal".to_string());
-//     assert!(proposal.expiration_epoch() == 2);
-//     assert!(proposal.execution_time() == 5);
-//     assert!(proposal.total_weight() == 0);
-//     assert!(proposal.actions_length() == 2);
+// === Tests ===
 
-//     world.account().add_proposal(proposal, Witness {});  
-//     world.end();
-// }
+#[test]
+fun test_create_and_share_account() {
+    let (scenario, extensions, account) = start();
 
-// #[test]
-// fun test_approve_proposal() {
-//     let mut world = start_world();
-//     let key = b"key".to_string();
+    account.share();
 
-//     world.account().members_mut_for_testing().add(ALICE, 1, option::none(), vector[]);
-//     world.account().members_mut_for_testing().add(BOB, 1, option::none(), vector[]);
+    destroy(extensions);
+    scenario.end();
+}
 
-//     world.account().member_mut(ALICE).set_weight(2);
-//     world.account().member_mut(BOB).set_weight(3);
+#[test]
+fun test_keep_object() {
+    let (mut scenario, extensions, account) = start();
 
-//     let mut proposal = world.create_proposal(Witness {}, b"".to_string(), key, b"".to_string(), 0, 0);
-//     proposal.add_action(Action { value: 1 }, Witness {});
-//     proposal.add_action(Action { value: 2 }, Witness {});   
-//     world.account().add_proposal(proposal, Witness {});
+    account.keep(Object { id: object::new(scenario.ctx()) });
+    scenario.next_tx(OWNER);
+    let Object { id } = scenario.take_from_address<Object>(account.addr());
+    id.delete();
 
-//     world.scenario().next_tx(ALICE);
-//     world.approve_proposal(key);
-//     let proposal = world.account().proposals().get(key);
-//     assert!(proposal.total_weight() == 2);
+    end(scenario, extensions, account);
+}
 
-//     world.scenario().next_tx(BOB);
-//     world.approve_proposal(key);
-//     let proposal = world.account().proposals().get(key);
-//     assert!(proposal.total_weight() == 5);
+#[test]
+fun test_account_getters() {
+    let (mut scenario, extensions, mut account) = start();
 
-//     world.end();        
-// }
+    assert!(account.addr() == object::id(&account).to_address());
+    assert!(account.metadata().get(b"name".to_string()) == b"Main".to_string());
+    assert!(account.deps().contains_name(b"AccountProtocol".to_string()));
+    assert!(account.deps().contains_name(b"AccountConfig".to_string()));
+    assert!(account.deps().contains_name(b"AccountActions".to_string()));
+    assert!(account.proposals().length() == 0);
+    // proposal
+    let auth = auth::new(&extensions, full_role(), account.addr(), version::current());
+    let proposal = account.create_proposal(
+        auth, 
+        true, 
+        version::current(), 
+        DummyProposal(), 
+        b"Degen".to_string(), 
+        b"one".to_string(), 
+        b"description".to_string(), 
+        0, 
+        0, 
+        scenario.ctx()
+    );
+    account.add_proposal(proposal, version::current(), DummyProposal());
+    assert!(account.proposals().length() == 1);
+    assert!(account.proposal(b"one".to_string()).execution_time() == 0);
+    assert!(account.proposal(b"one".to_string()).outcome() == true);
 
-// #[test]
-// fun test_remove_approval() {
-//     let mut world = start_world();
-//     let key = b"key".to_string();
+    end(scenario, extensions, account);
+}
 
-//     world.account().members_mut_for_testing().add(ALICE, 1, option::none(), vector[]);
-//     world.account().members_mut_for_testing().add(BOB, 1, option::none(), vector[]);
+#[test]
+fun test_proposal_execute_flow() {
+    let (mut scenario, extensions, mut account) = start();
+    let clock = clock::create_for_testing(scenario.ctx());
 
-//     world.account().member_mut(ALICE).set_weight(2);
-//     world.account().member_mut(BOB).set_weight(3);
+    let auth = auth::new(&extensions, full_role(), account.addr(), version::current());
+    let proposal = account.create_proposal(
+        auth, 
+        true, 
+        version::current(), 
+        DummyProposal(), 
+        b"Degen".to_string(), 
+        b"one".to_string(), 
+        b"description".to_string(), 
+        0, 
+        0, 
+        scenario.ctx()
+    );
+    account.add_proposal(proposal, version::current(), DummyProposal());
+    let (executable, outcome) = account.execute_proposal(
+        b"one".to_string(), 
+        &clock, 
+        version::current(), 
+        scenario.ctx()
+    );
 
-//     let mut proposal = world.create_proposal(Witness {}, b"".to_string(), key, b"".to_string(), 0, 0);
-//     proposal.add_action(Action { value: 1 }, Witness {});
-//     proposal.add_action(Action { value: 2 }, Witness {});   
-//     world.account().add_proposal(proposal, Witness {});
+    destroy(outcome);
+    destroy(executable);
+    destroy(clock);
+    end(scenario, extensions, account);
+}
 
-//     world.scenario().next_tx(ALICE);
-//     world.approve_proposal(key);
-//     let proposal = world.account().proposals().get(key);
-//     assert!(proposal.total_weight() == 2);
+#[test]
+fun test_proposal_delete_flow() {
+    let (mut scenario, extensions, mut account) = start();
+    let clock = clock::create_for_testing(scenario.ctx());
 
-//     world.scenario().next_tx(BOB);
-//     world.approve_proposal(key);
-//     let proposal = world.account().proposals().get(key);
-//     assert!(proposal.total_weight() == 5);
+    let auth = auth::new(&extensions, full_role(), account.addr(), version::current());
+    let proposal = account.create_proposal(
+        auth, 
+        true, 
+        version::current(), 
+        DummyProposal(), 
+        b"Degen".to_string(), 
+        b"one".to_string(), 
+        b"description".to_string(), 
+        0, 
+        0, 
+        scenario.ctx()
+    );
+    account.add_proposal(proposal, version::current(), DummyProposal());
+    let expired = account.delete_proposal(
+        b"one".to_string(), 
+        version::current(), 
+        scenario.ctx()
+    );
 
-//     world.scenario().next_tx(BOB);
-//     world.remove_approval(key);
-//     let proposal = world.account().proposals().get(key);
-//     assert!(proposal.total_weight() == 2);        
+    destroy(expired);
+    destroy(clock);
+    end(scenario, extensions, account);
+}
 
-//     world.end();        
-// }
+#[test]
+fun test_managed_assets() {
+    let (scenario, extensions, mut account) = start();
 
-// // TODO:
-// // #[test]
-// // fun delete_proposal() {
-// //     let mut world = start_world();
-// //     let key = b"key".to_string();
+    account.add_managed_asset(Key {}, Value { inner: true }, version::current());
+    account.has_managed_asset(Key {});
+    let asset: &Value = account.borrow_managed_asset(Key {}, version::current());
+    assert!(asset.inner == true);
+    let asset: &mut Value = account.borrow_managed_asset_mut(Key {}, version::current());
+    assert!(asset.inner == true);
+    let Value { .. } = account.remove_managed_asset(Key {}, version::current());
 
-// //     world.create_proposal(Witness {}, b"".to_string(), key, b"".to_string(), 0, 0);
-// //     assert!(world.account().proposals_length() == 1);
+    end(scenario, extensions, account);
+}
 
-// //     let actions = world.delete_proposal(key);
-// //     actions.destroy_empty();
-// //     assert!(world.account().proposals_length() == 0);
+#[test]
+fun test_receive_object() {
+    let (mut scenario, extensions, mut account) = start();
 
-// //     world.end();
-// // }
+    account.keep(Object { id: object::new(scenario.ctx()) });
+    scenario.next_tx(OWNER);
+    let id = object::id(&account);
+    let Object { id } = account.receive(ts::most_recent_receiving_ticket<Object>(&id), version::current());
+    id.delete();
 
-// #[test, expected_failure(abort_code = account::ECallerIsNotMember)]
-// fun test_assert_is_member_error_caller_is_not_member() {
-//     let mut world = start_world();
+    end(scenario, extensions, account);
+}
 
-//     world.scenario().next_tx(ALICE);
-//     world.assert_is_member();
+#[test]
+fun test_account_getters_mut() {
+    let (mut scenario, extensions, mut account) = start();
 
-//     world.end();     
-// }    
+    assert!(account.metadata_mut(version::current()).get(b"name".to_string()) == b"Main".to_string());
+    assert!(account.deps_mut(version::current()).contains_name(b"AccountProtocol".to_string()));
+    assert!(account.deps_mut(version::current()).contains_name(b"AccountConfig".to_string()));
+    assert!(account.deps_mut(version::current()).contains_name(b"AccountActions".to_string()));
+    assert!(account.proposals_mut(version::current()).length() == 0);
+    assert!(account.config_mut(version::current()) == true);
+    // proposal
+    let auth = auth::new(&extensions, full_role(), account.addr(), version::current());
+    let proposal = account.create_proposal(
+        auth, 
+        true, 
+        version::current(), 
+        DummyProposal(), 
+        b"Degen".to_string(), 
+        b"one".to_string(), 
+        b"description".to_string(), 
+        0, 
+        0, 
+        scenario.ctx()
+    );
+    account.add_proposal(proposal, version::current(), DummyProposal());
+    assert!(account.proposals_mut(version::current()).length() == 1);
+    assert!(account.proposal_mut(b"one".to_string(), version::current()).actions_length() == 0);
 
-// #[test, expected_failure(abort_code = account::ECantBeExecutedYet)]
-// fun test_execute_proposal_error_cant_be_executed_yet() {
-//     let mut world = start_world();
-//     let key = b"key".to_string();
+    end(scenario, extensions, account);
+}
 
-//     world.account().members_mut_for_testing().add(ALICE, 2, option::none(), vector[]);
-//     world.account().members_mut_for_testing().add(BOB, 3, option::none(), vector[]);
+#[test, expected_failure(abort_code = auth::EWrongAccount)]
+fun test_error_cannot_create_proposal_with_wrong_account() {
+    let (mut scenario, extensions, mut account) = start();
 
-//     let proposal = world.create_proposal(Witness {}, b"".to_string(), key, b"".to_string(), 5, 0);
-//     world.account().add_proposal(proposal, Witness {});
-//     world.approve_proposal(key);
-//     let executable = world.execute_proposal(key);
+    let auth = auth::new(&extensions, full_role(), @0xFA15E, version::current());
+    let proposal = account.create_proposal(
+        auth, 
+        true, 
+        version::current(), 
+        DummyProposal(), 
+        b"Degen".to_string(), 
+        b"one".to_string(), 
+        b"description".to_string(), 
+        0, 
+        0, 
+        scenario.ctx()
+    );
 
-//     destroy(executable);
-//     world.end();
-// }      
+    destroy(proposal);
+    end(scenario, extensions, account);
+}
 
-// // TODO:
-// // #[test, expected_failure(abort_code = account::EHasntExpired)]
-// // fun delete_proposal_error_hasnt_expired() {
-// //     let mut world = start_world();
-// //     let key = b"key".to_string();
+#[test, expected_failure(abort_code = deps::ENotDep)]
+fun test_error_cannot_create_proposal_from_not_dependent_package() {
+    let (mut scenario, extensions, mut account) = start();
 
-// //     world.create_proposal(Witness {}, b"".to_string(), key, b"".to_string(), 0, 2);
-// //     assert!(world.account().proposals().length() == 1);
+    let auth = auth::new(&extensions, full_role(), account.addr(), version::current());
+    let proposal = account.create_proposal(
+        auth, 
+        true, 
+        wrong_version(), 
+        DummyProposal(), 
+        b"Degen".to_string(), 
+        b"one".to_string(), 
+        b"description".to_string(), 
+        0, 
+        0, 
+        scenario.ctx()
+    );
 
-// //     let actions = world.delete_proposal(key);
-// //     actions.destroy_empty();
-// //     assert!(world.account().proposals().length() == 0);
+    destroy(proposal);
+    end(scenario, extensions, account);
+}
 
-// //     world.end();
-// // }
+#[test, expected_failure(abort_code = deps::ENotDep)]
+fun test_error_cannot_add_proposal_from_not_dependent_package() {
+    let (mut scenario, extensions, mut account) = start();
+
+    let auth = auth::new(&extensions, full_role(), account.addr(), version::current());
+    let proposal = account.create_proposal(
+        auth, 
+        true, 
+        version::current(), 
+        DummyProposal(), 
+        b"Degen".to_string(), 
+        b"one".to_string(), 
+        b"description".to_string(), 
+        0, 
+        0, 
+        scenario.ctx()
+    );
+    account.add_proposal(proposal, wrong_version(), DummyProposal());
+
+    end(scenario, extensions, account);
+}
+
+#[test, expected_failure(abort_code = issuer::EWrongWitness)]
+fun test_error_cannot_add_proposal_with_wrong_witness() {
+    let (mut scenario, extensions, mut account) = start();
+
+    let auth = auth::new(&extensions, full_role(), account.addr(), version::current());
+    let proposal = account.create_proposal(
+        auth, 
+        true, 
+        version::current(), 
+        DummyProposal(), 
+        b"Degen".to_string(), 
+        b"one".to_string(), 
+        b"description".to_string(), 
+        0, 
+        0, 
+        scenario.ctx()
+    );
+    account.add_proposal(proposal, version::current(), WrongWitness());
+
+    end(scenario, extensions, account);
+}
+
+#[test, expected_failure(abort_code = deps::EDepNotFound)]
+fun test_error_cannot_execute_proposal_from_not_core_dep() {
+    let (mut scenario, extensions, mut account) = start();
+    let clock = clock::create_for_testing(scenario.ctx());
+
+    let auth = auth::new(&extensions, full_role(), account.addr(), version::current());
+    let proposal = account.create_proposal(
+        auth, 
+        true, 
+        version::current(), 
+        DummyProposal(), 
+        b"Degen".to_string(), 
+        b"one".to_string(), 
+        b"description".to_string(), 
+        0, 
+        0, 
+        scenario.ctx()
+    );
+    account.add_proposal(proposal, version::current(), DummyProposal());
+    let (executable, outcome) = account.execute_proposal(b"one".to_string(), &clock, wrong_version(), scenario.ctx());
+
+    destroy(executable);
+    destroy(outcome);
+    destroy(clock);
+    end(scenario, extensions, account);
+}
+
+#[test, expected_failure(abort_code = deps::EDepNotFound)]
+fun test_error_cannot_delete_proposal_from_not_core_dep() {
+    let (mut scenario, extensions, mut account) = start();
+
+    let auth = auth::new(&extensions, full_role(), account.addr(), version::current());
+    let proposal = account.create_proposal(
+        auth, 
+        true, 
+        version::current(), 
+        DummyProposal(), 
+        b"Degen".to_string(), 
+        b"one".to_string(), 
+        b"description".to_string(), 
+        0, 
+        0, 
+        scenario.ctx()
+    );
+    account.add_proposal(proposal, version::current(), DummyProposal());
+    let expired = account.delete_proposal(b"one".to_string(), wrong_version(), scenario.ctx());
+
+    destroy(expired);
+    end(scenario, extensions, account);
+}
+
+#[test, expected_failure(abort_code = deps::ENotDep)]
+fun test_error_cannot_add_managed_asset_from_not_dependent_package() {
+    let (scenario, extensions, mut account) = start();
+
+    account.add_managed_asset(Key {}, Value { inner: true }, wrong_version());
+
+    end(scenario, extensions, account);
+}
+
+#[test, expected_failure(abort_code = deps::ENotDep)]
+fun test_error_cannot_borrow_managed_asset_from_not_dependent_package() {
+    let (scenario, extensions, mut account) = start();
+
+    account.add_managed_asset(Key {}, Value { inner: true }, version::current());
+    let asset: &Value = account.borrow_managed_asset(Key {}, wrong_version());
+    assert!(asset.inner == true);
+
+    end(scenario, extensions, account);
+}
+
+#[test, expected_failure(abort_code = deps::ENotDep)]
+fun test_error_cannot_borrow_mut_managed_asset_from_not_dependent_package() {
+    let (scenario, extensions, mut account) = start();
+
+    account.add_managed_asset(Key {}, Value { inner: true }, version::current());
+    let asset: &mut Value = account.borrow_managed_asset_mut(Key {}, wrong_version());
+    assert!(asset.inner == true);
+
+    end(scenario, extensions, account);
+}
+
+#[test, expected_failure(abort_code = deps::ENotDep)]
+fun test_error_cannot_remove_managed_asset_from_not_dependent_package() {
+    let (scenario, extensions, mut account) = start();
+
+    account.add_managed_asset(Key {}, Value { inner: true }, version::current());
+    let Value { .. } = account.remove_managed_asset(Key {}, wrong_version());
+
+    end(scenario, extensions, account);
+}
+
+#[test, expected_failure(abort_code = deps::EDepNotFound)]
+fun test_error_cannot_receive_object_from_not_core_dep() {
+    let (mut scenario, extensions, mut account) = start();
+
+    account.keep(Object { id: object::new(scenario.ctx()) });
+    scenario.next_tx(OWNER);
+    let id = object::id(&account);
+    let Object { id } = account.receive(ts::most_recent_receiving_ticket<Object>(&id), wrong_version());
+    id.delete();
+
+    end(scenario, extensions, account);
+}
+
+#[test, expected_failure(abort_code = deps::EDepNotFound)]
+fun test_error_cannot_access_metadata_mut_from_not_core_dep() {
+    let (scenario, extensions, mut account) = start();
+
+    assert!(account.metadata_mut(wrong_version()).get(b"name".to_string()) == b"Main".to_string());
+
+    end(scenario, extensions, account);
+}
+
+#[test, expected_failure(abort_code = deps::EDepNotFound)]
+fun test_error_cannot_access_deps_mut_from_not_core_dep() {
+    let (scenario, extensions, mut account) = start();
+
+    assert!(account.deps_mut(wrong_version()).contains_name(b"AccountProtocol".to_string()));
+    assert!(account.deps_mut(wrong_version()).contains_name(b"AccountConfig".to_string()));
+    assert!(account.deps_mut(wrong_version()).contains_name(b"AccountActions".to_string()));
+
+    end(scenario, extensions, account);
+}
+
+#[test, expected_failure(abort_code = deps::EDepNotFound)]
+fun test_error_cannot_access_proposals_mut_from_not_core_dep() {
+    let (scenario, extensions, mut account) = start();
+
+    assert!(account.proposals_mut(wrong_version()).length() == 0);
+
+    end(scenario, extensions, account);
+}
+
+#[test, expected_failure(abort_code = deps::EDepNotFound)]
+fun test_error_cannot_access_config_mut_from_not_core_dep() {
+    let (scenario, extensions, mut account) = start();
+
+    assert!(account.config_mut(wrong_version()) == true);
+
+    end(scenario, extensions, account);
+}
+
+#[test, expected_failure(abort_code = deps::EDepNotFound)]
+fun test_error_cannot_access_proposal_mut_from_not_core_dep() {
+    let (mut scenario, extensions, mut account) = start();
+
+    assert!(account.proposals_mut(version::current()).length() == 0);
+    // proposal
+    let auth = auth::new(&extensions, full_role(), account.addr(), version::current());
+    let proposal = account.create_proposal(
+        auth, 
+        true, 
+        version::current(), 
+        DummyProposal(), 
+        b"Degen".to_string(), 
+        b"one".to_string(), 
+        b"description".to_string(), 
+        0, 
+        0, 
+        scenario.ctx()
+    );
+    account.add_proposal(proposal, version::current(), DummyProposal());
+    assert!(account.proposal_mut(b"one".to_string(), wrong_version()).actions_length() == 0);
+
+    end(scenario, extensions, account);
+}

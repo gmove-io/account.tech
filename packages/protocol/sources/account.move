@@ -205,6 +205,13 @@ public fun add_managed_asset<Config, Outcome, K: copy + drop + store, A: store>(
     df::add(&mut account.id, key, asset);
 }
 
+public fun has_managed_asset<Config, Outcome, K: copy + drop + store>(
+    account: &Account<Config, Outcome>, 
+    key: K, 
+): bool {
+    df::exists_(&account.id, key)
+}
+
 public fun borrow_managed_asset<Config, Outcome, K: copy + drop + store, A: store>(
     account: &Account<Config, Outcome>,
     key: K, 
@@ -230,13 +237,6 @@ public fun remove_managed_asset<Config, Outcome, K: copy + drop + store, A: stor
 ): A {
     account.deps.assert_is_dep(version);
     df::remove(&mut account.id, key)
-}
-
-public fun has_managed_asset<Config, Outcome, K: copy + drop + store>(
-    account: &Account<Config, Outcome>, 
-    key: K, 
-): bool {
-    df::exists_(&account.id, key)
 }
 
 // === Core Deps only functions ===
@@ -289,20 +289,11 @@ public fun config_mut<Config, Outcome>(
 }
 
 /// Only called in AccountConfig
-public fun outcome_mut<Config, Outcome>(
+public fun proposal_mut<Config, Outcome>(
     account: &mut Account<Config, Outcome>, 
     key: String,
     version: TypeName,
-): &mut Outcome {
+): &mut Proposal<Outcome> {
     account.deps.assert_is_core_dep(version);
-    account.proposals.get_mut(key).outcome_mut()
-}
-
-// === Test functions ===
-
-#[test_only]
-public fun deps_mut_for_testing<Config, Outcome>(
-    account: &mut Account<Config, Outcome>, 
-): &mut Deps {
-    &mut account.deps
+    account.proposals.get_mut(key)
 }

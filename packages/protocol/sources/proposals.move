@@ -104,6 +104,12 @@ public fun outcome<Outcome>(proposal: &Proposal<Outcome>): &Outcome {
     &proposal.outcome
 }
 
+/// safe because &mut Proposal is only accessible in core deps
+/// only used in AccountConfig 
+public fun outcome_mut<Outcome>(proposal: &mut Proposal<Outcome>): &mut Outcome {
+    &mut proposal.outcome
+}
+
 // === Proposal functions ===
 
 /// Inserts an action to the proposal bag
@@ -159,10 +165,6 @@ public(package) fun get_mut<Outcome>(proposals: &mut Proposals<Outcome>, key: St
     assert!(proposals.contains(key), EProposalNotFound);
     let idx = proposals.get_idx(key);
     &mut proposals.inner[idx]
-}
-
-public(package) fun outcome_mut<Outcome>(proposal: &mut Proposal<Outcome>): &mut Outcome {
-    &mut proposal.outcome
 }
 
 /// Removes an proposal being executed if the execution_time is reached
