@@ -45,6 +45,7 @@ fun start(): (Scenario, Extensions, Account<bool, bool>) {
     let mut scenario = ts::begin(OWNER);
     // publish package
     extensions::init_for_testing(scenario.ctx());
+    account::init_for_testing(scenario.ctx());
     // retrieve objects
     scenario.next_tx(OWNER);
     let mut extensions = scenario.take_shared<Extensions>();

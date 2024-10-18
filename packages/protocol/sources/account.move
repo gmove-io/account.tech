@@ -23,6 +23,7 @@ use sui::{
     transfer::Receiving,
     clock::Clock, 
     dynamic_field as df,
+    package,
 };
 use account_protocol::{
     issuer,
@@ -35,6 +36,8 @@ use account_protocol::{
 use account_extensions::extensions::Extensions;
 
 // === Structs ===
+
+public struct ACCOUNT has drop {}
 
 /// Shared multisig Account object 
 public struct Account<Config, Outcome> has key {
@@ -52,6 +55,10 @@ public struct Account<Config, Outcome> has key {
 }
 
 // === Public mutative functions ===
+
+fun init(otw: ACCOUNT, ctx: &mut TxContext) {
+    package::claim_and_keep(otw, ctx);
+}
 
 /// Creates a new Account object, called from AccountConfig
 public fun new<Config, Outcome>(
@@ -296,4 +303,11 @@ public fun proposal_mut<Config, Outcome>(
 ): &mut Proposal<Outcome> {
     account.deps.assert_is_core_dep(version);
     account.proposals.get_mut(key)
+}
+
+// === Test functions ===
+
+#[test_only]
+public fun init_for_testing(ctx: &mut TxContext) {
+    init(ACCOUNT {}, ctx);
 }
