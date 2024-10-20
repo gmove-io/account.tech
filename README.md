@@ -1,4 +1,4 @@
-# Kraken - Account Abstraction on Sui
+# account.tech - Account Abstraction infrastructure on Sui
 
 ![account.tech logo](./assets/accountdottech_logo.png)
 
