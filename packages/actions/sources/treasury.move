@@ -53,8 +53,6 @@ public struct Treasury has store {
 
 /// [MEMBER] can deposit coins into a treasury
 public struct Deposit() has drop;
-/// [PROPOSAL] opens a treasury for the account
-public struct OpenProposal() has copy, drop;
 /// [PROPOSAL] transfers from a treasury 
 public struct TransferProposal() has copy, drop;
 /// [PROPOSAL] pays from a treasury
@@ -88,6 +86,19 @@ public fun coin_type_value<C: drop>(treasury: &Treasury, coin_type: String): u64
 }
 
 // === [MEMBER] Public Functions ===
+
+// Members can open a treasury
+public fun open<Config, Outcome>(
+    auth: Auth,
+    account: &mut Account<Config, Outcome>,
+    name: String,
+    ctx: &mut TxContext
+) {
+    auth.verify(account.addr());
+    assert!(!treasury_exists(account, name), ETreasuryAlreadyExists);
+
+    account.add_managed_asset(TreasuryKey { name }, Treasury { bag: bag::new(ctx) }, version::current());
+}
 
 public fun treasury_exists<Config, Outcome>(
     account: &Account<Config, Outcome>, 
@@ -144,51 +155,6 @@ public fun close<Config, Outcome>(
 }
 
 // === [PROPOSAL] Public Functions ===
-
-// step 1: propose to open a treasury for the account
-public fun propose_open<Config, Outcome>(
-    auth: Auth,
-    account: &mut Account<Config, Outcome>,
-    outcome: Outcome,
-    key: String,
-    description: String,
-    execution_time: u64,
-    expiration_epoch: u64,
-    name: String,
-    ctx: &mut TxContext
-) {
-    assert!(!treasury_exists(account, name), ETreasuryAlreadyExists);
-
-    let mut proposal = account.create_proposal(
-        auth,
-        outcome,
-        version::current(),
-        OpenProposal(),
-        b"".to_string(),
-        key,
-        description,
-        execution_time,
-        expiration_epoch,
-        ctx
-    );
-
-    new_open(&mut proposal, name, OpenProposal());
-    account.add_proposal(proposal, version::current(), OpenProposal());
-}
-
-// step 2: multiple members have to approve the proposal (account::approve_proposal)
-// step 3: execute the proposal and return the action (account::execute_proposal)
-
-// step 4: create the Treasury
-public fun execute_open<Config, Outcome>(
-    mut executable: Executable,
-    account: &mut Account<Config, Outcome>,
-    ctx: &mut TxContext
-) {
-    open(&mut executable, account, version::current(), OpenProposal(), ctx);
-    destroy_open(&mut executable, version::current(), OpenProposal());
-    executable.terminate(version::current(), OpenProposal());
-}
 
 // step 1: propose to send managed coins
 public fun propose_transfer<Config, Outcome>(
@@ -301,31 +267,6 @@ public fun execute_pay<Config, Outcome, C: drop>(
 }
 
 // === [ACTION] Public Functions ===
-
-public fun new_open<Outcome, W: drop>(
-    proposal: &mut Proposal<Outcome>, 
-    name: String, 
-    witness: W
-) {
-    proposal.add_action(OpenAction { name }, witness);
-}
-
-public fun open<Config, Outcome, W: copy + drop>(
-    executable: &mut Executable,
-    account: &mut Account<Config, Outcome>,
-    version: TypeName,
-    witness: W,
-    ctx: &mut TxContext
-) {
-    let open_action = executable.load<OpenAction, W>(account.addr(), version, witness);
-    account.add_managed_asset(TreasuryKey { name: open_action.name }, Treasury { bag: bag::new(ctx) }, version);
-
-    executable.process<OpenAction, W>(version, witness);
-}
-
-public fun destroy_open<W: drop>(executable: &mut Executable, version: TypeName, witness: W) {
-    let OpenAction { .. } = executable.cleanup(version, witness);
-}
 
 public fun new_spend<Outcome, W: drop>(
     proposal: &mut Proposal<Outcome>,

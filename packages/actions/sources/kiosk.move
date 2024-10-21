@@ -76,7 +76,7 @@ public struct ListAction has store {
 /// Creates a new Kiosk and locks the KioskOwnerCap in the Account
 /// Only a member can create a Kiosk
 #[allow(lint(share_owned))]
-public fun new<Config, Outcome>(
+public fun open<Config, Outcome>(
     auth: Auth,
     account: &mut Account<Config, Outcome>, 
     name: String, 
@@ -171,6 +171,23 @@ public fun withdraw_profits<Config, Outcome>(
     let profits = profits_mut.split(profits_value);
 
     account.keep(coin::from_balance<SUI>(profits, ctx));
+}
+
+/// Closes the kiosk if empty
+public fun close<Config, Outcome>(
+    auth: Auth,
+    account: &mut Account<Config, Outcome>,
+    name: String,
+    kiosk: Kiosk,
+    ctx: &mut TxContext
+) {
+    auth.verify(account.addr());
+
+    let cap = 
+        account.remove_managed_asset(KioskOwnerKey { name }, version::current());
+    let profits = kiosk.close_and_withdraw(cap, ctx);
+    
+    account.keep(profits);
 }
 
 // === [PROPOSAL] Public functions ===
