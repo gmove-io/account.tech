@@ -84,13 +84,13 @@ public fun new(username: String, profile_picture: String, ctx: &mut TxContext): 
 
 /// Fills user_id in Account, inserts account_id in User, aborts if already joined
 public fun join_account(user: &mut User, account: &mut Account<Multisig, Approvals>, ctx: &TxContext) {
-    account.config_mut(version::current()).get_member_mut(ctx.sender()).register_user_id(user.id.to_inner());
+    account.config_mut(version::current()).member_mut(ctx.sender()).register_user_id(user.id.to_inner());
     user.account_ids.insert(object::id(account)); 
 }
 
 /// Extracts and verifies user_id in Account, removes account_id from User, aborts if not member
 public fun leave_account(user: &mut User, account: &mut Account<Multisig, Approvals>, ctx: &TxContext) {
-    account.config_mut(version::current()).get_member_mut(ctx.sender()).unregister_user_id();
+    account.config_mut(version::current()).member_mut(ctx.sender()).unregister_user_id();
     user.account_ids.remove(&object::id(account));
 }
 

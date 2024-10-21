@@ -8,8 +8,6 @@ use sui::{
     vec_set::{Self, VecSet},
     vec_map::{Self, VecMap},
     clock::Clock,
-    package,
-    display,
 };
 use account_extensions::extensions::Extensions;
 use account_protocol::{
@@ -101,34 +99,35 @@ public struct Approvals has store {
 
 // === Public functions ===
 
-fun init(otw: MULTISIG, ctx: &mut TxContext) {
-    let publisher = package::claim(otw, ctx);
+// TODO: use built-in feature
+// public fun init_display(otw: MULTISIG, ctx: &mut TxContext) {
+//     let publisher = package::claim(otw, ctx);
 
-    let fields = vector[
-        b"name".to_string(),
-        b"description".to_string(),
-        b"link".to_string(),
-        b"image_url".to_string(),
-        b"thumbnail_url".to_string(),
-        b"project_url".to_string(),
-        b"creator".to_string(),
-    ];
-    let values = vector[
-        b"Multisig: {name}".to_string(),
-        b"Multisig Smart Account".to_string(),
-        b"https://account.tech/{id}".to_string(),
-        b"image_url.jpg".to_string(),
-        b"thumbnail_url.jpg".to_string(),
-        b"https://account.tech".to_string(),
-        b"Good Move".to_string(),
-    ];
+//     let fields = vector[
+//         b"name".to_string(),
+//         b"description".to_string(),
+//         b"link".to_string(),
+//         b"image_url".to_string(),
+//         b"thumbnail_url".to_string(),
+//         b"project_url".to_string(),
+//         b"creator".to_string(),
+//     ];
+//     let values = vector[
+//         b"Multisig: {name}".to_string(),
+//         b"Multisig Smart Account".to_string(),
+//         b"https://account.tech/{id}".to_string(),
+//         b"image_url.jpg".to_string(),
+//         b"thumbnail_url.jpg".to_string(),
+//         b"https://account.tech".to_string(),
+//         b"Good Move".to_string(),
+//     ];
 
-    let mut display = display::new_with_fields<Account<Multisig, Approvals>>(&publisher, fields, values, ctx);
-    display.update_version();
+//     let mut display = display::new_with_fields<Account<Multisig, Approvals>>(&publisher, fields, values, ctx);
+//     display.update_version();
 
-    transfer::public_transfer(display, ctx.sender());
-    transfer::public_transfer(publisher, ctx.sender());
-}
+//     transfer::public_transfer(display, ctx.sender());
+//     transfer::public_transfer(publisher, ctx.sender());
+// }
 
 /// Init and returns a new Account object
 /// Creator is added by default with weight and global threshold of 1
@@ -189,7 +188,7 @@ public fun approve_proposal(
     );
 
     let role = account.proposal(key).issuer().full_role();
-    let member = account.config().get_member(ctx.sender());
+    let member = account.config().member(ctx.sender());
     let has_role = member.has_role(role);
 
     let outcome_mut = account.proposal_mut(key, version::current()).outcome_mut();
@@ -210,14 +209,14 @@ public fun disapprove_proposal(
     );
     
     let role = account.proposal(key).issuer().full_role();
-    let member = account.config().get_member(ctx.sender());
+    let member = account.config().member(ctx.sender());
     let has_role = member.has_role(role);
 
     let outcome_mut = account.proposal_mut(key, version::current()).outcome_mut();
     outcome_mut.approved.remove(&ctx.sender()); // throws if already approved
-    outcome_mut.total_weight = outcome_mut.total_weight - member.weight;
+    outcome_mut.total_weight = if (outcome_mut.total_weight < member.weight) 0 else outcome_mut.total_weight - member.weight;
     if (has_role)
-        outcome_mut.role_weight = outcome_mut.role_weight - member.weight;
+        outcome_mut.role_weight = if (outcome_mut.role_weight < member.weight) 0 else outcome_mut.role_weight - member.weight;
 }
 
 /// Returns an executable if the number of signers is >= (global || role) threshold
@@ -240,6 +239,13 @@ public fun delete_proposal(
     ctx: &mut TxContext
 ): Expired<Approvals> {
     account.delete_proposal(key, version::current(), ctx)
+}
+
+/// Actions must have been removed and deleted before calling this function
+public fun delete_expired_outcome(
+    expired: Expired<Approvals>
+) {
+    let Approvals { .. } = expired.remove_expired_outcome();
 }
 
 // === [PROPOSAL] Public functions ===
@@ -318,7 +324,7 @@ public fun execute_config_multisig(
     executable.terminate(version::current(), ConfigMultisigProposal());
 }
 
-public fun delete_config_multisig_action(expired: &mut Expired<Approvals>) {
+public fun delete_expired_config_multisig(expired: &mut Expired<Approvals>) {
     let action = expired.remove_expired_action();
     let ConfigMultisigAction { .. } = action;
 }
@@ -344,12 +350,12 @@ public fun addresses(multisig: &Multisig): vector<address> {
     multisig.members.map_ref!(|member| member.addr)
 }
 
-public fun get_member(multisig: &Multisig, addr: address): Member {
+public fun member(multisig: &Multisig, addr: address): Member {
     let idx = multisig.get_member_idx(addr);
     multisig.members[idx]
 }
 
-public fun get_member_mut(multisig: &mut Multisig, addr: address): &mut Member {
+public fun member_mut(multisig: &mut Multisig, addr: address): &mut Member {
     let idx = multisig.get_member_idx(addr);
     &mut multisig.members[idx]
 }
@@ -368,7 +374,7 @@ public fun assert_is_member(multisig: &Multisig, ctx: &TxContext) {
     assert!(multisig.is_member(ctx.sender()), ECallerIsNotMember);
 }
 
-// // member functions
+// member functions
 public fun weight(member: &Member): u64 {
     member.weight
 }
@@ -385,8 +391,7 @@ public fun has_role(member: &Member, role: String): bool {
     member.roles.contains(&role)
 }
 
-// // roles functions
-
+// roles functions
 public fun get_global_threshold(multisig: &Multisig): u64 {
     multisig.global
 }
@@ -404,6 +409,19 @@ public fun get_role_idx(multisig: &Multisig, name: String): u64 {
 
 public fun role_exists(multisig: &Multisig, name: String): bool {
     multisig.roles.any!(|role| role.name == name)
+}
+
+// outcome functions
+public fun total_weight(outcome: &Approvals): u64 {
+    outcome.total_weight
+}
+
+public fun role_weight(outcome: &Approvals): u64 {
+    outcome.role_weight
+}
+
+public fun approved(outcome: &Approvals): vector<address> {
+    *outcome.approved.keys()
 }
 
 // === Private functions ===
@@ -460,32 +478,39 @@ fun validate(
 
 // === Test functions ===
 
-// #[test_only]
-// public fun remove(
-//     multisig: &mut Multisig,
-//     addr: address,
-// ) {
-//     let idx = multisig.get_member_idx(addr);
-//     multisig.members.remove(idx);
-// }
+#[test_only]
+public fun remove_member(
+    multisig: &mut Multisig,
+    addr: address,
+) {
+    let idx = multisig.get_member_idx(addr);
+    multisig.members.remove(idx);
+}
 
-// #[test_only]
-// public fun set_weight(
-//     member: &mut Member,
-//     weight: u64,
-// ) {
-//     member.weight = weight;
-// }
+#[test_only]
+public fun set_weight(
+    member: &mut Member,
+    weight: u64,
+) {
+    member.weight = weight;
+}
 
-// #[test_only]
-// public fun add_roles(
-//     member: &mut Member,
-//     roles: vector<String>,
-// ) {
-//     roles.CoreDep!(|role| {
-//         member.roles.insert(role);
-//     });
-// }
+#[test_only]
+public fun add_role_to_multisig(
+    multisig: &mut Multisig,
+    name: String,
+    threshold: u64,
+) {
+    multisig.roles.push_back(Role { name, threshold });
+}
+
+#[test_only]
+public fun add_role_to_member(
+    member: &mut Member,
+    role: String,
+) {
+    member.roles.insert(role);
+}
 
 // #[test_only]
 // public fun remove_roles(

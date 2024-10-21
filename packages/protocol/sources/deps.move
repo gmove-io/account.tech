@@ -166,17 +166,3 @@ public fun contains_name(deps: &Deps, name: String): bool {
 public fun contains_addr(deps: &Deps, addr: address): bool {
     deps.inner.any!(|dep| dep.addr == addr)
 }
-
-// === Test functions ===
-
-// #[test_only]
-// public fun update(deps: &mut Deps, package: address, version: u64) {
-//     let idx = deps.get_idx(package);
-//     deps.inner[idx].version = version;
-// }
-
-// #[test_only]
-// public fun remove(deps: &mut Deps, package: address) {
-//     let idx = deps.get_idx(package);
-//     deps.inner.remove(idx);
-// }

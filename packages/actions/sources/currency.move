@@ -195,7 +195,7 @@ public fun can_update_icon<CoinType>(lock: &CurrencyLock<CoinType>): bool {
 
 // === [PROPOSAL] Public functions ===
 
-// step 1: propose to mint an amount of a coin that will be transferred to the Account
+// step 1: propose to disable minting for the coin forever
 public fun propose_disable<Config, Outcome, CoinType>(
     auth: Auth,
     account: &mut Account<Config, Outcome>,
@@ -244,7 +244,7 @@ public fun propose_disable<Config, Outcome, CoinType>(
 // step 2: multiple members have to approve the proposal (account::approve_proposal)
 // step 3: execute the proposal and return the action (AccountConfig::module::execute_proposal)
 
-// step 4: mint the coins and send them to the account
+// step 4: disable minting for the coin forever
 public fun execute_disable<Config, Outcome, CoinType>(
     mut executable: Executable,
     account: &mut Account<Config, Outcome>,
