@@ -121,8 +121,8 @@ fun test_account_getters() {
         b"Degen".to_string(), 
         b"one".to_string(), 
         b"description".to_string(), 
-        0, 
-        0, 
+        0,
+        1, 
         scenario.ctx()
     );
     account.add_proposal(proposal, version::current(), DummyProposal());
@@ -147,8 +147,8 @@ fun test_proposal_execute_flow() {
         b"Degen".to_string(), 
         b"one".to_string(), 
         b"description".to_string(), 
-        0, 
-        0, 
+        0,
+        1, 
         scenario.ctx()
     );
     account.add_proposal(proposal, version::current(), DummyProposal());
@@ -168,7 +168,8 @@ fun test_proposal_execute_flow() {
 #[test]
 fun test_proposal_delete_flow() {
     let (mut scenario, extensions, mut account) = start();
-    let clock = clock::create_for_testing(scenario.ctx());
+    let mut clock = clock::create_for_testing(scenario.ctx());
+    clock.increment_for_testing(1);
 
     let auth = auth::new(&extensions, full_role(), account.addr(), version::current());
     let proposal = account.create_proposal(
@@ -179,15 +180,15 @@ fun test_proposal_delete_flow() {
         b"Degen".to_string(), 
         b"one".to_string(), 
         b"description".to_string(), 
-        0, 
-        0, 
+        0,
+        1, 
         scenario.ctx()
     );
     account.add_proposal(proposal, version::current(), DummyProposal());
     let expired = account.delete_proposal(
         b"one".to_string(), 
         version::current(), 
-        scenario.ctx()
+        &clock, 
     );
 
     destroy(expired);
@@ -243,8 +244,8 @@ fun test_account_getters_mut() {
         b"Degen".to_string(), 
         b"one".to_string(), 
         b"description".to_string(), 
-        0, 
-        0, 
+        0,
+        1, 
         scenario.ctx()
     );
     account.add_proposal(proposal, version::current(), DummyProposal());
@@ -267,8 +268,8 @@ fun test_error_cannot_create_proposal_with_wrong_account() {
         b"Degen".to_string(), 
         b"one".to_string(), 
         b"description".to_string(), 
-        0, 
-        0, 
+        0,
+        1, 
         scenario.ctx()
     );
 
@@ -289,8 +290,8 @@ fun test_error_cannot_create_proposal_from_not_dependent_package() {
         b"Degen".to_string(), 
         b"one".to_string(), 
         b"description".to_string(), 
-        0, 
-        0, 
+        0,
+        1, 
         scenario.ctx()
     );
 
@@ -311,8 +312,8 @@ fun test_error_cannot_add_proposal_from_not_dependent_package() {
         b"Degen".to_string(), 
         b"one".to_string(), 
         b"description".to_string(), 
-        0, 
-        0, 
+        0,
+        1, 
         scenario.ctx()
     );
     account.add_proposal(proposal, wrong_version(), DummyProposal());
@@ -333,8 +334,8 @@ fun test_error_cannot_add_proposal_with_wrong_witness() {
         b"Degen".to_string(), 
         b"one".to_string(), 
         b"description".to_string(), 
-        0, 
-        0, 
+        0,
+        1, 
         scenario.ctx()
     );
     account.add_proposal(proposal, version::current(), WrongWitness());
@@ -356,8 +357,8 @@ fun test_error_cannot_execute_proposal_from_not_core_dep() {
         b"Degen".to_string(), 
         b"one".to_string(), 
         b"description".to_string(), 
-        0, 
-        0, 
+        0,
+        1, 
         scenario.ctx()
     );
     account.add_proposal(proposal, version::current(), DummyProposal());
@@ -372,6 +373,8 @@ fun test_error_cannot_execute_proposal_from_not_core_dep() {
 #[test, expected_failure(abort_code = deps::EDepNotFound)]
 fun test_error_cannot_delete_proposal_from_not_core_dep() {
     let (mut scenario, extensions, mut account) = start();
+    let mut clock = clock::create_for_testing(scenario.ctx());
+    clock.increment_for_testing(1);
 
     let auth = auth::new(&extensions, full_role(), account.addr(), version::current());
     let proposal = account.create_proposal(
@@ -382,14 +385,15 @@ fun test_error_cannot_delete_proposal_from_not_core_dep() {
         b"Degen".to_string(), 
         b"one".to_string(), 
         b"description".to_string(), 
-        0, 
-        0, 
+        0,
+        1, 
         scenario.ctx()
     );
     account.add_proposal(proposal, version::current(), DummyProposal());
-    let expired = account.delete_proposal(b"one".to_string(), wrong_version(), scenario.ctx());
+    let expired = account.delete_proposal(b"one".to_string(), wrong_version(), &clock);
 
     destroy(expired);
+    destroy(clock);
     end(scenario, extensions, account);
 }
 
@@ -500,8 +504,8 @@ fun test_error_cannot_access_proposal_mut_from_not_core_dep() {
         b"Degen".to_string(), 
         b"one".to_string(), 
         b"description".to_string(), 
-        0, 
-        0, 
+        0,
+        1, 
         scenario.ctx()
     );
     account.add_proposal(proposal, version::current(), DummyProposal());

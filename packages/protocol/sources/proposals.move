@@ -19,13 +19,17 @@ use account_protocol::{
 #[error]
 const ECantBeExecutedYet: vector<u8> = b"Proposal hasn't reached execution time";
 #[error]
-const EHasntExpired: vector<u8> = b"Proposal hasn't reached expiration epoch";
+const EHasntExpired: vector<u8> = b"Proposal hasn't reached expiration time";
+#[error]
+const EHasExpired: vector<u8> = b"Proposal has already expired";
 #[error]
 const EProposalNotFound: vector<u8> = b"Proposal not found for key";
 #[error]
 const EProposalKeyAlreadyExists: vector<u8> = b"Proposal key already exists";
 #[error]
 const EActionNotFound: vector<u8> = b"Action not found for type";
+#[error]
+const EExpirationBeforeExecution: vector<u8> = b"Expiration time must be greater than execution time";
 
 // === Structs ===
 
@@ -46,8 +50,8 @@ public struct Proposal<Outcome> has store {
     // proposer can add a timestamp_ms before which the proposal can't be executed
     // can be used to schedule actions via a backend
     execution_time: u64,
-    // the proposal can be deleted from this epoch
-    expiration_epoch: u64,
+    // the proposal can be deleted from this timestamp
+    expiration_time: u64,
     // heterogenous array of actions to be executed from last to first
     actions: Bag,
     // Generic struct storing vote related data, depends on the config
@@ -88,12 +92,12 @@ public fun description<Outcome>(proposal: &Proposal<Outcome>): String {
     proposal.description
 }
 
-public fun expiration_epoch<Outcome>(proposal: &Proposal<Outcome>): u64 {
-    proposal.expiration_epoch
-}
-
 public fun execution_time<Outcome>(proposal: &Proposal<Outcome>): u64 {
     proposal.execution_time
+}
+
+public fun expiration_time<Outcome>(proposal: &Proposal<Outcome>): u64 {
+    proposal.expiration_time
 }
 
 public fun actions_length<Outcome>(proposal: &Proposal<Outcome>): u64 {
@@ -138,16 +142,18 @@ public(package) fun new_proposal<Outcome>(
     key: String,
     description: String,
     execution_time: u64, // timestamp in ms
-    expiration_epoch: u64,
+    expiration_time: u64,
     outcome: Outcome,
     ctx: &mut TxContext
 ): Proposal<Outcome> {
+    assert!(execution_time < expiration_time, EExpirationBeforeExecution);
+
     Proposal<Outcome> { 
         issuer,
         key,
         description,
         execution_time,
-        expiration_epoch,
+        expiration_time,
         actions: bag::new(ctx),
         outcome
     }
@@ -175,8 +181,9 @@ public(package) fun remove<Outcome>(
     clock: &Clock,
 ): (Issuer, Bag, Outcome) {
     let idx = proposals.get_idx(key);
-    let Proposal { execution_time, issuer, actions, outcome, .. } = proposals.inner.remove(idx);
+    let Proposal { execution_time, expiration_time, issuer, actions, outcome, .. } = proposals.inner.remove(idx);
     assert!(clock.timestamp_ms() >= execution_time, ECantBeExecutedYet);
+    assert!(clock.timestamp_ms() < expiration_time, EHasExpired);
 
     (issuer, actions, outcome)
 }
@@ -184,11 +191,11 @@ public(package) fun remove<Outcome>(
 public(package) fun delete<Outcome>(
     proposals: &mut Proposals<Outcome>,
     key: String,
-    ctx: &TxContext
+    clock: &Clock
 ): Expired<Outcome> {
     let idx = proposals.get_idx(key);
-    let Proposal<Outcome> { expiration_epoch, actions, outcome, .. } = proposals.inner.remove(idx);
-    assert!(expiration_epoch <= ctx.epoch(), EHasntExpired);
+    let Proposal<Outcome> { expiration_time, actions, outcome, .. } = proposals.inner.remove(idx);
+    assert!(clock.timestamp_ms() >= expiration_time, EHasntExpired);
 
     Expired { actions, outcome }
 }

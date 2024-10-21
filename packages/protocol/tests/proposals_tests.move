@@ -32,10 +32,10 @@ fun test_proposals_getters() {
 
     let mut proposals = proposals::empty<bool>();
     let issuer = issuer::construct(@0x0, version::current(), DummyProposal(), b"".to_string());
-    let proposal1 = proposals::new_proposal(issuer, b"one".to_string(), b"".to_string(), 0, 0, true, scenario.ctx());
+    let proposal1 = proposals::new_proposal(issuer, b"one".to_string(), b"".to_string(), 0, 1, true, scenario.ctx());
     proposals.add(proposal1);
     let issuer = issuer::construct(@0x0, version::current(), DummyProposal(), b"".to_string());
-    let proposal2 = proposals::new_proposal(issuer, b"two".to_string(), b"".to_string(), 0, 0, true, scenario.ctx());
+    let proposal2 = proposals::new_proposal(issuer, b"two".to_string(), b"".to_string(), 0, 1, true, scenario.ctx());
     proposals.add(proposal2);
     // check proposals getters
     assert!(proposals.length() == 2);
@@ -50,8 +50,8 @@ fun test_proposals_getters() {
     let proposal1 = proposals.get(b"one".to_string());
     assert!(proposal1.issuer().account_addr() == @0x0);
     assert!(proposal1.description() == b"".to_string());
-    assert!(proposal1.expiration_epoch() == 0);
     assert!(proposal1.execution_time() == 0);
+    assert!(proposal1.expiration_time() == 1);
     assert!(proposal1.actions_length() == 0);
     assert!(proposal1.outcome() == true);
 
@@ -64,7 +64,7 @@ fun test_actions() {
     let mut scenario = ts::begin(OWNER);
 
     let issuer = issuer::construct(@0x0, version::current(), DummyProposal(), b"".to_string());
-    let mut proposal = proposals::new_proposal(issuer, b"one".to_string(), b"".to_string(), 0, 0, true, scenario.ctx());
+    let mut proposal = proposals::new_proposal(issuer, b"one".to_string(), b"".to_string(), 0, 1, true, scenario.ctx());
     proposal.add_action(DummyAction {}, DummyProposal());
     assert!(proposal.actions_length() == 1);
 
@@ -79,7 +79,7 @@ fun test_remove_proposal() {
 
     let mut proposals = proposals::empty<bool>();
     let issuer = issuer::construct(@0x0, version::current(), DummyProposal(), b"".to_string());
-    let proposal = proposals::new_proposal(issuer, b"one".to_string(), b"".to_string(), 0, 0, true, scenario.ctx());
+    let proposal = proposals::new_proposal(issuer, b"one".to_string(), b"".to_string(), 0, 1, true, scenario.ctx());
     proposals.add(proposal);
     // remove proposal
     let (issuer, actions, outcome) = proposals.remove(b"one".to_string(), &clock);
@@ -95,20 +95,34 @@ fun test_remove_proposal() {
 #[test]
 fun test_delete_proposal() {
     let mut scenario = ts::begin(OWNER);
+    let mut clock = clock::create_for_testing(scenario.ctx());
+    clock.increment_for_testing(1);
 
     let mut proposals = proposals::empty<bool>();
     let issuer = issuer::construct(@0x0, version::current(), DummyProposal(), b"".to_string());
-    let mut proposal = proposals::new_proposal(issuer, b"one".to_string(), b"".to_string(), 0, 0, true, scenario.ctx());
+    let mut proposal = proposals::new_proposal(issuer, b"one".to_string(), b"".to_string(), 0, 1, true, scenario.ctx());
     proposal.add_action(DummyAction {}, DummyProposal());
     proposals.add(proposal);
     // remove proposal
-    let mut expired = proposals.delete(b"one".to_string(), scenario.ctx());
+    let mut expired = proposals.delete(b"one".to_string(), &clock);
     let action: DummyAction = expired.remove_expired_action();
     let outcome = expired.remove_expired_outcome();
 
     destroy(action);
     destroy(outcome);
     destroy(proposals);
+    destroy(clock);
+    scenario.end();
+}
+
+#[test, expected_failure(abort_code = proposals::EExpirationBeforeExecution)]
+fun test_error_wrong_execution_expiration_time() {
+    let mut scenario = ts::begin(OWNER);
+
+    let issuer = issuer::construct(@0x0, version::current(), DummyProposal(), b"".to_string());
+    let proposal = proposals::new_proposal(issuer, b"one".to_string(), b"".to_string(), 0, 0, true, scenario.ctx());
+
+    destroy(proposal);
     scenario.end();
 }
 
@@ -118,10 +132,10 @@ fun test_error_key_already_exists() {
 
     let mut proposals = proposals::empty<bool>();
     let issuer = issuer::construct(@0x0, version::current(), DummyProposal(), b"".to_string());
-    let proposal1 = proposals::new_proposal(issuer, b"one".to_string(), b"".to_string(), 0, 0, true, scenario.ctx());
+    let proposal1 = proposals::new_proposal(issuer, b"one".to_string(), b"".to_string(), 0, 1, true, scenario.ctx());
     proposals.add(proposal1);
     let issuer = issuer::construct(@0x0, version::current(), DummyProposal(), b"".to_string());
-    let proposal2 = proposals::new_proposal(issuer, b"one".to_string(), b"".to_string(), 0, 0, true, scenario.ctx());
+    let proposal2 = proposals::new_proposal(issuer, b"one".to_string(), b"".to_string(), 0, 1, true, scenario.ctx());
     proposals.add(proposal2);
 
     destroy(proposals);
@@ -157,7 +171,28 @@ fun test_error_cant_be_executed_yet() {
 
     let mut proposals = proposals::empty<bool>();
     let issuer = issuer::construct(@0x0, version::current(), DummyProposal(), b"".to_string());
-    let proposal = proposals::new_proposal(issuer, b"one".to_string(), b"".to_string(), 1, 0, true, scenario.ctx());
+    let proposal = proposals::new_proposal(issuer, b"one".to_string(), b"".to_string(), 1, 2, true, scenario.ctx());
+    proposals.add(proposal);
+    // remove proposal
+    let (issuer, actions, outcome) = proposals.remove(b"one".to_string(), &clock);
+
+    destroy(issuer);
+    destroy(actions);
+    destroy(outcome);
+    destroy(proposals);
+    destroy(clock);
+    scenario.end();
+}
+
+#[test, expected_failure(abort_code = proposals::EHasExpired)]
+fun test_error_has_already_expired() {
+    let mut scenario = ts::begin(OWNER);
+    let mut clock = clock::create_for_testing(scenario.ctx());
+    clock.increment_for_testing(1);
+
+    let mut proposals = proposals::empty<bool>();
+    let issuer = issuer::construct(@0x0, version::current(), DummyProposal(), b"".to_string());
+    let proposal = proposals::new_proposal(issuer, b"one".to_string(), b"".to_string(), 0, 1, true, scenario.ctx());
     proposals.add(proposal);
     // remove proposal
     let (issuer, actions, outcome) = proposals.remove(b"one".to_string(), &clock);
@@ -173,6 +208,7 @@ fun test_error_cant_be_executed_yet() {
 #[test, expected_failure(abort_code = proposals::EHasntExpired)]
 fun test_error_cant_delete_proposal_not_expired() {
     let mut scenario = ts::begin(OWNER);
+    let clock = clock::create_for_testing(scenario.ctx()); 
 
     let mut proposals = proposals::empty<bool>();
     let issuer = issuer::construct(@0x0, version::current(), DummyProposal(), b"".to_string());
@@ -180,13 +216,14 @@ fun test_error_cant_delete_proposal_not_expired() {
     proposal.add_action(DummyAction {}, DummyProposal());
     proposals.add(proposal);
     // remove proposal
-    let mut expired = proposals.delete(b"one".to_string(), scenario.ctx());
+    let mut expired = proposals.delete(b"one".to_string(), &clock);
     let action: DummyAction = expired.remove_expired_action();
     let outcome = expired.remove_expired_outcome();
 
     destroy(action);
     destroy(outcome);
     destroy(proposals);
+    destroy(clock);
     scenario.end();
 }
 

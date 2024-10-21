@@ -160,13 +160,11 @@ public fun delete_proposal<Config: drop, Outcome>(
     account: &mut Account<Config, Outcome>, 
     key: String, 
     version: TypeName,
-    ctx: &mut TxContext
+    clock: &Clock,
 ): Expired<Outcome> {
-    let expired = account.proposals.delete(key, ctx);
-
     account.deps().assert_is_core_dep(version);
 
-    expired
+    account.proposals.delete(key, clock)
 }
 
 // === View functions ===
