@@ -250,7 +250,7 @@ fun test_account_getters_mut() {
     );
     account.add_proposal(proposal, version::current(), DummyProposal());
     assert!(account.proposals_mut(version::current()).length() == 1);
-    assert!(account.proposal_mut(b"one".to_string(), version::current()).actions_length() == 0);
+    assert!(account.proposal_mut(0, version::current()).actions_length() == 0);
 
     end(scenario, extensions, account);
 }
@@ -509,7 +509,7 @@ fun test_error_cannot_access_proposal_mut_from_not_core_dep() {
         scenario.ctx()
     );
     account.add_proposal(proposal, version::current(), DummyProposal());
-    assert!(account.proposal_mut(b"one".to_string(), wrong_version()).actions_length() == 0);
+    assert!(account.proposal_mut(0, wrong_version()).actions_length() == 0);
 
     end(scenario, extensions, account);
 }

@@ -296,11 +296,11 @@ public fun config_mut<Config, Outcome>(
 /// Only called in AccountConfig
 public fun proposal_mut<Config, Outcome>(
     account: &mut Account<Config, Outcome>, 
-    key: String,
+    idx: u64,
     version: TypeName,
 ): &mut Proposal<Outcome> {
     account.deps.assert_is_core_dep(version);
-    account.proposals.get_mut(key)
+    account.proposals.get_mut(idx)
 }
 
 // === Test functions ===

@@ -43,7 +43,9 @@ fun test_proposals_getters() {
     assert!(proposals.contains(b"two".to_string()));
     assert!(proposals.get_idx(b"one".to_string()) == 0);
     assert!(proposals.get_idx(b"two".to_string()) == 1);
-    let proposal_mut1 = proposals.get_mut(b"one".to_string());
+    assert!(proposals.all_idx(b"one".to_string()) == vector[0]);
+    assert!(proposals.all_idx(b"two".to_string()) == vector[1]);
+    let proposal_mut1 = proposals.get_mut(0);
     let outcome = proposal_mut1.outcome_mut();
     assert!(outcome == true);
     // check proposal getters
@@ -126,22 +128,6 @@ fun test_error_wrong_execution_expiration_time() {
     scenario.end();
 }
 
-#[test, expected_failure(abort_code = proposals::EProposalKeyAlreadyExists)]
-fun test_error_key_already_exists() {
-    let mut scenario = ts::begin(OWNER);
-
-    let mut proposals = proposals::empty<bool>();
-    let issuer = issuer::construct(@0x0, version::current(), DummyProposal(), b"".to_string());
-    let proposal1 = proposals::new_proposal(issuer, b"one".to_string(), b"".to_string(), 0, 1, true, scenario.ctx());
-    proposals.add(proposal1);
-    let issuer = issuer::construct(@0x0, version::current(), DummyProposal(), b"".to_string());
-    let proposal2 = proposals::new_proposal(issuer, b"one".to_string(), b"".to_string(), 0, 1, true, scenario.ctx());
-    proposals.add(proposal2);
-
-    destroy(proposals);
-    scenario.end();
-}
-
 #[test, expected_failure(abort_code = proposals::EProposalNotFound)]
 fun test_error_get_proposal() {
     let scenario = ts::begin(OWNER);
@@ -158,7 +144,7 @@ fun test_error_get_mut_proposal() {
     let scenario = ts::begin(OWNER);
 
     let mut proposals = proposals::empty<bool>();
-    let _ = proposals.get_mut(b"one".to_string());
+    let _ = proposals.get_mut(0);
 
     destroy(proposals);
     scenario.end();

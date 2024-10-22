@@ -25,8 +25,6 @@ const EHasExpired: vector<u8> = b"Proposal has already expired";
 #[error]
 const EProposalNotFound: vector<u8> = b"Proposal not found for key";
 #[error]
-const EProposalKeyAlreadyExists: vector<u8> = b"Proposal key already exists";
-#[error]
 const EActionNotFound: vector<u8> = b"Action not found for type";
 #[error]
 const EExpirationBeforeExecution: vector<u8> = b"Expiration time must be greater than execution time";
@@ -76,6 +74,16 @@ public fun contains<Outcome>(proposals: &Proposals<Outcome>, key: String): bool 
 
 public fun get_idx<Outcome>(proposals: &Proposals<Outcome>, key: String): u64 {
     proposals.inner.find_index!(|proposal| proposal.key == key).destroy_some()
+}
+
+public fun all_idx<Outcome>(proposals: &Proposals<Outcome>, key: String): vector<u64> {
+    let (mut i, mut idx) = (0, vector[]);
+    while (i < proposals.inner.length()) {
+        if (proposals.inner[i].key == key) idx.push_back(i);
+        i = i + 1;
+    };
+
+    idx
 }
 
 public fun get<Outcome>(proposals: &Proposals<Outcome>, key: String): &Proposal<Outcome> {
@@ -163,13 +171,14 @@ public(package) fun add<Outcome>(
     proposals: &mut Proposals<Outcome>,
     proposal: Proposal<Outcome>,
 ) {
-    assert!(!proposals.contains(proposal.key), EProposalKeyAlreadyExists);
     proposals.inner.push_back(proposal);
 }
 
-public(package) fun get_mut<Outcome>(proposals: &mut Proposals<Outcome>, key: String): &mut Proposal<Outcome> {
-    assert!(proposals.contains(key), EProposalNotFound);
-    let idx = proposals.get_idx(key);
+public(package) fun get_mut<Outcome>(
+    proposals: &mut Proposals<Outcome>, 
+    idx: u64
+): &mut Proposal<Outcome> {
+    assert!(idx < proposals.inner.length(), EProposalNotFound);
     &mut proposals.inner[idx]
 }
 

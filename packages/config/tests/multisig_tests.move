@@ -75,8 +75,30 @@ fun create_and_add_dummy_proposal(
         b"Degen".to_string(), 
         b"dummy".to_string(), 
         b"".to_string(), 
-        0, 
-        0, 
+        0,
+        1, 
+        scenario.ctx()
+    );
+    account.add_proposal(proposal, version::current(), DummyProposal());
+}
+
+fun create_and_add_other_proposal(
+    scenario: &mut Scenario,
+    account: &mut Account<Multisig, Approvals>, 
+    extensions: &Extensions, 
+) {
+    let auth = multisig::authenticate(extensions, account, full_role(), scenario.ctx());
+    let outcome = multisig::new_outcome(account, scenario.ctx());
+    let proposal = account.create_proposal(
+        auth, 
+        outcome, 
+        version::current(), 
+        DummyProposal(), 
+        b"Degen".to_string(), 
+        b"other".to_string(), 
+        b"".to_string(), 
+        0,
+        1, 
         scenario.ctx()
     );
     account.add_proposal(proposal, version::current(), DummyProposal());
@@ -231,6 +253,44 @@ fun test_proposal_disapprove_with_higher_weight() {
 }
 
 #[test]
+fun test_proposal_approve_multiple() {
+    let (mut scenario, extensions, mut account, clock) = start();
+    // create proposals
+    create_and_add_dummy_proposal(&mut scenario, &mut account, &extensions);
+    create_and_add_dummy_proposal(&mut scenario, &mut account, &extensions);
+    create_and_add_other_proposal(&mut scenario, &mut account, &extensions);
+    create_and_add_dummy_proposal(&mut scenario, &mut account, &extensions);
+    create_and_add_other_proposal(&mut scenario, &mut account, &extensions);
+    // approve all dummy proposals
+    multisig::approve_proposal(&mut account, b"dummy".to_string(), scenario.ctx());
+    // check dummy are approved
+    let idx = account.proposals().all_idx(b"dummy".to_string());
+    idx.do!(|i| {
+        let outcome = account.proposal_mut(i, version::current()).outcome();
+        assert!(outcome.total_weight() == 1);
+        assert!(outcome.approved() == vector[OWNER]);
+    });
+    // check other aren't approved
+    let idx = account.proposals().all_idx(b"other".to_string());
+    idx.do!(|i| {
+        let outcome = account.proposal_mut(i, version::current()).outcome();
+        assert!(outcome.total_weight() == 0);
+        assert!(outcome.approved() == vector[]);
+    });
+    // disapprove all dummy proposals
+    multisig::disapprove_proposal(&mut account, b"dummy".to_string(), scenario.ctx());
+    // check dummy are approved
+    let idx = account.proposals().all_idx(b"dummy".to_string());
+    idx.do!(|i| {
+        let outcome = account.proposal_mut(i, version::current()).outcome();
+        assert!(outcome.total_weight() == 0);
+        assert!(outcome.approved() == vector[]);
+    });
+
+    end(scenario, extensions, account, clock);
+}
+
+#[test]
 fun test_proposal_execution() {
     let (mut scenario, extensions, mut account, clock) = start();
 
@@ -248,12 +308,13 @@ fun test_proposal_execution() {
 
 #[test]
 fun test_proposal_deletion() {
-    let (mut scenario, extensions, mut account, clock) = start();
+    let (mut scenario, extensions, mut account, mut clock) = start();
+    clock.increment_for_testing(1);
 
     // create proposal
     create_and_add_dummy_proposal(&mut scenario, &mut account, &extensions);
     // execute proposal
-    let expired = multisig::delete_proposal(&mut account, b"dummy".to_string(), scenario.ctx());
+    let expired = multisig::delete_proposal(&mut account, b"dummy".to_string(), &clock);
     let outcome = expired.remove_expired_outcome();
 
     destroy(outcome);
@@ -269,8 +330,8 @@ fun test_config_multisig() {
         &mut account, 
         b"config".to_string(), 
         b"description".to_string(), 
-        0, 
-        0, 
+        0,
+        1, 
         vector[OWNER, @0xBABE], 
         vector[2, 1], 
         vector[vector[full_role()], vector[]], 
@@ -303,15 +364,16 @@ fun test_config_multisig() {
 
 #[test]
 fun test_config_multisig_deletion() {
-    let (mut scenario, extensions, mut account, clock) = start();
+    let (mut scenario, extensions, mut account, mut clock) = start();
+    clock.increment_for_testing(1);
 
     multisig::propose_config_multisig(
         &extensions, 
         &mut account, 
         b"config".to_string(), 
         b"description".to_string(), 
-        0, 
-        0, 
+        0,
+        1, 
         vector[OWNER, @0xBABE], 
         vector[2, 1], 
         vector[vector[full_role()], vector[]], 
@@ -320,7 +382,7 @@ fun test_config_multisig_deletion() {
         vector[1], 
         scenario.ctx()
     );
-    let mut expired = multisig::delete_proposal(&mut account, b"config".to_string(), scenario.ctx());
+    let mut expired = multisig::delete_proposal(&mut account, b"config".to_string(), &clock);
     multisig::delete_expired_config_multisig(&mut expired);
     multisig::delete_expired_outcome(expired);
 
@@ -428,8 +490,8 @@ fun test_error_verify_rules_addresses_weights_not_same_length() {
         &mut account, 
         b"config".to_string(), 
         b"".to_string(), 
-        0, 
-        0, 
+        0,
+        1, 
         vector[OWNER, @0xBABE], 
         vector[2], 
         vector[vector[full_role()], vector[]], 
@@ -451,8 +513,8 @@ fun test_error_verify_rules_addresses_roles_not_same_length() {
         &mut account, 
         b"config".to_string(), 
         b"".to_string(), 
-        0, 
-        0, 
+        0,
+        1, 
         vector[OWNER, @0xBABE], 
         vector[2, 1], 
         vector[vector[full_role()]], 
@@ -474,8 +536,8 @@ fun test_error_verify_rules_roles_not_same_length() {
         &mut account, 
         b"config".to_string(), 
         b"".to_string(), 
-        0, 
-        0, 
+        0,
+        1, 
         vector[], 
         vector[], 
         vector[], 
@@ -497,8 +559,8 @@ fun test_error_verify_rules_global_threshold_too_high() {
         &mut account, 
         b"config".to_string(), 
         b"".to_string(), 
-        0, 
-        0, 
+        0,
+        1, 
         vector[], 
         vector[], 
         vector[], 
@@ -520,8 +582,8 @@ fun test_error_verify_rules_global_threshold_null() {
         &mut account, 
         b"config".to_string(), 
         b"".to_string(), 
-        0, 
-        0, 
+        0,
+        1, 
         vector[], 
         vector[], 
         vector[], 
@@ -543,8 +605,8 @@ fun test_error_verify_rules_role_not_added_but_given() {
         &mut account, 
         b"config".to_string(), 
         b"".to_string(), 
-        0, 
-        0, 
+        0,
+        1, 
         vector[OWNER], 
         vector[1], 
         vector[vector[full_role()]], 
@@ -566,8 +628,8 @@ fun test_error_verify_rules_role_threshold_too_high() {
         &mut account, 
         b"config".to_string(), 
         b"".to_string(), 
-        0, 
-        0, 
+        0,
+        1, 
         vector[OWNER], 
         vector[1], 
         vector[vector[full_role()]], 
