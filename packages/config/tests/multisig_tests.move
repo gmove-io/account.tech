@@ -12,10 +12,10 @@ use sui::{
 use account_extensions::extensions::{Self, Extensions, AdminCap};
 use account_protocol::{
     account::Account,
-    version,
 };
 use account_config::{
     multisig::{Self, Multisig, Approvals, Invite},
+    version,
     user,
 };
 

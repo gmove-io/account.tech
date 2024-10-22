@@ -20,6 +20,6 @@ public fun get(): u64 {
     VERSION
 }
 
-public fun current(): TypeName {
+public(package) fun current(): TypeName {
     type_name::get<V1>()
 }
