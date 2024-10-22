@@ -17,7 +17,10 @@ use account_protocol::{
     issuer::Issuer,
     auth::{Self, Auth},
 };
-use account_config::version;
+use account_config::{
+    version,
+    user::User,
+};
 
 // === Errors ===
 
@@ -43,13 +46,11 @@ const EMembersNotSameLength: vector<u8> = b"Members and roles vectors are not th
 const ERolesNotSameLength: vector<u8> = b"The role vectors are not the same length";
 #[error]
 const EAlreadyApproved: vector<u8> = b"Proposal is already approved by the caller";
+#[error]
+const ENotMember: vector<u8> = b"User is not a member of the account";
 
 // === Structs ===
 
-public struct MULTISIG has drop {}
-
-/// Witness authorizing access to the inner Account
-public struct CoreDep() has drop;
 /// [PROPOSAL] modifies the members and thresholds of the account
 public struct ConfigMultisigProposal() has drop;
 
@@ -73,8 +74,6 @@ public struct Member has copy, drop, store {
     addr: address,
     // voting power of the member
     weight: u64,
-    // ID of the member's User object, none if he didn't join yet
-    user_id: Option<ID>,
     // roles that have been attributed
     roles: VecSet<String>,
 }
@@ -95,6 +94,13 @@ public struct Approvals has store {
     role_weight: u64, 
     // who has approved the proposal
     approved: VecSet<address>,
+}
+
+/// Invite object issued by an Account to a user
+public struct Invite has key { 
+    id: UID, 
+    // Account that issued the invite
+    account_addr: address,
 }
 
 // === Public functions ===
@@ -134,14 +140,12 @@ public struct Approvals has store {
 public fun new_account(
     extensions: &Extensions,
     name: String,
-    account_id: ID,
     ctx: &mut TxContext,
 ): Account<Multisig, Approvals> {
     let config = Multisig {
         members: vector[Member { 
             addr: ctx.sender(), 
             weight: 1, 
-            user_id: option::some(account_id), 
             roles: vec_set::empty() 
         }],
         global: 1,
@@ -256,6 +260,42 @@ public fun delete_expired_outcome(
     let Approvals { .. } = expired.remove_expired_outcome();
 }
 
+/// Inserts account_id in User, aborts if already joined
+public fun join(user: &mut User, account: &mut Account<Multisig, Approvals>) {
+    user.add_account(account.addr(), b"multisig".to_string());
+}
+
+/// Removes account_id from User, aborts if not joined
+public fun leave(user: &mut User, account: &mut Account<Multisig, Approvals>) {
+    user.remove_account(account.addr(), b"multisig".to_string());
+}
+
+/// Invites can be sent by an Account member (upon Account creation for instance)
+public fun send_invite(account: &Account<Multisig, Approvals>, recipient: address, ctx: &mut TxContext) {
+    // user inviting must be member
+    account.config().assert_is_member(ctx);
+    // invited user must be member
+    assert!(account.config().is_member(recipient), ENotMember);
+
+    transfer::transfer(Invite { 
+        id: object::new(ctx), 
+        account_addr: account.addr() 
+    }, recipient);
+}
+
+/// Invited user can register the Account in his User account
+public fun accept_invite(user: &mut User, invite: Invite) {
+    let Invite { id, account_addr } = invite;
+    id.delete();
+    user.add_account(account_addr, b"multisig".to_string());
+}
+
+/// Deletes the invite object
+public fun refuse_invite(invite: Invite) {
+    let Invite { id, .. } = invite;
+    id.delete();
+}
+
 // === [PROPOSAL] Public functions ===
 
 /// No actions are defined as changing the config isn't supposed to be composable for security reasons
@@ -304,7 +344,6 @@ public fun propose_config_multisig(
         config.members.push_back(Member {
             addr,
             weight,
-            user_id: option::none(),
             roles: vec_set::from_keys(roles.remove(0)),
         });
     });
@@ -339,21 +378,6 @@ public fun delete_expired_config_multisig(expired: &mut Expired<Approvals>) {
 
 // === Accessors ===
 
-/// Registers the member's User ID, upon joining the Account
-public fun register_user_id(
-    member: &mut Member,
-    id: ID,
-) {
-    member.user_id.swap_or_fill(id);
-}
-
-/// Unregisters the member's User ID, upon leaving the Account
-public fun unregister_user_id(
-    member: &mut Member,
-): ID {
-    member.user_id.extract()
-}
-
 public fun addresses(multisig: &Multisig): vector<address> {
     multisig.members.map_ref!(|member| member.addr)
 }
@@ -385,10 +409,6 @@ public fun assert_is_member(multisig: &Multisig, ctx: &TxContext) {
 // member functions
 public fun weight(member: &Member): u64 {
     member.weight
-}
-
-public fun user_id(member: &Member): Option<ID> {
-    member.user_id
 }
 
 public fun roles(member: &Member): vector<String> {
@@ -487,6 +507,14 @@ fun validate(
 // === Test functions ===
 
 #[test_only]
+public fun add_member(
+    multisig: &mut Multisig,
+    addr: address,
+) {
+    multisig.members.push_back(Member { addr, weight: 1, roles: vec_set::empty() });
+}
+
+#[test_only]
 public fun remove_member(
     multisig: &mut Multisig,
     addr: address,
@@ -519,14 +547,3 @@ public fun add_role_to_member(
 ) {
     member.roles.insert(role);
 }
-
-// #[test_only]
-// public fun remove_roles(
-//     member: &mut Member,
-//     roles: vector<String>,
-// ) {
-//     roles.CoreDep!(|role| {
-//         member.roles.remove(&role);
-//     });
-// }
-

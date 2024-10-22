@@ -14,7 +14,10 @@ use account_protocol::{
     account::Account,
     version,
 };
-use account_config::multisig::{Self, Multisig, Approvals};
+use account_config::{
+    multisig::{Self, Multisig, Approvals, Invite},
+    user,
+};
 
 // === Constants ===
 
@@ -40,7 +43,7 @@ fun start(): (Scenario, Extensions, Account<Multisig, Approvals>, Clock) {
     extensions.add(&cap, b"AccountConfig".to_string(), @account_config, 1);
     extensions.add(&cap, b"AccountActions".to_string(), @0x2, 1);
     // Account generic types are dummy types (bool, bool)
-    let account = multisig::new_account(&extensions, b"Main".to_string(), @0x1D.to_id(), scenario.ctx());
+    let account = multisig::new_account(&extensions, b"Main".to_string(), scenario.ctx());
     let clock = clock::create_for_testing(scenario.ctx());
     // create world
     destroy(cap);
@@ -107,14 +110,50 @@ fun create_and_add_other_proposal(
 // === Tests ===
 
 #[test]
-fun test_register_user_id() {
-    let (scenario, extensions, mut account, clock) = start();
+fun test_join_and_leave() {
+    let (mut scenario, extensions, mut account, clock) = start();
+    let mut user = user::new(scenario.ctx());
 
-    let member_mut = account.config_mut(version::current()).member_mut(OWNER);
-    member_mut.register_user_id(@0x0.to_id());
-    let user_id = member_mut.unregister_user_id();
-    assert!(user_id == @0x0.to_id());
+    multisig::join(&mut user, &mut account);
+    assert!(user.account_ids() == vector[account.addr()]);
+    multisig::leave(&mut user, &mut account);
+    assert!(user.account_ids() == vector[]);
 
+    destroy(user);
+    end(scenario, extensions, account, clock);
+}
+
+#[test]
+fun test_invite_and_accept() {
+    let (mut scenario, extensions, mut account, clock) = start();
+
+    let user = user::new(scenario.ctx());
+    account.config_mut(version::current()).add_member(ALICE);
+    multisig::send_invite(&account, ALICE, scenario.ctx());
+
+    scenario.next_tx(ALICE);
+    let invite = scenario.take_from_sender<Invite>();
+    multisig::refuse_invite(invite);
+    assert!(user.account_ids() == vector[]);
+
+    destroy(user);
+    end(scenario, extensions, account, clock);
+}
+
+#[test]
+fun test_invite_and_refuse() {
+    let (mut scenario, extensions, mut account, clock) = start();
+
+    let mut user = user::new(scenario.ctx());
+    account.config_mut(version::current()).add_member(ALICE);
+    multisig::send_invite(&account, ALICE, scenario.ctx());
+
+    scenario.next_tx(ALICE);
+    let invite = scenario.take_from_sender<Invite>();
+    multisig::accept_invite(&mut user, invite);
+    assert!(user.account_ids() == vector[account.addr()]);
+
+    destroy(user);
     end(scenario, extensions, account, clock);
 }
 
@@ -139,7 +178,6 @@ fun test_member_getters() {
     account.config_mut(version::current()).member_mut(OWNER).add_role_to_member(full_role());
 
     assert!(account.config().member(OWNER).weight() == 1);
-    assert!(account.config().member(OWNER).user_id() == option::some(@0x1D.to_id()));
     assert!(account.config().member(OWNER).roles() == vector[full_role()]);
     assert!(account.config().member(OWNER).has_role(full_role()));
 
@@ -351,10 +389,8 @@ fun test_config_multisig() {
 
     assert!(account.config().addresses() == vector[OWNER, @0xBABE]);
     assert!(account.config().member(OWNER).weight() == 2);
-    assert!(account.config().member(OWNER).user_id() == option::none());
     assert!(account.config().member(OWNER).roles() == vector[full_role()]);
     assert!(account.config().member(@0xBABE).weight() == 1);
-    assert!(account.config().member(@0xBABE).user_id() == option::none());
     assert!(account.config().member(@0xBABE).roles() == vector[]);
     assert!(account.config().get_global_threshold() == 2);
     assert!(account.config().get_role_threshold(full_role()) == 1);
@@ -455,6 +491,17 @@ fun test_error_disapprove_not_member() {
     account.config_mut(version::current()).remove_member(OWNER);
     multisig::disapprove_proposal(&mut account, b"dummy".to_string(), scenario.ctx());
 
+    end(scenario, extensions, account, clock);
+}
+
+#[test, expected_failure(abort_code = multisig::ENotMember)]
+fun test_invite_not_member() {
+    let (mut scenario, extensions, account, clock) = start();
+
+    let user = user::new(scenario.ctx());
+    multisig::send_invite(&account, ALICE, scenario.ctx());
+
+    destroy(user);
     end(scenario, extensions, account, clock);
 }
 
