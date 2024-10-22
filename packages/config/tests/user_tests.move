@@ -1,89 +1,127 @@
-// #[test_only]
-// module account_protocol::user_tests;
+#[test_only]
+module account_config::user_tests;
 
-// use sui::test_utils::destroy;
-// use account_protocol::{
-//     account,
-//     members,
-//     account_test_utils::start_world,
-//     user::{Self, User, Invite}
-// };
+// === Imports ===
 
-// const OWNER: address = @0xBABE;
-// const ALICE: address = @0xA11CE;
+use sui::{
+    test_utils::destroy,
+    test_scenario::{Self as ts, Scenario},
+};
+use account_config::user::{Self, Registry, User};
 
-// #[test]
-// fun test_join_account() {
-//     let mut world = start_world();
+// === Constants ===
 
-//     world.scenario().next_tx(OWNER);
-//     let mut user = user::new(b"Sam".to_string(), b"Sam.png".to_string(), world.scenario().ctx());
-//     let mut account2 = world.new_account();
-//     assert!(user.username() == b"Sam".to_string());
-//     assert!(user.profile_picture() == b"Sam.png".to_string());
-//     assert!(user.account_ids() == vector[]);
+const OWNER: address = @0xCAFE;
+const ALICE: address = @0xA11CE;
 
-//     world.join_account(&mut user);
-//     user.join_account(&mut account2, world.scenario().ctx());
-//     assert!(user.account_ids() == vector[object::id(world.account()) ,object::id(&account2)]);
+// === Structs ===
 
-//     destroy(user);
-//     destroy(account2);
-//     world.end();
-// }
+public struct DummyProposal() has drop;
 
-// #[test]
-// fun test_leave_account() {
-//     let mut world = start_world();
+// === Helpers ===
 
-//     world.scenario().next_tx(ALICE);
-//     let mut user = user::new(b"Alice".to_string(), b"Alice.png".to_string(), world.scenario().ctx());
-//     world.account().members_mut_for_testing().add(ALICE, 1, option::none(), vector[]);
-    
-//     world.join_account(&mut user);
-//     assert!(user.account_ids() == vector[object::id(world.account())]);
+fun start(): (Scenario, Registry) {
+    let mut scenario = ts::begin(OWNER);
+    // publish package
+    user::init_for_testing(scenario.ctx());
+    // retrieve objects
+    scenario.next_tx(OWNER);
+    let registry = scenario.take_shared<Registry>();
 
-//     world.leave_account(&mut user);
-//     assert!(user.account_ids() == vector[]);
-    
-//     user.destroy();
-//     world.end();
-// }
+    (scenario, registry)
+}
 
-// #[test]
-// fun test_accept_invite() {
-//     let mut world = start_world();
+fun end(scenario: Scenario, registry: Registry) {
+    destroy(registry);
+    ts::end(scenario);
+}
 
-//     world.scenario().next_tx(ALICE);
-//     let mut user = user::new(b"Alice".to_string(), b"Alice.png".to_string(), world.scenario().ctx());
-//     world.account().members_mut_for_testing().add(ALICE, 1, option::none(), vector[]);
-//     assert!(user.account_ids() == vector[]);
-//     world.send_invite(ALICE);
+// === Tests ===
 
-//     world.scenario().next_tx(ALICE);
-//     let invite = world.scenario().take_from_address<Invite>(ALICE);
-//     assert!(invite.account_id() == object::id(world.account()));
-//     world.accept_invite(&mut user, invite);
-//     assert!(user.account_ids() == vector[object::id(world.account())]);
-    
-//     destroy(user);
-//     world.end();
-// }
+#[test]
+fun test_user_flow() {
+    let (mut scenario, mut registry) = start();
 
-// #[test]
-// fun test_refuse_invite() {
-//     let mut world = start_world();
+    let mut user = user::new(scenario.ctx());
+    assert!(registry.users().length() == 0);
+    assert!(!registry.users().contains(OWNER));
 
-//     world.scenario().next_tx(ALICE);
-//     let user = user::new(b"Alice".to_string(), b"Alice.png".to_string(), world.scenario().ctx());
-//     world.account().members_mut_for_testing().add(ALICE, 1, option::none(), vector[]);
-//     assert!(user.account_ids() == vector[]);
-//     world.send_invite(ALICE);
+    user.add_account(@0xACC1, b"multisig".to_string());
+    user.add_account(@0xACC2, b"multisig".to_string());
+    user.add_account(@0xACC3, b"dao".to_string());
+    assert!(user.all_ids() == vector[@0xACC3, @0xACC1, @0xACC2]);
+    assert!(user.ids_for_type(b"multisig".to_string()) == vector[@0xACC1, @0xACC2]);
+    assert!(user.ids_for_type(b"dao".to_string()) == vector[@0xACC3]);
 
-//     world.scenario().next_tx(ALICE);
-//     let invite = world.scenario().take_from_address<Invite>(ALICE);
-//     invite.refuse_invite();
-    
-//     destroy(user);
-//     world.end();
-// }
+    user.remove_account(@0xACC1, b"multisig".to_string());
+    user.remove_account(@0xACC2, b"multisig".to_string());
+    user.remove_account(@0xACC3, b"dao".to_string());
+    assert!(user.all_ids() == vector[]);
+
+    registry.transfer(user, OWNER, scenario.ctx());
+    assert!(registry.users().length() == 1);
+    assert!(registry.users().contains(OWNER));
+
+    scenario.next_tx(OWNER);
+    let user = scenario.take_from_sender<User>();
+    registry.destroy(user, scenario.ctx());
+    assert!(registry.users().length() == 0);
+    assert!(!registry.users().contains(OWNER));
+
+    end(scenario, registry);
+}
+
+#[test, expected_failure(abort_code = user::EAccountTypeDoesntExist)]
+fun test_error_remove_empty_account_type() {
+    let (mut scenario, registry) = start();
+
+    let mut user = user::new(scenario.ctx());
+    user.remove_account(@0xACC1, b"multisig".to_string());
+
+    destroy(user);
+    end(scenario, registry);
+}
+
+#[test, expected_failure(abort_code = user::EAccountNotFound)]
+fun test_error_remove_wrong_account() {
+    let (mut scenario, registry) = start();
+
+    let mut user = user::new(scenario.ctx());
+    user.add_account(@0xACC2, b"multisig".to_string());
+    user.remove_account(@0xACC1, b"multisig".to_string());
+
+    destroy(user);
+    end(scenario, registry);
+}
+
+#[test, expected_failure(abort_code = user::EAlreadyHasUser)]
+fun test_error_transfer_to_existing_user() {
+    let (mut scenario, mut registry) = start();
+
+    registry.transfer(user::new(scenario.ctx()), OWNER, scenario.ctx());
+    registry.transfer(user::new(scenario.ctx()), OWNER, scenario.ctx());
+
+    end(scenario, registry);
+}
+
+#[test, expected_failure(abort_code = user::EWrongUserId)]
+fun test_error_transfer_wrong_user_object() {
+    let (mut scenario, mut registry) = start();
+
+    registry.transfer(user::new(scenario.ctx()), OWNER, scenario.ctx());
+    // OWNER transfers wrong user object to ALICE
+    registry.transfer(user::new(scenario.ctx()), ALICE, scenario.ctx());
+
+    end(scenario, registry);
+}
+
+#[test, expected_failure(abort_code = user::ENotEmpty)]
+fun test_error_destroy_non_empty_user() {
+    let (mut scenario, mut registry) = start();
+
+    let mut user = user::new(scenario.ctx());
+    user.add_account(@0xACC, b"multisig".to_string());
+    registry.destroy(user, scenario.ctx());
+
+    end(scenario, registry);
+}

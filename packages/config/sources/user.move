@@ -18,11 +18,15 @@ use sui::{
 // === Errors ===
 
 #[error]
-const EMustLeaveAllAccounts: vector<u8> = b"User must leave all accounts before destroying their User object";
+const ENotEmpty: vector<u8> = b"User must leave all accounts before destroying their User object";
 #[error]
 const EAlreadyHasUser: vector<u8> = b"User already has a User object";
 #[error]
 const EAccountNotFound: vector<u8> = b"Account not found in User";
+#[error]
+const EAccountTypeDoesntExist: vector<u8> = b"Account type doesn't exist in User";
+#[error]
+const EWrongUserId: vector<u8> = b"The User ID for caller in Registry does not match the User object";
 
 // === Struct ===
 
@@ -68,7 +72,9 @@ public(package) fun add_account(user: &mut User, account_addr: address, account_
 }
 
 public(package) fun remove_account(user: &mut User, account_addr: address, account_type: String) {
+    assert!(user.accounts.contains(&account_type), EAccountTypeDoesntExist);
     let (exists, idx) = user.accounts[&account_type].index_of(&account_addr);
+    
     assert!(exists, EAccountNotFound);
     user.accounts.get_mut(&account_type).swap_remove(idx);
 
@@ -77,21 +83,38 @@ public(package) fun remove_account(user: &mut User, account_addr: address, accou
 }
 
 /// Can transfer the User object only if the other address has no User object yet
-public fun transfer(registry: &mut Registry, user: User, recipient: address) {
+public fun transfer(registry: &mut Registry, user: User, recipient: address, ctx: &mut TxContext) {
     assert!(!registry.users.contains(recipient), EAlreadyHasUser);
+    // if the sender is not in the registry, then the User has been just created
+    if (registry.users.contains(ctx.sender())) {
+        let id = registry.users.remove(ctx.sender());
+        assert!(id == object::id(&user), EWrongUserId); // should never happen
+    };
+
+    registry.users.add(recipient, object::id(&user));
     transfer::transfer(user, recipient);
 }
 
 /// Must leave all Accounts before, for consistency
-public fun destroy(user: User) {
+public fun destroy(registry: &mut Registry, user: User, ctx: &mut TxContext) {
     let User { id, accounts, .. } = user;
-    assert!(accounts.is_empty(), EMustLeaveAllAccounts);
+    assert!(accounts.is_empty(), ENotEmpty);
+
     id.delete();
+    registry.users.remove(ctx.sender());
 }
 
 // === View functions ===    
 
-public fun account_ids(user: &User): vector<address> {
+public fun users(registry: &Registry): &Table<address, ID> {
+    &registry.users
+}
+
+public fun ids_for_type(user: &User, account_type: String): vector<address> {
+    user.accounts[&account_type]
+}
+
+public fun all_ids(user: &User): vector<address> {
     let mut map = user.accounts;
     let mut ids = vector<address>[];
 

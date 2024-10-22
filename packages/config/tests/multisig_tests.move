@@ -115,9 +115,9 @@ fun test_join_and_leave() {
     let mut user = user::new(scenario.ctx());
 
     multisig::join(&mut user, &mut account);
-    assert!(user.account_ids() == vector[account.addr()]);
+    assert!(user.all_ids() == vector[account.addr()]);
     multisig::leave(&mut user, &mut account);
-    assert!(user.account_ids() == vector[]);
+    assert!(user.all_ids() == vector[]);
 
     destroy(user);
     end(scenario, extensions, account, clock);
@@ -134,7 +134,7 @@ fun test_invite_and_accept() {
     scenario.next_tx(ALICE);
     let invite = scenario.take_from_sender<Invite>();
     multisig::refuse_invite(invite);
-    assert!(user.account_ids() == vector[]);
+    assert!(user.all_ids() == vector[]);
 
     destroy(user);
     end(scenario, extensions, account, clock);
@@ -151,7 +151,7 @@ fun test_invite_and_refuse() {
     scenario.next_tx(ALICE);
     let invite = scenario.take_from_sender<Invite>();
     multisig::accept_invite(&mut user, invite);
-    assert!(user.account_ids() == vector[account.addr()]);
+    assert!(user.all_ids() == vector[account.addr()]);
 
     destroy(user);
     end(scenario, extensions, account, clock);
