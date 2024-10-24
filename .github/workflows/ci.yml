@@ -19,5 +19,5 @@ jobs:
       - name: install git
         run: apt-get install -y git
 
-      - name: run kraken tests
-        run: sui move test -p ./package
+      - name: run account.tech tests
+        run: sui move test -p ./packages/protocol --test && sui move test -p ./packages/config --test && sui move test -p ./packages/actions --test && sui move test -p ./packages/extensions --test
