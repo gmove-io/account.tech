@@ -24,6 +24,7 @@ use account_extensions::extensions::{Self, Extensions, AdminCap};
 // === Constants ===
 
 const OWNER: address = @0xCAFE;
+const ALICE: address = @0xA11CE;
 
 // === Structs ===
 
@@ -152,6 +153,40 @@ fun test_proposal_execute_flow() {
         scenario.ctx()
     );
     account.add_proposal(proposal, version::current(), DummyProposal());
+    let (executable, outcome) = account.execute_proposal(
+        b"one".to_string(), 
+        &clock, 
+        version::current(), 
+        scenario.ctx()
+    );
+
+    destroy(outcome);
+    destroy(executable);
+    destroy(clock);
+    end(scenario, extensions, account);
+}
+
+#[test]
+fun test_anyone_can_execute_proposal() {
+    let (mut scenario, extensions, mut account) = start();
+    let clock = clock::create_for_testing(scenario.ctx());
+
+    let auth = auth::new(&extensions, full_role(), account.addr(), version::current());
+    let proposal = account.create_proposal(
+        auth, 
+        true, 
+        version::current(), 
+        DummyProposal(), 
+        b"Degen".to_string(), 
+        b"one".to_string(), 
+        b"description".to_string(), 
+        0,
+        1, 
+        scenario.ctx()
+    );
+    account.add_proposal(proposal, version::current(), DummyProposal());
+
+    scenario.next_tx(ALICE);
     let (executable, outcome) = account.execute_proposal(
         b"one".to_string(), 
         &clock, 

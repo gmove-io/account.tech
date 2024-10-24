@@ -35,6 +35,9 @@ local = "../protocol"
 [dev-dependencies.AccountExtensions]
 local = "../extensions"
 
+[dev-dependencies.AccountConfig]
+local = "../config"
+
 [addresses]
 account_actions = "_"
 account_protocol = "_"
@@ -42,6 +45,7 @@ account_extensions = "_"
 kiosk = "_"
 
 [dev-addresses]
+account_config = "0x0"
 account_actions = "0x29dd152d8a8a427cb3eb343e2f58f68e9f07587597eb23816df3e2b04a72bdfd"
 account_protocol = "0xacfd4da2d93e228e252150fc3bd030c8c3ce86b6267706de94ad8f9f6b6eba0d"
 account_extensions = "0x2d1f315f2b4f5cb64901b054c7f315a03f0aea3f49f6e6c9b74cbd1d12f4b6c7"

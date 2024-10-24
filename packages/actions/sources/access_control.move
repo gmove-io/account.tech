@@ -31,6 +31,8 @@ use account_actions::version;
 #[error]
 const ENoLock: vector<u8> = b"No Lock for this Cap type";
 #[error]
+const EAlreadyLocked: vector<u8> = b"A Cap is already locked for this type";
+#[error]
 const EWrongAccount: vector<u8> = b"This Cap has not been borrowed from this acccount";
 
 // === Structs ===    
@@ -62,6 +64,7 @@ public fun lock_cap<Config, Outcome, Cap: store>(
     cap: Cap,
 ) {
     auth.verify(account.addr());
+    assert!(!has_lock<Config, Outcome, Cap>(account), EAlreadyLocked);
     account.add_managed_asset(AccessKey<Cap> {}, AccessLock { cap }, version::current());
 }
 
