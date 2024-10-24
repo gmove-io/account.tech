@@ -113,8 +113,8 @@ public fun has_rule<K: copy + drop + store>(
 /// Attaches the UpgradeLock as a Dynamic Field to the account
 public fun lock_cap<Config, Outcome>(
     auth: Auth,
-    lock: UpgradeLock,
     account: &mut Account<Config, Outcome>,
+    lock: UpgradeLock,
 ) {
     auth.verify(account.addr());
     account.add_managed_asset(
@@ -135,7 +135,7 @@ public fun lock_cap_with_timelock<Config, Outcome>(
 ) {
     let mut lock = new_lock(upgrade_cap, name, ctx);
     add_rule(&mut lock, TimeLockKey {}, TimeLock { delay_ms });
-    lock_cap(auth, lock, account);
+    lock_cap(auth, account, lock);
 }
 
 public fun has_lock<Config, Outcome>(

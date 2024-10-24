@@ -43,7 +43,7 @@ const EMetadataNameMissing: vector<u8> = b"New metadata must set a name for the 
 #[error]
 const ENameCannotBeEmpty: vector<u8> = b"Name cannot be empty";
 #[error]
-const EUpgradeCapDoesntExist: vector<u8> = b"Upgrade Cap does not exist";
+const ENoExtensionOrUpgradeCap: vector<u8> = b"No extension or upgrade cap for this package";
 
 // === Structs ===
 
@@ -217,11 +217,10 @@ public fun new_config_deps<Config, Outcome, W: drop>(
 
         if (extensions.is_extension(name, package, version)) {
             deps.add(extensions, name, package, version);
-        } else {
-            assert!(upgrade_policies::has_lock(account, package), EUpgradeCapDoesntExist);
+        } else if (upgrade_policies::has_lock(account, package)) {
             let cap = upgrade_policies::borrow_lock(account, package).upgrade_cap();
             deps.add_with_upgrade_cap(cap, name, package, version);
-        };
+        } else abort ENoExtensionOrUpgradeCap;
     });
 
     proposal.add_action(ConfigDepsAction { deps }, witness);

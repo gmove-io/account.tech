@@ -83,7 +83,7 @@ fun create_dummy_proposal(
         outcome, 
         version::current(), 
         DummyProposal(), 
-        b"Degen".to_string(), 
+        b"".to_string(), 
         b"dummy".to_string(), 
         b"".to_string(), 
         0,
@@ -111,7 +111,7 @@ fun test_propose_execute_access() {
     let (mut scenario, extensions, mut account, clock) = start();
     let auth = multisig::authenticate(&extensions, &account, b"".to_string(), scenario.ctx());
     access_control::lock_cap(auth, &mut account, cap(&mut scenario));
-    let key = b"key".to_string();
+    let key = b"dummy".to_string();
 
     let auth = multisig::authenticate(&extensions, &account, b"".to_string(), scenario.ctx());
     let outcome = multisig::new_outcome(&account, scenario.ctx());
@@ -142,7 +142,7 @@ fun test_propose_execute_access() {
 #[test]
 fun test_access_flow() {
     let (mut scenario, extensions, mut account, clock) = start();
-    let key = b"key".to_string();
+    let key = b"dummy".to_string();
 
     let auth = multisig::authenticate(&extensions, &account, b"".to_string(), scenario.ctx());
     access_control::lock_cap(auth, &mut account, cap(&mut scenario));
@@ -172,7 +172,7 @@ fun test_access_flow() {
 fun test_access_expired() {
     let (mut scenario, extensions, mut account, mut clock) = start();
     clock.increment_for_testing(1);
-    let key = b"key".to_string();
+    let key = b"dummy".to_string();
 
     let mut proposal = create_dummy_proposal(&mut scenario, &mut account, &extensions);
     
@@ -203,7 +203,7 @@ fun test_error_lock_cap_already_locked() {
 #[test, expected_failure(abort_code = access_control::ENoLock)]
 fun test_error_propose_access_no_lock() {
     let (mut scenario, extensions, mut account, clock) = start();
-    let key = b"key".to_string();
+    let key = b"dummy".to_string();
 
     let auth = multisig::authenticate(&extensions, &account, b"".to_string(), scenario.ctx());
     let outcome = multisig::new_outcome(&account, scenario.ctx());
@@ -224,7 +224,7 @@ fun test_error_propose_access_no_lock() {
 #[test, expected_failure(abort_code = access_control::ENoLock)]
 fun test_error_access_no_lock() {
     let (mut scenario, extensions, mut account, clock) = start();
-    let key = b"key".to_string();
+    let key = b"dummy".to_string();
 
     let mut proposal = create_dummy_proposal(&mut scenario, &mut account, &extensions);
     
@@ -245,7 +245,7 @@ fun test_error_access_no_lock() {
 #[test, expected_failure(abort_code = access_control::EWrongAccount)]
 fun test_error_return_to_wrong_account() {
     let (mut scenario, extensions, mut account, clock) = start();
-    let key = b"key".to_string();
+    let key = b"dummy".to_string();
 
     let auth = multisig::authenticate(&extensions, &account, b"".to_string(), scenario.ctx());
     access_control::lock_cap(auth, &mut account, cap(&mut scenario));
@@ -273,7 +273,7 @@ fun test_error_return_to_wrong_account() {
 #[test, expected_failure(abort_code = issuer::EWrongAccount)]
 fun test_error_access_from_wrong_account() {
     let (mut scenario, extensions, mut account, clock) = start();
-    let key = b"key".to_string();
+    let key = b"dummy".to_string();
 
     let auth = multisig::authenticate(&extensions, &account, b"".to_string(), scenario.ctx());
     access_control::lock_cap(auth, &mut account, cap(&mut scenario));
@@ -302,7 +302,7 @@ fun test_error_access_from_wrong_account() {
 #[test, expected_failure(abort_code = issuer::EWrongWitness)]
 fun test_error_access_from_wrong_constructor_witness() {
     let (mut scenario, extensions, mut account, clock) = start();
-    let key = b"key".to_string();
+    let key = b"dummy".to_string();
 
     let auth = multisig::authenticate(&extensions, &account, b"".to_string(), scenario.ctx());
     access_control::lock_cap(auth, &mut account, cap(&mut scenario));
@@ -326,7 +326,7 @@ fun test_error_access_from_wrong_constructor_witness() {
 #[test, expected_failure(abort_code = deps::ENotDep)]
 fun test_error_access_from_not_dep() {
     let (mut scenario, extensions, mut account, clock) = start();
-    let key = b"key".to_string();
+    let key = b"dummy".to_string();
 
     let auth = multisig::authenticate(&extensions, &account, b"".to_string(), scenario.ctx());
     access_control::lock_cap(auth, &mut account, cap(&mut scenario));
@@ -350,7 +350,7 @@ fun test_error_access_from_not_dep() {
 #[test, expected_failure(abort_code = issuer::EWrongWitness)]
 fun test_error__destroy_access_from_wrong_constructor_witness() {
     let (mut scenario, extensions, mut account, clock) = start();
-    let key = b"key".to_string();
+    let key = b"dummy".to_string();
 
     let auth = multisig::authenticate(&extensions, &account, b"".to_string(), scenario.ctx());
     access_control::lock_cap(auth, &mut account, cap(&mut scenario));
@@ -375,7 +375,7 @@ fun test_error__destroy_access_from_wrong_constructor_witness() {
 #[test, expected_failure(abort_code = deps::ENotDep)]
 fun test_error_destroy_access_from_not_dep() {
     let (mut scenario, extensions, mut account, clock) = start();
-    let key = b"key".to_string();
+    let key = b"dummy".to_string();
 
     let auth = multisig::authenticate(&extensions, &account, b"".to_string(), scenario.ctx());
     access_control::lock_cap(auth, &mut account, cap(&mut scenario));
