@@ -146,12 +146,11 @@ public fun execute_proposal<Config, Outcome>(
     key: String, 
     clock: &Clock,
     version: TypeName,
-    ctx: &mut TxContext,
 ): (Executable, Outcome) {
     account.deps().assert_is_core_dep(version);
     let (issuer, actions, outcome) = account.proposals.remove(key, clock);
 
-    (executable::new(account.deps, issuer, actions, ctx), outcome)
+    (executable::new(account.deps, issuer, actions), outcome)
 }
 
 /// Removes a proposal if it has expired

@@ -109,9 +109,8 @@ public fun execute_config_metadata<Config, Outcome>(
     mut executable: Executable,
     account: &mut Account<Config, Outcome>, 
 ) {
-    config_metadata(&mut executable, account, version::current(), ConfigMetadataProposal());
-    destroy_config_metadata(&mut executable, version::current(), ConfigMetadataProposal());
-    executable.terminate(version::current(), ConfigMetadataProposal());
+    do_config_metadata(&mut executable, account, version::current(), ConfigMetadataProposal());
+    executable.destroy(version::current(), ConfigMetadataProposal());
 }
 
 // step 1: propose to update the dependencies
@@ -154,9 +153,8 @@ public fun execute_config_deps<Config, Outcome>(
     mut executable: Executable,
     account: &mut Account<Config, Outcome>, 
 ) {
-    config_deps(&mut executable, account, version::current(), ConfigDepsProposal());
-    destroy_config_deps(&mut executable, version::current(), ConfigDepsProposal());
-    executable.terminate(version::current(), ConfigDepsProposal());
+    do_config_deps(&mut executable, account, version::current(), ConfigDepsProposal());
+    executable.destroy(version::current(), ConfigDepsProposal());
 }
 
 // === [ACTION] Public functions ===
@@ -177,24 +175,14 @@ public fun new_config_metadata<Outcome, W: drop>(
     );
 }
 
-public fun config_metadata<Config, Outcome, W: copy + drop>(
+public fun do_config_metadata<Config, Outcome, W: copy + drop>(
     executable: &mut Executable,
     account: &mut Account<Config, Outcome>, 
     version: TypeName,
     witness: W,
 ) {
-    let config_metadata_action = executable.load<ConfigMetadataAction, W>(account.addr(), version, witness);
-    *account.metadata_mut(version) = config_metadata_action.metadata;
-    
-    executable.process<ConfigMetadataAction, W>(version, witness);
-}
-
-public fun destroy_config_metadata<W: drop>(
-    executable: &mut Executable,
-    version: TypeName,
-    witness: W,
-) {
-    let ConfigMetadataAction { .. } = executable.cleanup(version, witness);
+    let ConfigMetadataAction { metadata } = executable.action(account.addr(), version, witness);
+    *account.metadata_mut(version) = metadata;
 }
 
 public fun delete_config_metadata_action<Outcome>(expired: &mut Expired<Outcome>) {
@@ -226,28 +214,16 @@ public fun new_config_deps<Config, Outcome, W: drop>(
     proposal.add_action(ConfigDepsAction { deps }, witness);
 }
 
-public fun config_deps<Config, Outcome, W: copy + drop>(
+public fun do_config_deps<Config, Outcome, W: copy + drop>(
     executable: &mut Executable,
     account: &mut Account<Config, Outcome>, 
     version: TypeName,
     witness: W,
 ) {
-    let config_deps_action = executable.load<ConfigDepsAction, W>(account.addr(), version, witness);    
-    *account.deps_mut(version) = config_deps_action.deps;
-
-    executable.process<ConfigDepsAction, W>(version, witness);
-}
-
-public fun destroy_config_deps<W: drop>(
-    executable: &mut Executable,
-    version: TypeName,
-    witness: W,
-) {
-    let ConfigDepsAction { .. } = executable.cleanup(version, witness);
+    let ConfigDepsAction { deps } = executable.action(account.addr(), version, witness);    
+    *account.deps_mut(version) = deps;
 }
 
 public fun delete_config_deps_action<Outcome>(expired: &mut Expired<Outcome>) {
     let ConfigDepsAction { .. } = expired.remove_expired_action();
 }
-
-// === Private functions ===

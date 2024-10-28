@@ -127,7 +127,7 @@ fun test_propose_execute_access() {
     );
 
     multisig::approve_proposal(&mut account, key, scenario.ctx());
-    let mut executable = multisig::execute_proposal(&mut account, key, &clock, scenario.ctx());
+    let mut executable = multisig::execute_proposal(&mut account, key, &clock);
     
     assert!(access_control::has_lock<Multisig, Approvals, Cap>(&account));
     let (borrow, cap) = access_control::execute_access<Multisig, Approvals, Cap>(&mut executable, &mut account);
@@ -148,22 +148,20 @@ fun test_access_flow() {
     access_control::lock_cap(auth, &mut account, cap(&mut scenario));
 
     let mut proposal = create_dummy_proposal(&mut scenario, &mut account, &extensions);
-    
     access_control::new_access<Approvals, Cap, DummyProposal>(&mut proposal, DummyProposal());
     account.add_proposal(proposal, version::current(), DummyProposal());
 
     multisig::approve_proposal(&mut account, key, scenario.ctx());
-    let mut executable = multisig::execute_proposal(&mut account, key, &clock, scenario.ctx());
+    let mut executable = multisig::execute_proposal(&mut account, key, &clock);
 
     assert!(access_control::has_lock<Multisig, Approvals, Cap>(&account));
-    let (borrow, cap) = access_control::access_cap<Multisig, Approvals, Cap, DummyProposal>(&mut executable, &mut account, version::current(), DummyProposal());
+    let (borrow, cap) = access_control::do_access<Multisig, Approvals, Cap, DummyProposal>(&mut executable, &mut account, version::current(), DummyProposal());
     assert!(!access_control::has_lock<Multisig, Approvals, Cap>(&account));
     // do something with the cap
     access_control::return_cap(&mut account, borrow, cap, version::current());
     assert!(access_control::has_lock<Multisig, Approvals, Cap>(&account));
 
-    access_control::destroy_access<Cap, DummyProposal>(&mut executable, version::current(), DummyProposal());
-    executable.terminate(version::current(), DummyProposal());
+    executable.destroy(version::current(), DummyProposal());
 
     end(scenario, extensions, account, clock);
 }
@@ -175,7 +173,6 @@ fun test_access_expired() {
     let key = b"dummy".to_string();
 
     let mut proposal = create_dummy_proposal(&mut scenario, &mut account, &extensions);
-    
     access_control::new_access<Approvals, Cap, DummyProposal>(&mut proposal, DummyProposal());
     account.add_proposal(proposal, version::current(), DummyProposal());
     
@@ -227,14 +224,13 @@ fun test_error_access_no_lock() {
     let key = b"dummy".to_string();
 
     let mut proposal = create_dummy_proposal(&mut scenario, &mut account, &extensions);
-    
     access_control::new_access<Approvals, Cap, DummyProposal>(&mut proposal, DummyProposal());
     account.add_proposal(proposal, version::current(), DummyProposal());
 
     multisig::approve_proposal(&mut account, key, scenario.ctx());
-    let mut executable = multisig::execute_proposal(&mut account, key, &clock, scenario.ctx());
+    let mut executable = multisig::execute_proposal(&mut account, key, &clock);
 
-    let (borrow, cap) = access_control::access_cap<Multisig, Approvals, Cap, DummyProposal>(&mut executable, &mut account, version::current(), DummyProposal());
+    let (borrow, cap) = access_control::do_access<Multisig, Approvals, Cap, DummyProposal>(&mut executable, &mut account, version::current(), DummyProposal());
 
     destroy(executable);
     destroy(borrow);
@@ -251,18 +247,17 @@ fun test_error_return_to_wrong_account() {
     access_control::lock_cap(auth, &mut account, cap(&mut scenario));
 
     let mut proposal = create_dummy_proposal(&mut scenario, &mut account, &extensions);
-    
     access_control::new_access<Approvals, Cap, DummyProposal>(&mut proposal, DummyProposal());
     account.add_proposal(proposal, version::current(), DummyProposal());
 
     multisig::approve_proposal(&mut account, key, scenario.ctx());
-    let mut executable = multisig::execute_proposal(&mut account, key, &clock, scenario.ctx());
+    let mut executable = multisig::execute_proposal(&mut account, key, &clock);
 
-    let (borrow, cap) = access_control::access_cap<Multisig, Approvals, Cap, DummyProposal>(&mut executable, &mut account, version::current(), DummyProposal());
+    let (borrow, cap) = access_control::do_access<Multisig, Approvals, Cap, DummyProposal>(&mut executable, &mut account, version::current(), DummyProposal());
     // create other account
     let mut account2 = multisig::new_account(&extensions, b"Main".to_string(), scenario.ctx());
     access_control::return_cap(&mut account2, borrow, cap, version::current());
-    executable.terminate(version::current(), DummyProposal());
+    executable.destroy(version::current(), DummyProposal());
 
     destroy(account2);
     end(scenario, extensions, account, clock);
@@ -271,7 +266,7 @@ fun test_error_return_to_wrong_account() {
 // sanity checks as these are tested in AccountProtocol tests
 
 #[test, expected_failure(abort_code = issuer::EWrongAccount)]
-fun test_error_access_from_wrong_account() {
+fun test_error_do_access_from_wrong_account() {
     let (mut scenario, extensions, mut account, clock) = start();
     let key = b"dummy".to_string();
 
@@ -279,18 +274,17 @@ fun test_error_access_from_wrong_account() {
     access_control::lock_cap(auth, &mut account, cap(&mut scenario));
 
     let mut proposal = create_dummy_proposal(&mut scenario, &mut account, &extensions);
-    
     access_control::new_access<Approvals, Cap, DummyProposal>(&mut proposal, DummyProposal());
     account.add_proposal(proposal, version::current(), DummyProposal());
 
     multisig::approve_proposal(&mut account, key, scenario.ctx());
-    let mut executable = multisig::execute_proposal(&mut account, key, &clock, scenario.ctx());
+    let mut executable = multisig::execute_proposal(&mut account, key, &clock);
     // create other account and lock same type of cap
     let mut account2 = multisig::new_account(&extensions, b"Main".to_string(), scenario.ctx());
     let auth = multisig::authenticate(&extensions, &account2, b"".to_string(), scenario.ctx());
     access_control::lock_cap(auth, &mut account2, cap(&mut scenario));
     
-    let (borrow, cap) = access_control::access_cap<Multisig, Approvals, Cap, DummyProposal>(&mut executable, &mut account2, version::current(), DummyProposal());
+    let (borrow, cap) = access_control::do_access<Multisig, Approvals, Cap, DummyProposal>(&mut executable, &mut account2, version::current(), DummyProposal());
 
     destroy(account2);
     destroy(executable);
@@ -300,7 +294,7 @@ fun test_error_access_from_wrong_account() {
 }
 
 #[test, expected_failure(abort_code = issuer::EWrongWitness)]
-fun test_error_access_from_wrong_constructor_witness() {
+fun test_error_do_access_from_wrong_constructor_witness() {
     let (mut scenario, extensions, mut account, clock) = start();
     let key = b"dummy".to_string();
 
@@ -308,14 +302,13 @@ fun test_error_access_from_wrong_constructor_witness() {
     access_control::lock_cap(auth, &mut account, cap(&mut scenario));
 
     let mut proposal = create_dummy_proposal(&mut scenario, &mut account, &extensions);
-    
     access_control::new_access<Approvals, Cap, DummyProposal>(&mut proposal, DummyProposal());
     account.add_proposal(proposal, version::current(), DummyProposal());
 
     multisig::approve_proposal(&mut account, key, scenario.ctx());
-    let mut executable = multisig::execute_proposal(&mut account, key, &clock, scenario.ctx());
+    let mut executable = multisig::execute_proposal(&mut account, key, &clock);
     
-    let (borrow, cap) = access_control::access_cap<Multisig, Approvals, Cap, WrongProposal>(&mut executable, &mut account, version::current(), WrongProposal());
+    let (borrow, cap) = access_control::do_access<Multisig, Approvals, Cap, WrongProposal>(&mut executable, &mut account, version::current(), WrongProposal());
 
     destroy(executable);
     destroy(borrow);
@@ -324,7 +317,7 @@ fun test_error_access_from_wrong_constructor_witness() {
 }
 
 #[test, expected_failure(abort_code = deps::ENotDep)]
-fun test_error_access_from_not_dep() {
+fun test_error_do_access_from_not_dep() {
     let (mut scenario, extensions, mut account, clock) = start();
     let key = b"dummy".to_string();
 
@@ -332,67 +325,16 @@ fun test_error_access_from_not_dep() {
     access_control::lock_cap(auth, &mut account, cap(&mut scenario));
 
     let mut proposal = create_dummy_proposal(&mut scenario, &mut account, &extensions);
-    
     access_control::new_access<Approvals, Cap, DummyProposal>(&mut proposal, DummyProposal());
     account.add_proposal(proposal, version::current(), DummyProposal());
 
     multisig::approve_proposal(&mut account, key, scenario.ctx());
-    let mut executable = multisig::execute_proposal(&mut account, key, &clock, scenario.ctx());
+    let mut executable = multisig::execute_proposal(&mut account, key, &clock);
     
-    let (borrow, cap) = access_control::access_cap<Multisig, Approvals, Cap, DummyProposal>(&mut executable, &mut account, wrong_version(), DummyProposal());
+    let (borrow, cap) = access_control::do_access<Multisig, Approvals, Cap, DummyProposal>(&mut executable, &mut account, wrong_version(), DummyProposal());
 
     destroy(executable);
     destroy(borrow);
     destroy(cap);
-    end(scenario, extensions, account, clock);
-}
-
-#[test, expected_failure(abort_code = issuer::EWrongWitness)]
-fun test_error__destroy_access_from_wrong_constructor_witness() {
-    let (mut scenario, extensions, mut account, clock) = start();
-    let key = b"dummy".to_string();
-
-    let auth = multisig::authenticate(&extensions, &account, b"".to_string(), scenario.ctx());
-    access_control::lock_cap(auth, &mut account, cap(&mut scenario));
-
-    let mut proposal = create_dummy_proposal(&mut scenario, &mut account, &extensions);
-    
-    access_control::new_access<Approvals, Cap, DummyProposal>(&mut proposal, DummyProposal());
-    account.add_proposal(proposal, version::current(), DummyProposal());
-
-    multisig::approve_proposal(&mut account, key, scenario.ctx());
-    let mut executable = multisig::execute_proposal(&mut account, key, &clock, scenario.ctx());
-    
-    let (borrow, cap) = access_control::access_cap<Multisig, Approvals, Cap, DummyProposal>(&mut executable, &mut account, version::current(), DummyProposal());
-    access_control::return_cap(&mut account, borrow, cap, version::current());
-    
-    access_control::destroy_access<Cap, WrongProposal>(&mut executable, version::current(), WrongProposal());
-    executable.terminate(version::current(), DummyProposal());
-
-    end(scenario, extensions, account, clock);
-}
-
-#[test, expected_failure(abort_code = deps::ENotDep)]
-fun test_error_destroy_access_from_not_dep() {
-    let (mut scenario, extensions, mut account, clock) = start();
-    let key = b"dummy".to_string();
-
-    let auth = multisig::authenticate(&extensions, &account, b"".to_string(), scenario.ctx());
-    access_control::lock_cap(auth, &mut account, cap(&mut scenario));
-
-    let mut proposal = create_dummy_proposal(&mut scenario, &mut account, &extensions);
-    
-    access_control::new_access<Approvals, Cap, DummyProposal>(&mut proposal, DummyProposal());
-    account.add_proposal(proposal, version::current(), DummyProposal());
-
-    multisig::approve_proposal(&mut account, key, scenario.ctx());
-    let mut executable = multisig::execute_proposal(&mut account, key, &clock, scenario.ctx());
-    
-    let (borrow, cap) = access_control::access_cap<Multisig, Approvals, Cap, DummyProposal>(&mut executable, &mut account, version::current(), DummyProposal());
-    access_control::return_cap(&mut account, borrow, cap, version::current());
-    
-    access_control::destroy_access<Cap, DummyProposal>(&mut executable, wrong_version(), DummyProposal());
-    executable.terminate(version::current(), DummyProposal());
-
     end(scenario, extensions, account, clock);
 }

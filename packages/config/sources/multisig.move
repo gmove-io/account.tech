@@ -237,9 +237,8 @@ public fun execute_proposal(
     account: &mut Account<Multisig, Approvals>, 
     key: String, 
     clock: &Clock,
-    ctx: &mut TxContext
 ): Executable {
-    let (executable, outcome) = account.execute_proposal(key, clock, version::current(), ctx);
+    let (executable, outcome) = account.execute_proposal(key, clock, version::current());
     outcome.validate(account.config(), executable.issuer());
 
     executable
@@ -364,11 +363,9 @@ public fun execute_config_multisig(
     mut executable: Executable,
     account: &mut Account<Multisig, Approvals>, 
 ) {
-    executable.process<ConfigMultisigAction, ConfigMultisigProposal>(version::current(), ConfigMultisigProposal());
-    let ConfigMultisigAction { config } = executable.cleanup(version::current(), ConfigMultisigProposal());
-
+    let ConfigMultisigAction { config } = executable.action(account.addr(), version::current(), ConfigMultisigProposal());
     *account.config_mut(version::current()) = config;
-    executable.terminate(version::current(), ConfigMultisigProposal());
+    executable.destroy(version::current(), ConfigMultisigProposal());
 }
 
 public fun delete_expired_config_multisig(expired: &mut Expired<Approvals>) {

@@ -16,7 +16,6 @@ use sui::{
     balance::Balance,
     coin::{Self, Coin},
     transfer::Receiving,
-    vec_map::{Self, VecMap},
 };
 use account_protocol::{
     account::Account,
@@ -58,20 +57,29 @@ public struct TransferProposal() has copy, drop;
 /// [PROPOSAL] pays from a treasury
 public struct PayProposal() has copy, drop;
 
-/// [ACTION] proposes to open a treasury for the account
-public struct OpenAction has store {
-    // label for the treasury and role
-    name: String,
-}
-/// [ACTION] action to be used with specific proposals making good use of the returned coins, similar as owned::withdraw
+/// [ACTION] action to be used with specific proposals making good use of the returned coins, similar to owned::withdraw
 public struct SpendAction has store {
-    // name of the treasury to withdraw from
-    name: String,
-    // coin types to amounts
-    coin_amounts: VecMap<String, u64>,
+    // coin types to withdraw
+    coin_type: String,
+    // amount to withdraw
+    amount: u64,
 }
 
 // === View Functions ===
+
+public fun treasury_exists<Config, Outcome>(
+    account: &Account<Config, Outcome>, 
+    name: String
+): bool {
+    account.has_managed_asset(TreasuryKey { name })
+}
+
+public fun borrow_treasury<Config, Outcome>(
+    account: &Account<Config, Outcome>, 
+    name: String
+): &Treasury {
+    account.borrow_managed_asset(TreasuryKey { name }, version::current())
+}
 
 public fun coin_type_string<C: drop>(): String {
     type_name::get<C>().into_string().to_string()
@@ -98,13 +106,6 @@ public fun open<Config, Outcome>(
     assert!(!treasury_exists(account, name), ETreasuryAlreadyExists);
 
     account.add_managed_asset(TreasuryKey { name }, Treasury { bag: bag::new(ctx) }, version::current());
-}
-
-public fun treasury_exists<Config, Outcome>(
-    account: &Account<Config, Outcome>, 
-    name: String
-): bool {
-    account.has_managed_asset(TreasuryKey { name })
 }
 
 /// Deposits coins owned by the account into a treasury
@@ -166,17 +167,19 @@ public fun propose_transfer<Config, Outcome>(
     execution_time: u64,
     expiration_epoch: u64,
     treasury_name: String,
-    coin_types: vector<vector<String>>,
-    coin_amounts: vector<vector<u64>>,
+    coin_types: vector<String>,
+    amounts: vector<u64>,
     mut recipients: vector<address>,
     ctx: &mut TxContext
 ) {
+    assert!(coin_types.length() == amounts.length(), ETypesAmountsNotSameLength);
+
     let mut proposal = account.create_proposal(
         auth,
         outcome,
         version::current(),
         TransferProposal(),
-        b"".to_string(),
+        treasury_name,
         key,
         description,
         execution_time,
@@ -184,8 +187,8 @@ public fun propose_transfer<Config, Outcome>(
         ctx
     );
 
-    coin_types.zip_do!(coin_amounts, |types, amounts| {
-        new_spend(&mut proposal, treasury_name, types, amounts, TransferProposal());
+    coin_types.zip_do!(amounts, |coin_type, amount| {
+        new_spend(&mut proposal, coin_type, amount, TransferProposal());
         transfers::new_transfer(&mut proposal, recipients.remove(0), TransferProposal());
     });
 
@@ -201,17 +204,13 @@ public fun execute_transfer<Config, Outcome, C: drop>(
     account: &mut Account<Config, Outcome>, 
     ctx: &mut TxContext
 ) {
-    let coin: Coin<C> = spend(executable, account, version::current(), TransferProposal(), ctx);
-    let mut is_executed = false;
+    let coin: Coin<C> = do_spend(executable, account, version::current(), TransferProposal(), ctx);
+    transfers::do_transfer(executable, account, coin, version::current(), TransferProposal());
+}
 
-    if (executable.action_is_completed<SpendAction>()) {
-        destroy_spend(executable, version::current(), TransferProposal());
-        is_executed = true;
-    };
-
-    transfers::transfer(executable, account, coin, version::current(), TransferProposal(), is_executed);
-
-    if (is_executed) transfers::destroy_transfer(executable, version::current(), TransferProposal());
+// step 5: complete transfers and destroy the executable
+public fun complete_transfer(executable: Executable) {
+    executable.destroy(version::current(), TransferProposal());
 }
 
 // step 1(bis): same but from a treasury
@@ -236,7 +235,7 @@ public fun propose_pay<Config, Outcome>(
         outcome,
         version::current(),
         PayProposal(),
-        b"".to_string(),
+        treasury_name,
         key,
         description,
         execution_time,
@@ -244,7 +243,7 @@ public fun propose_pay<Config, Outcome>(
         ctx
     );
 
-    new_spend(&mut proposal, treasury_name, vector[coin_type], vector[coin_amount], PayProposal());
+    new_spend(&mut proposal, coin_type, coin_amount, PayProposal());
     payments::new_pay(&mut proposal, amount, interval, recipient, PayProposal());
     account.add_proposal(proposal, version::current(), PayProposal());
 }
@@ -258,53 +257,39 @@ public fun execute_pay<Config, Outcome, C: drop>(
     account: &mut Account<Config, Outcome>, 
     ctx: &mut TxContext
 ) {
-    let coin: Coin<C> = spend(&mut executable, account, version::current(), PayProposal(), ctx);
-    payments::pay(&mut executable, account, coin, version::current(), PayProposal(), ctx);
-
-    destroy_spend(&mut executable, version::current(), PayProposal());
-    payments::destroy_pay(&mut executable, version::current(), PayProposal());
-    executable.terminate(version::current(), PayProposal());
+    let coin: Coin<C> = do_spend(&mut executable, account, version::current(), PayProposal(), ctx);
+    payments::do_pay(&mut executable, account, coin, version::current(), PayProposal(), ctx);
+    executable.destroy(version::current(), PayProposal());
 }
 
 // === [ACTION] Public Functions ===
 
 public fun new_spend<Outcome, W: drop>(
     proposal: &mut Proposal<Outcome>,
-    name: String,
-    coin_types: vector<String>,
-    amounts: vector<u64>,
+    coin_type: String,
+    amount: u64,
     witness: W,
 ) {
-    assert!(coin_types.length() == amounts.length(), ETypesAmountsNotSameLength);
-    proposal.add_action(
-        SpendAction { name, coin_amounts: vec_map::from_keys_values(coin_types, amounts) },
-        witness
-    );
+    proposal.add_action(SpendAction { coin_type, amount }, witness);
 }
 
-public fun spend<Config, Outcome, C: drop, W: copy + drop>(
+public fun do_spend<Config, Outcome, C: drop, W: copy + drop>(
     executable: &mut Executable,
     account: &mut Account<Config, Outcome>,
     version: TypeName,
     witness: W,
     ctx: &mut TxContext
 ): Coin<C> {
-    let spend_action = executable.load<SpendAction, W>(account.addr(), version, witness);
-    let (coin_type, amount) = spend_action.coin_amounts.remove(&coin_type_string<C>());
+    let name = executable.issuer().role_name();
+    let SpendAction { coin_type, amount } = executable.action(account.addr(), version, witness);
     
-    let treasury: &mut Treasury = account.borrow_managed_asset_mut(TreasuryKey { name: spend_action.name }, version);
+    let treasury: &mut Treasury = account.borrow_managed_asset_mut(TreasuryKey { name }, version);
     let balance: &mut Balance<C> = treasury.bag.borrow_mut(coin_type);
     let coin = coin::take(balance, amount, ctx);
 
     if (balance.value() == 0) treasury.bag.remove<String, Balance<C>>(coin_type).destroy_zero();
     
-    executable.process<SpendAction, W>(version, witness);
-
     coin
-}
-
-public fun destroy_spend<W: drop>(executable: &mut Executable, version: TypeName, witness: W) {
-    let SpendAction { .. } = executable.cleanup(version, witness);
 }
 
 public fun delete_spend_action<Outcome>(expired: &mut Expired<Outcome>) {

@@ -30,26 +30,15 @@ public fun new_transfer<Outcome, W: drop>(
     proposal.add_action(TransferAction { recipient }, witness);
 }
 
-public fun transfer<Config, Outcome, T: key + store, W: copy + drop>(
+public fun do_transfer<Config, Outcome, T: key + store, W: drop>(
     executable: &mut Executable, 
     account: &mut Account<Config, Outcome>, 
     object: T,
     version: TypeName,
     witness: W,
-    is_executed: bool,
 ) {
-    let transfer_action = executable.load<TransferAction, W>(account.addr(), version, witness);
-    transfer::public_transfer(object, transfer_action.recipient);
-
-    if (is_executed) executable.process<TransferAction, W>(version, witness);
-}
-
-public fun destroy_transfer<W: drop>(
-    executable: &mut Executable, 
-    version: TypeName,
-    witness: W,
-) {
-    let TransferAction { .. } = executable.cleanup(version, witness);
+    let TransferAction { recipient } = executable.action(account.addr(), version, witness);
+    transfer::public_transfer(object, recipient);
 }
 
 public fun delete_transfer_action<Outcome>(expired: &mut Expired<Outcome>) {

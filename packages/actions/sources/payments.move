@@ -10,6 +10,7 @@ use std::type_name::TypeName;
 use sui::{
     balance::Balance,
     coin::{Self, Coin},
+    clock::Clock,
 };
 use account_protocol::{
     account::Account,
@@ -36,10 +37,10 @@ public struct Stream<phantom CoinType> has key {
     balance: Balance<CoinType>,
     // amount to pay at each due date
     amount: u64,
-    // number of epochs between each payment
+    // ms between each payment
     interval: u64,
-    // epoch of the last payment
-    last_epoch: u64,
+    // timestamp of the last payment
+    last_timestamp: u64,
     // address to pay
     recipient: address,
 }
@@ -55,7 +56,7 @@ public struct ClaimCap has key {
 public struct PayAction has store {
     // amount to pay at each due date
     amount: u64,
-    // number of epochs between each payment
+    // ms between each payment
     interval: u64,
     // address to pay
     recipient: address,
@@ -69,24 +70,25 @@ public struct PayAction has store {
 // step 4: loop over `execute_transfer` it in PTB from the module implementing it
 
 // step 5: bearer of ClaimCap can claim the payment
-public fun claim<CoinType>(stream: &mut Stream<CoinType>, cap: &ClaimCap, ctx: &mut TxContext) {
+public fun claim<CoinType>(stream: &mut Stream<CoinType>, cap: &ClaimCap, clock: &Clock, ctx: &mut TxContext) {
     assert!(cap.stream_id == stream.id.to_inner(), EWrongStream);
-    stream.disburse(ctx);
+    stream.disburse(clock, ctx);
 }
 
 // step 5(bis): backend send the coin to the recipient until balance is empty
-public fun disburse<CoinType>(stream: &mut Stream<CoinType>, ctx: &mut TxContext) {
-    assert!(ctx.epoch() > stream.last_epoch + stream.interval, EPayTooEarly);
+public fun disburse<CoinType>(stream: &mut Stream<CoinType>, clock: &Clock, ctx: &mut TxContext) {
+    assert!(clock.timestamp_ms() > stream.last_timestamp + stream.interval, EPayTooEarly);
 
     let amount = if (stream.balance.value() < stream.amount) {
         stream.balance.value()
     } else {
         stream.amount
     };
-    let coin = coin::from_balance(stream.balance.split(amount), ctx);
 
+    let coin = coin::from_balance(stream.balance.split(amount), ctx);
     transfer::public_transfer(coin, stream.recipient);
-    stream.last_epoch = ctx.epoch();
+
+    stream.last_timestamp = clock.timestamp_ms();
 }
 
 // step 6: destroy the stream when balance is empty
@@ -125,7 +127,7 @@ public fun new_pay<Outcome, W: drop>(
     proposal.add_action(PayAction { amount, interval, recipient }, witness);
 }
 
-public fun pay<Config, Outcome, CoinType, W: copy + drop>(
+public fun do_pay<Config, Outcome, CoinType, W: copy + drop>(
     executable: &mut Executable, 
     account: &mut Account<Config, Outcome>, 
     coin: Coin<CoinType>,
@@ -133,22 +135,17 @@ public fun pay<Config, Outcome, CoinType, W: copy + drop>(
     witness: W,
     ctx: &mut TxContext
 ) {    
-    let pay_action = executable.load<PayAction, W>(account.addr(), version, witness);
+    let PayAction { amount, interval, recipient } = 
+        executable.action(account.addr(), version, witness);
 
     transfer::share_object(Stream<CoinType> { 
         id: object::new(ctx), 
         balance: coin.into_balance(), 
-        amount: pay_action.amount,
-        interval: pay_action.interval,
-        last_epoch: 0,
-        recipient: pay_action.recipient
+        amount,
+        interval,
+        last_timestamp: 0,
+        recipient
     });
-    
-    executable.process<PayAction, W>(version, witness);
-}
-
-public fun destroy_pay<W: drop>(executable: &mut Executable, version: TypeName, witness: W) {
-    let PayAction { .. } = executable.cleanup(version, witness);
 }
 
 public fun delete_pay_action<Outcome>(expired: &mut Expired<Outcome>) {
@@ -157,7 +154,7 @@ public fun delete_pay_action<Outcome>(expired: &mut Expired<Outcome>) {
 
 // === View Functions ===
 
-public fun balance<CoinType>(self: &Stream<CoinType>): u64 {
+public fun balance_value<CoinType>(self: &Stream<CoinType>): u64 {
     self.balance.value()
 }
 
@@ -169,8 +166,8 @@ public fun interval<CoinType>(self: &Stream<CoinType>): u64 {
     self.interval
 }
 
-public fun last_epoch<CoinType>(self: &Stream<CoinType>): u64 {
-    self.last_epoch
+public fun last_timestamp<CoinType>(self: &Stream<CoinType>): u64 {
+    self.last_timestamp
 }
 
 public fun recipient<CoinType>(self: &Stream<CoinType>): address {

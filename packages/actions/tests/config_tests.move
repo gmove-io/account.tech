@@ -116,7 +116,7 @@ fun test_propose_execute_config_metadata() {
     assert!(account.metadata().get(b"name".to_string()) == b"Main".to_string());
 
     multisig::approve_proposal(&mut account, key, scenario.ctx());
-    let executable = multisig::execute_proposal(&mut account, key, &clock, scenario.ctx());
+    let executable = multisig::execute_proposal(&mut account, key, &clock);
     config::execute_config_metadata(executable, &mut account);
     assert!(account.metadata().get(b"name".to_string()) == b"New Name".to_string());
 
@@ -147,7 +147,7 @@ fun test_propose_execute_config_deps() {
     assert!(!account.deps().contains_name(b"External".to_string()));
 
     multisig::approve_proposal(&mut account, key, scenario.ctx());
-    let executable = multisig::execute_proposal(&mut account, key, &clock, scenario.ctx());
+    let executable = multisig::execute_proposal(&mut account, key, &clock);
     config::execute_config_deps(executable, &mut account);
     
     let package = account.deps().get_from_name(b"External".to_string());
@@ -162,19 +162,17 @@ fun test_config_metadata_flow() {
     let (mut scenario, extensions, mut account, clock) = start();
     let key = b"dummy".to_string();
 
-    let mut proposal = create_dummy_proposal(&mut scenario, &mut account, &extensions);  
-    assert!(account.metadata().get(b"name".to_string()) == b"Main".to_string());
+    let mut proposal = create_dummy_proposal(&mut scenario, &mut account, &extensions);  assert!(account.metadata().get(b"name".to_string()) == b"Main".to_string());
     
     config::new_config_metadata(&mut proposal, vector[b"name".to_string()], vector[b"New Name".to_string()], DummyProposal());
     account.add_proposal(proposal, version::current(), DummyProposal());
 
     multisig::approve_proposal(&mut account, key, scenario.ctx());
-    let mut executable = multisig::execute_proposal(&mut account, key, &clock, scenario.ctx());
-    config::config_metadata(&mut executable, &mut account, version::current(), DummyProposal());
+    let mut executable = multisig::execute_proposal(&mut account, key, &clock);
+    config::do_config_metadata(&mut executable, &mut account, version::current(), DummyProposal());
     assert!(account.metadata().get(b"name".to_string()) == b"New Name".to_string());
 
-    config::destroy_config_metadata(&mut executable, version::current(), DummyProposal());
-    executable.terminate(version::current(), DummyProposal());
+    executable.destroy(version::current(), DummyProposal());
 
     end(scenario, extensions, account, clock);
 }
@@ -184,8 +182,7 @@ fun test_config_deps_flow() {
     let (mut scenario, extensions, mut account, clock) = start();
     let key = b"dummy".to_string();
 
-    let mut proposal = create_dummy_proposal(&mut scenario, &mut account, &extensions);  
-    assert!(!account.deps().contains_name(b"External".to_string()));
+    let mut proposal = create_dummy_proposal(&mut scenario, &mut account, &extensions);  assert!(!account.deps().contains_name(b"External".to_string()));
     
     config::new_config_deps(
         &mut proposal, 
@@ -199,13 +196,12 @@ fun test_config_deps_flow() {
     account.add_proposal(proposal, version::current(), DummyProposal());
 
     multisig::approve_proposal(&mut account, key, scenario.ctx());
-    let mut executable = multisig::execute_proposal(&mut account, key, &clock, scenario.ctx());
-    config::config_deps(&mut executable, &mut account, version::current(), DummyProposal());
+    let mut executable = multisig::execute_proposal(&mut account, key, &clock);
+    config::do_config_deps(&mut executable, &mut account, version::current(), DummyProposal());
     assert!(account.deps().get_from_name(b"External".to_string()).addr() == @0xABC);
     assert!(account.deps().get_from_name(b"External".to_string()).version() == 1);
 
-    config::destroy_config_deps(&mut executable, version::current(), DummyProposal());
-    executable.terminate(version::current(), DummyProposal());
+    executable.destroy(version::current(), DummyProposal());
 
     end(scenario, extensions, account, clock);
 }
@@ -219,8 +215,7 @@ fun test_config_deps_from_upgrade_cap() {
     let auth = multisig::authenticate(&extensions, &account, b"".to_string(), scenario.ctx());
     upgrade_policies::lock_cap_with_timelock(auth, &mut account, b"Deep".to_string(), 0, upgrade_cap, scenario.ctx());
 
-    let mut proposal = create_dummy_proposal(&mut scenario, &mut account, &extensions);  
-    assert!(!account.deps().contains_name(b"DeepPackage".to_string()));
+    let mut proposal = create_dummy_proposal(&mut scenario, &mut account, &extensions);  assert!(!account.deps().contains_name(b"DeepPackage".to_string()));
     
     config::new_config_deps(
         &mut proposal, 
@@ -234,13 +229,12 @@ fun test_config_deps_from_upgrade_cap() {
     account.add_proposal(proposal, version::current(), DummyProposal());
 
     multisig::approve_proposal(&mut account, key, scenario.ctx());
-    let mut executable = multisig::execute_proposal(&mut account, key, &clock, scenario.ctx());
-    config::config_deps(&mut executable, &mut account, version::current(), DummyProposal());
+    let mut executable = multisig::execute_proposal(&mut account, key, &clock);
+    config::do_config_deps(&mut executable, &mut account, version::current(), DummyProposal());
     assert!(account.deps().get_from_name(b"DeepPackage".to_string()).addr() == @0xdee9);
     assert!(account.deps().get_from_name(b"DeepPackage".to_string()).version() == 1);
 
-    config::destroy_config_deps(&mut executable, version::current(), DummyProposal());
-    executable.terminate(version::current(), DummyProposal());
+    executable.destroy(version::current(), DummyProposal());
 
     end(scenario, extensions, account, clock);
 }
@@ -252,7 +246,6 @@ fun test_config_metadata_expired() {
     let key = b"dummy".to_string();
 
     let mut proposal = create_dummy_proposal(&mut scenario, &mut account, &extensions);  
-    
     config::new_config_metadata(&mut proposal, vector[b"name".to_string()], vector[b"New Name".to_string()], DummyProposal());
     account.add_proposal(proposal, version::current(), DummyProposal());
     
@@ -270,7 +263,6 @@ fun test_config_deps_expired() {
     let key = b"dummy".to_string();
 
     let mut proposal = create_dummy_proposal(&mut scenario, &mut account, &extensions);  
-    
     config::new_config_deps(
         &mut proposal, 
         &account, 
@@ -294,7 +286,6 @@ fun test_error_new_config_metadata_not_same_length() {
     let (mut scenario, extensions, mut account, clock) = start();
 
     let mut proposal = create_dummy_proposal(&mut scenario, &mut account, &extensions);  
-    
     config::new_config_metadata(&mut proposal, vector[b"name".to_string()], vector[], DummyProposal());
     account.add_proposal(proposal, version::current(), DummyProposal());
 
@@ -306,7 +297,6 @@ fun test_error_new_config_metadata_name_missing() {
     let (mut scenario, extensions, mut account, clock) = start();
 
     let mut proposal = create_dummy_proposal(&mut scenario, &mut account, &extensions);  
-    
     config::new_config_metadata(&mut proposal, vector[b"nam".to_string()], vector[b"new".to_string()], DummyProposal());
     account.add_proposal(proposal, version::current(), DummyProposal());
 
@@ -318,7 +308,6 @@ fun test_error_new_config_metadata_name_empty() {
     let (mut scenario, extensions, mut account, clock) = start();
 
     let mut proposal = create_dummy_proposal(&mut scenario, &mut account, &extensions);  
-    
     config::new_config_metadata(&mut proposal, vector[b"name".to_string()], vector[b"".to_string()], DummyProposal());
     account.add_proposal(proposal, version::current(), DummyProposal());
 
@@ -329,8 +318,7 @@ fun test_error_new_config_metadata_name_empty() {
 fun test_error_config_deps_not_extension_name() {
     let (mut scenario, extensions, mut account, clock) = start();
 
-    let mut proposal = create_dummy_proposal(&mut scenario, &mut account, &extensions);  
-    assert!(!account.deps().contains_name(b"External".to_string()));
+    let mut proposal = create_dummy_proposal(&mut scenario, &mut account, &extensions);  assert!(!account.deps().contains_name(b"External".to_string()));
     
     config::new_config_deps(
         &mut proposal, 
@@ -350,8 +338,7 @@ fun test_error_config_deps_not_extension_name() {
 fun test_error_config_deps_not_extension_addr() {
     let (mut scenario, extensions, mut account, clock) = start();
 
-    let mut proposal = create_dummy_proposal(&mut scenario, &mut account, &extensions);  
-    assert!(!account.deps().contains_name(b"External".to_string()));
+    let mut proposal = create_dummy_proposal(&mut scenario, &mut account, &extensions);  assert!(!account.deps().contains_name(b"External".to_string()));
     
     config::new_config_deps(
         &mut proposal, 
@@ -371,8 +358,7 @@ fun test_error_config_deps_not_extension_addr() {
 fun test_error_config_deps_not_extension_version() {
     let (mut scenario, extensions, mut account, clock) = start();
 
-    let mut proposal = create_dummy_proposal(&mut scenario, &mut account, &extensions);  
-    assert!(!account.deps().contains_name(b"External".to_string()));
+    let mut proposal = create_dummy_proposal(&mut scenario, &mut account, &extensions);  assert!(!account.deps().contains_name(b"External".to_string()));
     
     config::new_config_deps(
         &mut proposal, 
@@ -392,8 +378,7 @@ fun test_error_config_deps_not_extension_version() {
 fun test_error_config_deps_from_not_upgrade_cap() {
     let (mut scenario, extensions, mut account, clock) = start();
 
-    let mut proposal = create_dummy_proposal(&mut scenario, &mut account, &extensions);  
-    assert!(!account.deps().contains_name(b"DeepPackage".to_string()));
+    let mut proposal = create_dummy_proposal(&mut scenario, &mut account, &extensions);  assert!(!account.deps().contains_name(b"DeepPackage".to_string()));
     
     config::new_config_deps(
         &mut proposal, 
@@ -412,7 +397,7 @@ fun test_error_config_deps_from_not_upgrade_cap() {
 // sanity checks as these are tested in AccountProtocol tests
 
 #[test, expected_failure(abort_code = issuer::EWrongAccount)]
-fun test_error_config_metadata_for_wrong_account() {
+fun test_error_do_config_metadata_for_wrong_account() {
     let (mut scenario, extensions, mut account, clock) = start();
     let key = b"dummy".to_string();
 
@@ -421,30 +406,62 @@ fun test_error_config_metadata_for_wrong_account() {
     account.add_proposal(proposal, version::current(), DummyProposal());
 
     multisig::approve_proposal(&mut account, key, scenario.ctx());
-    let mut executable = multisig::execute_proposal(&mut account, key, &clock, scenario.ctx());
+    let mut executable = multisig::execute_proposal(&mut account, key, &clock);
 
     let mut account2 = multisig::new_account(&extensions, b"Main".to_string(), scenario.ctx());
-    config::config_metadata(&mut executable, &mut account2, version::current(), DummyProposal());
+    config::do_config_metadata(&mut executable, &mut account2, version::current(), DummyProposal());
 
     destroy(account2);
+    destroy(executable);
+    end(scenario, extensions, account, clock);
+}
+
+#[test, expected_failure(abort_code = issuer::EWrongWitness)]
+fun test_error_do_config_metadata_from_wrong_constructor_witness() {
+    let (mut scenario, extensions, mut account, clock) = start();
+    let key = b"dummy".to_string();
+
+    let mut proposal = create_dummy_proposal(&mut scenario, &mut account, &extensions);  config::new_config_metadata(&mut proposal, vector[b"name".to_string()], vector[b"New Name".to_string()], DummyProposal());
+    account.add_proposal(proposal, version::current(), DummyProposal());
+
+    multisig::approve_proposal(&mut account, key, scenario.ctx());
+    let mut executable = multisig::execute_proposal(&mut account, key, &clock);
+    // wrong witness used here
+    config::do_config_metadata(&mut executable, &mut account, version::current(), WrongProposal());
+
+    destroy(executable);
+    end(scenario, extensions, account, clock);
+}
+
+#[test, expected_failure(abort_code = deps::ENotDep)]
+fun test_error_do_config_metadata_not_from_dep() {
+    let (mut scenario, extensions, mut account, clock) = start();
+    let key = b"dummy".to_string();
+
+    let mut proposal = create_dummy_proposal(&mut scenario, &mut account, &extensions);  config::new_config_metadata(&mut proposal, vector[b"name".to_string()], vector[b"New Name".to_string()], DummyProposal());
+    account.add_proposal(proposal, version::current(), DummyProposal());
+    // wrong version dep used here
+    multisig::approve_proposal(&mut account, key, scenario.ctx());
+    let mut executable = multisig::execute_proposal(&mut account, key, &clock);
+    config::do_config_metadata(&mut executable, &mut account, wrong_version(), DummyProposal());
+
     destroy(executable);
     end(scenario, extensions, account, clock);
 }
 
 #[test, expected_failure(abort_code = issuer::EWrongAccount)]
-fun test_error_config_deps_for_wrong_account() {
+fun test_error_do_config_deps_for_wrong_account() {
     let (mut scenario, extensions, mut account, clock) = start();
     let key = b"dummy".to_string();
 
-    let mut proposal = create_dummy_proposal(&mut scenario, &mut account, &extensions);  
-    config::new_config_deps(&mut proposal, &account, &extensions, vector[b"External".to_string()], vector[@0xABC], vector[1], DummyProposal());
+    let mut proposal = create_dummy_proposal(&mut scenario, &mut account, &extensions);  config::new_config_deps(&mut proposal, &account, &extensions, vector[b"External".to_string()], vector[@0xABC], vector[1], DummyProposal());
     account.add_proposal(proposal, version::current(), DummyProposal());
 
     multisig::approve_proposal(&mut account, key, scenario.ctx());
-    let mut executable = multisig::execute_proposal(&mut account, key, &clock, scenario.ctx());
+    let mut executable = multisig::execute_proposal(&mut account, key, &clock);
 
     let mut account2 = multisig::new_account(&extensions, b"Main".to_string(), scenario.ctx());
-    config::config_deps(&mut executable, &mut account2, version::current(), DummyProposal());
+    config::do_config_deps(&mut executable, &mut account2, version::current(), DummyProposal());
 
     destroy(account2);
     destroy(executable);
@@ -452,148 +469,34 @@ fun test_error_config_deps_for_wrong_account() {
 }
 
 #[test, expected_failure(abort_code = issuer::EWrongWitness)]
-fun test_error_config_metadata_from_wrong_constructor_witness() {
+fun test_error_do_config_deps_from_wrong_constructor_witness() {
     let (mut scenario, extensions, mut account, clock) = start();
     let key = b"dummy".to_string();
 
-    let mut proposal = create_dummy_proposal(&mut scenario, &mut account, &extensions);  
-    config::new_config_metadata(&mut proposal, vector[b"name".to_string()], vector[b"New Name".to_string()], DummyProposal());
+    let mut proposal = create_dummy_proposal(&mut scenario, &mut account, &extensions);  config::new_config_deps(&mut proposal, &account, &extensions, vector[b"External".to_string()], vector[@0xABC], vector[1], DummyProposal());
     account.add_proposal(proposal, version::current(), DummyProposal());
 
     multisig::approve_proposal(&mut account, key, scenario.ctx());
-    let mut executable = multisig::execute_proposal(&mut account, key, &clock, scenario.ctx());
+    let mut executable = multisig::execute_proposal(&mut account, key, &clock);
     // wrong witness used here
-    config::config_metadata(&mut executable, &mut account, version::current(), WrongProposal());
-
-    destroy(executable);
-    end(scenario, extensions, account, clock);
-}
-
-#[test, expected_failure(abort_code = issuer::EWrongWitness)]
-fun test_error_config_deps_from_wrong_constructor_witness() {
-    let (mut scenario, extensions, mut account, clock) = start();
-    let key = b"dummy".to_string();
-
-    let mut proposal = create_dummy_proposal(&mut scenario, &mut account, &extensions);  
-    config::new_config_deps(&mut proposal, &account, &extensions, vector[b"External".to_string()], vector[@0xABC], vector[1], DummyProposal());
-    account.add_proposal(proposal, version::current(), DummyProposal());
-
-    multisig::approve_proposal(&mut account, key, scenario.ctx());
-    let mut executable = multisig::execute_proposal(&mut account, key, &clock, scenario.ctx());
-    // wrong witness used here
-    config::config_deps(&mut executable, &mut account, version::current(), WrongProposal());
+    config::do_config_deps(&mut executable, &mut account, version::current(), WrongProposal());
 
     destroy(executable);
     end(scenario, extensions, account, clock);
 }
 
 #[test, expected_failure(abort_code = deps::ENotDep)]
-fun test_error_config_metadata_not_from_dep() {
+fun test_error_do_config_deps_not_from_dep() {
     let (mut scenario, extensions, mut account, clock) = start();
     let key = b"dummy".to_string();
 
-    let mut proposal = create_dummy_proposal(&mut scenario, &mut account, &extensions);  
-    config::new_config_metadata(&mut proposal, vector[b"name".to_string()], vector[b"New Name".to_string()], DummyProposal());
+    let mut proposal = create_dummy_proposal(&mut scenario, &mut account, &extensions);  config::new_config_deps(&mut proposal, &account, &extensions, vector[b"External".to_string()], vector[@0xABC], vector[1], DummyProposal());
     account.add_proposal(proposal, version::current(), DummyProposal());
     // wrong version dep used here
     multisig::approve_proposal(&mut account, key, scenario.ctx());
-    let mut executable = multisig::execute_proposal(&mut account, key, &clock, scenario.ctx());
-    config::config_metadata(&mut executable, &mut account, wrong_version(), DummyProposal());
+    let mut executable = multisig::execute_proposal(&mut account, key, &clock);
+    config::do_config_deps(&mut executable, &mut account, wrong_version(), DummyProposal());
 
     destroy(executable);
-    end(scenario, extensions, account, clock);
-}
-
-#[test, expected_failure(abort_code = deps::ENotDep)]
-fun test_error_config_deps_not_from_dep() {
-    let (mut scenario, extensions, mut account, clock) = start();
-    let key = b"dummy".to_string();
-
-    let mut proposal = create_dummy_proposal(&mut scenario, &mut account, &extensions);  
-    config::new_config_deps(&mut proposal, &account, &extensions, vector[b"External".to_string()], vector[@0xABC], vector[1], DummyProposal());
-    account.add_proposal(proposal, version::current(), DummyProposal());
-    // wrong version dep used here
-    multisig::approve_proposal(&mut account, key, scenario.ctx());
-    let mut executable = multisig::execute_proposal(&mut account, key, &clock, scenario.ctx());
-    config::config_deps(&mut executable, &mut account, wrong_version(), DummyProposal());
-
-    destroy(executable);
-    end(scenario, extensions, account, clock);
-}
-
-// destroy action
-#[test, expected_failure(abort_code = issuer::EWrongWitness)]
-fun test_error_destroy_config_metadata_from_wrong_constructor_witness() {
-    let (mut scenario, extensions, mut account, clock) = start();
-    let key = b"dummy".to_string();
-
-    let mut proposal = create_dummy_proposal(&mut scenario, &mut account, &extensions);  
-    config::new_config_metadata(&mut proposal, vector[b"name".to_string()], vector[b"New Name".to_string()], DummyProposal());
-    account.add_proposal(proposal, version::current(), DummyProposal());
-
-    multisig::approve_proposal(&mut account, key, scenario.ctx());
-    let mut executable = multisig::execute_proposal(&mut account, key, &clock, scenario.ctx());
-    config::config_metadata(&mut executable, &mut account, version::current(), DummyProposal());
-    // wrong witness used here
-    config::destroy_config_metadata(&mut executable, version::current(), WrongProposal());
-    executable.terminate(version::current(), DummyProposal());
-
-    end(scenario, extensions, account, clock);
-}
-
-#[test, expected_failure(abort_code = issuer::EWrongWitness)]
-fun test_error_destroy_config_deps_from_wrong_constructor_witness() {
-    let (mut scenario, extensions, mut account, clock) = start();
-    let key = b"dummy".to_string();
-
-    let mut proposal = create_dummy_proposal(&mut scenario, &mut account, &extensions);  
-    config::new_config_deps(&mut proposal, &account, &extensions, vector[b"External".to_string()], vector[@0xABC], vector[1], DummyProposal());
-    account.add_proposal(proposal, version::current(), DummyProposal());
-
-    multisig::approve_proposal(&mut account, key, scenario.ctx());
-    let mut executable = multisig::execute_proposal(&mut account, key, &clock, scenario.ctx());
-    config::config_deps(&mut executable, &mut account, version::current(), DummyProposal());
-    // wrong witness used here
-    config::destroy_config_deps(&mut executable, version::current(), WrongProposal());
-    executable.terminate(version::current(), DummyProposal());
-
-    end(scenario, extensions, account, clock);
-}
-
-#[test, expected_failure(abort_code = deps::ENotDep)]
-fun test_error_destroy_config_metadata_not_from_dep() {
-    let (mut scenario, extensions, mut account, clock) = start();
-    let key = b"dummy".to_string();
-
-    let mut proposal = create_dummy_proposal(&mut scenario, &mut account, &extensions);  
-    config::new_config_metadata(&mut proposal, vector[b"name".to_string()], vector[b"New Name".to_string()], DummyProposal());
-    account.add_proposal(proposal, version::current(), DummyProposal());
-
-    multisig::approve_proposal(&mut account, key, scenario.ctx());
-    let mut executable = multisig::execute_proposal(&mut account, key, &clock, scenario.ctx());
-    config::config_metadata(&mut executable, &mut account, version::current(), DummyProposal());
-    // wrong version dep used here
-    config::destroy_config_metadata(&mut executable, wrong_version(), DummyProposal());
-    executable.terminate(version::current(), DummyProposal());
-
-    end(scenario, extensions, account, clock);
-}
-
-#[test, expected_failure(abort_code = deps::ENotDep)]
-fun test_error_destroy_config_deps_not_from_dep() {
-    let (mut scenario, extensions, mut account, clock) = start();
-    let key = b"dummy".to_string();
-
-    let mut proposal = create_dummy_proposal(&mut scenario, &mut account, &extensions);  
-    config::new_config_deps(&mut proposal, &account, &extensions, vector[b"External".to_string()], vector[@0xABC], vector[1], DummyProposal());
-    account.add_proposal(proposal, version::current(), DummyProposal());
-
-    multisig::approve_proposal(&mut account, key, scenario.ctx());
-    let mut executable = multisig::execute_proposal(&mut account, key, &clock, scenario.ctx());
-    config::config_deps(&mut executable, &mut account, version::current(), DummyProposal());
-    // wrong version dep used here
-    config::destroy_config_deps(&mut executable, wrong_version(), DummyProposal());
-    executable.terminate(version::current(), DummyProposal());
-
     end(scenario, extensions, account, clock);
 }

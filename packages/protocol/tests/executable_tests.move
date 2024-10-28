@@ -62,19 +62,14 @@ fun test_executable_flow() {
     let issuer = issuer::construct(@0x0, version::current(), DummyProposal(), b"".to_string());
     let mut actions = bag::new(scenario.ctx());
     actions.add(0, DummyAction {});
-    let mut executable = executable::new(deps, issuer, actions, scenario.ctx());
+    let mut executable = executable::new(deps, issuer, actions);
     // verify initial state (pending action)
     assert!(executable.deps().length() == 3);
     assert!(executable.issuer().account_addr() == @0x0);
-    assert!(!executable.action_is_completed<DummyAction>());
     // first step: execute action
-    let _action_mut = executable.load<DummyAction, DummyProposal>(@0x0, version::current(), DummyProposal());
-    executable.process<DummyAction, DummyProposal>(version::current(), DummyProposal());
-    assert!(executable.action_is_completed<DummyAction>());
-    // second step: destroy action
-    let DummyAction {} = executable.cleanup(version::current(), DummyProposal());
-    assert!(!executable.action_is_completed<DummyAction>());
-    executable.terminate(version::current(), DummyProposal());
+    let DummyAction {} = executable.action<DummyAction, DummyProposal>(@0x0, version::current(), DummyProposal());
+    // second step: destroy executable
+    executable.destroy(version::current(), DummyProposal());
 
     end(scenario, extensions);
 }
@@ -87,48 +82,14 @@ fun test_error_cannot_load_action() {
     let issuer = issuer::construct(@0x0, version::current(), DummyProposal(), b"".to_string());
     let mut actions = bag::new(scenario.ctx());
     actions.add(0, DummyAction {});
-    let mut executable = executable::new(deps, issuer, actions, scenario.ctx());
-    let _action_mut = executable.load<WrongAction, DummyProposal>(@0x0, version::current(), DummyProposal());
+    let mut executable = executable::new(deps, issuer, actions);
+    let WrongAction {} = executable.action<WrongAction, DummyProposal>(@0x0, version::current(), DummyProposal());
 
     destroy(executable);
     end(scenario, extensions);
 }
 
-#[test, expected_failure(abort_code = executable::EActionNotPending)]
-fun test_error_cannot_process_action() {
-    let (mut scenario, extensions) = start();
-
-    let deps = deps::new(&extensions);
-    let issuer = issuer::construct(@0x0, version::current(), DummyProposal(), b"".to_string());
-    let mut actions = bag::new(scenario.ctx());
-    actions.add(0, DummyAction {});
-
-    let mut executable = executable::new(deps, issuer, actions, scenario.ctx());
-    executable.process<WrongAction, DummyProposal>(version::current(), DummyProposal());
-
-    destroy(executable);
-    end(scenario, extensions);
-}
-
-#[test, expected_failure(abort_code = executable::EActionNotCompleted)]
-fun test_error_cannot_cleanup_action() {
-    let (mut scenario, extensions) = start();
-
-    let deps = deps::new(&extensions);
-    let issuer = issuer::construct(@0x0, version::current(), DummyProposal(), b"".to_string());
-    let mut actions = bag::new(scenario.ctx());
-    actions.add(0, DummyAction {});
-
-    let mut executable = executable::new(deps, issuer, actions, scenario.ctx());
-    executable.process<DummyAction, DummyProposal>(version::current(), DummyProposal());
-    let action = executable.cleanup<WrongAction, DummyProposal>(version::current(), DummyProposal());
-
-    destroy(action);
-    destroy(executable);
-    end(scenario, extensions);
-}
-
-#[test, expected_failure(abort_code = executable::EPendingNotEmpty)]
+#[test, expected_failure(abort_code = executable::EActionsNotEmpty)]
 fun test_error_cannot_terminate_pending_remaining() {
     let (mut scenario, extensions) = start();
 
@@ -138,31 +99,9 @@ fun test_error_cannot_terminate_pending_remaining() {
     actions.add(0, DummyAction {});
     actions.add(1, DummyAction {});
 
-    let mut executable = executable::new(deps, issuer, actions, scenario.ctx());
-    executable.process<DummyAction, DummyProposal>(version::current(), DummyProposal());
-    let action = executable.cleanup<DummyAction, DummyProposal>(version::current(), DummyProposal());
-    executable.terminate(version::current(), DummyProposal());
+    let mut executable = executable::new(deps, issuer, actions);
+    let DummyAction {} = executable.action<DummyAction, DummyProposal>(@0x0, version::current(), DummyProposal());
+    executable.destroy(version::current(), DummyProposal());
 
-    destroy(action);
-    end(scenario, extensions);
-}
-
-#[test, expected_failure(abort_code = executable::ECompletedNotEmpty)]
-fun test_error_cannot_terminate_completed_remaining() {
-    let (mut scenario, extensions) = start();
-
-    let deps = deps::new(&extensions);
-    let issuer = issuer::construct(@0x0, version::current(), DummyProposal(), b"".to_string());
-    let mut actions = bag::new(scenario.ctx());
-    actions.add(0, DummyAction {});
-    actions.add(1, DummyAction {});
-
-    let mut executable = executable::new(deps, issuer, actions, scenario.ctx());
-    executable.process<DummyAction, DummyProposal>(version::current(), DummyProposal());
-    executable.process<DummyAction, DummyProposal>(version::current(), DummyProposal());
-    let action = executable.cleanup<DummyAction, DummyProposal>(version::current(), DummyProposal());
-    executable.terminate(version::current(), DummyProposal());
-
-    destroy(action);
     end(scenario, extensions);
 }

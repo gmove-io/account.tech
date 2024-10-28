@@ -157,7 +157,6 @@ fun test_proposal_execute_flow() {
         b"one".to_string(), 
         &clock, 
         version::current(), 
-        scenario.ctx()
     );
 
     destroy(outcome);
@@ -191,7 +190,6 @@ fun test_anyone_can_execute_proposal() {
         b"one".to_string(), 
         &clock, 
         version::current(), 
-        scenario.ctx()
     );
 
     destroy(outcome);
@@ -397,7 +395,7 @@ fun test_error_cannot_execute_proposal_from_not_core_dep() {
         scenario.ctx()
     );
     account.add_proposal(proposal, version::current(), DummyProposal());
-    let (executable, outcome) = account.execute_proposal(b"one".to_string(), &clock, wrong_version(), scenario.ctx());
+    let (executable, outcome) = account.execute_proposal(b"one".to_string(), &clock, wrong_version());
 
     destroy(executable);
     destroy(outcome);

@@ -337,7 +337,7 @@ fun test_proposal_execution() {
     // approve
     multisig::approve_proposal(&mut account, b"dummy".to_string(), scenario.ctx());
     // execute proposal
-    let executable = multisig::execute_proposal(&mut account, b"dummy".to_string(), &clock, scenario.ctx());
+    let executable = multisig::execute_proposal(&mut account, b"dummy".to_string(), &clock);
     assert!(executable.issuer().full_role() == full_role());
 
     destroy(executable);
@@ -379,12 +379,7 @@ fun test_config_multisig() {
         scenario.ctx()
     );
     multisig::approve_proposal(&mut account, b"config".to_string(), scenario.ctx());
-    let executable = multisig::execute_proposal(
-        &mut account, 
-        b"config".to_string(), 
-        &clock, 
-        scenario.ctx()
-    );
+    let executable = multisig::execute_proposal(&mut account, b"config".to_string(), &clock);
     multisig::execute_config_multisig(executable, &mut account);
 
     assert!(account.config().addresses() == vector[OWNER, @0xBABE]);
@@ -510,7 +505,7 @@ fun test_error_outcome_validate_global_threshold_reached() {
     let (mut scenario, extensions, mut account, clock) = start();
     
     create_and_add_dummy_proposal(&mut scenario, &mut account, &extensions);
-    let executable = multisig::execute_proposal(&mut account, b"dummy".to_string(), &clock, scenario.ctx());
+    let executable = multisig::execute_proposal(&mut account, b"dummy".to_string(), &clock);
 
     destroy(executable);
     end(scenario, extensions, account, clock);
@@ -522,7 +517,7 @@ fun test_error_outcome_validate_no_threshold_reached() {
     account.config_mut(version::current()).add_role_to_multisig(full_role(), 2);
     
     create_and_add_dummy_proposal(&mut scenario, &mut account, &extensions);
-    let executable = multisig::execute_proposal(&mut account, b"dummy".to_string(), &clock, scenario.ctx());
+    let executable = multisig::execute_proposal(&mut account, b"dummy".to_string(), &clock);
 
     destroy(executable);
     end(scenario, extensions, account, clock);

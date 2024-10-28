@@ -114,19 +114,18 @@ public fun execute_access<Config, Outcome, Cap: store>(
     executable: &mut Executable,
     account: &mut Account<Config, Outcome>,
 ): (Borrow<Cap>, Cap) {
-    access_cap(executable, account, version::current(), AccessProposal())
+    do_access(executable, account, version::current(), AccessProposal())
 }
 
 // step 5: return the cap to destroy Borrow, the action and executable
 public fun complete_access<Config, Outcome, Cap: store>(
-    mut executable: Executable, 
+    executable: Executable, 
     account: &mut Account<Config, Outcome>,
     borrow: Borrow<Cap>, 
     cap: Cap
 ) {
     return_cap(account, borrow, cap, version::current());
-    destroy_access<Cap, AccessProposal>(&mut executable, version::current(), AccessProposal());
-    executable.terminate(version::current(), AccessProposal());
+    executable.destroy(version::current(), AccessProposal());
 }
 
 // === [ACTION] Public functions ===
@@ -138,7 +137,7 @@ public fun new_access<Outcome, Cap, W: drop>(
     proposal.add_action(AccessAction<Cap> {}, witness);
 }
 
-public fun access_cap<Config, Outcome, Cap: store, W: copy + drop>(
+public fun do_access<Config, Outcome, Cap: store, W: copy + drop>(
     executable: &mut Executable, 
     account: &mut Account<Config, Outcome>,
     version: TypeName,
@@ -146,11 +145,9 @@ public fun access_cap<Config, Outcome, Cap: store, W: copy + drop>(
 ): (Borrow<Cap>, Cap) {
     assert!(has_lock<Config, Outcome, Cap>(account), ENoLock);
     // check to be sure this cap type has been approved
-    let _access_action = executable.load<AccessAction<Cap>, W>(account.addr(), version, witness);
+    let AccessAction<Cap> {} = executable.action(account.addr(), version, witness);
     let AccessLock<Cap> { cap } = account.remove_managed_asset(AccessKey<Cap> {}, version);
     
-    executable.process<AccessAction<Cap>, W>(version, witness);
-
     (Borrow<Cap> { account_addr: account.addr() }, cap)
 }
 
@@ -164,10 +161,6 @@ public fun return_cap<Config, Outcome, Cap: store>(
     assert!(account_addr == account.addr(), EWrongAccount);
 
     account.add_managed_asset(AccessKey<Cap> {}, AccessLock { cap }, version);
-}
-
-public fun destroy_access<Cap, W: drop>(executable: &mut Executable, version: TypeName, witness: W) {
-    let AccessAction<Cap> {} = executable.cleanup(version, witness);
 }
 
 public fun delete_access_action<Outcome, Cap>(expired: &mut Expired<Outcome>) {

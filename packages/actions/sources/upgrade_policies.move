@@ -201,21 +201,21 @@ public fun propose_upgrade<Config, Outcome>(
 public fun execute_upgrade<Config, Outcome>(
     executable: &mut Executable,
     account: &mut Account<Config, Outcome>,
-): UpgradeTicket {
-    upgrade(executable, account, version::current(), UpgradeProposal())
+): (UpgradeTicket, UpgradeLock) {
+    do_upgrade(executable, account, version::current(), UpgradeProposal())
 }    
 
 // step 5: consume the ticket to upgrade  
 
 // step 6: consume the receipt to commit the upgrade
 public fun complete_upgrade<Config, Outcome>(
-    mut executable: Executable,
+    executable: Executable,
     account: &mut Account<Config, Outcome>,
     receipt: UpgradeReceipt,
+    lock: UpgradeLock,
 ) {
-    confirm_upgrade(&mut executable, account, receipt, version::current(), UpgradeProposal());
-    destroy_upgrade(&mut executable, version::current(), UpgradeProposal());
-    executable.terminate(version::current(), UpgradeProposal());
+    confirm_upgrade(&executable, account, receipt, lock, version::current(), UpgradeProposal());
+    executable.destroy(version::current(), UpgradeProposal());
 }
 
 // step 1: propose an UpgradeAction by passing the digest of the package build
@@ -262,9 +262,8 @@ public fun execute_restrict<Config, Outcome>(
     mut executable: Executable,
     account: &mut Account<Config, Outcome>,
 ) {
-    restrict(&mut executable, account, version::current(), RestrictProposal());
-    destroy_restrict(&mut executable, version::current(), RestrictProposal());
-    executable.terminate(version::current(), RestrictProposal());
+    do_restrict(&mut executable, account, version::current(), RestrictProposal());
+    executable.destroy(version::current(), RestrictProposal());
 }
 
 // [ACTION] Public Functions ===
@@ -278,42 +277,36 @@ public fun new_upgrade<Outcome, W: drop>(
     proposal.add_action(UpgradeAction { package, digest }, witness);
 }    
 
-public fun upgrade<Config, Outcome, W: copy + drop>(
+public fun do_upgrade<Config, Outcome, W: copy + drop>(
     executable: &mut Executable,
     account: &mut Account<Config, Outcome>,
     version: TypeName,
     witness: W,
-): UpgradeTicket {
-    let upgrade_action = executable.load<UpgradeAction, W>(account.addr(), version, witness);
-    let lock_mut: &mut UpgradeLock = 
-        account.borrow_managed_asset_mut(UpgradeKey { package: upgrade_action.package }, version);
+): (UpgradeTicket, UpgradeLock) {
+    let UpgradeAction { package, digest } = executable.action(account.addr(), version, witness);
+    let mut lock: UpgradeLock = account.remove_managed_asset(UpgradeKey { package }, version);
 
-    let policy = lock_mut.upgrade_cap.policy();
-    let ticket = lock_mut.upgrade_cap.authorize_upgrade(policy, upgrade_action.digest);
+    let policy = lock.upgrade_cap.policy();
+    let ticket = lock.upgrade_cap.authorize_upgrade(policy, digest);
 
-    ticket
+    (ticket, lock)
 }    
 
 public fun confirm_upgrade<Config, Outcome, W: copy + drop>(
-    executable: &mut Executable,
+    executable: &Executable,
     account: &mut Account<Config, Outcome>,
     receipt: UpgradeReceipt,
+    mut lock: UpgradeLock,
     version: TypeName,
     witness: W,
 ) {
-    let upgrade_action = executable.load<UpgradeAction, W>(account.addr(), version, witness);
-    let mut lock: UpgradeLock = 
-        account.remove_managed_asset(UpgradeKey { package: upgrade_action.package }, version);
+    executable.deps().assert_is_dep(version);
+    executable.issuer().assert_is_constructor(witness);
+    executable.issuer().assert_is_account(account.addr());
 
     let new_package = receipt.package().to_address();
     package::commit_upgrade(&mut lock.upgrade_cap, receipt);
     account.add_managed_asset(UpgradeKey { package: new_package }, lock, version);
-
-    executable.process<UpgradeAction, W>(version, witness);
-}
-
-public fun destroy_upgrade<W: drop>(executable: &mut Executable, version: TypeName, witness: W) {
-    let UpgradeAction { .. } = executable.cleanup(version, witness);
 }
 
 public fun delete_upgrade_action<Outcome>(expired: &mut Expired<Outcome>) {
@@ -338,19 +331,18 @@ public fun new_restrict<Outcome, W: drop>(
     proposal.add_action(RestrictAction { package, policy }, witness);
 }    
 
-public fun restrict<Config, Outcome, W: copy + drop>(
+public fun do_restrict<Config, Outcome, W: copy + drop>(
     executable: &mut Executable,
     account: &mut Account<Config, Outcome>,
     version: TypeName,
     witness: W,
 ) {
-    let restrict_action = executable.load<RestrictAction, W>(account.addr(), version, witness);
-    let package = restrict_action.package;
+    let RestrictAction { package, policy } = executable.action(account.addr(), version, witness);
 
-    if (restrict_action.policy == package::additive_policy()) {
+    if (policy == package::additive_policy()) {
         let lock_mut: &mut UpgradeLock = account.borrow_managed_asset_mut(UpgradeKey { package }, version);
         lock_mut.upgrade_cap.only_additive_upgrades();
-    } else if (restrict_action.policy == package::dep_only_policy()) {
+    } else if (policy == package::dep_only_policy()) {
         let lock_mut: &mut UpgradeLock = account.borrow_managed_asset_mut(UpgradeKey { package }, version);
         lock_mut.upgrade_cap.only_dep_upgrades();
     } else {
@@ -358,12 +350,6 @@ public fun restrict<Config, Outcome, W: copy + drop>(
         package::make_immutable(upgrade_cap);
         id.delete();
     };
-    
-    executable.process<RestrictAction, W>(version, witness);
-}
-
-public fun destroy_restrict<W: drop>(executable: &mut Executable, version: TypeName, witness: W) {
-    let RestrictAction { .. } = executable.cleanup(version, witness);
 }
 
 public fun delete_restrict_action<Outcome>(expired: &mut Expired<Outcome>) {
