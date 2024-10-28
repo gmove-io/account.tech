@@ -203,6 +203,7 @@ public fun public_burn<Config, Outcome, CoinType>(
     let lock_mut: &mut CurrencyLock<CoinType> = account.borrow_managed_asset_mut(CurrencyKey<CoinType> {}, version::current());
     assert!(lock_mut.can_burn, EBurnDisabled);
 
+    lock_mut.total_burnt = lock_mut.total_burnt + coin.value();
     lock_mut.treasury_cap.burn(coin);
 }
 
@@ -601,6 +602,8 @@ public fun do_mint<Config, Outcome, CoinType, W: copy + drop>(
     let lock_mut: &mut CurrencyLock<CoinType> = account.borrow_managed_asset_mut(CurrencyKey<CoinType> {}, version);
     assert!(lock_mut.can_mint, EMintDisabled);
     if (lock_mut.max_supply.is_some()) assert!(amount + lock_mut.supply() <= *lock_mut.max_supply.borrow(), EMaxSupply);
+    
+    lock_mut.total_minted = lock_mut.total_minted + amount;
     lock_mut.treasury_cap.mint(amount, ctx)
 }
 
@@ -628,6 +631,8 @@ public fun do_burn<Config, Outcome, CoinType, W: copy + drop>(
     
     let lock_mut: &mut CurrencyLock<CoinType> = account.borrow_managed_asset_mut(CurrencyKey<CoinType> {}, version);
     assert!(lock_mut.can_burn, EBurnDisabled);
+
+    lock_mut.total_burnt = lock_mut.total_burnt + amount;
     lock_mut.treasury_cap.burn(coin);
 }
 
