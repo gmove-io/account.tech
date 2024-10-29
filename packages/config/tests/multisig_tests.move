@@ -43,7 +43,9 @@ fun start(): (Scenario, Extensions, Account<Multisig, Approvals>, Clock) {
     extensions.add(&cap, b"AccountConfig".to_string(), @account_config, 1);
     extensions.add(&cap, b"AccountActions".to_string(), @0x2, 1);
     // Account generic types are dummy types (bool, bool)
-    let account = multisig::new_account(&extensions, b"Main".to_string(), scenario.ctx());
+    let mut account = multisig::new_account(&extensions, b"Main".to_string(), scenario.ctx());
+    account.config_mut(version::current()).add_role_to_multisig(full_role(), 1);
+    account.config_mut(version::current()).member_mut(OWNER).add_role_to_member(full_role());
     let clock = clock::create_for_testing(scenario.ctx());
     // create world
     destroy(cap);
@@ -90,14 +92,14 @@ fun create_and_add_other_proposal(
     account: &mut Account<Multisig, Approvals>, 
     extensions: &Extensions, 
 ) {
-    let auth = multisig::authenticate(extensions, account, full_role(), scenario.ctx());
+    let auth = multisig::authenticate(extensions, account, b"".to_string(), scenario.ctx());
     let outcome = multisig::new_outcome(account, scenario.ctx());
     let proposal = account.create_proposal(
         auth, 
         outcome, 
         version::current(), 
         DummyProposal(), 
-        b"Degen".to_string(), 
+        b"".to_string(), 
         b"other".to_string(), 
         b"".to_string(), 
         0,
@@ -173,9 +175,7 @@ fun test_members_accessors() {
 
 #[test]
 fun test_member_getters() {
-    let (scenario, extensions, mut account, clock) = start();
-    account.config_mut(version::current()).add_role_to_multisig(full_role(), 1);
-    account.config_mut(version::current()).member_mut(OWNER).add_role_to_member(full_role());
+    let (scenario, extensions, account, clock) = start();
 
     assert!(account.config().member(OWNER).weight() == 1);
     assert!(account.config().member(OWNER).roles() == vector[full_role()]);
@@ -209,7 +209,7 @@ fun test_proposal_approval() {
     multisig::approve_proposal(&mut account, b"dummy".to_string(), scenario.ctx());
     let outcome = account.proposal(b"dummy".to_string()).outcome();
     assert!(outcome.total_weight() == 1);
-    assert!(outcome.role_weight() == 0); // OWNER does not have the role
+    assert!(outcome.role_weight() == 1); // OWNER has the role
     assert!(outcome.approved() == vector[OWNER]);
     // disapprove
     multisig::disapprove_proposal(&mut account, b"dummy".to_string(), scenario.ctx());
@@ -224,8 +224,6 @@ fun test_proposal_approval() {
 #[test]
 fun test_proposal_approval_with_role() {
     let (mut scenario, extensions, mut account, clock) = start();
-    // add role to OWNER
-    account.config_mut(version::current()).member_mut(OWNER).add_role_to_member(full_role());
     // create proposal
     create_and_add_dummy_proposal(&mut scenario, &mut account, &extensions);
     // approve with role
@@ -247,19 +245,20 @@ fun test_proposal_approval_with_role() {
 #[test]
 fun test_proposal_approval_without_role() {
     let (mut scenario, extensions, mut account, clock) = start();
+    account.config_mut(version::current()).member_mut(OWNER).remove_role_from_member(full_role());
     // create proposal
-    create_and_add_dummy_proposal(&mut scenario, &mut account, &extensions);
+    create_and_add_other_proposal(&mut scenario, &mut account, &extensions);
     // approve WITHOUT role
-    multisig::approve_proposal(&mut account, b"dummy".to_string(), scenario.ctx());
-    let outcome = account.proposal(b"dummy".to_string()).outcome();
+    multisig::approve_proposal(&mut account, b"other".to_string(), scenario.ctx());
+    let outcome = account.proposal(b"other".to_string()).outcome();
     assert!(outcome.total_weight() == 1);
     assert!(outcome.role_weight() == 0);
     assert!(outcome.approved() == vector[OWNER]);
     // add role to OWNER
     account.config_mut(version::current()).member_mut(OWNER).add_role_to_member(full_role());
     // disapprove with role (shouldn't throw)
-    multisig::disapprove_proposal(&mut account, b"dummy".to_string(), scenario.ctx());
-    let outcome = account.proposal(b"dummy".to_string()).outcome();
+    multisig::disapprove_proposal(&mut account, b"other".to_string(), scenario.ctx());
+    let outcome = account.proposal(b"other".to_string()).outcome();
     assert!(outcome.total_weight() == 0);
     assert!(outcome.role_weight() == 0);
     assert!(outcome.approved() == vector[]);
@@ -270,19 +269,20 @@ fun test_proposal_approval_without_role() {
 #[test]
 fun test_proposal_disapprove_with_higher_weight() {
     let (mut scenario, extensions, mut account, clock) = start();
+    account.config_mut(version::current()).member_mut(OWNER).remove_role_from_member(full_role());
     // create proposal
-    create_and_add_dummy_proposal(&mut scenario, &mut account, &extensions);
+    create_and_add_other_proposal(&mut scenario, &mut account, &extensions);
     // approve WITHOUT role
-    multisig::approve_proposal(&mut account, b"dummy".to_string(), scenario.ctx());
-    let outcome = account.proposal(b"dummy".to_string()).outcome();
+    multisig::approve_proposal(&mut account, b"other".to_string(), scenario.ctx());
+    let outcome = account.proposal(b"other".to_string()).outcome();
     assert!(outcome.total_weight() == 1);
     assert!(outcome.role_weight() == 0);
     assert!(outcome.approved() == vector[OWNER]);
     // increase OWNER's weight
     account.config_mut(version::current()).member_mut(OWNER).set_weight(2);
     // disapprove with role (shouldn't throw)
-    multisig::disapprove_proposal(&mut account, b"dummy".to_string(), scenario.ctx());
-    let outcome = account.proposal(b"dummy".to_string()).outcome();
+    multisig::disapprove_proposal(&mut account, b"other".to_string(), scenario.ctx());
+    let outcome = account.proposal(b"other".to_string()).outcome();
     assert!(outcome.total_weight() == 0);
     assert!(outcome.role_weight() == 0);
     assert!(outcome.approved() == vector[]);
@@ -434,6 +434,18 @@ fun test_error_new_outcome_not_member() {
 #[test, expected_failure(abort_code = multisig::ECallerIsNotMember)]
 fun test_error_authenticate_not_member() {
     let (mut scenario, extensions, account, clock) = start();
+
+    scenario.next_tx(ALICE);
+    let auth = multisig::authenticate(&extensions, &account, full_role(), scenario.ctx());
+
+    destroy(auth);
+    end(scenario, extensions, account, clock);
+}
+
+#[test, expected_failure(abort_code = multisig::ERoleNotFound)]
+fun test_error_authenticate_member_no_role() {
+    let (mut scenario, extensions, mut account, clock) = start();
+    account.config_mut(version::current()).add_member(ALICE);
 
     scenario.next_tx(ALICE);
     let auth = multisig::authenticate(&extensions, &account, full_role(), scenario.ctx());
@@ -697,7 +709,7 @@ fun test_error_get_member_idx_not_found() {
 fun test_error_get_role_idx_not_found() {
     let (scenario, extensions, account, clock) = start();
 
-    assert!(account.config().get_role_idx(full_role()) == 1);
+    assert!(account.config().get_role_idx(b"".to_string()) == 1);
 
     end(scenario, extensions, account, clock);
 }

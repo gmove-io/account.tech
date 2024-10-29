@@ -177,6 +177,7 @@ public fun authenticate(
     ctx: &TxContext
 ): Auth {
     account.config().assert_is_member(ctx);
+    if (!role.is_empty()) assert!(account.config().member(ctx.sender()).has_role(role), ERoleNotFound);
 
     auth::new(extensions, role, account.addr(), version::current())
 }
@@ -543,4 +544,12 @@ public fun add_role_to_member(
     role: String,
 ) {
     member.roles.insert(role);
+}
+
+#[test_only]
+public fun remove_role_from_member(
+    member: &mut Member,
+    role: String,
+) {
+    member.roles.remove(&role);
 }
