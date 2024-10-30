@@ -134,8 +134,10 @@ public fun add_proposal<Config, Outcome, W: drop>(
     version: TypeName,
     witness: W
 ) {
+    proposal.issuer().assert_is_account(account.addr());
     account.deps().assert_is_dep(version);  
-    proposal.issuer().assert_is_constructor(witness);  
+    proposal.issuer().assert_is_constructor(witness);
+
     account.proposals.add(proposal);
 }
 

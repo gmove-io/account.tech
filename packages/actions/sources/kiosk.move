@@ -35,6 +35,8 @@ const EWrongReceiver: vector<u8> = b"Caller is not the approved recipient";
 const ENftsPricesNotSameLength: vector<u8> = b"Nfts prices vectors must have the same length";
 #[error]
 const ENoLock: vector<u8> = b"No Kiosk found with this name";
+#[error]
+const EAlreadyExists: vector<u8> = b"There already is a Kiosk with this name";
 
 // === Structs ===    
 
@@ -82,6 +84,7 @@ public fun open<Config, Outcome>(
     ctx: &mut TxContext
 ) {
     auth.verify(account.addr());
+    assert!(!has_lock<Config, Outcome>(account, name), EAlreadyExists);
 
     let (mut kiosk, kiosk_owner_cap) = kiosk::new(ctx);
     kiosk.set_owner_custom(&kiosk_owner_cap, account.addr());
@@ -115,12 +118,14 @@ public fun place<Config, Outcome, Nft: key + store>(
     account_kiosk: &mut Kiosk, 
     sender_kiosk: &mut Kiosk, 
     sender_cap: &KioskOwnerCap, 
+    policy: &mut TransferPolicy<Nft>,
     name: String,
     nft_id: ID,
-    policy: &mut TransferPolicy<Nft>,
     ctx: &mut TxContext
 ): TransferRequest<Nft> {
     auth.verify_with_role<Place>(account.addr(), name);
+    assert!(has_lock(account, name), ENoLock);
+
     let lock_mut: &mut KioskOwnerLock = account.borrow_managed_asset_mut(KioskOwnerKey { name }, version::current());
 
     sender_kiosk.list<Nft>(sender_cap, nft_id, 0);
@@ -134,6 +139,8 @@ public fun place<Config, Outcome, Nft: key + store>(
     };
 
     if (policy.has_rule<Nft, royalty_rule::Rule>()) {
+        // can't read royalty rule on-chain because transfer_policy::get_rule not implemented
+        // so we can't throw an error if there is a minimum floor price set
         royalty_rule::pay(policy, &mut request, coin::zero<SUI>(ctx));
     }; 
 
@@ -150,6 +157,8 @@ public fun delist<Config, Outcome, Nft: key + store>(
     nft: ID,
 ) {
     auth.verify_with_role<Delist>(account.addr(), name);
+    assert!(has_lock(account, name), ENoLock);
+
     let lock_mut: &mut KioskOwnerLock = account.borrow_managed_asset_mut(KioskOwnerKey { name }, version::current());
     kiosk.delist<Nft>(&lock_mut.kiosk_owner_cap, nft);
 }
@@ -163,6 +172,8 @@ public fun withdraw_profits<Config, Outcome>(
     ctx: &mut TxContext
 ) {
     auth.verify(account.addr());
+    assert!(has_lock(account, name), ENoLock);
+
     let lock_mut: &mut KioskOwnerLock = account.borrow_managed_asset_mut(KioskOwnerKey { name }, version::current());
 
     let profits_mut = kiosk.profits_mut(&lock_mut.kiosk_owner_cap);
@@ -181,10 +192,11 @@ public fun close<Config, Outcome>(
     ctx: &mut TxContext
 ) {
     auth.verify(account.addr());
+    assert!(has_lock(account, name), ENoLock);
 
-    let cap = 
+    let KioskOwnerLock { kiosk_owner_cap } = 
         account.remove_managed_asset(KioskOwnerKey { name }, version::current());
-    let profits = kiosk.close_and_withdraw(cap, ctx);
+    let profits = kiosk.close_and_withdraw(kiosk_owner_cap, ctx);
     
     account.keep(profits);
 }
