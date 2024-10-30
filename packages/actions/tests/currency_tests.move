@@ -22,7 +22,7 @@ use account_config::multisig::{Self, Multisig, Approvals};
 use account_actions::{
     version,
     currency,
-    payments::Stream,
+    vesting::Stream,
 };
 
 // === Constants ===
@@ -379,7 +379,7 @@ fun test_propose_execute_transfer() {
 }
 
 #[test]
-fun test_propose_execute_payment() {
+fun test_propose_execute_vesting() {
     let (mut scenario, extensions, mut account, clock, cap, metadata) = start();
     let auth = multisig::authenticate(&extensions, &account, b"".to_string(), scenario.ctx());
     currency::lock_cap(auth, &mut account, cap, option::none());
@@ -387,7 +387,7 @@ fun test_propose_execute_payment() {
 
     let auth = multisig::authenticate(&extensions, &account, b"".to_string(), scenario.ctx());
     let outcome = multisig::new_outcome(&account, scenario.ctx());
-    currency::propose_pay<Multisig, Approvals, CURRENCY_TESTS>(
+    currency::propose_vesting<Multisig, Approvals, CURRENCY_TESTS>(
         auth, 
         &mut account, 
         outcome, 
@@ -404,14 +404,14 @@ fun test_propose_execute_payment() {
 
     multisig::approve_proposal(&mut account, key, scenario.ctx());
     let executable = multisig::execute_proposal(&mut account, key, &clock);
-    currency::execute_pay<Multisig, Approvals, CURRENCY_TESTS>(executable, &mut account, scenario.ctx());
+    currency::execute_vesting<Multisig, Approvals, CURRENCY_TESTS>(executable, &mut account, scenario.ctx());
 
     scenario.next_tx(OWNER);
     let stream = scenario.take_shared<Stream<CURRENCY_TESTS>>();
     assert!(stream.balance_value() == 5);
-    assert!(stream.amount() == 1);
-    assert!(stream.interval() == 2);
-    assert!(stream.last_timestamp() == 0);
+    assert!(stream.last_claimed() == 0);
+    assert!(stream.start_timestamp() == 1);
+    assert!(stream.end_timestamp() == 2);
     assert!(stream.recipient() == @0x1);
 
     destroy(stream);
@@ -1007,12 +1007,12 @@ fun test_error_propose_transfer_not_same_length() {
 }
 
 #[test, expected_failure(abort_code = currency::ENoLock)]
-fun test_error_propose_payment_no_lock() {
+fun test_error_propose_vesting_no_lock() {
     let (mut scenario, extensions, mut account, clock, cap, metadata) = start();
 
     let auth = multisig::authenticate(&extensions, &account, b"".to_string(), scenario.ctx());
     let outcome = multisig::new_outcome(&account, scenario.ctx());
-    currency::propose_pay<Multisig, Approvals, CURRENCY_TESTS>(
+    currency::propose_vesting<Multisig, Approvals, CURRENCY_TESTS>(
         auth, 
         &mut account, 
         outcome, 

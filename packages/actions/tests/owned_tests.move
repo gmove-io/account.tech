@@ -22,7 +22,7 @@ use account_config::multisig::{Self, Multisig, Approvals};
 use account_actions::{
     version,
     owned,
-    payments::Stream,
+    vesting::Stream,
 };
 
 // === Constants ===
@@ -141,7 +141,7 @@ fun test_propose_execute_transfer() {
 }
 
 #[test]
-fun test_propose_execute_payment() {
+fun test_propose_execute_vesting() {
     let (mut scenario, extensions, mut account, clock) = start();
     let key = b"dummy".to_string();
 
@@ -149,7 +149,7 @@ fun test_propose_execute_payment() {
 
     let auth = multisig::authenticate(&extensions, &account, b"".to_string(), scenario.ctx());
     let outcome = multisig::new_outcome(&account, scenario.ctx());
-    owned::propose_pay(
+    owned::propose_vesting(
         auth, 
         &mut account, 
         outcome, 
@@ -166,14 +166,14 @@ fun test_propose_execute_payment() {
 
     multisig::approve_proposal(&mut account, key, scenario.ctx());
     let executable = multisig::execute_proposal(&mut account, key, &clock);
-    owned::execute_pay<Multisig, Approvals, SUI>(executable, &mut account, ts::receiving_ticket_by_id<Coin<SUI>>(id), scenario.ctx());
+    owned::execute_vesting<Multisig, Approvals, SUI>(executable, &mut account, ts::receiving_ticket_by_id<Coin<SUI>>(id), scenario.ctx());
 
     scenario.next_tx(OWNER);
     let stream = scenario.take_shared<Stream<SUI>>();
     assert!(stream.balance_value() == 5);
-    assert!(stream.amount() == 1);
-    assert!(stream.interval() == 2);
-    assert!(stream.last_timestamp() == 0);
+    assert!(stream.last_claimed() == 0);
+    assert!(stream.start_timestamp() == 1);
+    assert!(stream.end_timestamp() == 2);
     assert!(stream.recipient() == @0x1);
 
     destroy(stream);

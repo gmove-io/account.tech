@@ -26,8 +26,8 @@ use account_protocol::{
 };
 use account_actions::{
     owned,
-    transfers,
-    payments,
+    transfer as acc_transfer,
+    vesting,
     version,
 };
 
@@ -87,7 +87,7 @@ public struct MintProposal() has copy, drop;
 public struct BurnProposal() has copy, drop;
 /// [PROPOSAL] updates the CoinMetadata associated with a locked TreasuryCap
 public struct UpdateProposal() has copy, drop;
-/// [PROPOSAL] transfers from a minted coin 
+/// [PROPOSAL] acc_transfer from a minted coin 
 public struct TransferProposal() has copy, drop;
 /// [PROPOSAL] pays from a minted coin
 public struct PayProposal() has copy, drop;
@@ -467,7 +467,7 @@ public fun propose_transfer<Config, Outcome, CoinType>(
             amount, 
             TransferProposal()
         );
-        transfers::new_transfer(&mut proposal, recipient, TransferProposal());
+        acc_transfer::new_transfer(&mut proposal, recipient, TransferProposal());
     });
 
     account.add_proposal(proposal, version::current(), TransferProposal());
@@ -483,16 +483,16 @@ public fun execute_transfer<Config, Outcome, CoinType>(
     ctx: &mut TxContext
 ) {
     let coin: Coin<CoinType> = do_mint(executable, account, version::current(), TransferProposal(), ctx);
-    transfers::do_transfer(executable, account, coin, version::current(), TransferProposal());
+    acc_transfer::do_transfer(executable, account, coin, version::current(), TransferProposal());
 }
 
-// step 5: complete transfers and destroy the executable
+// step 5: complete acc_transfer and destroy the executable
 public fun complete_transfer(executable: Executable) {
     executable.destroy(version::current(), TransferProposal());
 }
 
 // step 1: propose to pay from a minted coin
-public fun propose_pay<Config, Outcome, CoinType>(
+public fun propose_vesting<Config, Outcome, CoinType>(
     auth: Auth,
     account: &mut Account<Config, Outcome>, 
     outcome: Outcome,
@@ -501,8 +501,8 @@ public fun propose_pay<Config, Outcome, CoinType>(
     execution_time: u64,
     expiration_epoch: u64,
     total_amount: u64,
-    amount: u64, // amount to be paid at each interval
-    interval: u64, // ms between each payment
+    start_timestamp: u64, 
+    end_timestamp: u64, 
     recipient: address,
     ctx: &mut TxContext
 ) {
@@ -526,7 +526,7 @@ public fun propose_pay<Config, Outcome, CoinType>(
         total_amount, 
         PayProposal()
     );
-    payments::new_pay(&mut proposal, amount, interval, recipient, PayProposal());
+    vesting::new_vesting(&mut proposal, start_timestamp, end_timestamp, recipient, PayProposal());
     account.add_proposal(proposal, version::current(), PayProposal());
 }
 
@@ -534,13 +534,13 @@ public fun propose_pay<Config, Outcome, CoinType>(
 // step 3: execute the proposal and return the action (account::execute_proposal)
 
 // step 4: loop over it in PTB, sends last object from the Send action
-public fun execute_pay<Config, Outcome, CoinType>(
+public fun execute_vesting<Config, Outcome, CoinType>(
     mut executable: Executable, 
     account: &mut Account<Config, Outcome>, 
     ctx: &mut TxContext
 ) {
     let coin: Coin<CoinType> = do_mint(&mut executable, account, version::current(), PayProposal(), ctx);
-    payments::do_pay(&mut executable, account, coin, version::current(), PayProposal(), ctx);
+    vesting::do_vesting(&mut executable, account, coin, version::current(), PayProposal(), ctx);
     executable.destroy(version::current(), PayProposal());
 }
 

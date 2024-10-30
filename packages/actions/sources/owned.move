@@ -6,7 +6,7 @@
 /// Caution: borrowed Coins and similar assets can be emptied, only withdraw the amount you need (merge and split coins before if necessary)
 /// 
 /// Objects owned by the account can also be transferred to any address.
-/// Objects can be used to stream payments at specific intervals.
+/// Objects can be used to stream vesting at specific intervals.
 
 module account_actions::owned;
 
@@ -27,8 +27,8 @@ use account_protocol::{
     auth::Auth,
 };
 use account_actions::{
-    transfers,
-    payments,
+    transfer as acc_transfer,
+    vesting,
     version,
 };
 
@@ -41,7 +41,7 @@ const EObjectsRecipientsNotSameLength: vector<u8> = b"Recipients and objects vec
 
 // === Structs ===
 
-/// [PROPOSAL] transfers multiple objects
+/// [PROPOSAL] acc_transfer multiple objects
 public struct TransferProposal() has copy, drop;
 /// [PROPOSAL] streams an amount of coin to be paid at specific intervals
 public struct PayProposal() has copy, drop;
@@ -83,7 +83,7 @@ public fun propose_transfer<Config, Outcome>(
 
     object_ids.zip_do!(recipients, |object_id, recipient| {
         new_withdraw(&mut proposal, object_id, TransferProposal());
-        transfers::new_transfer(&mut proposal, recipient, TransferProposal());
+        acc_transfer::new_transfer(&mut proposal, recipient, TransferProposal());
     });
 
     account.add_proposal(proposal, version::current(), TransferProposal());
@@ -99,16 +99,16 @@ public fun execute_transfer<Config, Outcome, T: key + store>(
     receiving: Receiving<T>,
 ) {
     let object = do_withdraw(executable, account, receiving, version::current(), TransferProposal());
-    transfers::do_transfer(executable, account, object, version::current(), TransferProposal());
+    acc_transfer::do_transfer(executable, account, object, version::current(), TransferProposal());
 }
 
-// step 5: complete transfers and destroy the executable
+// step 5: complete acc_transfer and destroy the executable
 public fun complete_transfer(executable: Executable) {
     executable.destroy(version::current(), TransferProposal());
 }
 
 // step 1: propose to create a Stream with a specific amount to be paid at each interval
-public fun propose_pay<Config, Outcome>(
+public fun propose_vesting<Config, Outcome>(
     auth: Auth,
     account: &mut Account<Config, Outcome>, 
     outcome: Outcome,
@@ -117,8 +117,8 @@ public fun propose_pay<Config, Outcome>(
     execution_time: u64,
     expiration_epoch: u64,
     coin_id: ID, // coin owned by the account, must have the total amount to be paid
-    amount: u64, // amount to be paid at each interval
-    interval: u64, // number of epochs between each payment
+    start_timestamp: u64,
+    end_timestamp: u64, 
     recipient: address,
     ctx: &mut TxContext
 ) {
@@ -136,7 +136,7 @@ public fun propose_pay<Config, Outcome>(
     );
     
     new_withdraw(&mut proposal, coin_id, PayProposal());
-    payments::new_pay(&mut proposal, amount, interval, recipient, PayProposal());
+    vesting::new_vesting(&mut proposal, start_timestamp, end_timestamp, recipient, PayProposal());
 
     account.add_proposal(proposal, version::current(), PayProposal());
 }
@@ -145,14 +145,14 @@ public fun propose_pay<Config, Outcome>(
 // step 3: execute the proposal and return the action (account::execute_proposal)
 
 // step 4: withdraw and place the coin into Stream to be paid
-public fun execute_pay<Config, Outcome, C: drop>(
+public fun execute_vesting<Config, Outcome, C: drop>(
     mut executable: Executable, 
     account: &mut Account<Config, Outcome>, 
     receiving: Receiving<Coin<C>>,
     ctx: &mut TxContext
 ) {
     let coin: Coin<C> = do_withdraw(&mut executable, account, receiving, version::current(), PayProposal());
-    payments::do_pay(&mut executable, account, coin, version::current(), PayProposal(), ctx);
+    vesting::do_vesting(&mut executable, account, coin, version::current(), PayProposal(), ctx);
     executable.destroy(version::current(), PayProposal());
 }
 

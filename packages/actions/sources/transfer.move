@@ -1,7 +1,7 @@
 /// This module defines apis to transfer assets owned or managed by the account.
 /// The proposals can implement transfers for any action type (e.g. see owned or treasury).
 
-module account_actions::transfers;
+module account_actions::transfer;
 
 // === Imports ===
 
