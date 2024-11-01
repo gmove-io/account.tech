@@ -448,6 +448,11 @@ public fun propose_transfer<Config, Outcome, CoinType>(
     assert!(has_lock<Config, Outcome, CoinType>(account), ENoLock);
     assert!(amounts.length() == recipients.length(), EAmountsRecipentsNotSameLength);
 
+    let lock: &CurrencyLock<CoinType> = borrow_lock(account);
+    assert!(lock.can_mint, EMintDisabled);
+    let sum = amounts.fold!(0, |sum, amount| sum + amount);
+    if (lock.max_supply.is_some()) assert!(sum <= *lock.max_supply.borrow(), EMaxSupply);
+
     let mut proposal = account.create_proposal(
         auth,
         outcome,
@@ -507,6 +512,9 @@ public fun propose_vesting<Config, Outcome, CoinType>(
     ctx: &mut TxContext
 ) {
     assert!(has_lock<Config, Outcome, CoinType>(account), ENoLock);
+    let lock: &CurrencyLock<CoinType> = borrow_lock(account);
+    assert!(lock.can_mint, EMintDisabled);
+    if (lock.max_supply.is_some()) assert!(total_amount <= *lock.max_supply.borrow(), EMaxSupply);
 
     let mut proposal = account.create_proposal(
         auth,

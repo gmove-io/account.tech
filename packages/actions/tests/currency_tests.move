@@ -1006,6 +1006,56 @@ fun test_error_propose_transfer_not_same_length() {
     end(scenario, extensions, account, clock, metadata);
 }
 
+#[test, expected_failure(abort_code = currency::EMintDisabled)]
+fun test_error_propose_transfer_mint_disabled() {
+    let (mut scenario, extensions, mut account, clock, cap, metadata) = start();
+    let auth = multisig::authenticate(&extensions, &account, b"".to_string(), scenario.ctx());
+    currency::lock_cap(auth, &mut account, cap, option::none());
+
+    currency::toggle_can_mint<Multisig, Approvals, CURRENCY_TESTS>(&mut account);
+
+    let auth = multisig::authenticate(&extensions, &account, b"".to_string(), scenario.ctx());
+    let outcome = multisig::new_outcome(&account, scenario.ctx());
+    currency::propose_transfer<Multisig, Approvals, CURRENCY_TESTS>(
+        auth, 
+        &mut account, 
+        outcome, 
+        b"dummy".to_string(), 
+        b"".to_string(), 
+        0, 
+        1, 
+        vector[1],
+        vector[@0x1],
+        scenario.ctx()
+    );
+
+    end(scenario, extensions, account, clock, metadata);
+}
+
+#[test, expected_failure(abort_code = currency::EMaxSupply)]
+fun test_error_propose_transfer_mint_too_many() {
+    let (mut scenario, extensions, mut account, clock, cap, metadata) = start();
+    let auth = multisig::authenticate(&extensions, &account, b"".to_string(), scenario.ctx());
+    currency::lock_cap(auth, &mut account, cap, option::some(4));
+
+    let auth = multisig::authenticate(&extensions, &account, b"".to_string(), scenario.ctx());
+    let outcome = multisig::new_outcome(&account, scenario.ctx());
+    currency::propose_transfer<Multisig, Approvals, CURRENCY_TESTS>(
+        auth, 
+        &mut account, 
+        outcome, 
+        b"dummy".to_string(), 
+        b"".to_string(), 
+        0, 
+        1, 
+        vector[1, 2, 3],
+        vector[@0x1, @0x2, @0x3],
+        scenario.ctx()
+    );
+
+    end(scenario, extensions, account, clock, metadata);
+}
+
 #[test, expected_failure(abort_code = currency::ENoLock)]
 fun test_error_propose_vesting_no_lock() {
     let (mut scenario, extensions, mut account, clock, cap, metadata) = start();
@@ -1028,6 +1078,60 @@ fun test_error_propose_vesting_no_lock() {
     );
     
     destroy(cap);
+    end(scenario, extensions, account, clock, metadata);
+}
+
+#[test, expected_failure(abort_code = currency::EMintDisabled)]
+fun test_error_propose_vesting_mint_disabled() {
+    let (mut scenario, extensions, mut account, clock, cap, metadata) = start();
+    let auth = multisig::authenticate(&extensions, &account, b"".to_string(), scenario.ctx());
+    currency::lock_cap(auth, &mut account, cap, option::none());
+
+    currency::toggle_can_mint<Multisig, Approvals, CURRENCY_TESTS>(&mut account);
+
+    let auth = multisig::authenticate(&extensions, &account, b"".to_string(), scenario.ctx());
+    let outcome = multisig::new_outcome(&account, scenario.ctx());
+    currency::propose_vesting<Multisig, Approvals, CURRENCY_TESTS>(
+        auth, 
+        &mut account, 
+        outcome, 
+        b"dummy".to_string(), 
+        b"".to_string(), 
+        0, 
+        1,
+        5, 
+        1,
+        2,
+        @0x1,
+        scenario.ctx()
+    );
+    
+    end(scenario, extensions, account, clock, metadata);
+}
+
+#[test, expected_failure(abort_code = currency::EMaxSupply)]
+fun test_error_propose_vesting_mint_too_many() {
+    let (mut scenario, extensions, mut account, clock, cap, metadata) = start();
+    let auth = multisig::authenticate(&extensions, &account, b"".to_string(), scenario.ctx());
+    currency::lock_cap(auth, &mut account, cap, option::some(4));
+
+    let auth = multisig::authenticate(&extensions, &account, b"".to_string(), scenario.ctx());
+    let outcome = multisig::new_outcome(&account, scenario.ctx());
+    currency::propose_vesting<Multisig, Approvals, CURRENCY_TESTS>(
+        auth, 
+        &mut account, 
+        outcome, 
+        b"dummy".to_string(), 
+        b"".to_string(), 
+        0, 
+        1,
+        5, 
+        1,
+        2,
+        @0x1,
+        scenario.ctx()
+    );
+    
     end(scenario, extensions, account, clock, metadata);
 }
 

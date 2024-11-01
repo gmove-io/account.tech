@@ -67,7 +67,7 @@ fun wrong_version(): TypeName {
     type_name::get<Extensions>()
 }
 
-fun keep_coin(addr: address, amount: u64, scenario: &mut Scenario): ID {
+fun send_coin(addr: address, amount: u64, scenario: &mut Scenario): ID {
     let coin = coin::mint_for_testing<SUI>(amount, scenario.ctx());
     let id = object::id(&coin);
     transfer::public_transfer(coin, addr);
@@ -104,8 +104,8 @@ fun test_propose_execute_transfer() {
     let (mut scenario, extensions, mut account, clock) = start();
     let key = b"dummy".to_string();
 
-    let id1 = keep_coin(account.addr(), 1, &mut scenario);
-    let id2 = keep_coin(account.addr(), 2, &mut scenario);
+    let id1 = send_coin(account.addr(), 1, &mut scenario);
+    let id2 = send_coin(account.addr(), 2, &mut scenario);
 
     let auth = multisig::authenticate(&extensions, &account, b"".to_string(), scenario.ctx());
     let outcome = multisig::new_outcome(&account, scenario.ctx());
@@ -145,7 +145,7 @@ fun test_propose_execute_vesting() {
     let (mut scenario, extensions, mut account, clock) = start();
     let key = b"dummy".to_string();
 
-    let id = keep_coin(account.addr(), 5, &mut scenario);
+    let id = send_coin(account.addr(), 5, &mut scenario);
 
     let auth = multisig::authenticate(&extensions, &account, b"".to_string(), scenario.ctx());
     let outcome = multisig::new_outcome(&account, scenario.ctx());
@@ -185,7 +185,7 @@ fun test_withdraw_flow() {
     let (mut scenario, extensions, mut account, clock) = start();
     let key = b"dummy".to_string();
 
-    let id = keep_coin(account.addr(), 5, &mut scenario);
+    let id = send_coin(account.addr(), 5, &mut scenario);
 
     let mut proposal = create_dummy_proposal(&mut scenario, &mut account, &extensions);
     owned::new_withdraw(&mut proposal, id, DummyProposal());
@@ -213,7 +213,7 @@ fun test_withdraw_expired() {
     clock.increment_for_testing(1);
     let key = b"dummy".to_string();
 
-    let id = keep_coin(account.addr(), 5, &mut scenario);
+    let id = send_coin(account.addr(), 5, &mut scenario);
 
     let mut proposal = create_dummy_proposal(&mut scenario, &mut account, &extensions);
     owned::new_withdraw(&mut proposal, id, DummyProposal());
@@ -256,7 +256,7 @@ fun test_error_do_withdraw_from_wrong_account() {
     let mut account2 = multisig::new_account(&extensions, b"Main".to_string(), scenario.ctx());
     let key = b"dummy".to_string();
 
-    let id = keep_coin(account.addr(), 5, &mut scenario);
+    let id = send_coin(account.addr(), 5, &mut scenario);
 
     // proposal is submitted to other account
     let mut proposal = create_dummy_proposal(&mut scenario, &mut account2, &extensions);
@@ -285,7 +285,7 @@ fun test_error_do_withdraw_from_wrong_constructor_witness() {
     let (mut scenario, extensions, mut account, clock) = start();
     let key = b"dummy".to_string();
 
-    let id = keep_coin(account.addr(), 5, &mut scenario);
+    let id = send_coin(account.addr(), 5, &mut scenario);
 
     let mut proposal = create_dummy_proposal(&mut scenario, &mut account, &extensions);
     owned::new_withdraw(&mut proposal, id, DummyProposal());
@@ -312,7 +312,7 @@ fun test_error_do_withdraw_from_not_dep() {
     let (mut scenario, extensions, mut account, clock) = start();
     let key = b"dummy".to_string();
 
-    let id = keep_coin(account.addr(), 5, &mut scenario);
+    let id = send_coin(account.addr(), 5, &mut scenario);
 
     let mut proposal = create_dummy_proposal(&mut scenario, &mut account, &extensions);
     owned::new_withdraw(&mut proposal, id, DummyProposal());
