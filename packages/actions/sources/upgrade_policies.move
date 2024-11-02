@@ -32,6 +32,8 @@ const EPolicyShouldRestrict: vector<u8> = b"Policy should be restrictive";
 const EInvalidPolicy: vector<u8> = b"Invalid policy number";
 #[error]
 const ENoLock: vector<u8> = b"No lock with this name";
+#[error]
+const ELockAlreadyExists: vector<u8> = b"Lock with this name already exists";
 
 // === Structs ===
 
@@ -110,6 +112,13 @@ public fun has_rule<K: copy + drop + store>(
     df::exists_(&lock.id, key)
 }
 
+public fun get_rule<K: copy + drop + store, R: store>(
+    lock: &UpgradeLock,
+    key: K,
+): &R {
+    df::borrow(&lock.id, key)
+}
+
 /// Attaches the UpgradeLock as a Dynamic Field to the account
 public fun lock_cap<Config, Outcome>(
     auth: Auth,
@@ -117,11 +126,9 @@ public fun lock_cap<Config, Outcome>(
     lock: UpgradeLock,
 ) {
     auth.verify(account.addr());
-    account.add_managed_asset(
-        UpgradeKey { package: lock.upgrade_cap.package().to_address() }, 
-        lock, 
-        version::current()
-    );
+    let package = lock.upgrade_cap.package().to_address();
+    assert!(!has_lock(account, package), ELockAlreadyExists);
+    account.add_managed_asset(UpgradeKey { package }, lock, version::current());
 }
 
 /// Locks a cap with a timelock rule
@@ -156,6 +163,15 @@ public fun upgrade_cap(lock: &UpgradeLock): &UpgradeCap {
     &lock.upgrade_cap
 } 
 
+public fun has_timelock(lock: &UpgradeLock): bool {
+    lock.has_rule(TimeLockKey {})
+}
+
+public fun time_delay(lock: &UpgradeLock): u64 {
+    let rule: &TimeLock = lock.get_rule(TimeLockKey {});
+    rule.delay_ms
+}
+
 // === [PROPOSAL] Public Functions ===
 
 // step 1: propose an UpgradeAction by passing the digest of the package build
@@ -175,7 +191,7 @@ public fun propose_upgrade<Config, Outcome>(
 ) {
     assert!(has_lock(account, package), ENoLock);
     let lock = borrow_lock(account, package);
-    let delay = lock.time_delay();
+    let delay = if (lock.has_timelock()) lock.time_delay() else 0;
 
     let mut proposal = account.create_proposal(
         auth,
@@ -234,7 +250,7 @@ public fun propose_restrict<Config, Outcome>(
 ) {
     assert!(has_lock(account, package), ENoLock);
     let lock = borrow_lock(account, package);
-    let delay = lock.time_delay();
+    let delay = if (lock.has_timelock()) lock.time_delay() else 0;
     let current_policy = lock.upgrade_cap.policy();
 
     let mut proposal = account.create_proposal(
@@ -266,7 +282,7 @@ public fun execute_restrict<Config, Outcome>(
     executable.destroy(version::current(), RestrictProposal());
 }
 
-// [ACTION] Public Functions ===
+// === [ACTION] Public Functions ===
 
 public fun new_upgrade<Outcome, W: drop>(
     proposal: &mut Proposal<Outcome>, 
@@ -300,6 +316,7 @@ public fun confirm_upgrade<Config, Outcome, W: copy + drop>(
     version: TypeName,
     witness: W,
 ) {
+    // same checks as in `executable.action()`
     executable.deps().assert_is_dep(version);
     executable.issuer().assert_is_constructor(witness);
     executable.issuer().assert_is_account(account.addr());
@@ -354,15 +371,4 @@ public fun do_restrict<Config, Outcome, W: copy + drop>(
 
 public fun delete_restrict_action<Outcome>(expired: &mut Expired<Outcome>) {
     let RestrictAction { .. } = expired.remove_expired_action();
-}
-
-// === Private Functions ===
-
-fun time_delay(lock: &UpgradeLock): u64 {
-    if (lock.has_rule(TimeLockKey {})) {
-        let timelock: &TimeLock = df::borrow(&lock.id, TimeLockKey {});
-        timelock.delay_ms
-    } else {
-        0
-    }
 }
