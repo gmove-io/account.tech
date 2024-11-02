@@ -135,7 +135,7 @@ fun test_deposit_owned() {
     let auth = multisig::authenticate(&extensions, &account, b"".to_string(), scenario.ctx());
     treasury::open(auth, &mut account, b"Degen".to_string(), scenario.ctx());
 
-    let id = keep_coin(OWNER, 5, &mut scenario);
+    let id = keep_coin(account.addr(), 5, &mut scenario);
     let auth = multisig::authenticate(&extensions, &account, role(b"Deposit", b"Degen"), scenario.ctx());
     treasury::deposit_owned<Multisig, Approvals, SUI>(
         auth, 

@@ -55,6 +55,15 @@ fun full_role(): String {
     full_role
 }
 
+fun keep_coin(addr: address, amount: u64, scenario: &mut Scenario): ID {
+    let coin = coin::mint_for_testing<SUI>(amount, scenario.ctx());
+    let id = object::id(&coin);
+    transfer::public_transfer(coin, addr);
+    
+    scenario.next_tx(OWNER);
+    id
+}
+
 // === Tests ===
 
 #[test]
@@ -98,21 +107,14 @@ fun test_merge_2_coins_and_split() {
     let (mut scenario, extensions, mut account) = start();
     let account_address = account.addr();
 
-    let coin1 = coin::mint_for_testing<SUI>(60, scenario.ctx());
-    transfer::public_transfer(coin1, account_address);
-    scenario.next_tx(OWNER);
-    let receiving1 = ts::most_recent_receiving_ticket<Coin<SUI>>(&object::id(&account));
+    let id1 = keep_coin(account_address, 60, &mut scenario);
+    let id2 = keep_coin(account_address, 40, &mut scenario);
 
-    let coin2 = coin::mint_for_testing<SUI>(40, scenario.ctx());
-    transfer::public_transfer(coin2, account_address);
-    scenario.next_tx(OWNER);
-    let receiving2 = ts::most_recent_receiving_ticket<Coin<SUI>>(&object::id(&account));
-    
     let auth = auth::new(&extensions, full_role(), account.addr(), version::current());
     let merge_coin_id = coin_operations::merge_and_split<bool, bool, SUI>(
         &auth,
         &mut account,
-        vector[receiving1, receiving2],
+        vector[ts::receiving_ticket_by_id(id1), ts::receiving_ticket_by_id(id2)],
         vector[100],
         scenario.ctx()
     );
