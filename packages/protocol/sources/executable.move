@@ -90,20 +90,6 @@ public fun issuer(executable: &Executable): &Issuer {
     &executable.issuer
 }
 
-// === Private functions ===
-
-fun action_index<Action: store>(executable: &Executable): u64 {
-    let mut idx = executable.start_idx + executable.actions.length(); // end index
-    executable.actions.length().do!(|mut i| {
-        i = i + executable.start_idx;
-        if (executable.actions.contains_with_type<u64, Action>(i)) idx = i;
-        // returns length if not found
-    });
-    assert!(idx != executable.start_idx + executable.actions.length(), EActionNotFound);
-
-    idx
-}
-
 // === Package functions ===
 
 /// Is only called from the account module
