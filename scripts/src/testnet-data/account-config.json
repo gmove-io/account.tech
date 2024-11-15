@@ -1,0 +1,14 @@
+[
+  {
+    "type": "user::Registry",
+    "id": "0x6734e9236d74926007a6e954cd9c933dbb97dedd7b5f3b695386f6d8f67477bf"
+  },
+  {
+    "type": "AccountConfig",
+    "id": "0x830b9b1dbe3925a0e7f139cd9e65eecd5275175d25e8052747f94bd4084c5b53"
+  },
+  {
+    "type": "package::UpgradeCap",
+    "id": "0xec60e9dd87cccb40f01505387e160a9a6ab7f01157a4a3021fd1cb8f2e38768e"
+  }
+]

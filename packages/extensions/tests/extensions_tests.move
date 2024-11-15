@@ -1,3 +1,4 @@
+#[test_only]
 module account_extensions::extensions_tests;
 
 // === Imports === 

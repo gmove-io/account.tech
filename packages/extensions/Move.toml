@@ -1,11 +1,8 @@
 [package]
 name = "AccountExtensions"
-edition = "2024.alpha"
+edition = "2024.beta"
 license = "MIT"
-authors = [
-  "Thouny (thouny@tuta.io)",
-  "Jose (jose@interestprotocol.com)"
-]
+authors = [ "Thouny (thouny@tuta.io)" ]
 
 [dependencies.Sui]
 git = "https://github.com/MystenLabs/sui.git"
@@ -21,4 +18,4 @@ rev = "testnet"
 account_extensions = "_"
 
 [dev-addresses]
-account_extensions = "0x2d1f315f2b4f5cb64901b054c7f315a03f0aea3f49f6e6c9b74cbd1d12f4b6c7"
+account_extensions = "0x1d44d8f613f07d3683aabac27027b741d18bb7ab01352be31f9f1e6c12d84e97"

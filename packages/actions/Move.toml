@@ -1,11 +1,8 @@
 [package]
 name = "AccountActions"
-edition = "2024.alpha"
+edition = "2024.beta"
 license = "MIT"
-authors = [
-  "Thouny (thouny@tuta.io)",
-  "Jose (jose@interestprotocol.com)"
-]
+authors = [ "Thouny (thouny@tuta.io)" ]
 
 [dependencies.Sui]
 git = "https://github.com/MystenLabs/sui.git"
@@ -45,8 +42,8 @@ account_extensions = "_"
 kiosk = "_"
 
 [dev-addresses]
-account_config = "0x0"
-account_actions = "0x29dd152d8a8a427cb3eb343e2f58f68e9f07587597eb23816df3e2b04a72bdfd"
-account_protocol = "0xacfd4da2d93e228e252150fc3bd030c8c3ce86b6267706de94ad8f9f6b6eba0d"
-account_extensions = "0x2d1f315f2b4f5cb64901b054c7f315a03f0aea3f49f6e6c9b74cbd1d12f4b6c7"
+account_config = "0x830b9b1dbe3925a0e7f139cd9e65eecd5275175d25e8052747f94bd4084c5b53"
+account_actions = "0x43e396ea3bff4d527fb45b5e32b34d93141d3289fa654a151058a1c5eb055c51"
+account_protocol = "0x09148d2d673214d9e82a87e24c602226a3ad8fdaaf8f7295ef1b52cb84330b94"
+account_extensions = "0x1d44d8f613f07d3683aabac27027b741d18bb7ab01352be31f9f1e6c12d84e97"
 kiosk = "0xbd8fc1947cf119350184107a3087e2dc27efefa0dd82e25a1f699069fe81a585"

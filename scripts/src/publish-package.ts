@@ -8,7 +8,7 @@ import { client, keypair, IObjectInfo, getId } from "./utils.js";
 /// Package name must be in PascalCase and named address must be in snake_case in Move.toml
 /// Example: packageName = "AccountExtensions" -> packageNamedAddress = "account_extensions"
 ///
-/// When using --dev, the package will be published in testnet
+/// When using --test, the package will be published on testnet
 /// named addresses must be different in [dev-addresses] and [addresses]
 /// use "_" as a placeholder in [addresses] if necessary
 
@@ -130,7 +130,7 @@ import { client, keypair, IObjectInfo, getId } from "./utils.js";
 	const tx = new Transaction();
 	tx.setGasBudget(1000000000);
 
-	const [upgradeCap] = tx.publish({ modules,dependencies });
+	const [upgradeCap] = tx.publish({ modules, dependencies });
 	tx.transferObjects([upgradeCap], keypair.getPublicKey().toSuiAddress());
 	
 	const result = await client.signAndExecuteTransaction({

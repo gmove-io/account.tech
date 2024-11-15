@@ -1,0 +1,18 @@
+[
+  {
+    "type": "AccountExtensions",
+    "id": "0x1d44d8f613f07d3683aabac27027b741d18bb7ab01352be31f9f1e6c12d84e97"
+  },
+  {
+    "type": "package::UpgradeCap",
+    "id": "0x444edc6878713d3c075d3c34987648db5a3c2d6f44d31d59c1d2c7a605a166ec"
+  },
+  {
+    "type": "extensions::AdminCap",
+    "id": "0x476f55897067854a1c0ceade51d12ef75c8334b533841d7754942c977ed42fbc"
+  },
+  {
+    "type": "extensions::Extensions",
+    "id": "0x7ec12f4e6836cccceb3a82e4678a649f9d6a4f51698028458539c7881265882d"
+  }
+]

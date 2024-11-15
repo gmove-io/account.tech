@@ -1,0 +1,14 @@
+[
+  {
+    "type": "AccountProtocol",
+    "id": "0x09148d2d673214d9e82a87e24c602226a3ad8fdaaf8f7295ef1b52cb84330b94"
+  },
+  {
+    "type": "package::UpgradeCap",
+    "id": "0x1207667c77961b98ac0b9322ea73b1f25a58d31d6afe894542f49f2c635ad043"
+  },
+  {
+    "type": "package::Publisher",
+    "id": "0x8560a7836a27ab343e13a0b840846cf79a906440263c6e926f3ae3ed143f02de"
+  }
+]
