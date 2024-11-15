@@ -4,10 +4,27 @@ edition = "2024.beta"
 license = "MIT"
 authors = [ "Thouny (thouny@tuta.io)" ]
 
+# [dependencies.Sui]
+# git = "https://github.com/MystenLabs/sui.git"
+# subdir = "crates/sui-framework/packages/sui-framework"
+# rev = "framework/mainnet"
+
+# [dependencies.Kiosk]
+# local = "../../deps/kiosk"
+
+# [dependencies.AccountProtocol]
+# local = "../protocol"
+
+# [dependencies.AccountExtensions]
+# local = "../extensions"
+
+# [dependencies.AccountConfig]
+# local = "../config"
+
 [dependencies.Sui]
 git = "https://github.com/MystenLabs/sui.git"
 subdir = "crates/sui-framework/packages/sui-framework"
-rev = "framework/mainnet"
+rev = "testnet"
 
 [dependencies.Kiosk]
 local = "../../deps/kiosk"
@@ -18,32 +35,19 @@ local = "../protocol"
 [dependencies.AccountExtensions]
 local = "../extensions"
 
-[dev-dependencies.Sui]
-git = "https://github.com/MystenLabs/sui.git"
-subdir = "crates/sui-framework/packages/sui-framework"
-rev = "testnet"
-
-[dev-dependencies.Kiosk]
-local = "../../deps/kiosk"
-
-[dev-dependencies.AccountProtocol]
-local = "../protocol"
-
-[dev-dependencies.AccountExtensions]
-local = "../extensions"
-
-[dev-dependencies.AccountConfig]
+[dependencies.AccountConfig]
 local = "../config"
 
-[addresses]
-account_actions = "_"
-account_protocol = "_"
-account_extensions = "_"
-kiosk = "_"
+# [addresses]
+# account_config = "_"
+# account_actions = "_"
+# account_protocol = "_"
+# account_extensions = "_"
+# kiosk = "_"
 
-[dev-addresses]
+[addresses]
 account_config = "0x830b9b1dbe3925a0e7f139cd9e65eecd5275175d25e8052747f94bd4084c5b53"
-account_actions = "0x43e396ea3bff4d527fb45b5e32b34d93141d3289fa654a151058a1c5eb055c51"
+account_actions = "0xc93d8630fe588dc8c4e81feac51543d5f8c8a2837c5187e644556860b447943b"
 account_protocol = "0x09148d2d673214d9e82a87e24c602226a3ad8fdaaf8f7295ef1b52cb84330b94"
 account_extensions = "0x1d44d8f613f07d3683aabac27027b741d18bb7ab01352be31f9f1e6c12d84e97"
 kiosk = "0xbd8fc1947cf119350184107a3087e2dc27efefa0dd82e25a1f699069fe81a585"
