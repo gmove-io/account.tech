@@ -62,7 +62,7 @@ public fun propose_transfer<Config, Outcome>(
     key: String,
     description: String,
     execution_time: u64,
-    expiration_epoch: u64,
+    expiration_time: u64,
     object_ids: vector<ID>,
     recipients: vector<address>,
     ctx: &mut TxContext
@@ -77,7 +77,7 @@ public fun propose_transfer<Config, Outcome>(
         key,
         description,
         execution_time,
-        expiration_epoch,
+        expiration_time,
         ctx
     );
 
@@ -115,7 +115,7 @@ public fun propose_vesting<Config, Outcome>(
     key: String,
     description: String,
     execution_time: u64,
-    expiration_epoch: u64,
+    expiration_time: u64,
     coin_id: ID, // coin owned by the account, must have the total amount to be paid
     start_timestamp: u64,
     end_timestamp: u64, 
@@ -131,7 +131,7 @@ public fun propose_vesting<Config, Outcome>(
         key,
         description,
         execution_time,
-        expiration_epoch,
+        expiration_time,
         ctx
     );
     

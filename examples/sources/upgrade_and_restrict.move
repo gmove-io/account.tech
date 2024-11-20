@@ -31,7 +31,7 @@ public fun propose_upgrade(
     multisig: &mut Multisig, 
     key: String,
     execution_time: u64,
-    expiration_epoch: u64,
+    expiration_time: u64,
     description: String,
     name: String,
     digest: vector<u8>,
@@ -47,7 +47,7 @@ public fun propose_upgrade(
         key,
         description,
         execution_time,
-        expiration_epoch,
+        expiration_time,
         ctx
     );
     // first we would like to upgrade

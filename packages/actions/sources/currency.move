@@ -217,7 +217,7 @@ public fun propose_disable<Config, Outcome, CoinType>(
     key: String,
     description: String,
     execution_time: u64,
-    expiration_epoch: u64,
+    expiration_time: u64,
     disable_mint: bool,
     disable_burn: bool,
     disable_update_symbol: bool,
@@ -237,7 +237,7 @@ public fun propose_disable<Config, Outcome, CoinType>(
         key, 
         description, 
         execution_time, 
-        expiration_epoch, 
+        expiration_time, 
         ctx
     );
 
@@ -274,7 +274,7 @@ public fun propose_mint<Config, Outcome, CoinType>(
     key: String,
     description: String,
     execution_time: u64,
-    expiration_epoch: u64,
+    expiration_time: u64,
     amount: u64,
     ctx: &mut TxContext
 ) {
@@ -292,7 +292,7 @@ public fun propose_mint<Config, Outcome, CoinType>(
         key, 
         description, 
         execution_time, 
-        expiration_epoch, 
+        expiration_time, 
         ctx
     );
 
@@ -326,7 +326,7 @@ public fun propose_burn<Config, Outcome, CoinType>(
     key: String,
     description: String,
     execution_time: u64,
-    expiration_epoch: u64,
+    expiration_time: u64,
     coin_id: ID,
     amount: u64,
     ctx: &mut TxContext
@@ -344,7 +344,7 @@ public fun propose_burn<Config, Outcome, CoinType>(
         key, 
         description, 
         execution_time, 
-        expiration_epoch, 
+        expiration_time, 
         ctx
     );
 
@@ -380,7 +380,7 @@ public fun propose_update<Config, Outcome, CoinType>(
     key: String,
     description: String,
     execution_time: u64,
-    expiration_epoch: u64,
+    expiration_time: u64,
     md_symbol: Option<ascii::String>,
     md_name: Option<String>,
     md_description: Option<String>,
@@ -404,7 +404,7 @@ public fun propose_update<Config, Outcome, CoinType>(
         key,
         description,
         execution_time,
-        expiration_epoch,
+        expiration_time,
         ctx
     );
 
@@ -440,7 +440,7 @@ public fun propose_transfer<Config, Outcome, CoinType>(
     key: String,
     description: String,
     execution_time: u64,
-    expiration_epoch: u64,
+    expiration_time: u64,
     amounts: vector<u64>,
     recipients: vector<address>,
     ctx: &mut TxContext
@@ -462,7 +462,7 @@ public fun propose_transfer<Config, Outcome, CoinType>(
         key,
         description,
         execution_time,
-        expiration_epoch,
+        expiration_time,
         ctx
     );
 
@@ -504,7 +504,7 @@ public fun propose_vesting<Config, Outcome, CoinType>(
     key: String,
     description: String,
     execution_time: u64,
-    expiration_epoch: u64,
+    expiration_time: u64,
     total_amount: u64,
     start_timestamp: u64, 
     end_timestamp: u64, 
@@ -525,7 +525,7 @@ public fun propose_vesting<Config, Outcome, CoinType>(
         key,
         description,
         execution_time,
-        expiration_epoch,
+        expiration_time,
         ctx
     );
 

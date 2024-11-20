@@ -84,7 +84,7 @@ public fun propose_access<Config, Outcome, Cap>(
     key: String,
     description: String,
     execution_time: u64,
-    expiration_epoch: u64,
+    expiration_time: u64,
     ctx: &mut TxContext
 ) {
     assert!(has_lock<Config, Outcome, Cap>(account), ENoLock);
@@ -98,7 +98,7 @@ public fun propose_access<Config, Outcome, Cap>(
         key, 
         description, 
         execution_time, 
-        expiration_epoch, 
+        expiration_time, 
         ctx
     );
 

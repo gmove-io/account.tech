@@ -308,7 +308,7 @@ public fun propose_config_multisig(
     key: String,
     description: String,
     execution_time: u64,
-    expiration_epoch: u64,
+    expiration_time: u64,
     // members 
     addresses: vector<address>,
     weights: vector<u64>,
@@ -334,7 +334,7 @@ public fun propose_config_multisig(
         key,
         description,
         execution_time,
-        expiration_epoch,
+        expiration_time,
         ctx
     );
     // must modify members before modifying thresholds to ensure they are reachable

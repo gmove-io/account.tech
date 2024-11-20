@@ -211,7 +211,7 @@ public fun propose_take<Config, Outcome>(
     key: String,
     description: String,
     execution_time: u64,
-    expiration_epoch: u64,
+    expiration_time: u64,
     kiosk_name: String,
     nft_ids: vector<ID>,
     recipient: address,
@@ -228,7 +228,7 @@ public fun propose_take<Config, Outcome>(
         key,
         description,
         execution_time,
-        expiration_epoch,
+        expiration_time,
         ctx
     );
 
@@ -265,7 +265,7 @@ public fun propose_list<Config, Outcome>(
     key: String,
     description: String,
     execution_time: u64,
-    expiration_epoch: u64,
+    expiration_time: u64,
     kiosk_name: String,
     nft_ids: vector<ID>,
     prices: vector<u64>,
@@ -283,7 +283,7 @@ public fun propose_list<Config, Outcome>(
         key,
         description,
         execution_time,
-        expiration_epoch,
+        expiration_time,
         ctx
     );
 

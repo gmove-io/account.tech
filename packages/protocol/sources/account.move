@@ -100,7 +100,7 @@ public fun create_proposal<Config, Outcome, W: drop>(
     key: String, // proposal key
     description: String,
     execution_time: u64, // timestamp in ms
-    expiration_epoch: u64, // epoch when we can delete the proposal
+    expiration_time: u64, // epoch when we can delete the proposal
     ctx: &mut TxContext
 ): Proposal<Outcome> {
     // ensures the caller is authorized for this account
@@ -120,7 +120,7 @@ public fun create_proposal<Config, Outcome, W: drop>(
         key,
         description,
         execution_time,
-        expiration_epoch,
+        expiration_time,
         outcome,
         ctx
     )

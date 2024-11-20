@@ -11,11 +11,35 @@ import { client, keypair, getId } from './utils.js';
         const pkg = getId("AccountExtensions")
 
         tx.moveCall({
-            target: `${pkg}::extensions::init_core_deps`,
+            target: `${pkg}::extensions::add`,
             arguments: [
-                tx.object(getId("extensions::AdminCap")),
                 tx.object(getId("extensions::Extensions")),
-                tx.pure.vector("address", [getId("AccountProtocol"), getId("AccountActions")])
+                tx.object(getId("extensions::AdminCap")),
+                tx.pure.string("AccountProtocol"),
+                tx.pure.address(getId("AccountProtocol")),
+                tx.pure.u64(1),
+            ],
+        });
+        
+        tx.moveCall({
+            target: `${pkg}::extensions::add`,
+            arguments: [
+                tx.object(getId("extensions::Extensions")),
+                tx.object(getId("extensions::AdminCap")),
+                tx.pure.string("AccountConfig"),
+                tx.pure.address(getId("AccountConfig")),
+                tx.pure.u64(1),
+            ],
+        });
+
+        tx.moveCall({
+            target: `${pkg}::extensions::add`,
+            arguments: [
+                tx.object(getId("extensions::Extensions")),
+                tx.object(getId("extensions::AdminCap")),
+                tx.pure.string("AccountActions"),
+                tx.pure.address(getId("AccountActions")),
+                tx.pure.u64(1),
             ],
         });
 

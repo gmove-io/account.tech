@@ -27,6 +27,8 @@ const EAccountNotFound: vector<u8> = b"Account not found in User";
 const EAccountTypeDoesntExist: vector<u8> = b"Account type doesn't exist in User";
 #[error]
 const EWrongUserId: vector<u8> = b"The User ID for caller in Registry does not match the User object";
+#[error]
+const EAccountAlreadyRegistered: vector<u8> = b"Account ID already registered for this type";
 
 // === Struct ===
 
@@ -65,6 +67,7 @@ public fun new(ctx: &mut TxContext): User {
 
 public(package) fun add_account(user: &mut User, account_addr: address, account_type: String) {
     if (user.accounts.contains(&account_type)) {
+        assert!(!user.accounts[&account_type].contains(&account_addr), EAccountAlreadyRegistered);
         user.accounts.get_mut(&account_type).push_back(account_addr);
     } else {
         user.accounts.insert(account_type, vector<address>[account_addr]);

@@ -163,7 +163,7 @@ public fun propose_transfer<Config, Outcome, CoinType: drop>(
     key: String,
     description: String,
     execution_time: u64,
-    expiration_epoch: u64,
+    expiration_time: u64,
     treasury_name: String,
     amounts: vector<u64>,
     recipients: vector<address>,
@@ -184,7 +184,7 @@ public fun propose_transfer<Config, Outcome, CoinType: drop>(
         key,
         description,
         execution_time,
-        expiration_epoch,
+        expiration_time,
         ctx
     );
 
@@ -222,7 +222,7 @@ public fun propose_vesting<Config, Outcome, CoinType: drop>(
     key: String,
     description: String,
     execution_time: u64,
-    expiration_epoch: u64,
+    expiration_time: u64,
     treasury_name: String, 
     coin_amount: u64, 
     start_timestamp: u64, 
@@ -243,7 +243,7 @@ public fun propose_vesting<Config, Outcome, CoinType: drop>(
         key,
         description,
         execution_time,
-        expiration_epoch,
+        expiration_time,
         ctx
     );
 

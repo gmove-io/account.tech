@@ -71,6 +71,18 @@ fun test_user_flow() {
     end(scenario, registry);
 }
 
+#[test, expected_failure(abort_code = user::EAccountAlreadyRegistered)]
+fun test_error_add_already_existing_account() {
+    let (mut scenario, registry) = start();
+
+    let mut user = user::new(scenario.ctx());
+    user.add_account(@0xACC2, b"multisig".to_string());
+    user.add_account(@0xACC2, b"multisig".to_string());
+    
+    destroy(user);
+    end(scenario, registry);
+}
+
 #[test, expected_failure(abort_code = user::EAccountTypeDoesntExist)]
 fun test_error_remove_empty_account_type() {
     let (mut scenario, registry) = start();

@@ -183,7 +183,7 @@ public fun propose_upgrade<Config, Outcome>(
     outcome: Outcome,
     key: String,
     description: String,
-    expiration_epoch: u64,
+    expiration_time: u64,
     package: address,
     digest: vector<u8>,
     clock: &Clock,
@@ -202,7 +202,7 @@ public fun propose_upgrade<Config, Outcome>(
         key,
         description,
         clock.timestamp_ms() + delay,
-        expiration_epoch,
+        expiration_time,
         ctx
     );
 
@@ -242,7 +242,7 @@ public fun propose_restrict<Config, Outcome>(
     outcome: Outcome,
     key: String,
     description: String,
-    expiration_epoch: u64,
+    expiration_time: u64,
     package: address,
     policy: u8,
     clock: &Clock,
@@ -262,7 +262,7 @@ public fun propose_restrict<Config, Outcome>(
         key,
         description,
         clock.timestamp_ms() + delay,
-        expiration_epoch,
+        expiration_time,
         ctx
     );
 

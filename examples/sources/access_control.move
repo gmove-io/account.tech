@@ -49,7 +49,7 @@ public fun propose_update_fee(
     multisig: &mut Multisig, 
     key: String,
     execution_time: u64,
-    expiration_epoch: u64,
+    expiration_time: u64,
     description: String,
     fee: u64,
     ctx: &mut TxContext
@@ -61,7 +61,7 @@ public fun propose_update_fee(
         key,
         description,
         execution_time,
-        expiration_epoch,
+        expiration_time,
         ctx
     );
     proposal_mut.add_action(UpdateFee { fee });

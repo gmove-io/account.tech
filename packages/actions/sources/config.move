@@ -79,7 +79,7 @@ public fun propose_config_metadata<Config, Outcome>(
     key: String,
     description: String,
     execution_time: u64,
-    expiration_epoch: u64,
+    expiration_time: u64,
     keys: vector<String>,
     values: vector<String>,
     ctx: &mut TxContext
@@ -93,7 +93,7 @@ public fun propose_config_metadata<Config, Outcome>(
         key,
         description,
         execution_time,
-        expiration_epoch,
+        expiration_time,
         ctx
     );
 
@@ -121,7 +121,7 @@ public fun propose_config_deps<Config, Outcome>(
     key: String,
     description: String,
     execution_time: u64,
-    expiration_epoch: u64,
+    expiration_time: u64,
     extensions: &Extensions,
     names: vector<String>,
     addresses: vector<address>,
@@ -137,7 +137,7 @@ public fun propose_config_deps<Config, Outcome>(
         key,
         description,
         execution_time,
-        expiration_epoch,
+        expiration_time,
         ctx
     );
 
