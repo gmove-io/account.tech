@@ -72,7 +72,7 @@ fun create_dummy_proposal(
     extensions: &Extensions, 
 ): Proposal<Approvals> {
     let auth = multisig::authenticate(extensions, account, b"".to_string(), scenario.ctx());
-    let outcome = multisig::new_outcome(account, scenario.ctx());
+    let outcome = multisig::empty_outcome(account, scenario.ctx());
     account.create_proposal(
         auth, 
         outcome, 

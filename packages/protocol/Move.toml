@@ -12,18 +12,6 @@ rev = "framework/mainnet"
 [dependencies.AccountExtensions]
 local = "../extensions"
 
-[dev-dependencies.Sui]
-git = "https://github.com/MystenLabs/sui.git"
-subdir = "crates/sui-framework/packages/sui-framework"
-rev = "testnet"
-
-[dev-dependencies.AccountExtensions]
-local = "../extensions"
-
 [addresses]
-account_protocol = "_"
-account_extensions = "_"
-
-[dev-addresses]
-account_protocol = "0x09148d2d673214d9e82a87e24c602226a3ad8fdaaf8f7295ef1b52cb84330b94"
-account_extensions = "0x1d44d8f613f07d3683aabac27027b741d18bb7ab01352be31f9f1e6c12d84e97"
+account_protocol = "0xfab9c0343c7710a5a10f4edca62c4dd25f742010086289cd89dd8e66c1b0e7c2"
+account_extensions = "0x1114fd9cc11d62d5e5390b37e8389688e9023358075e6e0c23ab9773ddae155d"

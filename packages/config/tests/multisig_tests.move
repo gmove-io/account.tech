@@ -71,7 +71,7 @@ fun create_and_add_dummy_proposal(
     extensions: &Extensions, 
 ) {
     let auth = multisig::authenticate(extensions, account, full_role(), scenario.ctx());
-    let outcome = multisig::new_outcome(account, scenario.ctx());
+    let outcome = multisig::empty_outcome(account, scenario.ctx());
     let proposal = account.create_proposal(
         auth, 
         outcome, 
@@ -93,7 +93,7 @@ fun create_and_add_other_proposal(
     extensions: &Extensions, 
 ) {
     let auth = multisig::authenticate(extensions, account, b"".to_string(), scenario.ctx());
-    let outcome = multisig::new_outcome(account, scenario.ctx());
+    let outcome = multisig::empty_outcome(account, scenario.ctx());
     let proposal = account.create_proposal(
         auth, 
         outcome, 
@@ -421,11 +421,11 @@ fun test_config_multisig_deletion() {
 }
 
 #[test, expected_failure(abort_code = multisig::ECallerIsNotMember)]
-fun test_error_new_outcome_not_member() {
+fun test_error_empty_outcome_not_member() {
     let (mut scenario, extensions, account, clock) = start();
 
     scenario.next_tx(ALICE);
-    let outcome = multisig::new_outcome(&account, scenario.ctx());
+    let outcome = multisig::empty_outcome(&account, scenario.ctx());
 
     destroy(outcome);
     end(scenario, extensions, account, clock);

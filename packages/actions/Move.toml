@@ -8,9 +8,12 @@ authors = [ "Thouny (thouny@tuta.io)" ]
 git = "https://github.com/MystenLabs/sui.git"
 subdir = "crates/sui-framework/packages/sui-framework"
 rev = "framework/mainnet"
+override = true
 
 [dependencies.Kiosk]
-local = "../../deps/kiosk"
+git = "https://github.com/thounyy/apps.git"
+subdir = "kiosk"
+rev = "testnet"
 
 [dependencies.AccountProtocol]
 local = "../protocol"
@@ -18,32 +21,9 @@ local = "../protocol"
 [dependencies.AccountExtensions]
 local = "../extensions"
 
-[dev-dependencies.Sui]
-git = "https://github.com/MystenLabs/sui.git"
-subdir = "crates/sui-framework/packages/sui-framework"
-rev = "testnet"
-
-[dev-dependencies.Kiosk]
-local = "../../deps/kiosk"
-
-[dev-dependencies.AccountProtocol]
-local = "../protocol"
-
-[dev-dependencies.AccountExtensions]
-local = "../extensions"
-
-[dev-dependencies.AccountConfig]
-local = "../config"
-
 [addresses]
-account_actions = "_"
-account_protocol = "_"
-account_extensions = "_"
-kiosk = "_"
-
-[dev-addresses]
-account_config = "0x830b9b1dbe3925a0e7f139cd9e65eecd5275175d25e8052747f94bd4084c5b53"
-account_actions = "0x43e396ea3bff4d527fb45b5e32b34d93141d3289fa654a151058a1c5eb055c51"
-account_protocol = "0x09148d2d673214d9e82a87e24c602226a3ad8fdaaf8f7295ef1b52cb84330b94"
-account_extensions = "0x1d44d8f613f07d3683aabac27027b741d18bb7ab01352be31f9f1e6c12d84e97"
+account_config = "0x9e27e8950bb08c32342feb6277f11abb4d0f7efee0aefde04062f7acf4977af1"
+account_actions = "0xbd4c78226735c67c73d1ca38d515b6f8ff98c28e82fe20df70b530bf096fc7d5"
+account_protocol = "0xfab9c0343c7710a5a10f4edca62c4dd25f742010086289cd89dd8e66c1b0e7c2"
+account_extensions = "0x1114fd9cc11d62d5e5390b37e8389688e9023358075e6e0c23ab9773ddae155d"
 kiosk = "0xbd8fc1947cf119350184107a3087e2dc27efefa0dd82e25a1f699069fe81a585"

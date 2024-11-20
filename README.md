@@ -97,7 +97,7 @@ This design allows us to manage the packages with a special `Account` object whi
 ### Proposal Flow
 
 1. User must authenticate himself by calling `multisig::authenticate()` or similar in anothe configuration module.
-2. Then the outcome can be initialized for the configuration by calling `multisig::new_outcome()`.
+2. Then the outcome can be initialized for the configuration by calling `multisig::empty_outcome()`.
 3. Proposals are then created via `propose_` functions within modules, by stacking one or more predefined actions.
 4. Members of the Account can approve the proposal by calling `multisig::approve_proposal`. Optionally, members can `multisig::remove_approval`. This increases the `global_weight` field of the Proposal and the `role_weight` field if the member posseses the role.
 5. Once the threshold is reached, the proposal is executed by calling the `multisig::execute_proposal` function, validating the `Outcome` and an `Executable` hot potato wrapping the action bag and `Issuer`.

@@ -156,7 +156,7 @@ public fun new_account(
 }
 
 /// Creates a new outcome to initiate a proposal
-public fun new_outcome(
+public fun empty_outcome(
     account: &Account<Multisig, Approvals>,
     ctx: &TxContext
 ): Approvals {
@@ -323,7 +323,7 @@ public fun propose_config_multisig(
     verify_new_rules(addresses, weights, roles, global, role_names, role_thresholds);
     // create outcome and auth
     let auth = authenticate(extensions, account, b"".to_string(), ctx);
-    let outcome = new_outcome(account, ctx);
+    let outcome = empty_outcome(account, ctx);
 
     let mut proposal = account.create_proposal(
         auth,

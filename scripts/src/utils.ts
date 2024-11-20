@@ -14,8 +14,8 @@ export const keypair = Ed25519Keypair.fromSecretKey(Uint8Array.from(Buffer.from(
 
 export const client = new SuiClient({ url: getFullnodeUrl(process.env.NETWORK as "mainnet" | "testnet" | "devnet" | "localnet") });
 
-export const getId = (type: string, isDev: boolean = true): string => {
-    const dataDir = isDev ? "./src/testnet-data/" : "./src/mainnet-data/";
+export const getId = (type: string, isMainnet: boolean = false): string => {
+    const dataDir = isMainnet ? "./src/mainnet-data/" : "./src/testnet-data/";
     const allObjects: IObjectInfo[] = [];
 
     fs.readdirSync(dataDir)

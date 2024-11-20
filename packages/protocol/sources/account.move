@@ -294,7 +294,7 @@ public fun config_mut<Config, Outcome>(
     &mut account.config
 }
 
-/// Only called in AccountConfig
+// Only called in AccountConfig
 public fun proposal_mut<Config, Outcome>(
     account: &mut Account<Config, Outcome>, 
     idx: u64,

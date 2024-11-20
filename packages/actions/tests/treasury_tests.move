@@ -99,7 +99,7 @@ fun create_dummy_proposal(
     extensions: &Extensions, 
 ): Proposal<Approvals> {
     let auth = multisig::authenticate(extensions, account, b"".to_string(), scenario.ctx());
-    let outcome = multisig::new_outcome(account, scenario.ctx());
+    let outcome = multisig::empty_outcome(account, scenario.ctx());
     account.create_proposal(
         auth, 
         outcome, 
@@ -247,7 +247,7 @@ fun test_propose_execute_transfer() {
     );
 
     let auth = multisig::authenticate(&extensions, &account, b"".to_string(), scenario.ctx());
-    let outcome = multisig::new_outcome(&account, scenario.ctx());
+    let outcome = multisig::empty_outcome(&account, scenario.ctx());
     treasury::propose_transfer<Multisig, Approvals, SUI>(
         auth, 
         &mut account, 
@@ -296,7 +296,7 @@ fun test_propose_execute_vesting() {
     );
 
     let auth = multisig::authenticate(&extensions, &account, b"".to_string(), scenario.ctx());
-    let outcome = multisig::new_outcome(&account, scenario.ctx());
+    let outcome = multisig::empty_outcome(&account, scenario.ctx());
     treasury::propose_vesting<Multisig, Approvals, SUI>(
         auth, 
         &mut account, 
@@ -495,7 +495,7 @@ fun test_error_propose_transfer_not_same_length() {
     );
 
     let auth = multisig::authenticate(&extensions, &account, b"".to_string(), scenario.ctx());
-    let outcome = multisig::new_outcome(&account, scenario.ctx());
+    let outcome = multisig::empty_outcome(&account, scenario.ctx());
     treasury::propose_transfer<Multisig, Approvals, SUI>(
         auth, 
         &mut account, 
@@ -529,7 +529,7 @@ fun test_error_propose_transfer_coin_type_doesnt_exist() {
     );
 
     let auth = multisig::authenticate(&extensions, &account, b"".to_string(), scenario.ctx());
-    let outcome = multisig::new_outcome(&account, scenario.ctx());
+    let outcome = multisig::empty_outcome(&account, scenario.ctx());
     treasury::propose_transfer<Multisig, Approvals, SUI>(
         auth, 
         &mut account, 
@@ -563,7 +563,7 @@ fun test_error_propose_transfer_insufficient_funds() {
     );
 
     let auth = multisig::authenticate(&extensions, &account, b"".to_string(), scenario.ctx());
-    let outcome = multisig::new_outcome(&account, scenario.ctx());
+    let outcome = multisig::empty_outcome(&account, scenario.ctx());
     treasury::propose_transfer<Multisig, Approvals, SUI>(
         auth, 
         &mut account, 
@@ -597,7 +597,7 @@ fun test_error_propose_vesting_coin_type_doesnt_exist() {
     );
 
     let auth = multisig::authenticate(&extensions, &account, b"".to_string(), scenario.ctx());
-    let outcome = multisig::new_outcome(&account, scenario.ctx());
+    let outcome = multisig::empty_outcome(&account, scenario.ctx());
     treasury::propose_vesting<Multisig, Approvals, SUI>(
         auth, 
         &mut account, 
@@ -633,7 +633,7 @@ fun test_error_propose_vesting_insufficient_funds() {
     );
 
     let auth = multisig::authenticate(&extensions, &account, b"".to_string(), scenario.ctx());
-    let outcome = multisig::new_outcome(&account, scenario.ctx());
+    let outcome = multisig::empty_outcome(&account, scenario.ctx());
     treasury::propose_vesting<Multisig, Approvals, SUI>(
         auth, 
         &mut account, 

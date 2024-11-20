@@ -16,10 +16,8 @@ import { client, keypair, IObjectInfo, getId } from "./utils.js";
 	// read args from command line
 	const args = process.argv.slice(2);
 	const packageName = args[0];
-	const isDev = args.includes("--dev");
-	
-	const addressesSection = isDev ? "dev-addresses" : "addresses";
-	
+	const isMainnet = args.includes("--mainnet");
+		
 	if (!packageName) {
 		console.error("Error: Name parameter is required.");
 		process.exit(1);
@@ -96,8 +94,8 @@ import { client, keypair, IObjectInfo, getId } from "./utils.js";
 		const moveTomlContent = fs.readFileSync(moveTomlPath, "utf8");
 		const parsedToml = TOML.parse(moveTomlContent);
 		
-		if (parsedToml[addressesSection] && typeof parsedToml[addressesSection] === "object") {
-			(parsedToml[addressesSection] as Record<string, string>)[packageNamedAddress] = "0x0";
+		if (parsedToml.addresses && typeof parsedToml.addresses === "object") {
+			(parsedToml.addresses as Record<string, string>)[packageNamedAddress] = "0x0";
 		}
 		
 		if (parsedToml.dependencies && typeof parsedToml.dependencies === "object") {
@@ -120,7 +118,7 @@ import { client, keypair, IObjectInfo, getId } from "./utils.js";
 	const { execSync } = require("child_process");
 	const { modules, dependencies } = JSON.parse(
 		execSync(
-			`${process.env.CLI_PATH!} move build --dump-bytecode-as-base64 --path ${packagePath} ${isDev && "--dev"}`, 
+			`${process.env.CLI_PATH!} move build --dump-bytecode-as-base64 --path ${packagePath}`, 
 			{ encoding: "utf-8" }
 		)
 	);
@@ -179,15 +177,15 @@ import { client, keypair, IObjectInfo, getId } from "./utils.js";
 			});
 		}
 	});
-	const dataFolder = isDev ? "testnet-data" : "mainnet-data";
+	const dataFolder = isMainnet ? "mainnet-data" : "testnet-data";
 	const filePath = `./src/${dataFolder}/${packageNamedAddress.replace("_", "-")}.json`;
 	fs.writeFileSync(filePath, JSON.stringify(objects, null, 2));
 	
 	execSync(
 		`${process.env.CLI_PATH!} move manage-package --environment "$(sui client active-env)" \
 			--network-id "$(sui client chain-identifier)" \
-			--original-id ${getId(packageName, isDev)} \
-			--latest-id ${getId(packageName, isDev)} \
+			--original-id ${getId(packageName, isMainnet)} \
+			--latest-id ${getId(packageName, isMainnet)} \
 			--version-number "1" \
 			--path ${packagePath}`,
 		{ encoding: "utf-8" }
@@ -207,8 +205,8 @@ import { client, keypair, IObjectInfo, getId } from "./utils.js";
 			try {
 				const parsed = TOML.parse(content);
 				
-				if (parsed[addressesSection] && typeof parsed[addressesSection] === "object" && packageNamedAddress in parsed[addressesSection]) {
-					(parsed[addressesSection] as Record<string, string>)[packageNamedAddress] = getId(packageName, isDev);
+				if (parsed.addresses && typeof parsed.addresses === "object" && packageNamedAddress in parsed.addresses) {
+					(parsed.addresses as Record<string, string>)[packageNamedAddress] = getId(packageName, isMainnet);
 					
 					const updatedContent = TOML.stringify(parsed);
 					fs.writeFileSync(moveTomlPath, updatedContent);

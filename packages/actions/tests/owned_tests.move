@@ -82,7 +82,7 @@ fun create_dummy_proposal(
     extensions: &Extensions, 
 ): Proposal<Approvals> {
     let auth = multisig::authenticate(extensions, account, b"".to_string(), scenario.ctx());
-    let outcome = multisig::new_outcome(account, scenario.ctx());
+    let outcome = multisig::empty_outcome(account, scenario.ctx());
     account.create_proposal(
         auth, 
         outcome, 
@@ -108,7 +108,7 @@ fun test_propose_execute_transfer() {
     let id2 = send_coin(account.addr(), 2, &mut scenario);
 
     let auth = multisig::authenticate(&extensions, &account, b"".to_string(), scenario.ctx());
-    let outcome = multisig::new_outcome(&account, scenario.ctx());
+    let outcome = multisig::empty_outcome(&account, scenario.ctx());
     owned::propose_transfer(
         auth, 
         &mut account, 
@@ -148,7 +148,7 @@ fun test_propose_execute_vesting() {
     let id = send_coin(account.addr(), 5, &mut scenario);
 
     let auth = multisig::authenticate(&extensions, &account, b"".to_string(), scenario.ctx());
-    let outcome = multisig::new_outcome(&account, scenario.ctx());
+    let outcome = multisig::empty_outcome(&account, scenario.ctx());
     owned::propose_vesting(
         auth, 
         &mut account, 
@@ -231,7 +231,7 @@ fun test_error_propose_transfer_not_same_length() {
     let (mut scenario, extensions, mut account, clock) = start();
 
     let auth = multisig::authenticate(&extensions, &account, b"".to_string(), scenario.ctx());
-    let outcome = multisig::new_outcome(&account, scenario.ctx());
+    let outcome = multisig::empty_outcome(&account, scenario.ctx());
     owned::propose_transfer(
         auth, 
         &mut account, 

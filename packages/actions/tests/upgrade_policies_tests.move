@@ -72,7 +72,7 @@ fun create_dummy_proposal(
     extensions: &Extensions, 
 ): Proposal<Approvals> {
     let auth = multisig::authenticate(extensions, account, b"".to_string(), scenario.ctx());
-    let outcome = multisig::new_outcome(account, scenario.ctx());
+    let outcome = multisig::empty_outcome(account, scenario.ctx());
     account.create_proposal(
         auth, 
         outcome, 
@@ -132,7 +132,7 @@ fun test_propose_execute_upgrade() {
     upgrade_policies::lock_cap_with_timelock(auth, &mut account, b"Degen".to_string(), 1000, upgrade_cap, scenario.ctx());
 
     let auth = multisig::authenticate(&extensions, &account, b"".to_string(), scenario.ctx());
-    let outcome = multisig::new_outcome(&account, scenario.ctx());
+    let outcome = multisig::empty_outcome(&account, scenario.ctx());
     upgrade_policies::propose_upgrade(
         auth, 
         &mut account, 
@@ -166,7 +166,7 @@ fun test_propose_execute_restrict_all() {
     upgrade_policies::lock_cap_with_timelock(auth, &mut account, b"Degen".to_string(), 1000, upgrade_cap, scenario.ctx());
 
     let auth = multisig::authenticate(&extensions, &account, b"".to_string(), scenario.ctx());
-    let outcome = multisig::new_outcome(&account, scenario.ctx());
+    let outcome = multisig::empty_outcome(&account, scenario.ctx());
     upgrade_policies::propose_restrict(
         auth, 
         &mut account, 
@@ -186,7 +186,7 @@ fun test_propose_execute_restrict_all() {
     upgrade_policies::execute_restrict(executable, &mut account);
 
     let auth = multisig::authenticate(&extensions, &account, b"".to_string(), scenario.ctx());
-    let outcome = multisig::new_outcome(&account, scenario.ctx());
+    let outcome = multisig::empty_outcome(&account, scenario.ctx());
     upgrade_policies::propose_restrict(
         auth, 
         &mut account, 
@@ -206,7 +206,7 @@ fun test_propose_execute_restrict_all() {
     upgrade_policies::execute_restrict(executable, &mut account);
 
     let auth = multisig::authenticate(&extensions, &account, b"".to_string(), scenario.ctx());
-    let outcome = multisig::new_outcome(&account, scenario.ctx());
+    let outcome = multisig::empty_outcome(&account, scenario.ctx());
     upgrade_policies::propose_restrict(
         auth, 
         &mut account, 
@@ -407,7 +407,7 @@ fun test_error_propose_upgrade_no_lock() {
     let key = b"dummy".to_string();
 
     let auth = multisig::authenticate(&extensions, &account, b"".to_string(), scenario.ctx());
-    let outcome = multisig::new_outcome(&account, scenario.ctx());
+    let outcome = multisig::empty_outcome(&account, scenario.ctx());
     upgrade_policies::propose_upgrade(
         auth, 
         &mut account, 
@@ -431,7 +431,7 @@ fun test_error_propose_restrict_no_lock() {
     let key = b"dummy".to_string();
 
     let auth = multisig::authenticate(&extensions, &account, b"".to_string(), scenario.ctx());
-    let outcome = multisig::new_outcome(&account, scenario.ctx());
+    let outcome = multisig::empty_outcome(&account, scenario.ctx());
     upgrade_policies::propose_restrict(
         auth, 
         &mut account, 

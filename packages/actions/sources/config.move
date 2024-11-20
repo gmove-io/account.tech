@@ -124,7 +124,7 @@ public fun propose_config_deps<Config, Outcome>(
     expiration_epoch: u64,
     extensions: &Extensions,
     names: vector<String>,
-    packages: vector<address>,
+    addresses: vector<address>,
     versions: vector<u64>,
     ctx: &mut TxContext
 ) {
@@ -141,7 +141,7 @@ public fun propose_config_deps<Config, Outcome>(
         ctx
     );
 
-    new_config_deps(&mut proposal, account, extensions, names, packages, versions, ConfigDepsProposal());
+    new_config_deps(&mut proposal, account, extensions, names, addresses, versions, ConfigDepsProposal());
     account.add_proposal(proposal, version::current(), ConfigDepsProposal());
 }
 

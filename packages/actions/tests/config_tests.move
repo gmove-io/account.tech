@@ -77,7 +77,7 @@ fun create_dummy_proposal(
     extensions: &Extensions, 
 ): Proposal<Approvals> {
     let auth = multisig::authenticate(extensions, account, b"".to_string(), scenario.ctx());
-    let outcome = multisig::new_outcome(account, scenario.ctx());
+    let outcome = multisig::empty_outcome(account, scenario.ctx());
     account.create_proposal(
         auth, 
         outcome, 
@@ -100,7 +100,7 @@ fun test_propose_execute_config_metadata() {
     let key = b"dummy".to_string();
 
     let auth = multisig::authenticate(&extensions, &account, b"".to_string(), scenario.ctx());
-    let outcome = multisig::new_outcome(&account, scenario.ctx());
+    let outcome = multisig::empty_outcome(&account, scenario.ctx());
     config::propose_config_metadata(
         auth, 
         &mut account, 
@@ -129,7 +129,7 @@ fun test_propose_execute_config_deps() {
     let key = b"dummy".to_string();
 
     let auth = multisig::authenticate(&extensions, &account, b"".to_string(), scenario.ctx());
-    let outcome = multisig::new_outcome(&account, scenario.ctx());
+    let outcome = multisig::empty_outcome(&account, scenario.ctx());
     config::propose_config_deps(
         auth, 
         &mut account, 

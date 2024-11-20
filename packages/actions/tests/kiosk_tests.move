@@ -154,7 +154,7 @@ fun create_dummy_proposal(
     extensions: &Extensions, 
 ): Proposal<Approvals> {
     let auth = multisig::authenticate(extensions, account, b"".to_string(), scenario.ctx());
-    let outcome = multisig::new_outcome(account, scenario.ctx());
+    let outcome = multisig::empty_outcome(account, scenario.ctx());
     account.create_proposal(
         auth, 
         outcome, 
@@ -256,7 +256,7 @@ fun test_delist_nfts() {
 
     // list nfts
     let auth = multisig::authenticate(&extensions, &account, role(b"ListProposal", b"Degen"), scenario.ctx());
-    let outcome = multisig::new_outcome(&account, scenario.ctx());
+    let outcome = multisig::empty_outcome(&account, scenario.ctx());
     acc_kiosk::propose_list(
         auth, 
         &mut account, 
@@ -296,7 +296,7 @@ fun test_withdraw_profits() {
     
     // list nfts
     let auth = multisig::authenticate(&extensions, &account, role(b"ListProposal", b"Degen"), scenario.ctx());
-    let outcome = multisig::new_outcome(&account, scenario.ctx());
+    let outcome = multisig::empty_outcome(&account, scenario.ctx());
     acc_kiosk::propose_list(
         auth, 
         &mut account, 
@@ -372,7 +372,7 @@ fun test_propose_execute_take() {
     let (mut caller_kiosk, caller_cap, _) = init_caller_kiosk_with_nfts(&policy, 0, &mut scenario);
 
     let auth = multisig::authenticate(&extensions, &account, role(b"TakeProposal", b"Degen"), scenario.ctx());
-    let outcome = multisig::new_outcome(&account, scenario.ctx());
+    let outcome = multisig::empty_outcome(&account, scenario.ctx());
     acc_kiosk::propose_take(
         auth, 
         &mut account, 
@@ -428,7 +428,7 @@ fun test_propose_execute_list() {
     
     // list nfts
     let auth = multisig::authenticate(&extensions, &account, role(b"ListProposal", b"Degen"), scenario.ctx());
-    let outcome = multisig::new_outcome(&account, scenario.ctx());
+    let outcome = multisig::empty_outcome(&account, scenario.ctx());
     acc_kiosk::propose_list(
         auth, 
         &mut account, 
@@ -720,7 +720,7 @@ fun test_error_propose_take_from_kiosk_doesnt_exist() {
     
     account.config_mut(version::current()).member_mut(OWNER).add_role_to_member(role(b"TakeProposal", b"NotDegen"));
     let auth = multisig::authenticate(&extensions, &account, role(b"TakeProposal", b"NotDegen"), scenario.ctx());
-    let outcome = multisig::new_outcome(&account, scenario.ctx());
+    let outcome = multisig::empty_outcome(&account, scenario.ctx());
     acc_kiosk::propose_take(
         auth, 
         &mut account, 
@@ -744,7 +744,7 @@ fun test_error_propose_list_from_kiosk_doesnt_exist() {
     
     account.config_mut(version::current()).member_mut(OWNER).add_role_to_member(role(b"ListProposal", b"NotDegen"));
     let auth = multisig::authenticate(&extensions, &account, role(b"ListProposal", b"NotDegen"), scenario.ctx());
-    let outcome = multisig::new_outcome(&account, scenario.ctx());
+    let outcome = multisig::empty_outcome(&account, scenario.ctx());
     acc_kiosk::propose_list(
         auth, 
         &mut account, 
@@ -768,7 +768,7 @@ fun test_error_propose_list_nfts_prices_not_same_length() {
     let (acc_kiosk, _) = init_account_kiosk_with_nfts(&extensions, &mut account, &mut policy, 1, &mut scenario);
     
     let auth = multisig::authenticate(&extensions, &account, role(b"ListProposal", b"Degen"), scenario.ctx());
-    let outcome = multisig::new_outcome(&account, scenario.ctx());
+    let outcome = multisig::empty_outcome(&account, scenario.ctx());
     acc_kiosk::propose_list(
         auth, 
         &mut account, 
