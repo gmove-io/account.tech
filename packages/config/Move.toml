@@ -18,7 +18,7 @@ authors = [ "Thouny (thouny@tuta.io)" ]
 [dependencies.Sui]
 git = "https://github.com/MystenLabs/sui.git"
 subdir = "crates/sui-framework/packages/sui-framework"
-rev = "testnet"
+rev = "framework/mainnet"
 
 [dependencies.AccountProtocol]
 local = "../protocol"
