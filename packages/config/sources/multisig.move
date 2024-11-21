@@ -303,8 +303,9 @@ public fun refuse_invite(invite: Invite) {
 // step 1: propose to modify account rules (everything touching weights)
 // threshold has to be valid (reachable and different from 0 for global)
 public fun propose_config_multisig(
-    extensions: &Extensions,
+    auth: Auth,
     account: &mut Account<Multisig, Approvals>, 
+    outcome: Approvals,
     key: String,
     description: String,
     execution_time: u64,
@@ -321,9 +322,6 @@ public fun propose_config_multisig(
 ) {
     // verify new rules are valid
     verify_new_rules(addresses, weights, roles, global, role_names, role_thresholds);
-    // create outcome and auth
-    let auth = authenticate(extensions, account, b"".to_string(), ctx);
-    let outcome = empty_outcome(account, ctx);
 
     let mut proposal = account.create_proposal(
         auth,
