@@ -1,14 +1,18 @@
-/// Developers can restrict access to functions in their own package with a Caps that can be locked into 
+/// Developers can restrict access to functions in their own package with a Cap that can be locked into the Smart Account. 
+/// The Cap can be borrowed upon approval and used in other move calls within the same ptb before being returned.
 /// 
-/// The Access has copy and drop abilities to be used multiple times within a single PTB
-/// It has a generic type which acts as a proof of cap. 
-/// It is similar to the Cap pattern but it is issued by an Account upon proposal execution.
+/// The Cap pattern uses the object type as a proof of access, the object ID is never checked.
+/// Therefore, only one Cap of a given type can be locked into the Smart Account.
+/// And any Cap of that type can be returned to the Smart Account after being borrowed.
+/// 
+/// A good practice to follow is to use a different Cap type for each function that needs to be restricted.
+/// This way, the Cap borrowed can't be misused in another function, by the person executing the proposal.
 /// 
 /// e.g.
 /// 
 /// public struct AdminCap has key, store {}
 /// 
-/// public fun foo(_: Access<AdminCap>) { ... }
+/// public fun foo(_: &AdminCap) { ... }
 
 module account_actions::access_control;
 
@@ -44,10 +48,12 @@ public struct AccessLock<Cap: store> has store {
     cap: Cap,
 }
 
-/// [PROPOSAL] issues an Access<Cap>, Cap being the type of a Cap held by the Account
+/// [COMMAND] witness defining the lock cap command, and associated role
+public struct LockCommand() has drop;
+/// [PROPOSAL] witness defining the access cap proposal, and associated role
 public struct AccessProposal() has copy, drop;
 
-/// [ACTION] mint new coins
+/// [ACTION] struct giving access to the Cap
 public struct AccessAction<phantom Cap> has store {}
 
 /// This struct is created upon approval to ensure the cap is returned
@@ -55,7 +61,7 @@ public struct Borrow<phantom Cap> {
     account_addr: address
 }
 
-// === [MEMBER] Public functions ===
+// === [COMMAND] Public functions ===
 
 /// Only a member can lock a Cap, the Cap must have at least store ability
 public fun lock_cap<Config, Outcome, Cap: store>(
@@ -63,7 +69,7 @@ public fun lock_cap<Config, Outcome, Cap: store>(
     account: &mut Account<Config, Outcome>,
     cap: Cap,
 ) {
-    auth.verify(account.addr());
+    auth.verify_with_role<LockCommand>(account.addr(), b"".to_string());
     assert!(!has_lock<Config, Outcome, Cap>(account), EAlreadyLocked);
     account.add_managed_asset(AccessKey<Cap> {}, AccessLock { cap }, version::current());
 }

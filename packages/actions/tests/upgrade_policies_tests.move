@@ -3,7 +3,10 @@ module account_actions::upgrade_policies_tests;
 
 // === Imports ===
 
-use std::type_name::{Self, TypeName};
+use std::{
+    type_name::{Self, TypeName},
+    string::String,    
+};
 use sui::{
     test_utils::destroy,
     test_scenario::{Self as ts, Scenario},
@@ -47,7 +50,9 @@ fun start(): (Scenario, Extensions, Account<Multisig, Approvals>, Clock, Upgrade
     extensions.add(&cap, b"AccountConfig".to_string(), @account_config, 1);
     extensions.add(&cap, b"AccountActions".to_string(), @account_actions, 1);
     // Account generic types are dummy types (bool, bool)
-    let account = multisig::new_account(&extensions, b"Main".to_string(), scenario.ctx());
+    let mut account = multisig::new_account(&extensions, b"Main".to_string(), scenario.ctx());
+    account.config_mut(version::current()).add_role_to_multisig(role(b"LockCommand", b""), 1);
+    account.config_mut(version::current()).member_mut(OWNER).add_role_to_member(role(b"LockCommand", b""));
     let clock = clock::create_for_testing(scenario.ctx());
     let upgrade_cap = package::test_publish(@0x1.to_id(), scenario.ctx());
     // create world
@@ -60,6 +65,15 @@ fun end(scenario: Scenario, extensions: Extensions, account: Account<Multisig, A
     destroy(account);
     destroy(clock);
     ts::end(scenario);
+}
+
+fun role(action: vector<u8>, name: vector<u8>): String {
+    let mut full_role = @account_actions.to_string();
+    full_role.append_utf8(b"::upgrade_policies::");
+    full_role.append_utf8(action);
+    full_role.append_utf8(b"::");
+    full_role.append_utf8(name);
+    full_role
 }
 
 fun wrong_version(): TypeName {
@@ -97,7 +111,7 @@ fun test_new_lock_with_rule() {
     lock.add_rule(b"key".to_string(), true);
     assert!(lock.has_rule(b"key".to_string()));
     assert!(lock.get_rule(b"key".to_string()) == true);
-    let auth = multisig::authenticate(&extensions, &account, b"".to_string(), scenario.ctx());
+    let auth = multisig::authenticate(&extensions, &account, role(b"LockCommand", b""), scenario.ctx());
     upgrade_policies::lock_cap(auth, &mut account, lock);
 
     assert!(upgrade_policies::has_lock(&account, @0x1));
@@ -111,7 +125,7 @@ fun test_new_lock_with_rule() {
 fun test_lock_with_timelock() {
     let (mut scenario, extensions, mut account, clock, upgrade_cap) = start();
 
-    let auth = multisig::authenticate(&extensions, &account, b"".to_string(), scenario.ctx());
+    let auth = multisig::authenticate(&extensions, &account, role(b"LockCommand", b""), scenario.ctx());
     upgrade_policies::lock_cap_with_timelock(auth, &mut account, b"Degen".to_string(), 1000, upgrade_cap, scenario.ctx());
 
     assert!(upgrade_policies::has_lock(&account, @0x1));
@@ -128,7 +142,7 @@ fun test_propose_execute_upgrade() {
     let (mut scenario, extensions, mut account, mut clock, upgrade_cap) = start();
     let key = b"dummy".to_string();
 
-    let auth = multisig::authenticate(&extensions, &account, b"".to_string(), scenario.ctx());
+    let auth = multisig::authenticate(&extensions, &account, role(b"LockCommand", b""), scenario.ctx());
     upgrade_policies::lock_cap_with_timelock(auth, &mut account, b"Degen".to_string(), 1000, upgrade_cap, scenario.ctx());
 
     let auth = multisig::authenticate(&extensions, &account, b"".to_string(), scenario.ctx());
@@ -162,7 +176,7 @@ fun test_propose_execute_restrict_all() {
     let (mut scenario, extensions, mut account, mut clock, upgrade_cap) = start();
     let key = b"dummy".to_string();
 
-    let auth = multisig::authenticate(&extensions, &account, b"".to_string(), scenario.ctx());
+    let auth = multisig::authenticate(&extensions, &account, role(b"LockCommand", b""), scenario.ctx());
     upgrade_policies::lock_cap_with_timelock(auth, &mut account, b"Degen".to_string(), 1000, upgrade_cap, scenario.ctx());
 
     let auth = multisig::authenticate(&extensions, &account, b"".to_string(), scenario.ctx());
@@ -235,7 +249,7 @@ fun test_upgrade_flow() {
     let (mut scenario, extensions, mut account, clock, upgrade_cap) = start();
     let key = b"dummy".to_string();
 
-    let auth = multisig::authenticate(&extensions, &account, b"".to_string(), scenario.ctx());
+    let auth = multisig::authenticate(&extensions, &account, role(b"LockCommand", b""), scenario.ctx());
     upgrade_policies::lock_cap_with_timelock(auth, &mut account, b"Degen".to_string(), 1000, upgrade_cap, scenario.ctx());
 
     let mut proposal = create_dummy_proposal(&mut scenario, &mut account, &extensions);
@@ -270,7 +284,7 @@ fun test_restrict_flow_additive() {
     let (mut scenario, extensions, mut account, clock, upgrade_cap) = start();
     let key = b"dummy".to_string();
 
-    let auth = multisig::authenticate(&extensions, &account, b"".to_string(), scenario.ctx());
+    let auth = multisig::authenticate(&extensions, &account, role(b"LockCommand", b""), scenario.ctx());
     upgrade_policies::lock_cap_with_timelock(auth, &mut account, b"Degen".to_string(), 1000, upgrade_cap, scenario.ctx());
 
     let mut proposal = create_dummy_proposal(&mut scenario, &mut account, &extensions);
@@ -298,7 +312,7 @@ fun test_restrict_flow_deps_only() {
     let (mut scenario, extensions, mut account, clock, upgrade_cap) = start();
     let key = b"dummy".to_string();
 
-    let auth = multisig::authenticate(&extensions, &account, b"".to_string(), scenario.ctx());
+    let auth = multisig::authenticate(&extensions, &account, role(b"LockCommand", b""), scenario.ctx());
     upgrade_policies::lock_cap_with_timelock(auth, &mut account, b"Degen".to_string(), 1000, upgrade_cap, scenario.ctx());
 
     let mut proposal = create_dummy_proposal(&mut scenario, &mut account, &extensions);
@@ -326,7 +340,7 @@ fun test_restrict_flow_immutable() {
     let (mut scenario, extensions, mut account, clock, upgrade_cap) = start();
     let key = b"dummy".to_string();
 
-    let auth = multisig::authenticate(&extensions, &account, b"".to_string(), scenario.ctx());
+    let auth = multisig::authenticate(&extensions, &account, role(b"LockCommand", b""), scenario.ctx());
     upgrade_policies::lock_cap_with_timelock(auth, &mut account, b"Degen".to_string(), 1000, upgrade_cap, scenario.ctx());
 
     let mut proposal = create_dummy_proposal(&mut scenario, &mut account, &extensions);
@@ -354,7 +368,7 @@ fun test_upgrade_expired() {
     clock.increment_for_testing(1);
     let key = b"dummy".to_string();
 
-    let auth = multisig::authenticate(&extensions, &account, b"".to_string(), scenario.ctx());
+    let auth = multisig::authenticate(&extensions, &account, role(b"LockCommand", b""), scenario.ctx());
     upgrade_policies::lock_cap_with_timelock(auth, &mut account, b"Degen".to_string(), 1000, upgrade_cap, scenario.ctx());
 
     let mut proposal = create_dummy_proposal(&mut scenario, &mut account, &extensions);
@@ -374,7 +388,7 @@ fun test_restrict_expired() {
     clock.increment_for_testing(1);
     let key = b"dummy".to_string();
 
-    let auth = multisig::authenticate(&extensions, &account, b"".to_string(), scenario.ctx());
+    let auth = multisig::authenticate(&extensions, &account, role(b"LockCommand", b""), scenario.ctx());
     upgrade_policies::lock_cap_with_timelock(auth, &mut account, b"Degen".to_string(), 1000, upgrade_cap, scenario.ctx());
 
     let mut proposal = create_dummy_proposal(&mut scenario, &mut account, &extensions);
@@ -393,9 +407,9 @@ fun test_error_lock_name_already_exists() {
     let (mut scenario, extensions, mut account, clock, upgrade_cap) = start();
     let upgrade_cap1 = package::test_publish(@0x1.to_id(), scenario.ctx());
 
-    let auth = multisig::authenticate(&extensions, &account, b"".to_string(), scenario.ctx());
+    let auth = multisig::authenticate(&extensions, &account, role(b"LockCommand", b""), scenario.ctx());
     upgrade_policies::lock_cap_with_timelock(auth, &mut account, b"Degen".to_string(), 1000, upgrade_cap, scenario.ctx());
-    let auth = multisig::authenticate(&extensions, &account, b"".to_string(), scenario.ctx());
+    let auth = multisig::authenticate(&extensions, &account, role(b"LockCommand", b""), scenario.ctx());
     upgrade_policies::lock_cap_with_timelock(auth, &mut account, b"Degen".to_string(), 1000, upgrade_cap1, scenario.ctx());
 
     end(scenario, extensions, account, clock);
@@ -453,7 +467,7 @@ fun test_error_propose_restrict_no_lock() {
 fun test_error_new_restrict_not_restrictive() {
     let (mut scenario, extensions, mut account, clock, upgrade_cap) = start();
 
-    let auth = multisig::authenticate(&extensions, &account, b"".to_string(), scenario.ctx());
+    let auth = multisig::authenticate(&extensions, &account, role(b"LockCommand", b""), scenario.ctx());
     upgrade_policies::lock_cap_with_timelock(auth, &mut account, b"Degen".to_string(), 1000, upgrade_cap, scenario.ctx());
 
     let mut proposal = create_dummy_proposal(&mut scenario, &mut account, &extensions);
@@ -467,7 +481,7 @@ fun test_error_new_restrict_not_restrictive() {
 fun test_error_new_restrict_invalid_policy() {
     let (mut scenario, extensions, mut account, clock, upgrade_cap) = start();
 
-    let auth = multisig::authenticate(&extensions, &account, b"".to_string(), scenario.ctx());
+    let auth = multisig::authenticate(&extensions, &account, role(b"LockCommand", b""), scenario.ctx());
     upgrade_policies::lock_cap_with_timelock(auth, &mut account, b"Degen".to_string(), 1000, upgrade_cap, scenario.ctx());
 
     let mut proposal = create_dummy_proposal(&mut scenario, &mut account, &extensions);
@@ -485,7 +499,7 @@ fun test_error_do_upgrade_from_wrong_account() {
     let mut account2 = multisig::new_account(&extensions, b"Main".to_string(), scenario.ctx());
     let key = b"dummy".to_string();
 
-    let auth = multisig::authenticate(&extensions, &account, b"".to_string(), scenario.ctx());
+    let auth = multisig::authenticate(&extensions, &account, role(b"LockCommand", b""), scenario.ctx());
     upgrade_policies::lock_cap_with_timelock(auth, &mut account, b"Degen".to_string(), 1000, upgrade_cap, scenario.ctx());
     // proposal is submitted to other account
     let mut proposal = create_dummy_proposal(&mut scenario, &mut account2, &extensions);
@@ -514,7 +528,7 @@ fun test_error_do_upgrade_from_wrong_constructor_witness() {
     let (mut scenario, extensions, mut account, clock, upgrade_cap) = start();
     let key = b"dummy".to_string();
 
-    let auth = multisig::authenticate(&extensions, &account, b"".to_string(), scenario.ctx());
+    let auth = multisig::authenticate(&extensions, &account, role(b"LockCommand", b""), scenario.ctx());
     upgrade_policies::lock_cap_with_timelock(auth, &mut account, b"Degen".to_string(), 1000, upgrade_cap, scenario.ctx());
 
     let mut proposal = create_dummy_proposal(&mut scenario, &mut account, &extensions);
@@ -542,7 +556,7 @@ fun test_error_do_upgrade_from_not_dep() {
     let (mut scenario, extensions, mut account, clock, upgrade_cap) = start();
     let key = b"dummy".to_string();
 
-    let auth = multisig::authenticate(&extensions, &account, b"".to_string(), scenario.ctx());
+    let auth = multisig::authenticate(&extensions, &account, role(b"LockCommand", b""), scenario.ctx());
     upgrade_policies::lock_cap_with_timelock(auth, &mut account, b"Degen".to_string(), 1000, upgrade_cap, scenario.ctx());
 
     let mut proposal = create_dummy_proposal(&mut scenario, &mut account, &extensions);
@@ -569,11 +583,13 @@ fun test_error_do_upgrade_from_not_dep() {
 fun test_error_confirm_upgrade_from_wrong_account() {
     let (mut scenario, extensions, mut account, clock, upgrade_cap) = start();
     let mut account2 = multisig::new_account(&extensions, b"Main".to_string(), scenario.ctx());
+    account2.config_mut(version::current()).add_role_to_multisig(role(b"LockCommand", b""), 1);
+    account2.config_mut(version::current()).member_mut(OWNER).add_role_to_member(role(b"LockCommand", b""));
     let key = b"dummy".to_string();
 
-    let auth = multisig::authenticate(&extensions, &account, b"".to_string(), scenario.ctx());
+    let auth = multisig::authenticate(&extensions, &account, role(b"LockCommand", b""), scenario.ctx());
     upgrade_policies::lock_cap_with_timelock(auth, &mut account, b"Degen".to_string(), 1000, upgrade_cap, scenario.ctx());
-    let auth = multisig::authenticate(&extensions, &account2, b"".to_string(), scenario.ctx());
+    let auth = multisig::authenticate(&extensions, &account2, role(b"LockCommand", b""), scenario.ctx());
     upgrade_policies::lock_cap_with_timelock(auth, &mut account2, b"Degen".to_string(), 1000, package::test_publish(@0x1.to_id(), scenario.ctx()), scenario.ctx());
     // proposal is submitted to other account
     let mut proposal = create_dummy_proposal(&mut scenario, &mut account2, &extensions);
@@ -610,7 +626,7 @@ fun test_error_confirm_upgrade_from_wrong_constructor_witness() {
     let (mut scenario, extensions, mut account, clock, upgrade_cap) = start();
     let key = b"dummy".to_string();
 
-    let auth = multisig::authenticate(&extensions, &account, b"".to_string(), scenario.ctx());
+    let auth = multisig::authenticate(&extensions, &account, role(b"LockCommand", b""), scenario.ctx());
     upgrade_policies::lock_cap_with_timelock(auth, &mut account, b"Degen".to_string(), 1000, upgrade_cap, scenario.ctx());
 
     let mut proposal = create_dummy_proposal(&mut scenario, &mut account, &extensions);
@@ -646,7 +662,7 @@ fun test_error_confirm_upgrade_from_not_dep() {
     let (mut scenario, extensions, mut account, clock, upgrade_cap) = start();
     let key = b"dummy".to_string();
 
-    let auth = multisig::authenticate(&extensions, &account, b"".to_string(), scenario.ctx());
+    let auth = multisig::authenticate(&extensions, &account, role(b"LockCommand", b""), scenario.ctx());
     upgrade_policies::lock_cap_with_timelock(auth, &mut account, b"Degen".to_string(), 1000, upgrade_cap, scenario.ctx());
 
     let mut proposal = create_dummy_proposal(&mut scenario, &mut account, &extensions);
@@ -683,7 +699,7 @@ fun test_error_do_restrict_from_wrong_account() {
     let mut account2 = multisig::new_account(&extensions, b"Main".to_string(), scenario.ctx());
     let key = b"dummy".to_string();
 
-    let auth = multisig::authenticate(&extensions, &account, b"".to_string(), scenario.ctx());
+    let auth = multisig::authenticate(&extensions, &account, role(b"LockCommand", b""), scenario.ctx());
     upgrade_policies::lock_cap_with_timelock(auth, &mut account, b"Degen".to_string(), 1000, upgrade_cap, scenario.ctx());
     // proposal is submitted to other account
     let mut proposal = create_dummy_proposal(&mut scenario, &mut account2, &extensions);
@@ -710,7 +726,7 @@ fun test_error_do_restrict_from_wrong_constructor_witness() {
     let (mut scenario, extensions, mut account, clock, upgrade_cap) = start();
     let key = b"dummy".to_string();
 
-    let auth = multisig::authenticate(&extensions, &account, b"".to_string(), scenario.ctx());
+    let auth = multisig::authenticate(&extensions, &account, role(b"LockCommand", b""), scenario.ctx());
     upgrade_policies::lock_cap_with_timelock(auth, &mut account, b"Degen".to_string(), 1000, upgrade_cap, scenario.ctx());
 
     let mut proposal = create_dummy_proposal(&mut scenario, &mut account, &extensions);
@@ -736,7 +752,7 @@ fun test_error_do_restrict_from_not_dep() {
     let (mut scenario, extensions, mut account, clock, upgrade_cap) = start();
     let key = b"dummy".to_string();
 
-    let auth = multisig::authenticate(&extensions, &account, b"".to_string(), scenario.ctx());
+    let auth = multisig::authenticate(&extensions, &account, role(b"LockCommand", b""), scenario.ctx());
     upgrade_policies::lock_cap_with_timelock(auth, &mut account, b"Degen".to_string(), 1000, upgrade_cap, scenario.ctx());
 
     let mut proposal = create_dummy_proposal(&mut scenario, &mut account, &extensions);

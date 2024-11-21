@@ -3,7 +3,10 @@ module account_actions::access_control_tests;
 
 // === Imports ===
 
-use std::type_name::{Self, TypeName};
+use std::{
+    type_name::{Self, TypeName},
+    string::String,
+};
 use sui::{
     test_utils::destroy,
     test_scenario::{Self as ts, Scenario},
@@ -49,7 +52,9 @@ fun start(): (Scenario, Extensions, Account<Multisig, Approvals>, Clock) {
     extensions.add(&cap, b"AccountConfig".to_string(), @account_config, 1);
     extensions.add(&cap, b"AccountActions".to_string(), @account_actions, 1);
     // Account generic types are dummy types (bool, bool)
-    let account = multisig::new_account(&extensions, b"Main".to_string(), scenario.ctx());
+    let mut account = multisig::new_account(&extensions, b"Main".to_string(), scenario.ctx());
+    account.config_mut(version::current()).add_role_to_multisig(role(b"LockCommand", b""), 1);
+    account.config_mut(version::current()).member_mut(OWNER).add_role_to_member(role(b"LockCommand", b""));
     let clock = clock::create_for_testing(scenario.ctx());
     // create world
     destroy(cap);
@@ -61,6 +66,15 @@ fun end(scenario: Scenario, extensions: Extensions, account: Account<Multisig, A
     destroy(account);
     destroy(clock);
     ts::end(scenario);
+}
+
+fun role(action: vector<u8>, name: vector<u8>): String {
+    let mut full_role = @account_actions.to_string();
+    full_role.append_utf8(b"::access_control::");
+    full_role.append_utf8(action);
+    full_role.append_utf8(b"::");
+    full_role.append_utf8(name);
+    full_role
 }
 
 fun wrong_version(): TypeName {
@@ -99,7 +113,7 @@ fun test_lock_cap() {
     let (mut scenario, extensions, mut account, clock) = start();
 
     assert!(!access_control::has_lock<Multisig, Approvals, Cap>(&account));
-    let auth = multisig::authenticate(&extensions, &account, b"".to_string(), scenario.ctx());
+    let auth = multisig::authenticate(&extensions, &account, role(b"LockCommand", b""), scenario.ctx());
     access_control::lock_cap(auth, &mut account, cap(&mut scenario));
     assert!(access_control::has_lock<Multisig, Approvals, Cap>(&account));
 
@@ -109,7 +123,7 @@ fun test_lock_cap() {
 #[test]
 fun test_propose_execute_access() {
     let (mut scenario, extensions, mut account, clock) = start();
-    let auth = multisig::authenticate(&extensions, &account, b"".to_string(), scenario.ctx());
+    let auth = multisig::authenticate(&extensions, &account, role(b"LockCommand", b""), scenario.ctx());
     access_control::lock_cap(auth, &mut account, cap(&mut scenario));
     let key = b"dummy".to_string();
 
@@ -144,7 +158,7 @@ fun test_access_flow() {
     let (mut scenario, extensions, mut account, clock) = start();
     let key = b"dummy".to_string();
 
-    let auth = multisig::authenticate(&extensions, &account, b"".to_string(), scenario.ctx());
+    let auth = multisig::authenticate(&extensions, &account, role(b"LockCommand", b""), scenario.ctx());
     access_control::lock_cap(auth, &mut account, cap(&mut scenario));
 
     let mut proposal = create_dummy_proposal(&mut scenario, &mut account, &extensions);
@@ -189,9 +203,9 @@ fun test_access_expired() {
 fun test_error_lock_cap_already_locked() {
     let (mut scenario, extensions, mut account, clock) = start();
 
-    let auth = multisig::authenticate(&extensions, &account, b"".to_string(), scenario.ctx());
+    let auth = multisig::authenticate(&extensions, &account, role(b"LockCommand", b""), scenario.ctx());
     access_control::lock_cap(auth, &mut account, cap(&mut scenario));
-    let auth = multisig::authenticate(&extensions, &account, b"".to_string(), scenario.ctx());
+    let auth = multisig::authenticate(&extensions, &account, role(b"LockCommand", b""), scenario.ctx());
     access_control::lock_cap(auth, &mut account, cap(&mut scenario));
 
     end(scenario, extensions, account, clock);
@@ -243,7 +257,7 @@ fun test_error_return_to_wrong_account() {
     let (mut scenario, extensions, mut account, clock) = start();
     let key = b"dummy".to_string();
 
-    let auth = multisig::authenticate(&extensions, &account, b"".to_string(), scenario.ctx());
+    let auth = multisig::authenticate(&extensions, &account, role(b"LockCommand", b""), scenario.ctx());
     access_control::lock_cap(auth, &mut account, cap(&mut scenario));
 
     let mut proposal = create_dummy_proposal(&mut scenario, &mut account, &extensions);
@@ -270,7 +284,7 @@ fun test_error_do_access_from_wrong_account() {
     let (mut scenario, extensions, mut account, clock) = start();
     let key = b"dummy".to_string();
 
-    let auth = multisig::authenticate(&extensions, &account, b"".to_string(), scenario.ctx());
+    let auth = multisig::authenticate(&extensions, &account, role(b"LockCommand", b""), scenario.ctx());
     access_control::lock_cap(auth, &mut account, cap(&mut scenario));
 
     let mut proposal = create_dummy_proposal(&mut scenario, &mut account, &extensions);
@@ -281,7 +295,9 @@ fun test_error_do_access_from_wrong_account() {
     let mut executable = multisig::execute_proposal(&mut account, key, &clock);
     // create other account and lock same type of cap
     let mut account2 = multisig::new_account(&extensions, b"Main".to_string(), scenario.ctx());
-    let auth = multisig::authenticate(&extensions, &account2, b"".to_string(), scenario.ctx());
+    account2.config_mut(version::current()).add_role_to_multisig(role(b"LockCommand", b""), 1);
+    account2.config_mut(version::current()).member_mut(OWNER).add_role_to_member(role(b"LockCommand", b""));
+    let auth = multisig::authenticate(&extensions, &account2, role(b"LockCommand", b""), scenario.ctx());
     access_control::lock_cap(auth, &mut account2, cap(&mut scenario));
     
     let (borrow, cap) = access_control::do_access<Multisig, Approvals, Cap, DummyProposal>(&mut executable, &mut account2, version::current(), DummyProposal());
@@ -298,7 +314,7 @@ fun test_error_do_access_from_wrong_constructor_witness() {
     let (mut scenario, extensions, mut account, clock) = start();
     let key = b"dummy".to_string();
 
-    let auth = multisig::authenticate(&extensions, &account, b"".to_string(), scenario.ctx());
+    let auth = multisig::authenticate(&extensions, &account, role(b"LockCommand", b""), scenario.ctx());
     access_control::lock_cap(auth, &mut account, cap(&mut scenario));
 
     let mut proposal = create_dummy_proposal(&mut scenario, &mut account, &extensions);
@@ -321,7 +337,7 @@ fun test_error_do_access_from_not_dep() {
     let (mut scenario, extensions, mut account, clock) = start();
     let key = b"dummy".to_string();
 
-    let auth = multisig::authenticate(&extensions, &account, b"".to_string(), scenario.ctx());
+    let auth = multisig::authenticate(&extensions, &account, role(b"LockCommand", b""), scenario.ctx());
     access_control::lock_cap(auth, &mut account, cap(&mut scenario));
 
     let mut proposal = create_dummy_proposal(&mut scenario, &mut account, &extensions);

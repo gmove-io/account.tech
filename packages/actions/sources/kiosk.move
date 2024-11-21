@@ -48,23 +48,25 @@ public struct KioskOwnerLock has store {
     kiosk_owner_cap: KioskOwnerCap,
 }
 
-/// [MEMBER] can place into a Kiosk
-public struct Place() has drop;
-/// [MEMBER] can delist from a Kiosk
-public struct Delist() has drop;
-/// [PROPOSAL] take nfts from a kiosk managed by a account
+/// [COMMAND] witness defining the command to place into a Kiosk
+public struct KioskCommand() has drop;
+/// [COMMAND] witness defining the command to place into a Kiosk
+public struct PlaceCommand() has drop;
+/// [COMMAND] witness defining the command to delist from a Kiosk
+public struct DelistCommand() has drop;
+/// [PROPOSAL] witness defining the proposal to take nfts from a kiosk managed by a account
 public struct TakeProposal() has copy, drop;
-/// [PROPOSAL] list nfts in a kiosk managed by a account
+/// [PROPOSAL] witness defining the proposal to list nfts in a kiosk managed by a account
 public struct ListProposal() has copy, drop;
 
-/// [ACTION] transfer nfts from the account's kiosk to another one
+/// [ACTION] struct transferring nfts from the account's kiosk to another one
 public struct TakeAction has store {
     // id of the nfts to transfer
     nft_id: ID,
     // owner of the receiver kiosk
     recipient: address,
 }
-/// [ACTION] list nfts for purchase
+/// [ACTION] struct listing nfts for purchase
 public struct ListAction has store {
     // id of the nft to list
     nft_id: ID,
@@ -72,7 +74,7 @@ public struct ListAction has store {
     price: u64
 }
 
-// === [MEMBER] Public functions ===
+// === [COMMAND] Public functions ===
 
 /// Creates a new Kiosk and locks the KioskOwnerCap in the Account
 /// Only a member can create a Kiosk
@@ -83,7 +85,7 @@ public fun open<Config, Outcome>(
     name: String, 
     ctx: &mut TxContext
 ) {
-    auth.verify(account.addr());
+    auth.verify_with_role<KioskCommand>(account.addr(), b"".to_string());
     assert!(!has_lock<Config, Outcome>(account, name), EAlreadyExists);
 
     let (mut kiosk, kiosk_owner_cap) = kiosk::new(ctx);
@@ -123,7 +125,7 @@ public fun place<Config, Outcome, Nft: key + store>(
     nft_id: ID,
     ctx: &mut TxContext
 ): TransferRequest<Nft> {
-    auth.verify_with_role<Place>(account.addr(), name);
+    auth.verify_with_role<PlaceCommand>(account.addr(), name);
     assert!(has_lock(account, name), ENoLock);
 
     let lock_mut: &mut KioskOwnerLock = account.borrow_managed_asset_mut(KioskOwnerKey { name }, version::current());
@@ -156,7 +158,7 @@ public fun delist<Config, Outcome, Nft: key + store>(
     name: String,
     nft: ID,
 ) {
-    auth.verify_with_role<Delist>(account.addr(), name);
+    auth.verify_with_role<DelistCommand>(account.addr(), name);
     assert!(has_lock(account, name), ENoLock);
 
     let lock_mut: &mut KioskOwnerLock = account.borrow_managed_asset_mut(KioskOwnerKey { name }, version::current());
@@ -171,7 +173,7 @@ public fun withdraw_profits<Config, Outcome>(
     name: String,
     ctx: &mut TxContext
 ) {
-    auth.verify(account.addr());
+    auth.verify_with_role<KioskCommand>(account.addr(), b"".to_string());
     assert!(has_lock(account, name), ENoLock);
 
     let lock_mut: &mut KioskOwnerLock = account.borrow_managed_asset_mut(KioskOwnerKey { name }, version::current());
@@ -191,7 +193,7 @@ public fun close<Config, Outcome>(
     kiosk: Kiosk,
     ctx: &mut TxContext
 ) {
-    auth.verify(account.addr());
+    auth.verify_with_role<KioskCommand>(account.addr(), b"".to_string());
     assert!(has_lock(account, name), ENoLock);
 
     let KioskOwnerLock { kiosk_owner_cap } = 

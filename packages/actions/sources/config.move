@@ -53,25 +53,23 @@ const ENoExtensionOrUpgradeCap: vector<u8> = b"No extension or upgrade cap for t
 /// Those structs also define the different roles that members can have.
 /// Finally, they are used to parse the actions of the proposal off-chain.
 
-/// proof of core dependency
-public struct CoreDep() has drop;
-/// [PROPOSAL] modifies the name of the account
+/// [PROPOSAL] witness defining the metadata proposal, and associated role
 public struct ConfigMetadataProposal() has copy, drop;
-/// [PROPOSAL] modifies the dependencies of the account
+/// [PROPOSAL] witness defining the dependencies proposal, and associated role
 public struct ConfigDepsProposal() has copy, drop;
 
-/// [ACTION] wraps the metadata account field into an action
+/// [ACTION] struct wrapping the metadata account field into an action
 public struct ConfigMetadataAction has store {
     metadata: Metadata,
 }
-/// [ACTION] wraps the deps account field into an action
+/// [ACTION] struct wrapping the deps account field into an action
 public struct ConfigDepsAction has store {
     deps: Deps,
 }
 
 // === [PROPOSAL] Public functions ===
 
-// step 1: propose to change the name
+// step 1: propose to change the name and additional metadata
 public fun propose_config_metadata<Config, Outcome>(
     auth: Auth,
     account: &mut Account<Config, Outcome>, 

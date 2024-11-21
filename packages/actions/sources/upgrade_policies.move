@@ -60,9 +60,11 @@ public struct TimeLock has store {
     delay_ms: u64,
 }
 
-/// [PROPOSAL] upgrades a package
+/// [COMMAND] witness defining the command to lock an UpgradeCap
+public struct LockCommand() has drop;
+/// [PROPOSAL] witness defining the proposal to upgrade a package
 public struct UpgradeProposal() has copy, drop;
-/// [PROPOSAL] restricts a locked UpgradeCap
+/// [PROPOSAL] witness defining the proposal to restrict an UpgradeCap
 public struct RestrictProposal() has copy, drop;
 
 /// [ACTION] upgrades a package
@@ -80,7 +82,7 @@ public struct RestrictAction has store {
     policy: u8,
 }
 
-// === [MEMBER] Public Functions ===
+// === [COMMAND] Public Functions ===
 
 /// Creates a new UpgradeLock and returns it
 public fun new_lock(
@@ -125,7 +127,7 @@ public fun lock_cap<Config, Outcome>(
     account: &mut Account<Config, Outcome>,
     lock: UpgradeLock,
 ) {
-    auth.verify(account.addr());
+    auth.verify_with_role<LockCommand>(account.addr(), b"".to_string());
     let package = lock.upgrade_cap.package().to_address();
     assert!(!has_lock(account, package), ELockAlreadyExists);
     account.add_managed_asset(UpgradeKey { package }, lock, version::current());

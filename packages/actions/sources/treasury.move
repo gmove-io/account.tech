@@ -54,54 +54,31 @@ public struct Treasury has store {
     bag: Bag
 }
 
-/// [MEMBER] can deposit coins into a treasury
-public struct Deposit() has drop;
-/// [PROPOSAL] acc_transfer from a treasury 
+/// [COMMAND] witness defining the treasury opening and closing commands, and associated role
+public struct TreasuryCommand() has drop;
+/// [COMMAND] witness defining the treasury deposit command, and associated role
+public struct DepositCommand() has drop;
+/// [PROPOSAL] witness defining the treasury transfer proposal, and associated role
 public struct TransferProposal() has copy, drop;
-/// [PROPOSAL] pays from a treasury
+/// [PROPOSAL] witness defining the treasury pay proposal, and associated role
 public struct PayProposal() has copy, drop;
 
-/// [ACTION] action to be used with specific proposals making good use of the returned coins, similar to owned::withdraw
+/// [ACTION] struct to be used with specific proposals making good use of the returned coins, similar to owned::withdraw
 public struct SpendAction<phantom CoinType> has store {
     // amount to withdraw
     amount: u64,
 }
 
-// === View Functions ===
+// === [COMMAND] Public Functions ===
 
-public fun has_treasury<Config, Outcome>(
-    account: &Account<Config, Outcome>, 
-    name: String
-): bool {
-    account.has_managed_asset(TreasuryKey { name })
-}
-
-public fun borrow_treasury<Config, Outcome>(
-    account: &Account<Config, Outcome>, 
-    name: String
-): &Treasury {
-    assert!(has_treasury(account, name), ETreasuryDoesntExist);
-    account.borrow_managed_asset(TreasuryKey { name }, version::current())
-}
-
-public fun coin_type_exists<CoinType: drop>(treasury: &Treasury): bool {
-    treasury.bag.contains(type_name::get<CoinType>())
-}
-
-public fun coin_type_value<CoinType: drop>(treasury: &Treasury): u64 {
-    treasury.bag.borrow<TypeName, Balance<CoinType>>(type_name::get<CoinType>()).value()
-}
-
-// === [MEMBER] Public Functions ===
-
-// Members can open a treasury
+/// Members with role can open a treasury
 public fun open<Config, Outcome>(
     auth: Auth,
     account: &mut Account<Config, Outcome>,
     name: String,
     ctx: &mut TxContext
 ) {
-    auth.verify(account.addr());
+    auth.verify_with_role<TreasuryCommand>(account.addr(), b"".to_string());
     assert!(!has_treasury(account, name), EAlreadyExists);
 
     account.add_managed_asset(TreasuryKey { name }, Treasury { bag: bag::new(ctx) }, version::current());
@@ -125,7 +102,7 @@ public fun deposit<Config, Outcome, CoinType: drop>(
     name: String, 
     coin: Coin<CoinType>, 
 ) {
-    auth.verify_with_role<Deposit>(account.addr(), name);
+    auth.verify_with_role<DepositCommand>(account.addr(), name);
     assert!(has_treasury(account, name), ETreasuryDoesntExist);
 
     let treasury: &mut Treasury = 
@@ -145,12 +122,35 @@ public fun close<Config, Outcome>(
     account: &mut Account<Config, Outcome>,
     name: String,
 ) {
-    auth.verify(account.addr());
+    auth.verify_with_role<TreasuryCommand>(account.addr(), b"".to_string());
 
     let Treasury { bag } = 
         account.remove_managed_asset(TreasuryKey { name }, version::current());
     assert!(bag.is_empty(), ENotEmpty);
     bag.destroy_empty();
+}
+
+public fun has_treasury<Config, Outcome>(
+    account: &Account<Config, Outcome>, 
+    name: String
+): bool {
+    account.has_managed_asset(TreasuryKey { name })
+}
+
+public fun borrow_treasury<Config, Outcome>(
+    account: &Account<Config, Outcome>, 
+    name: String
+): &Treasury {
+    assert!(has_treasury(account, name), ETreasuryDoesntExist);
+    account.borrow_managed_asset(TreasuryKey { name }, version::current())
+}
+
+public fun coin_type_exists<CoinType: drop>(treasury: &Treasury): bool {
+    treasury.bag.contains(type_name::get<CoinType>())
+}
+
+public fun coin_type_value<CoinType: drop>(treasury: &Treasury): u64 {
+    treasury.bag.borrow<TypeName, Balance<CoinType>>(type_name::get<CoinType>()).value()
 }
 
 // === [PROPOSAL] Public Functions ===

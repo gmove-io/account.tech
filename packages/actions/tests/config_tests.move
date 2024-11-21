@@ -3,7 +3,10 @@ module account_actions::config_tests;
 
 // === Imports ===
 
-use std::type_name::{Self, TypeName};
+use std::{
+    type_name::{Self, TypeName},
+    string::String,
+};
 use sui::{
     test_utils::destroy,
     test_scenario::{Self as ts, Scenario},
@@ -53,7 +56,9 @@ fun start(): (Scenario, Extensions, Account<Multisig, Approvals>, Clock) {
     // add external dep
     extensions.add(&cap, b"External".to_string(), @0xABC, 1);
     // Account generic types are dummy types (bool, bool)
-    let account = multisig::new_account(&extensions, b"Main".to_string(), scenario.ctx());
+    let mut account = multisig::new_account(&extensions, b"Main".to_string(), scenario.ctx());
+    account.config_mut(version::current()).add_role_to_multisig(upgrade_policies_role(b"LockCommand", b""), 1);
+    account.config_mut(version::current()).member_mut(OWNER).add_role_to_member(upgrade_policies_role(b"LockCommand", b""));
     let clock = clock::create_for_testing(scenario.ctx());
     // create world
     destroy(cap);
@@ -65,6 +70,15 @@ fun end(scenario: Scenario, extensions: Extensions, account: Account<Multisig, A
     destroy(account);
     destroy(clock);
     ts::end(scenario);
+}
+
+fun upgrade_policies_role(action: vector<u8>, name: vector<u8>): String {
+    let mut full_role = @account_actions.to_string();
+    full_role.append_utf8(b"::upgrade_policies::");
+    full_role.append_utf8(action);
+    full_role.append_utf8(b"::");
+    full_role.append_utf8(name);
+    full_role
 }
 
 fun wrong_version(): TypeName {
@@ -212,7 +226,7 @@ fun test_config_deps_from_upgrade_cap() {
     let key = b"dummy".to_string();
 
     let upgrade_cap = package::test_publish(@0xdee9.to_id(), scenario.ctx());
-    let auth = multisig::authenticate(&extensions, &account, b"".to_string(), scenario.ctx());
+    let auth = multisig::authenticate(&extensions, &account, upgrade_policies_role(b"LockCommand", b""), scenario.ctx());
     upgrade_policies::lock_cap_with_timelock(auth, &mut account, b"Deep".to_string(), 0, upgrade_cap, scenario.ctx());
 
     let mut proposal = create_dummy_proposal(&mut scenario, &mut account, &extensions);  assert!(!account.deps().contains_name(b"DeepPackage".to_string()));

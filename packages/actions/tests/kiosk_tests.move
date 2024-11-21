@@ -63,14 +63,16 @@ fun start(): (Scenario, Extensions, Account<Multisig, Approvals>, Clock, Transfe
     extensions.add(&cap, b"AccountActions".to_string(), @account_actions, 1);
     // Account generic types are dummy types (bool, bool)
     let mut account = multisig::new_account(&extensions, b"Main".to_string(), scenario.ctx());
-    account.config_mut(version::current()).member_mut(OWNER).add_role_to_member(role(b"Place", b"Degen"));
-    account.config_mut(version::current()).member_mut(OWNER).add_role_to_member(role(b"Delist", b"Degen"));
-    account.config_mut(version::current()).member_mut(OWNER).add_role_to_member(role(b"TakeProposal", b"Degen"));
-    account.config_mut(version::current()).member_mut(OWNER).add_role_to_member(role(b"ListProposal", b"Degen"));
+    account.config_mut(version::current()).add_role_to_multisig(role(b"KioskCommand", b""), 1);
     account.config_mut(version::current()).add_role_to_multisig(role(b"ListProposal", b"Degen"), 1);
-    account.config_mut(version::current()).add_role_to_multisig(role(b"Delist", b"Degen"), 1);
+    account.config_mut(version::current()).add_role_to_multisig(role(b"DelistCommand", b"Degen"), 1);
     account.config_mut(version::current()).add_role_to_multisig(role(b"TakeProposal", b"Degen"), 1);
     account.config_mut(version::current()).add_role_to_multisig(role(b"ListProposal", b"Degen"), 1);
+    account.config_mut(version::current()).member_mut(OWNER).add_role_to_member(role(b"KioskCommand", b""));
+    account.config_mut(version::current()).member_mut(OWNER).add_role_to_member(role(b"PlaceCommand", b"Degen"));
+    account.config_mut(version::current()).member_mut(OWNER).add_role_to_member(role(b"DelistCommand", b"Degen"));
+    account.config_mut(version::current()).member_mut(OWNER).add_role_to_member(role(b"TakeProposal", b"Degen"));
+    account.config_mut(version::current()).member_mut(OWNER).add_role_to_member(role(b"ListProposal", b"Degen"));
     let clock = clock::create_for_testing(scenario.ctx());
     // instantiate TransferPolicy 
     let publisher = package::test_claim(KIOSK_TESTS {}, scenario.ctx());
@@ -119,7 +121,7 @@ fun init_caller_kiosk_with_nfts(policy: &TransferPolicy<Nft>, amount: u64, scena
 }
 
 fun init_account_kiosk_with_nfts(extensions: &Extensions, account: &mut Account<Multisig, Approvals>, policy: &mut TransferPolicy<Nft>, amount: u64, scenario: &mut Scenario): (Kiosk, vector<ID>) {
-    let auth = multisig::authenticate(extensions, account, b"".to_string(), scenario.ctx());
+    let auth = multisig::authenticate(extensions, account, role(b"KioskCommand", b""), scenario.ctx());
     acc_kiosk::open(auth, account, b"Degen".to_string(), scenario.ctx());
     scenario.next_tx(OWNER);
     let mut acc_kiosk = scenario.take_shared<Kiosk>();
@@ -128,7 +130,7 @@ fun init_account_kiosk_with_nfts(extensions: &Extensions, account: &mut Account<
     let mut nft_ids = ids;
 
     amount.do!(|_| {
-        let auth = multisig::authenticate(extensions, account, role(b"Place", b"Degen"), scenario.ctx());
+        let auth = multisig::authenticate(extensions, account, role(b"PlaceCommand", b"Degen"), scenario.ctx());
         let request = acc_kiosk::place(
             auth, 
             account, 
@@ -176,7 +178,7 @@ fun test_open_kiosk() {
     let (mut scenario, extensions, mut account, clock, policy) = start();
 
     assert!(!acc_kiosk::has_lock(&account, b"Degen".to_string()));
-    let auth = multisig::authenticate(&extensions, &account, b"".to_string(), scenario.ctx());
+    let auth = multisig::authenticate(&extensions, &account, role(b"KioskCommand", b""), scenario.ctx());
     acc_kiosk::open(auth, &mut account, b"Degen".to_string(), scenario.ctx());
     assert!(acc_kiosk::has_lock(&account, b"Degen".to_string()));
 
@@ -195,7 +197,7 @@ fun test_place_into_kiosk() {
     let (mut acc_kiosk, _) = init_account_kiosk_with_nfts(&extensions, &mut account, &mut policy, 0, &mut scenario);
     let (mut caller_kiosk, caller_cap, mut ids) = init_caller_kiosk_with_nfts(&policy, 1, &mut scenario);
 
-    let auth = multisig::authenticate(&extensions, &account, role(b"Place", b"Degen"), scenario.ctx());
+    let auth = multisig::authenticate(&extensions, &account, role(b"PlaceCommand", b"Degen"), scenario.ctx());
     let request = acc_kiosk::place(
         auth, 
         &mut account, 
@@ -225,7 +227,7 @@ fun test_place_into_kiosk_without_rules() {
     let publisher = package::test_claim(KIOSK_TESTS {}, scenario.ctx());
     let (mut empty_policy, policy_cap) = transfer_policy::new<Nft>(&publisher, scenario.ctx());
 
-    let auth = multisig::authenticate(&extensions, &account, role(b"Place", b"Degen"), scenario.ctx());
+    let auth = multisig::authenticate(&extensions, &account, role(b"PlaceCommand", b"Degen"), scenario.ctx());
     let request = acc_kiosk::place(
         auth, 
         &mut account, 
@@ -278,9 +280,9 @@ fun test_delist_nfts() {
     acc_kiosk::complete_list(executable);
 
     // delist nfts
-    let auth = multisig::authenticate(&extensions, &account, role(b"Delist", b"Degen"), scenario.ctx());
+    let auth = multisig::authenticate(&extensions, &account, role(b"DelistCommand", b"Degen"), scenario.ctx());
     acc_kiosk::delist<Multisig, Approvals, Nft>(auth, &mut account, &mut acc_kiosk, b"Degen".to_string(), ids.pop_back());
-    let auth = multisig::authenticate(&extensions, &account, role(b"Delist", b"Degen"), scenario.ctx());
+    let auth = multisig::authenticate(&extensions, &account, role(b"DelistCommand", b"Degen"), scenario.ctx());
     acc_kiosk::delist<Multisig, Approvals, Nft>(auth, &mut account, &mut acc_kiosk, b"Degen".to_string(), ids.pop_back());
 
     destroy(acc_kiosk);
@@ -331,7 +333,7 @@ fun test_withdraw_profits() {
     policy.confirm_request(request2);
 
     // withdraw profits
-    let auth = multisig::authenticate(&extensions, &account, b"".to_string(), scenario.ctx());
+    let auth = multisig::authenticate(&extensions, &account, role(b"KioskCommand", b""), scenario.ctx());
     acc_kiosk::withdraw_profits(auth, &mut account, &mut acc_kiosk, b"Degen".to_string(), scenario.ctx());
 
     scenario.next_tx(OWNER);
@@ -350,7 +352,7 @@ fun test_close_kiosk() {
     let (mut scenario, extensions, mut account, clock, policy) = start();
 
     assert!(!acc_kiosk::has_lock(&account, b"Degen".to_string()));
-    let auth = multisig::authenticate(&extensions, &account, b"".to_string(), scenario.ctx());
+    let auth = multisig::authenticate(&extensions, &account, role(b"KioskCommand", b""), scenario.ctx());
     acc_kiosk::open(auth, &mut account, b"Degen".to_string(), scenario.ctx());
     assert!(acc_kiosk::has_lock(&account, b"Degen".to_string()));
 
@@ -358,7 +360,7 @@ fun test_close_kiosk() {
     let kiosk = scenario.take_shared<Kiosk>();
     assert!(kiosk.owner() == account.addr());
 
-    let auth = multisig::authenticate(&extensions, &account, b"".to_string(), scenario.ctx());
+    let auth = multisig::authenticate(&extensions, &account, role(b"KioskCommand", b""), scenario.ctx());
     acc_kiosk::close(auth, &mut account, b"Degen".to_string(), kiosk, scenario.ctx());
 
     end(scenario, extensions, account, clock, policy);
@@ -556,9 +558,9 @@ fun test_list_expired() {
 fun test_error_open_kiosk_already_exists() {
     let (mut scenario, extensions, mut account, clock, policy) = start();
 
-    let auth = multisig::authenticate(&extensions, &account, b"".to_string(), scenario.ctx());
+    let auth = multisig::authenticate(&extensions, &account, role(b"KioskCommand", b""), scenario.ctx());
     acc_kiosk::open(auth, &mut account, b"Degen".to_string(), scenario.ctx());
-    let auth = multisig::authenticate(&extensions, &account, b"".to_string(), scenario.ctx());
+    let auth = multisig::authenticate(&extensions, &account, role(b"KioskCommand", b""), scenario.ctx());
     acc_kiosk::open(auth, &mut account, b"Degen".to_string(), scenario.ctx());
 
     end(scenario, extensions, account, clock, policy);
@@ -571,8 +573,8 @@ fun test_error_place_into_kiosk_unauthorized_kiosk_name() {
     let (mut acc_kiosk, _) = init_account_kiosk_with_nfts(&extensions, &mut account, &mut policy, 0, &mut scenario);
     let (mut caller_kiosk, caller_cap, _) = init_caller_kiosk_with_nfts(&policy, 1, &mut scenario);
     
-    account.config_mut(version::current()).member_mut(OWNER).add_role_to_member(role(b"Place", b"NotDegen"));
-    let auth = multisig::authenticate(&extensions, &account, role(b"Place", b"NotDegen"), scenario.ctx());
+    account.config_mut(version::current()).member_mut(OWNER).add_role_to_member(role(b"PlaceCommand", b"NotDegen"));
+    let auth = multisig::authenticate(&extensions, &account, role(b"PlaceCommand", b"NotDegen"), scenario.ctx());
     let request = acc_kiosk::place(
         auth, 
         &mut account, 
@@ -599,7 +601,7 @@ fun test_error_place_into_kiosk_unauthorized_not_role() {
     let (mut acc_kiosk, _) = init_account_kiosk_with_nfts(&extensions, &mut account, &mut policy, 0, &mut scenario);
     let (mut caller_kiosk, caller_cap, _) = init_caller_kiosk_with_nfts(&policy, 1, &mut scenario);
     // doesn't have the role
-    let auth = multisig::authenticate(&extensions, &account, role(b"Place", b"NotDegen"), scenario.ctx());
+    let auth = multisig::authenticate(&extensions, &account, role(b"PlaceCommand", b"NotDegen"), scenario.ctx());
     let request = acc_kiosk::place(
         auth, 
         &mut account, 
@@ -626,8 +628,8 @@ fun test_error_place_into_kiosk_doesnt_exist() {
     let (mut acc_kiosk, _) = init_account_kiosk_with_nfts(&extensions, &mut account, &mut policy, 0, &mut scenario);
     let (mut caller_kiosk, caller_cap, _) = init_caller_kiosk_with_nfts(&policy, 1, &mut scenario);
     
-    account.config_mut(version::current()).member_mut(OWNER).add_role_to_member(role(b"Place", b"NotDegen"));
-    let auth = multisig::authenticate(&extensions, &account, role(b"Place", b"NotDegen"), scenario.ctx());
+    account.config_mut(version::current()).member_mut(OWNER).add_role_to_member(role(b"PlaceCommand", b"NotDegen"));
+    let auth = multisig::authenticate(&extensions, &account, role(b"PlaceCommand", b"NotDegen"), scenario.ctx());
     let request = acc_kiosk::place(
         auth, 
         &mut account, 
@@ -653,11 +655,11 @@ fun test_error_delist_kiosk_unauthorized_kiosk_name() {
     let (mut acc_kiosk, _) = init_account_kiosk_with_nfts(&extensions, &mut account, &mut policy, 1, &mut scenario);
 
     // create 2nd Kiosk with different name
-    let auth = multisig::authenticate(&extensions, &account, b"".to_string(), scenario.ctx());
+    let auth = multisig::authenticate(&extensions, &account, role(b"KioskCommand", b""), scenario.ctx());
     acc_kiosk::open(auth, &mut account, b"NotDegen".to_string(), scenario.ctx());
     
-    account.config_mut(version::current()).member_mut(OWNER).add_role_to_member(role(b"Delist", b"NotDegen"));
-    let auth = multisig::authenticate(&extensions, &account, role(b"Delist", b"NotDegen"), scenario.ctx());
+    account.config_mut(version::current()).member_mut(OWNER).add_role_to_member(role(b"DelistCommand", b"NotDegen"));
+    let auth = multisig::authenticate(&extensions, &account, role(b"DelistCommand", b"NotDegen"), scenario.ctx());
     acc_kiosk::delist<Multisig, Approvals, Nft>(auth, &mut account, &mut acc_kiosk, b"Degen".to_string(), @0x0.to_id());
 
     destroy(acc_kiosk);
@@ -669,7 +671,7 @@ fun test_error_delist_kiosk_unauthorized_not_role() {
     let (mut scenario, extensions, mut account, clock, mut policy) = start();
     let (mut acc_kiosk, _) = init_account_kiosk_with_nfts(&extensions, &mut account, &mut policy, 1, &mut scenario);
     // doesn't have the role
-    let auth = multisig::authenticate(&extensions, &account, role(b"Delist", b"NotDegen"), scenario.ctx());
+    let auth = multisig::authenticate(&extensions, &account, role(b"DelistCommand", b"NotDegen"), scenario.ctx());
     acc_kiosk::delist<Multisig, Approvals, Nft>(auth, &mut account, &mut acc_kiosk, b"Degen".to_string(), @0x0.to_id());
 
     destroy(acc_kiosk);
@@ -681,8 +683,8 @@ fun test_error_delist_kiosk_doesnt_exist() {
     let (mut scenario, extensions, mut account, clock, mut policy) = start();
     let (mut acc_kiosk, _) = init_account_kiosk_with_nfts(&extensions, &mut account, &mut policy, 1, &mut scenario);
     
-    account.config_mut(version::current()).member_mut(OWNER).add_role_to_member(role(b"Delist", b"NotDegen"));
-    let auth = multisig::authenticate(&extensions, &account, role(b"Delist", b"NotDegen"), scenario.ctx());
+    account.config_mut(version::current()).member_mut(OWNER).add_role_to_member(role(b"DelistCommand", b"NotDegen"));
+    let auth = multisig::authenticate(&extensions, &account, role(b"DelistCommand", b"NotDegen"), scenario.ctx());
     acc_kiosk::delist<Multisig, Approvals, Nft>(auth, &mut account, &mut acc_kiosk, b"NotDegen".to_string(), @0x0.to_id());
     
     destroy(acc_kiosk);
@@ -695,7 +697,7 @@ fun test_error_withdraw_profits_kiosk_doesnt_exist() {
     let (mut scenario, extensions, mut account, clock, mut policy) = start();
     let (mut acc_kiosk, _) = init_account_kiosk_with_nfts(&extensions, &mut account, &mut policy, 0, &mut scenario);
     
-    let auth = multisig::authenticate(&extensions, &account, b"".to_string(), scenario.ctx());
+    let auth = multisig::authenticate(&extensions, &account, role(b"KioskCommand", b""), scenario.ctx());
     acc_kiosk::withdraw_profits(auth, &mut account, &mut acc_kiosk, b"NotDegen".to_string(), scenario.ctx());
 
     destroy(acc_kiosk);
@@ -708,7 +710,7 @@ fun test_error_close_kiosk_doesnt_exist() {
     let (mut scenario, extensions, mut account, clock, mut policy) = start();
     let (acc_kiosk, _) = init_account_kiosk_with_nfts(&extensions, &mut account, &mut policy, 1, &mut scenario);
     
-    let auth = multisig::authenticate(&extensions, &account, b"".to_string(), scenario.ctx());
+    let auth = multisig::authenticate(&extensions, &account, role(b"KioskCommand", b""), scenario.ctx());
     acc_kiosk::close(auth, &mut account, b"NotDegen".to_string(), acc_kiosk, scenario.ctx());
 
     end(scenario, extensions, account, clock, policy);

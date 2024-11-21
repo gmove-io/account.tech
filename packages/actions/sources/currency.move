@@ -79,17 +79,19 @@ public struct CurrencyLock<phantom CoinType> has store {
     can_update_icon: bool,
 }
 
-/// [PROPOSAL] disables one or more permissions
+/// [PROPOSAL] witness defining the TreasuryCap lock command, and associated role
+public struct LockCommand() has drop;
+/// [PROPOSAL] witness defining the proposal to disable one or more permissions
 public struct DisableProposal() has copy, drop;
-/// [PROPOSAL] mints new coins from a locked TreasuryCap
+/// [PROPOSAL] witness defining the proposal to mint new coins from a locked TreasuryCap
 public struct MintProposal() has copy, drop;
-/// [PROPOSAL] burns coins from the account using a locked TreasuryCap
+/// [PROPOSAL] witness defining the proposal to burn coins from the account using a locked TreasuryCap
 public struct BurnProposal() has copy, drop;
-/// [PROPOSAL] updates the CoinMetadata associated with a locked TreasuryCap
+/// [PROPOSAL] witness defining the proposal to update the CoinMetadata associated with a locked TreasuryCap
 public struct UpdateProposal() has copy, drop;
-/// [PROPOSAL] acc_transfer from a minted coin 
+/// [PROPOSAL] witness defining the proposal to transfer a minted coin 
 public struct TransferProposal() has copy, drop;
-/// [PROPOSAL] pays from a minted coin
+/// [PROPOSAL] witness defining the proposal to pay from a minted coin
 public struct PayProposal() has copy, drop;
 
 /// [ACTION] disables permissions marked as true, cannot be reenabled
@@ -117,17 +119,16 @@ public struct UpdateAction<phantom CoinType> has store {
     icon_url: Option<ascii::String>,
 }
 
-// === [MEMBER] Public functions ===
+// === [COMMAND] Public functions ===
 
-/// Only a member can lock a TreasuryCap and borrow it.
-
+/// Only a member with the LockCommand role can lock a TreasuryCap
 public fun lock_cap<Config, Outcome, CoinType>(
     auth: Auth,
     account: &mut Account<Config, Outcome>,
     treasury_cap: TreasuryCap<CoinType>,
     max_supply: Option<u64>,
 ) {
-    auth.verify(account.addr());
+    auth.verify_with_role<LockCommand>(account.addr(), b"".to_string());
 
     let treasury_lock = CurrencyLock { 
         treasury_cap,

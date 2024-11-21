@@ -3,7 +3,10 @@ module account_actions::currency_tests;
 
 // === Imports ===
 
-use std::type_name::{Self, TypeName};
+use std::{
+    type_name::{Self, TypeName},
+    string::String,
+};
 use sui::{
     test_utils::destroy,
     test_scenario::{Self as ts, Scenario},
@@ -51,7 +54,9 @@ fun start(): (Scenario, Extensions, Account<Multisig, Approvals>, Clock, Treasur
     extensions.add(&cap, b"AccountConfig".to_string(), @account_config, 1);
     extensions.add(&cap, b"AccountActions".to_string(), @account_actions, 1);
     // Account generic types are dummy types (bool, bool)
-    let account = multisig::new_account(&extensions, b"Main".to_string(), scenario.ctx());
+    let mut account = multisig::new_account(&extensions, b"Main".to_string(), scenario.ctx());
+    account.config_mut(version::current()).add_role_to_multisig(role(b"LockCommand", b""), 1);
+    account.config_mut(version::current()).member_mut(OWNER).add_role_to_member(role(b"LockCommand", b""));
     let clock = clock::create_for_testing(scenario.ctx());
     // create TreasuryCap and CoinMetadata
     let (treasury_cap, metadata) = coin::create_currency(
@@ -74,6 +79,15 @@ fun end(scenario: Scenario, extensions: Extensions, account: Account<Multisig, A
     destroy(clock);
     destroy(metadata);
     ts::end(scenario);
+}
+
+fun role(action: vector<u8>, name: vector<u8>): String {
+    let mut full_role = @account_actions.to_string();
+    full_role.append_utf8(b"::currency::");
+    full_role.append_utf8(action);
+    full_role.append_utf8(b"::");
+    full_role.append_utf8(name);
+    full_role
 }
 
 fun wrong_version(): TypeName {
@@ -108,7 +122,7 @@ fun test_lock_cap() {
     let (mut scenario, extensions, mut account, clock, cap, metadata) = start();
 
     assert!(!currency::has_lock<Multisig, Approvals, CURRENCY_TESTS>(&account));
-    let auth = multisig::authenticate(&extensions, &account, b"".to_string(), scenario.ctx());
+    let auth = multisig::authenticate(&extensions, &account, role(b"LockCommand", b""), scenario.ctx());
     currency::lock_cap(auth, &mut account, cap, option::some(100));
     assert!(currency::has_lock<Multisig, Approvals, CURRENCY_TESTS>(&account));
 
@@ -119,7 +133,7 @@ fun test_lock_cap() {
 fun test_lock_getters() {
     let (mut scenario, extensions, mut account, clock, cap, metadata) = start();
 
-    let auth = multisig::authenticate(&extensions, &account, b"".to_string(), scenario.ctx());
+    let auth = multisig::authenticate(&extensions, &account, role(b"LockCommand", b""), scenario.ctx());
     currency::lock_cap(auth, &mut account, cap, option::some(100));
 
     let lock = currency::borrow_lock<Multisig, Approvals, CURRENCY_TESTS>(&account);
@@ -141,7 +155,7 @@ fun test_public_burn() {
     let (mut scenario, extensions, mut account, clock, mut cap, metadata) = start();
     let coin = cap.mint(5, scenario.ctx());
 
-    let auth = multisig::authenticate(&extensions, &account, b"".to_string(), scenario.ctx());
+    let auth = multisig::authenticate(&extensions, &account, role(b"LockCommand", b""), scenario.ctx());
     currency::lock_cap(auth, &mut account, cap, option::some(100));
 
     currency::public_burn(&mut account, coin);
@@ -152,7 +166,7 @@ fun test_public_burn() {
 #[test]
 fun test_propose_execute_disable() {
     let (mut scenario, extensions, mut account, clock, cap, metadata) = start();
-    let auth = multisig::authenticate(&extensions, &account, b"".to_string(), scenario.ctx());
+    let auth = multisig::authenticate(&extensions, &account, role(b"LockCommand", b""), scenario.ctx());
     currency::lock_cap(auth, &mut account, cap, option::none());
     let key = b"dummy".to_string();
 
@@ -193,7 +207,7 @@ fun test_propose_execute_disable() {
 #[test]
 fun test_propose_execute_mint() {
     let (mut scenario, extensions, mut account, clock, cap, metadata) = start();
-    let auth = multisig::authenticate(&extensions, &account, b"".to_string(), scenario.ctx());
+    let auth = multisig::authenticate(&extensions, &account, role(b"LockCommand", b""), scenario.ctx());
     currency::lock_cap(auth, &mut account, cap, option::none());
     let key = b"dummy".to_string();
 
@@ -226,7 +240,7 @@ fun test_propose_execute_mint() {
 #[test]
 fun test_propose_execute_mint_with_max_supply() {
     let (mut scenario, extensions, mut account, clock, cap, metadata) = start();
-    let auth = multisig::authenticate(&extensions, &account, b"".to_string(), scenario.ctx());
+    let auth = multisig::authenticate(&extensions, &account, role(b"LockCommand", b""), scenario.ctx());
     currency::lock_cap(auth, &mut account, cap, option::some(5));
     let key = b"dummy".to_string();
 
@@ -267,7 +281,7 @@ fun test_propose_execute_burn() {
     scenario.next_tx(OWNER);
     let receiving = ts::most_recent_receiving_ticket<Coin<CURRENCY_TESTS>>(&object::id(&account));
 
-    let auth = multisig::authenticate(&extensions, &account, b"".to_string(), scenario.ctx());
+    let auth = multisig::authenticate(&extensions, &account, role(b"LockCommand", b""), scenario.ctx());
     currency::lock_cap(auth, &mut account, cap, option::none());
     let key = b"dummy".to_string();
 
@@ -301,7 +315,7 @@ fun test_propose_execute_burn() {
 #[test]
 fun test_propose_execute_update() {
     let (mut scenario, extensions, mut account, clock, cap, mut metadata) = start();
-    let auth = multisig::authenticate(&extensions, &account, b"".to_string(), scenario.ctx());
+    let auth = multisig::authenticate(&extensions, &account, role(b"LockCommand", b""), scenario.ctx());
     currency::lock_cap(auth, &mut account, cap, option::none());
     let key = b"dummy".to_string();
 
@@ -337,7 +351,7 @@ fun test_propose_execute_update() {
 #[test]
 fun test_propose_execute_transfer() {
     let (mut scenario, extensions, mut account, clock, cap, metadata) = start();
-    let auth = multisig::authenticate(&extensions, &account, b"".to_string(), scenario.ctx());
+    let auth = multisig::authenticate(&extensions, &account, role(b"LockCommand", b""), scenario.ctx());
     currency::lock_cap(auth, &mut account, cap, option::none());
     let key = b"dummy".to_string();
 
@@ -381,7 +395,7 @@ fun test_propose_execute_transfer() {
 #[test]
 fun test_propose_execute_vesting() {
     let (mut scenario, extensions, mut account, clock, cap, metadata) = start();
-    let auth = multisig::authenticate(&extensions, &account, b"".to_string(), scenario.ctx());
+    let auth = multisig::authenticate(&extensions, &account, role(b"LockCommand", b""), scenario.ctx());
     currency::lock_cap(auth, &mut account, cap, option::none());
     let key = b"dummy".to_string();
 
@@ -421,7 +435,7 @@ fun test_propose_execute_vesting() {
 #[test]
 fun test_disable_flow() {
     let (mut scenario, extensions, mut account, clock, cap, metadata) = start();
-    let auth = multisig::authenticate(&extensions, &account, b"".to_string(), scenario.ctx());
+    let auth = multisig::authenticate(&extensions, &account, role(b"LockCommand", b""), scenario.ctx());
     currency::lock_cap(auth, &mut account, cap, option::none());
     let key = b"dummy".to_string();
 
@@ -454,7 +468,7 @@ fun test_disable_flow() {
 #[test]
 fun test_mint_flow() {
     let (mut scenario, extensions, mut account, clock, cap, metadata) = start();
-    let auth = multisig::authenticate(&extensions, &account, b"".to_string(), scenario.ctx());
+    let auth = multisig::authenticate(&extensions, &account, role(b"LockCommand", b""), scenario.ctx());
     currency::lock_cap(auth, &mut account, cap, option::none());
     let key = b"dummy".to_string();
 
@@ -486,7 +500,7 @@ fun test_mint_flow() {
 fun test_burn_flow() {
     let (mut scenario, extensions, mut account, clock, mut cap, metadata) = start();
     let coin = cap.mint(5, scenario.ctx());
-    let auth = multisig::authenticate(&extensions, &account, b"".to_string(), scenario.ctx());
+    let auth = multisig::authenticate(&extensions, &account, role(b"LockCommand", b""), scenario.ctx());
     currency::lock_cap(auth, &mut account, cap, option::none());
     let key = b"dummy".to_string();
 
@@ -515,7 +529,7 @@ fun test_burn_flow() {
 #[test]
 fun test_update_flow() {
     let (mut scenario, extensions, mut account, clock, cap, mut metadata) = start();
-    let auth = multisig::authenticate(&extensions, &account, b"".to_string(), scenario.ctx());
+    let auth = multisig::authenticate(&extensions, &account, role(b"LockCommand", b""), scenario.ctx());
     currency::lock_cap(auth, &mut account, cap, option::none());
     let key = b"dummy".to_string();
 
@@ -660,7 +674,7 @@ fun test_error_public_burn_disabled() {
     let (mut scenario, extensions, mut account, clock, mut cap, metadata) = start();
     let coin = cap.mint(5, scenario.ctx());
 
-    let auth = multisig::authenticate(&extensions, &account, b"".to_string(), scenario.ctx());
+    let auth = multisig::authenticate(&extensions, &account, role(b"LockCommand", b""), scenario.ctx());
     currency::lock_cap(auth, &mut account, cap, option::none());
 
     currency::toggle_can_burn<Multisig, Approvals, CURRENCY_TESTS>(&mut account);
@@ -722,7 +736,7 @@ fun test_error_propose_mint_no_lock() {
 fun test_error_propose_mint_disabled() {
     let (mut scenario, extensions, mut account, clock, cap, metadata) = start();
 
-    let auth = multisig::authenticate(&extensions, &account, b"".to_string(), scenario.ctx());
+    let auth = multisig::authenticate(&extensions, &account, role(b"LockCommand", b""), scenario.ctx());
     currency::lock_cap(auth, &mut account, cap, option::none());
 
     currency::toggle_can_mint<Multisig, Approvals, CURRENCY_TESTS>(&mut account);
@@ -748,7 +762,7 @@ fun test_error_propose_mint_disabled() {
 fun test_error_propose_mint_too_many() {
     let (mut scenario, extensions, mut account, clock, cap, metadata) = start();
 
-    let auth = multisig::authenticate(&extensions, &account, b"".to_string(), scenario.ctx());
+    let auth = multisig::authenticate(&extensions, &account, role(b"LockCommand", b""), scenario.ctx());
     currency::lock_cap(auth, &mut account, cap, option::some(4));
 
     let auth = multisig::authenticate(&extensions, &account, b"".to_string(), scenario.ctx());
@@ -795,7 +809,7 @@ fun test_error_propose_burn_no_lock() {
 fun test_error_propose_burn_disabled() {
     let (mut scenario, extensions, mut account, clock, cap, metadata) = start();
 
-    let auth = multisig::authenticate(&extensions, &account, b"".to_string(), scenario.ctx());
+    let auth = multisig::authenticate(&extensions, &account, role(b"LockCommand", b""), scenario.ctx());
     currency::lock_cap(auth, &mut account, cap, option::none());
 
     currency::toggle_can_burn<Multisig, Approvals, CURRENCY_TESTS>(&mut account);
@@ -847,7 +861,7 @@ fun test_error_propose_update_no_lock() {
 fun test_error_propose_update_cannot_update_symbol() {
     let (mut scenario, extensions, mut account, clock, cap, metadata) = start();
 
-    let auth = multisig::authenticate(&extensions, &account, b"".to_string(), scenario.ctx());
+    let auth = multisig::authenticate(&extensions, &account, role(b"LockCommand", b""), scenario.ctx());
     currency::lock_cap(auth, &mut account, cap, option::none());
 
     currency::toggle_can_update_symbol<Multisig, Approvals, CURRENCY_TESTS>(&mut account);
@@ -876,7 +890,7 @@ fun test_error_propose_update_cannot_update_symbol() {
 fun test_error_propose_update_cannot_update_name() {
     let (mut scenario, extensions, mut account, clock, cap, metadata) = start();
 
-    let auth = multisig::authenticate(&extensions, &account, b"".to_string(), scenario.ctx());
+    let auth = multisig::authenticate(&extensions, &account, role(b"LockCommand", b""), scenario.ctx());
     currency::lock_cap(auth, &mut account, cap, option::none());
 
     currency::toggle_can_update_name<Multisig, Approvals, CURRENCY_TESTS>(&mut account);
@@ -905,7 +919,7 @@ fun test_error_propose_update_cannot_update_name() {
 fun test_error_propose_update_cannot_update_description() {
     let (mut scenario, extensions, mut account, clock, cap, metadata) = start();
 
-    let auth = multisig::authenticate(&extensions, &account, b"".to_string(), scenario.ctx());
+    let auth = multisig::authenticate(&extensions, &account, role(b"LockCommand", b""), scenario.ctx());
     currency::lock_cap(auth, &mut account, cap, option::none());
 
     currency::toggle_can_update_description<Multisig, Approvals, CURRENCY_TESTS>(&mut account);
@@ -934,7 +948,7 @@ fun test_error_propose_update_cannot_update_description() {
 fun test_error_propose_update_cannot_update_icon() {
     let (mut scenario, extensions, mut account, clock, cap, metadata) = start();
 
-    let auth = multisig::authenticate(&extensions, &account, b"".to_string(), scenario.ctx());
+    let auth = multisig::authenticate(&extensions, &account, role(b"LockCommand", b""), scenario.ctx());
     currency::lock_cap(auth, &mut account, cap, option::none());
 
     currency::toggle_can_update_icon<Multisig, Approvals, CURRENCY_TESTS>(&mut account);
@@ -985,7 +999,7 @@ fun test_error_propose_transfer_no_lock() {
 #[test, expected_failure(abort_code = currency::EAmountsRecipentsNotSameLength)]
 fun test_error_propose_transfer_not_same_length() {
     let (mut scenario, extensions, mut account, clock, cap, metadata) = start();
-    let auth = multisig::authenticate(&extensions, &account, b"".to_string(), scenario.ctx());
+    let auth = multisig::authenticate(&extensions, &account, role(b"LockCommand", b""), scenario.ctx());
     currency::lock_cap(auth, &mut account, cap, option::none());
 
     let auth = multisig::authenticate(&extensions, &account, b"".to_string(), scenario.ctx());
@@ -1009,7 +1023,7 @@ fun test_error_propose_transfer_not_same_length() {
 #[test, expected_failure(abort_code = currency::EMintDisabled)]
 fun test_error_propose_transfer_mint_disabled() {
     let (mut scenario, extensions, mut account, clock, cap, metadata) = start();
-    let auth = multisig::authenticate(&extensions, &account, b"".to_string(), scenario.ctx());
+    let auth = multisig::authenticate(&extensions, &account, role(b"LockCommand", b""), scenario.ctx());
     currency::lock_cap(auth, &mut account, cap, option::none());
 
     currency::toggle_can_mint<Multisig, Approvals, CURRENCY_TESTS>(&mut account);
@@ -1035,7 +1049,7 @@ fun test_error_propose_transfer_mint_disabled() {
 #[test, expected_failure(abort_code = currency::EMaxSupply)]
 fun test_error_propose_transfer_mint_too_many() {
     let (mut scenario, extensions, mut account, clock, cap, metadata) = start();
-    let auth = multisig::authenticate(&extensions, &account, b"".to_string(), scenario.ctx());
+    let auth = multisig::authenticate(&extensions, &account, role(b"LockCommand", b""), scenario.ctx());
     currency::lock_cap(auth, &mut account, cap, option::some(4));
 
     let auth = multisig::authenticate(&extensions, &account, b"".to_string(), scenario.ctx());
@@ -1084,7 +1098,7 @@ fun test_error_propose_vesting_no_lock() {
 #[test, expected_failure(abort_code = currency::EMintDisabled)]
 fun test_error_propose_vesting_mint_disabled() {
     let (mut scenario, extensions, mut account, clock, cap, metadata) = start();
-    let auth = multisig::authenticate(&extensions, &account, b"".to_string(), scenario.ctx());
+    let auth = multisig::authenticate(&extensions, &account, role(b"LockCommand", b""), scenario.ctx());
     currency::lock_cap(auth, &mut account, cap, option::none());
 
     currency::toggle_can_mint<Multisig, Approvals, CURRENCY_TESTS>(&mut account);
@@ -1112,7 +1126,7 @@ fun test_error_propose_vesting_mint_disabled() {
 #[test, expected_failure(abort_code = currency::EMaxSupply)]
 fun test_error_propose_vesting_mint_too_many() {
     let (mut scenario, extensions, mut account, clock, cap, metadata) = start();
-    let auth = multisig::authenticate(&extensions, &account, b"".to_string(), scenario.ctx());
+    let auth = multisig::authenticate(&extensions, &account, role(b"LockCommand", b""), scenario.ctx());
     currency::lock_cap(auth, &mut account, cap, option::some(4));
 
     let auth = multisig::authenticate(&extensions, &account, b"".to_string(), scenario.ctx());
@@ -1138,7 +1152,7 @@ fun test_error_propose_vesting_mint_too_many() {
 #[test, expected_failure(abort_code = currency::ENoChange)]
 fun test_error_disable_nothing() {
     let (mut scenario, extensions, mut account, clock, cap, metadata) = start();
-    let auth = multisig::authenticate(&extensions, &account, b"".to_string(), scenario.ctx());
+    let auth = multisig::authenticate(&extensions, &account, role(b"LockCommand", b""), scenario.ctx());
     currency::lock_cap(auth, &mut account, cap, option::none());
 
     let mut proposal = create_dummy_proposal(&mut scenario, &mut account, &extensions);
@@ -1160,7 +1174,7 @@ fun test_error_disable_nothing() {
 #[test, expected_failure(abort_code = currency::EMintDisabled)]
 fun test_error_mint_disabled() {
     let (mut scenario, extensions, mut account, clock, cap, metadata) = start();
-    let auth = multisig::authenticate(&extensions, &account, b"".to_string(), scenario.ctx());
+    let auth = multisig::authenticate(&extensions, &account, role(b"LockCommand", b""), scenario.ctx());
     currency::lock_cap(auth, &mut account, cap, option::some(4));
     let key = b"dummy".to_string();
 
@@ -1192,7 +1206,7 @@ fun test_error_mint_disabled() {
 #[test, expected_failure(abort_code = currency::EMaxSupply)]
 fun test_error_mint_too_many() {
     let (mut scenario, extensions, mut account, clock, cap, metadata) = start();
-    let auth = multisig::authenticate(&extensions, &account, b"".to_string(), scenario.ctx());
+    let auth = multisig::authenticate(&extensions, &account, role(b"LockCommand", b""), scenario.ctx());
     currency::lock_cap(auth, &mut account, cap, option::some(4));
     let key = b"dummy".to_string();
 
@@ -1223,7 +1237,7 @@ fun test_error_mint_too_many() {
 fun test_error_burn_wrong_value() {
     let (mut scenario, extensions, mut account, clock, mut cap, metadata) = start();
     let coin = cap.mint(5, scenario.ctx());
-    let auth = multisig::authenticate(&extensions, &account, b"".to_string(), scenario.ctx());
+    let auth = multisig::authenticate(&extensions, &account, role(b"LockCommand", b""), scenario.ctx());
     currency::lock_cap(auth, &mut account, cap, option::none());
     let key = b"dummy".to_string();
 
@@ -1253,7 +1267,7 @@ fun test_error_burn_wrong_value() {
 fun test_error_burn_disabled() {
     let (mut scenario, extensions, mut account, clock, mut cap, metadata) = start();
     let coin = cap.mint(5, scenario.ctx());
-    let auth = multisig::authenticate(&extensions, &account, b"".to_string(), scenario.ctx());
+    let auth = multisig::authenticate(&extensions, &account, role(b"LockCommand", b""), scenario.ctx());
     currency::lock_cap(auth, &mut account, cap, option::none());
     let key = b"dummy".to_string();
 
@@ -1284,7 +1298,7 @@ fun test_error_burn_disabled() {
 #[test, expected_failure(abort_code = currency::ENoChange)]
 fun test_error_update_nothing() {
     let (mut scenario, extensions, mut account, clock, cap, metadata) = start();
-    let auth = multisig::authenticate(&extensions, &account, b"".to_string(), scenario.ctx());
+    let auth = multisig::authenticate(&extensions, &account, role(b"LockCommand", b""), scenario.ctx());
     currency::lock_cap(auth, &mut account, cap, option::none());
 
     let mut proposal = create_dummy_proposal(&mut scenario, &mut account, &extensions);
@@ -1304,7 +1318,7 @@ fun test_error_update_nothing() {
 #[test, expected_failure(abort_code = currency::ECannotUpdateSymbol)]
 fun test_error_update_symbol_disabled() {
     let (mut scenario, extensions, mut account, clock, cap, mut metadata) = start();
-    let auth = multisig::authenticate(&extensions, &account, b"".to_string(), scenario.ctx());
+    let auth = multisig::authenticate(&extensions, &account, role(b"LockCommand", b""), scenario.ctx());
     currency::lock_cap(auth, &mut account, cap, option::none());
     let key = b"dummy".to_string();
 
@@ -1338,7 +1352,7 @@ fun test_error_update_symbol_disabled() {
 #[test, expected_failure(abort_code = currency::ECannotUpdateName)]
 fun test_error_update_name_disabled() {
     let (mut scenario, extensions, mut account, clock, cap, mut metadata) = start();
-    let auth = multisig::authenticate(&extensions, &account, b"".to_string(), scenario.ctx());
+    let auth = multisig::authenticate(&extensions, &account, role(b"LockCommand", b""), scenario.ctx());
     currency::lock_cap(auth, &mut account, cap, option::none());
     let key = b"dummy".to_string();
 
@@ -1372,7 +1386,7 @@ fun test_error_update_name_disabled() {
 #[test, expected_failure(abort_code = currency::ECannotUpdateDescription)]
 fun test_error_update_description_disabled() {
     let (mut scenario, extensions, mut account, clock, cap, mut metadata) = start();
-    let auth = multisig::authenticate(&extensions, &account, b"".to_string(), scenario.ctx());
+    let auth = multisig::authenticate(&extensions, &account, role(b"LockCommand", b""), scenario.ctx());
     currency::lock_cap(auth, &mut account, cap, option::none());
     let key = b"dummy".to_string();
 
@@ -1406,7 +1420,7 @@ fun test_error_update_description_disabled() {
 #[test, expected_failure(abort_code = currency::ECannotUpdateIcon)]
 fun test_error_update_icon_disabled() {
     let (mut scenario, extensions, mut account, clock, cap, mut metadata) = start();
-    let auth = multisig::authenticate(&extensions, &account, b"".to_string(), scenario.ctx());
+    let auth = multisig::authenticate(&extensions, &account, role(b"LockCommand", b""), scenario.ctx());
     currency::lock_cap(auth, &mut account, cap, option::none());
     let key = b"dummy".to_string();
 
@@ -1445,7 +1459,7 @@ fun test_error_do_disable_from_wrong_account() {
     let mut account2 = multisig::new_account(&extensions, b"Main".to_string(), scenario.ctx());
     let key = b"dummy".to_string();
 
-    let auth = multisig::authenticate(&extensions, &account, b"".to_string(), scenario.ctx());
+    let auth = multisig::authenticate(&extensions, &account, role(b"LockCommand", b""), scenario.ctx());
     currency::lock_cap(auth, &mut account, cap, option::some(4));
     // proposal is submitted to other account
     let mut proposal = create_dummy_proposal(&mut scenario, &mut account2, &extensions);
@@ -1481,7 +1495,7 @@ fun test_error_do_disable_from_wrong_constructor_witness() {
     let (mut scenario, extensions, mut account, clock, cap, metadata) = start();
     let key = b"dummy".to_string();
 
-    let auth = multisig::authenticate(&extensions, &account, b"".to_string(), scenario.ctx());
+    let auth = multisig::authenticate(&extensions, &account, role(b"LockCommand", b""), scenario.ctx());
     currency::lock_cap(auth, &mut account, cap, option::some(4));
 
     let mut proposal = create_dummy_proposal(&mut scenario, &mut account, &extensions);
@@ -1516,7 +1530,7 @@ fun test_error_do_disable_from_not_dep() {
     let (mut scenario, extensions, mut account, clock, cap, metadata) = start();
     let key = b"dummy".to_string();
 
-    let auth = multisig::authenticate(&extensions, &account, b"".to_string(), scenario.ctx());
+    let auth = multisig::authenticate(&extensions, &account, role(b"LockCommand", b""), scenario.ctx());
     currency::lock_cap(auth, &mut account, cap, option::some(4));
 
     let mut proposal = create_dummy_proposal(&mut scenario, &mut account, &extensions);
@@ -1552,7 +1566,7 @@ fun test_error_do_mint_from_wrong_account() {
     let mut account2 = multisig::new_account(&extensions, b"Main".to_string(), scenario.ctx());
     let key = b"dummy".to_string();
 
-    let auth = multisig::authenticate(&extensions, &account, b"".to_string(), scenario.ctx());
+    let auth = multisig::authenticate(&extensions, &account, role(b"LockCommand", b""), scenario.ctx());
     currency::lock_cap(auth, &mut account, cap, option::some(4));
     // proposal is submitted to other account
     let mut proposal = create_dummy_proposal(&mut scenario, &mut account2, &extensions);
@@ -1585,7 +1599,7 @@ fun test_error_do_mint_from_wrong_constructor_witness() {
     let (mut scenario, extensions, mut account, clock, cap, metadata) = start();
     let key = b"dummy".to_string();
 
-    let auth = multisig::authenticate(&extensions, &account, b"".to_string(), scenario.ctx());
+    let auth = multisig::authenticate(&extensions, &account, role(b"LockCommand", b""), scenario.ctx());
     currency::lock_cap(auth, &mut account, cap, option::some(4));
 
     let mut proposal = create_dummy_proposal(&mut scenario, &mut account, &extensions);
@@ -1617,7 +1631,7 @@ fun test_error_do_mint_from_not_dep() {
     let (mut scenario, extensions, mut account, clock, cap, metadata) = start();
     let key = b"dummy".to_string();
 
-    let auth = multisig::authenticate(&extensions, &account, b"".to_string(), scenario.ctx());
+    let auth = multisig::authenticate(&extensions, &account, role(b"LockCommand", b""), scenario.ctx());
     currency::lock_cap(auth, &mut account, cap, option::some(4));
 
     let mut proposal = create_dummy_proposal(&mut scenario, &mut account, &extensions);
@@ -1651,7 +1665,7 @@ fun test_error_do_burn_from_wrong_account() {
     let mut account2 = multisig::new_account(&extensions, b"Main".to_string(), scenario.ctx());
     let key = b"dummy".to_string();
 
-    let auth = multisig::authenticate(&extensions, &account, b"".to_string(), scenario.ctx());
+    let auth = multisig::authenticate(&extensions, &account, role(b"LockCommand", b""), scenario.ctx());
     currency::lock_cap(auth, &mut account, cap, option::some(4));
     // proposal is submitted to other account
     let mut proposal = create_dummy_proposal(&mut scenario, &mut account2, &extensions);
@@ -1684,7 +1698,7 @@ fun test_error_do_burn_from_wrong_constructor_witness() {
     let coin = cap.mint(5, scenario.ctx());
     let key = b"dummy".to_string();
 
-    let auth = multisig::authenticate(&extensions, &account, b"".to_string(), scenario.ctx());
+    let auth = multisig::authenticate(&extensions, &account, role(b"LockCommand", b""), scenario.ctx());
     currency::lock_cap(auth, &mut account, cap, option::some(4));
 
     let mut proposal = create_dummy_proposal(&mut scenario, &mut account, &extensions);
@@ -1716,7 +1730,7 @@ fun test_error_do_burn_from_not_dep() {
     let coin = cap.mint(5, scenario.ctx());
     let key = b"dummy".to_string();
 
-    let auth = multisig::authenticate(&extensions, &account, b"".to_string(), scenario.ctx());
+    let auth = multisig::authenticate(&extensions, &account, role(b"LockCommand", b""), scenario.ctx());
     currency::lock_cap(auth, &mut account, cap, option::some(4));
 
     let mut proposal = create_dummy_proposal(&mut scenario, &mut account, &extensions);
@@ -1748,7 +1762,7 @@ fun test_error_do_update_from_wrong_account() {
     let mut account2 = multisig::new_account(&extensions, b"Main".to_string(), scenario.ctx());
     let key = b"dummy".to_string();
 
-    let auth = multisig::authenticate(&extensions, &account, b"".to_string(), scenario.ctx());
+    let auth = multisig::authenticate(&extensions, &account, role(b"LockCommand", b""), scenario.ctx());
     currency::lock_cap(auth, &mut account, cap, option::some(4));
     // proposal is submitted to other account
     let mut proposal = create_dummy_proposal(&mut scenario, &mut account2, &extensions);
@@ -1783,7 +1797,7 @@ fun test_error_do_update_from_wrong_constructor_witness() {
     let (mut scenario, extensions, mut account, clock, cap, mut metadata) = start();
     let key = b"dummy".to_string();
 
-    let auth = multisig::authenticate(&extensions, &account, b"".to_string(), scenario.ctx());
+    let auth = multisig::authenticate(&extensions, &account, role(b"LockCommand", b""), scenario.ctx());
     currency::lock_cap(auth, &mut account, cap, option::some(4));
 
     let mut proposal = create_dummy_proposal(&mut scenario, &mut account, &extensions);
@@ -1817,7 +1831,7 @@ fun test_error_do_update_from_not_dep() {
     let (mut scenario, extensions, mut account, clock, cap, mut metadata) = start();
     let key = b"dummy".to_string();
 
-    let auth = multisig::authenticate(&extensions, &account, b"".to_string(), scenario.ctx());
+    let auth = multisig::authenticate(&extensions, &account, role(b"LockCommand", b""), scenario.ctx());
     currency::lock_cap(auth, &mut account, cap, option::some(4));
 
     let mut proposal = create_dummy_proposal(&mut scenario, &mut account, &extensions);
