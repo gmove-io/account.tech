@@ -40,13 +40,8 @@ const EAlreadyExists: vector<u8> = b"There already is a Kiosk with this name";
 
 // === Structs ===    
 
-/// Dynamic Field key for the KioskOwnerLock
+/// Dynamic Object Field key for the KioskOwnerCap
 public struct KioskOwnerKey has copy, drop, store { name: String }
-/// Dynamic Field wrapper restricting access to a KioskOwnerCap
-public struct KioskOwnerLock has store {
-    // the cap to lock
-    kiosk_owner_cap: KioskOwnerCap,
-}
 
 /// [COMMAND] witness defining the command to place into a Kiosk
 public struct KioskCommand() has drop;
@@ -91,9 +86,7 @@ public fun open<Config, Outcome>(
     let (mut kiosk, kiosk_owner_cap) = kiosk::new(ctx);
     kiosk.set_owner_custom(&kiosk_owner_cap, account.addr());
 
-    let kiosk_owner_lock = KioskOwnerLock { kiosk_owner_cap };
-    account.add_managed_asset(KioskOwnerKey { name }, kiosk_owner_lock, version::current());
-
+    account.add_managed_object(KioskOwnerKey { name }, kiosk_owner_cap, version::current());
     transfer::public_share_object(kiosk);
 }
 
@@ -101,14 +94,7 @@ public fun has_lock<Config, Outcome>(
     account: &Account<Config, Outcome>,
     name: String
 ): bool {
-    account.has_managed_asset(KioskOwnerKey { name })
-}
-
-public fun borrow_lock<Config, Outcome>(
-    account: &Account<Config, Outcome>, 
-    name: String
-): &KioskOwnerLock {
-    account.borrow_managed_asset(KioskOwnerKey { name }, version::current())
+    account.has_managed_object(KioskOwnerKey { name })
 }
 
 /// Deposits from another Kiosk, no need for proposal.
@@ -128,16 +114,16 @@ public fun place<Config, Outcome, Nft: key + store>(
     auth.verify_with_role<PlaceCommand>(account.addr(), name);
     assert!(has_lock(account, name), ENoLock);
 
-    let lock_mut: &mut KioskOwnerLock = account.borrow_managed_asset_mut(KioskOwnerKey { name }, version::current());
+    let cap: &KioskOwnerCap = account.borrow_managed_object(KioskOwnerKey { name }, version::current());
 
     sender_kiosk.list<Nft>(sender_cap, nft_id, 0);
     let (nft, mut request) = sender_kiosk.purchase<Nft>(nft_id, coin::zero<SUI>(ctx));
 
     if (policy.has_rule<Nft, kiosk_lock_rule::Rule>()) {
-        account_kiosk.lock(&lock_mut.kiosk_owner_cap, policy, nft);
+        account_kiosk.lock(cap, policy, nft);
         kiosk_lock_rule::prove(&mut request, account_kiosk);
     } else {
-        account_kiosk.place(&lock_mut.kiosk_owner_cap, nft);
+        account_kiosk.place(cap, nft);
     };
 
     if (policy.has_rule<Nft, royalty_rule::Rule>()) {
@@ -161,8 +147,8 @@ public fun delist<Config, Outcome, Nft: key + store>(
     auth.verify_with_role<DelistCommand>(account.addr(), name);
     assert!(has_lock(account, name), ENoLock);
 
-    let lock_mut: &mut KioskOwnerLock = account.borrow_managed_asset_mut(KioskOwnerKey { name }, version::current());
-    kiosk.delist<Nft>(&lock_mut.kiosk_owner_cap, nft);
+    let cap: &KioskOwnerCap = account.borrow_managed_object(KioskOwnerKey { name }, version::current());
+    kiosk.delist<Nft>(cap, nft);
 }
 
 /// Members can withdraw the profits to the account
@@ -176,9 +162,9 @@ public fun withdraw_profits<Config, Outcome>(
     auth.verify_with_role<KioskCommand>(account.addr(), b"".to_string());
     assert!(has_lock(account, name), ENoLock);
 
-    let lock_mut: &mut KioskOwnerLock = account.borrow_managed_asset_mut(KioskOwnerKey { name }, version::current());
+    let cap: &KioskOwnerCap = account.borrow_managed_object(KioskOwnerKey { name }, version::current());
 
-    let profits_mut = kiosk.profits_mut(&lock_mut.kiosk_owner_cap);
+    let profits_mut = kiosk.profits_mut(cap);
     let profits_value = profits_mut.value();
     let profits = profits_mut.split(profits_value);
 
@@ -196,9 +182,8 @@ public fun close<Config, Outcome>(
     auth.verify_with_role<KioskCommand>(account.addr(), b"".to_string());
     assert!(has_lock(account, name), ENoLock);
 
-    let KioskOwnerLock { kiosk_owner_cap } = 
-        account.remove_managed_asset(KioskOwnerKey { name }, version::current());
-    let profits = kiosk.close_and_withdraw(kiosk_owner_cap, ctx);
+    let cap: KioskOwnerCap = account.remove_managed_object(KioskOwnerKey { name }, version::current());
+    let profits = kiosk.close_and_withdraw(cap, ctx);
     
     account.keep(profits);
 }
@@ -334,10 +319,10 @@ public fun do_take<Config, Outcome, Nft: key + store, W: copy + drop>(
 ): TransferRequest<Nft> {
     let name = executable.issuer().role_name();
     let TakeAction { nft_id, recipient } = executable.action(account.addr(), version, witness);
-    let lock_mut: &mut KioskOwnerLock = account.borrow_managed_asset_mut(KioskOwnerKey { name }, version);
+    let cap: &KioskOwnerCap = account.borrow_managed_object(KioskOwnerKey { name }, version);
     assert!(recipient == ctx.sender(), EWrongReceiver);
 
-    account_kiosk.list<Nft>(&lock_mut.kiosk_owner_cap, nft_id, 0);
+    account_kiosk.list<Nft>(cap, nft_id, 0);
     let (nft, mut request) = account_kiosk.purchase<Nft>(nft_id, coin::zero<SUI>(ctx));
 
     if (policy.has_rule<Nft, kiosk_lock_rule::Rule>()) {
@@ -376,9 +361,9 @@ public fun do_list<Config, Outcome, Nft: key + store, W: copy + drop>(
 ) {
     let name = executable.issuer().role_name();
     let ListAction { nft_id, price } = executable.action(account.addr(), version, witness);
-    let lock_mut: &mut KioskOwnerLock = account.borrow_managed_asset_mut(KioskOwnerKey { name }, version);
+    let cap: &KioskOwnerCap = account.borrow_managed_object(KioskOwnerKey { name }, version);
 
-    kiosk.list<Nft>(&lock_mut.kiosk_owner_cap, nft_id, price);
+    kiosk.list<Nft>(cap, nft_id, price);
 }
 
 public fun delete_list_action<Outcome>(expired: &mut Expired<Outcome>) {

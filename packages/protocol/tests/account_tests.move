@@ -32,10 +32,9 @@ public struct DummyProposal() has drop;
 public struct WrongWitness() has drop;
 
 public struct Key has copy, drop, store {}
-public struct Value has store {
+public struct Struct has store {
     inner: bool
 }
-
 public struct Object has key, store {
     id: UID,
 }
@@ -230,16 +229,30 @@ fun test_proposal_delete_flow() {
 }
 
 #[test]
-fun test_managed_assets() {
+fun test_managed_structs() {
     let (scenario, extensions, mut account) = start();
 
-    account.add_managed_asset(Key {}, Value { inner: true }, version::current());
-    account.has_managed_asset(Key {});
-    let asset: &Value = account.borrow_managed_asset(Key {}, version::current());
-    assert!(asset.inner == true);
-    let asset: &mut Value = account.borrow_managed_asset_mut(Key {}, version::current());
-    assert!(asset.inner == true);
-    let Value { .. } = account.remove_managed_asset(Key {}, version::current());
+    account.add_managed_struct(Key {}, Struct { inner: true }, version::current());
+    account.has_managed_struct(Key {});
+    let `struct`: &Struct = account.borrow_managed_struct(Key {}, version::current());
+    assert!(`struct`.inner == true);
+    let `struct`: &mut Struct = account.borrow_managed_struct_mut(Key {}, version::current());
+    assert!(`struct`.inner == true);
+    let Struct { .. } = account.remove_managed_struct(Key {}, version::current());
+
+    end(scenario, extensions, account);
+}
+
+#[test]
+fun test_managed_objects() {
+    let (mut scenario, extensions, mut account) = start();
+
+    account.add_managed_object(Key {}, Object { id: object::new(scenario.ctx()) }, version::current());
+    account.has_managed_object(Key {});
+    let _object: &Object = account.borrow_managed_object(Key {}, version::current());
+    let _object: &mut Object = account.borrow_managed_object_mut(Key {}, version::current());
+    let Object { id } = account.remove_managed_object(Key {}, version::current());
+    id.delete();
 
     end(scenario, extensions, account);
 }
@@ -434,7 +447,7 @@ fun test_error_cannot_delete_proposal_from_not_core_dep() {
 fun test_error_cannot_add_managed_asset_from_not_dependent_package() {
     let (scenario, extensions, mut account) = start();
 
-    account.add_managed_asset(Key {}, Value { inner: true }, wrong_version());
+    account.add_managed_struct(Key {}, Struct { inner: true }, wrong_version());
 
     end(scenario, extensions, account);
 }
@@ -443,8 +456,8 @@ fun test_error_cannot_add_managed_asset_from_not_dependent_package() {
 fun test_error_cannot_borrow_managed_asset_from_not_dependent_package() {
     let (scenario, extensions, mut account) = start();
 
-    account.add_managed_asset(Key {}, Value { inner: true }, version::current());
-    let asset: &Value = account.borrow_managed_asset(Key {}, wrong_version());
+    account.add_managed_struct(Key {}, Struct { inner: true }, version::current());
+    let asset: &Struct = account.borrow_managed_struct(Key {}, wrong_version());
     assert!(asset.inner == true);
 
     end(scenario, extensions, account);
@@ -454,8 +467,8 @@ fun test_error_cannot_borrow_managed_asset_from_not_dependent_package() {
 fun test_error_cannot_borrow_mut_managed_asset_from_not_dependent_package() {
     let (scenario, extensions, mut account) = start();
 
-    account.add_managed_asset(Key {}, Value { inner: true }, version::current());
-    let asset: &mut Value = account.borrow_managed_asset_mut(Key {}, wrong_version());
+    account.add_managed_struct(Key {}, Struct { inner: true }, version::current());
+    let asset: &mut Struct = account.borrow_managed_struct_mut(Key {}, wrong_version());
     assert!(asset.inner == true);
 
     end(scenario, extensions, account);
@@ -465,8 +478,50 @@ fun test_error_cannot_borrow_mut_managed_asset_from_not_dependent_package() {
 fun test_error_cannot_remove_managed_asset_from_not_dependent_package() {
     let (scenario, extensions, mut account) = start();
 
-    account.add_managed_asset(Key {}, Value { inner: true }, version::current());
-    let Value { .. } = account.remove_managed_asset(Key {}, wrong_version());
+    account.add_managed_struct(Key {}, Struct { inner: true }, version::current());
+    let Struct { .. } = account.remove_managed_struct(Key {}, wrong_version());
+
+    end(scenario, extensions, account);
+}
+
+#[test, expected_failure(abort_code = deps::ENotDep)]
+fun test_error_cannot_add_managed_object_from_not_dependent_package() {
+    let (mut scenario, extensions, mut account) = start();
+
+    account.add_managed_object(Key {}, Object { id: object::new(scenario.ctx()) }, wrong_version());
+
+    end(scenario, extensions, account);
+}
+
+#[test, expected_failure(abort_code = deps::ENotDep)]
+fun test_error_cannot_borrow_managed_object_from_not_dependent_package() {
+    let (mut scenario, extensions, mut account) = start();
+
+    account.add_managed_object(Key {}, Object { id: object::new(scenario.ctx()) }, version::current());
+    let asset: &Object = account.borrow_managed_object(Key {}, wrong_version());
+    assert!(asset.id.to_inner() == object::id(&account));
+
+    end(scenario, extensions, account);
+}
+
+#[test, expected_failure(abort_code = deps::ENotDep)]
+fun test_error_cannot_borrow_mut_managed_object_from_not_dependent_package() {
+    let (mut scenario, extensions, mut account) = start();
+
+    account.add_managed_object(Key {}, Object { id: object::new(scenario.ctx()) }, version::current());
+    let asset: &mut Object = account.borrow_managed_object_mut(Key {}, wrong_version());
+    assert!(asset.id.to_inner() == object::id(&account));
+
+    end(scenario, extensions, account);
+}
+
+#[test, expected_failure(abort_code = deps::ENotDep)]
+fun test_error_cannot_remove_managed_object_from_not_dependent_package() {
+    let (mut scenario, extensions, mut account) = start();
+
+    account.add_managed_object(Key {}, Object { id: object::new(scenario.ctx()) }, version::current());
+    let Object { id } = account.remove_managed_object(Key {}, wrong_version());
+    id.delete();
 
     end(scenario, extensions, account);
 }

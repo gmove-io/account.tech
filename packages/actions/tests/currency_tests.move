@@ -121,10 +121,10 @@ fun create_dummy_proposal(
 fun test_lock_cap() {
     let (mut scenario, extensions, mut account, clock, cap, metadata) = start();
 
-    assert!(!currency::has_lock<Multisig, Approvals, CURRENCY_TESTS>(&account));
+    assert!(!currency::has_cap<Multisig, Approvals, CURRENCY_TESTS>(&account));
     let auth = multisig::authenticate(&extensions, &account, role(b"LockCommand", b""), scenario.ctx());
     currency::lock_cap(auth, &mut account, cap, option::some(100));
-    assert!(currency::has_lock<Multisig, Approvals, CURRENCY_TESTS>(&account));
+    assert!(currency::has_cap<Multisig, Approvals, CURRENCY_TESTS>(&account));
 
     end(scenario, extensions, account, clock, metadata);
 }
@@ -136,8 +136,9 @@ fun test_lock_getters() {
     let auth = multisig::authenticate(&extensions, &account, role(b"LockCommand", b""), scenario.ctx());
     currency::lock_cap(auth, &mut account, cap, option::some(100));
 
-    let lock = currency::borrow_lock<Multisig, Approvals, CURRENCY_TESTS>(&account);
-    assert!(lock.supply() == 0);
+    let lock = currency::borrow_rules<Multisig, Approvals, CURRENCY_TESTS>(&account);
+    let supply = currency::coin_type_supply<Multisig, Approvals, CURRENCY_TESTS>(&account);
+    assert!(supply == 0);
     assert!(lock.total_minted() == 0);
     assert!(lock.total_burnt() == 0);
     assert!(lock.can_mint() == true);
@@ -193,7 +194,7 @@ fun test_propose_execute_disable() {
     let executable = multisig::execute_proposal(&mut account, key, &clock);
     currency::execute_disable<Multisig, Approvals, CURRENCY_TESTS>(executable, &mut account);
 
-    let lock = currency::borrow_lock<Multisig, Approvals, CURRENCY_TESTS>(&account);
+    let lock = currency::borrow_rules<Multisig, Approvals, CURRENCY_TESTS>(&account);
     assert!(lock.can_mint() == false);
     assert!(lock.can_burn() == false);
     assert!(lock.can_update_name() == false);
@@ -229,8 +230,9 @@ fun test_propose_execute_mint() {
     let executable = multisig::execute_proposal(&mut account, key, &clock);
     currency::execute_mint<Multisig, Approvals, CURRENCY_TESTS>(executable, &mut account, scenario.ctx());
 
-    let lock = currency::borrow_lock<Multisig, Approvals, CURRENCY_TESTS>(&account);
-    assert!(lock.supply() == 5);
+    let lock = currency::borrow_rules<Multisig, Approvals, CURRENCY_TESTS>(&account);
+    let supply = currency::coin_type_supply<Multisig, Approvals, CURRENCY_TESTS>(&account);
+    assert!(supply == 5);
     assert!(lock.total_minted() == 5);
     assert!(lock.total_burnt() == 0);
 
@@ -262,8 +264,9 @@ fun test_propose_execute_mint_with_max_supply() {
     let executable = multisig::execute_proposal(&mut account, key, &clock);
     currency::execute_mint<Multisig, Approvals, CURRENCY_TESTS>(executable, &mut account, scenario.ctx());
 
-    let lock = currency::borrow_lock<Multisig, Approvals, CURRENCY_TESTS>(&account);
-    assert!(lock.supply() == 5);
+    let lock = currency::borrow_rules<Multisig, Approvals, CURRENCY_TESTS>(&account);
+    let supply = currency::coin_type_supply<Multisig, Approvals, CURRENCY_TESTS>(&account);
+    assert!(supply == 5);
     assert!(lock.total_minted() == 5);
     assert!(lock.total_burnt() == 0);
 
@@ -304,8 +307,9 @@ fun test_propose_execute_burn() {
     let executable = multisig::execute_proposal(&mut account, key, &clock);
     currency::execute_burn<Multisig, Approvals, CURRENCY_TESTS>(executable, &mut account, receiving);
 
-    let lock = currency::borrow_lock<Multisig, Approvals, CURRENCY_TESTS>(&account);
-    assert!(lock.supply() == 0);
+    let lock = currency::borrow_rules<Multisig, Approvals, CURRENCY_TESTS>(&account);
+    let supply = currency::coin_type_supply<Multisig, Approvals, CURRENCY_TESTS>(&account);
+    assert!(supply == 0);
     assert!(lock.total_minted() == 0);
     assert!(lock.total_burnt() == 5);
 

@@ -41,12 +41,8 @@ const EWrongAccount: vector<u8> = b"This Cap has not been borrowed from this acc
 
 // === Structs ===    
 
-/// Dynamic Field key for the AccessLock
-public struct AccessKey<phantom Cap> has copy, drop, store {}
-/// Dynamic Field wrapper storing a cap
-public struct AccessLock<Cap: store> has store {
-    cap: Cap,
-}
+/// Dynamic Object Field key for the Cap
+public struct CapKey<phantom Cap> has copy, drop, store {}
 
 /// [COMMAND] witness defining the lock cap command, and associated role
 public struct LockCommand() has drop;
@@ -64,20 +60,20 @@ public struct Borrow<phantom Cap> {
 // === [COMMAND] Public functions ===
 
 /// Only a member can lock a Cap, the Cap must have at least store ability
-public fun lock_cap<Config, Outcome, Cap: store>(
+public fun lock_cap<Config, Outcome, Cap: key + store>(
     auth: Auth,
     account: &mut Account<Config, Outcome>,
     cap: Cap,
 ) {
     auth.verify_with_role<LockCommand>(account.addr(), b"".to_string());
     assert!(!has_lock<Config, Outcome, Cap>(account), EAlreadyLocked);
-    account.add_managed_asset(AccessKey<Cap> {}, AccessLock { cap }, version::current());
+    account.add_managed_object(CapKey<Cap> {}, cap, version::current());
 }
 
 public fun has_lock<Config, Outcome, Cap>(
     account: &Account<Config, Outcome>
 ): bool {
-    account.has_managed_asset(AccessKey<Cap> {})
+    account.has_managed_object(CapKey<Cap> {})
 }
 
 // === [PROPOSAL] Public functions ===
@@ -116,7 +112,7 @@ public fun propose_access<Config, Outcome, Cap>(
 // step 3: execute the proposal and return the action (AccountConfig::module::execute_proposal)
 
 // step 4: mint the coins and send them to the account
-public fun execute_access<Config, Outcome, Cap: store>(
+public fun execute_access<Config, Outcome, Cap: key + store>(
     executable: &mut Executable,
     account: &mut Account<Config, Outcome>,
 ): (Borrow<Cap>, Cap) {
@@ -124,7 +120,7 @@ public fun execute_access<Config, Outcome, Cap: store>(
 }
 
 // step 5: return the cap to destroy Borrow, the action and executable
-public fun complete_access<Config, Outcome, Cap: store>(
+public fun complete_access<Config, Outcome, Cap: key + store>(
     executable: Executable, 
     account: &mut Account<Config, Outcome>,
     borrow: Borrow<Cap>, 
@@ -143,7 +139,7 @@ public fun new_access<Outcome, Cap, W: drop>(
     proposal.add_action(AccessAction<Cap> {}, witness);
 }
 
-public fun do_access<Config, Outcome, Cap: store, W: copy + drop>(
+public fun do_access<Config, Outcome, Cap: key + store, W: copy + drop>(
     executable: &mut Executable, 
     account: &mut Account<Config, Outcome>,
     version: TypeName,
@@ -152,12 +148,12 @@ public fun do_access<Config, Outcome, Cap: store, W: copy + drop>(
     assert!(has_lock<Config, Outcome, Cap>(account), ENoLock);
     // check to be sure this cap type has been approved
     let AccessAction<Cap> {} = executable.action(account.addr(), version, witness);
-    let AccessLock<Cap> { cap } = account.remove_managed_asset(AccessKey<Cap> {}, version);
+    let cap = account.remove_managed_object(CapKey<Cap> {}, version);
     
     (Borrow<Cap> { account_addr: account.addr() }, cap)
 }
 
-public fun return_cap<Config, Outcome, Cap: store>(
+public fun return_cap<Config, Outcome, Cap: key + store>(
     account: &mut Account<Config, Outcome>,
     borrow: Borrow<Cap>,
     cap: Cap,
@@ -166,7 +162,7 @@ public fun return_cap<Config, Outcome, Cap: store>(
     let Borrow<Cap> { account_addr } = borrow;
     assert!(account_addr == account.addr(), EWrongAccount);
 
-    account.add_managed_asset(AccessKey<Cap> {}, AccessLock { cap }, version);
+    account.add_managed_object(CapKey<Cap> {}, cap, version);
 }
 
 public fun delete_access_action<Outcome, Cap>(expired: &mut Expired<Outcome>) {

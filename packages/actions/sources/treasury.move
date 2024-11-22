@@ -81,7 +81,7 @@ public fun open<Config, Outcome>(
     auth.verify_with_role<TreasuryCommand>(account.addr(), b"".to_string());
     assert!(!has_treasury(account, name), EAlreadyExists);
 
-    account.add_managed_asset(TreasuryKey { name }, Treasury { bag: bag::new(ctx) }, version::current());
+    account.add_managed_struct(TreasuryKey { name }, Treasury { bag: bag::new(ctx) }, version::current());
 }
 
 /// Deposits coins owned by the account into a treasury
@@ -106,7 +106,7 @@ public fun deposit<Config, Outcome, CoinType: drop>(
     assert!(has_treasury(account, name), ETreasuryDoesntExist);
 
     let treasury: &mut Treasury = 
-        account.borrow_managed_asset_mut(TreasuryKey { name }, version::current());
+        account.borrow_managed_struct_mut(TreasuryKey { name }, version::current());
 
     if (treasury.coin_type_exists<CoinType>()) {
         let balance: &mut Balance<CoinType> = treasury.bag.borrow_mut(type_name::get<CoinType>());
@@ -125,7 +125,7 @@ public fun close<Config, Outcome>(
     auth.verify_with_role<TreasuryCommand>(account.addr(), b"".to_string());
 
     let Treasury { bag } = 
-        account.remove_managed_asset(TreasuryKey { name }, version::current());
+        account.remove_managed_struct(TreasuryKey { name }, version::current());
     assert!(bag.is_empty(), ENotEmpty);
     bag.destroy_empty();
 }
@@ -134,7 +134,7 @@ public fun has_treasury<Config, Outcome>(
     account: &Account<Config, Outcome>, 
     name: String
 ): bool {
-    account.has_managed_asset(TreasuryKey { name })
+    account.has_managed_struct(TreasuryKey { name })
 }
 
 public fun borrow_treasury<Config, Outcome>(
@@ -142,7 +142,7 @@ public fun borrow_treasury<Config, Outcome>(
     name: String
 ): &Treasury {
     assert!(has_treasury(account, name), ETreasuryDoesntExist);
-    account.borrow_managed_asset(TreasuryKey { name }, version::current())
+    account.borrow_managed_struct(TreasuryKey { name }, version::current())
 }
 
 public fun coin_type_exists<CoinType: drop>(treasury: &Treasury): bool {
@@ -286,7 +286,7 @@ public fun do_spend<Config, Outcome, CoinType: drop, W: copy + drop>(
     let name = executable.issuer().role_name();
     let SpendAction<CoinType> { amount } = executable.action(account.addr(), version, witness);
     
-    let treasury: &mut Treasury = account.borrow_managed_asset_mut(TreasuryKey { name }, version);
+    let treasury: &mut Treasury = account.borrow_managed_struct_mut(TreasuryKey { name }, version);
     let balance: &mut Balance<CoinType> = treasury.bag.borrow_mut(type_name::get<CoinType>());
     let coin = coin::take(balance, amount, ctx);
 

@@ -227,7 +227,7 @@ fun test_config_deps_from_upgrade_cap() {
 
     let upgrade_cap = package::test_publish(@0xdee9.to_id(), scenario.ctx());
     let auth = multisig::authenticate(&extensions, &account, upgrade_policies_role(b"LockCommand", b""), scenario.ctx());
-    upgrade_policies::lock_cap_with_timelock(auth, &mut account, b"Deep".to_string(), 0, upgrade_cap, scenario.ctx());
+    upgrade_policies::lock_cap(auth, &mut account, upgrade_cap, b"Deep".to_string(), 0);
 
     let mut proposal = create_dummy_proposal(&mut scenario, &mut account, &extensions);  assert!(!account.deps().contains_name(b"DeepPackage".to_string()));
     

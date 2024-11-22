@@ -23,6 +23,7 @@ use sui::{
     transfer::Receiving,
     clock::Clock, 
     dynamic_field as df,
+    dynamic_object_field as dof,
     package,
 };
 use account_protocol::{
@@ -196,53 +197,98 @@ public fun config<Config, Outcome>(account: &Account<Config, Outcome>): &Config 
 
 // === Deps-only functions ===
 
-/// Managed assets:
-/// Objects attached as dynamic fields to the account object
+/// Managed structs and objects:
+/// Structs and objects attached as dynamic fields to the account object.
+/// They are separated to improve objects discoverability on frontends and indexers.
 /// Keys must be custom types defined in the same module where the function is called
-/// The key type is checked against dependencies
+/// The version typename should be issued from the same package and is checked against dependencies
 
-public fun add_managed_asset<Config, Outcome, K: copy + drop + store, A: store>(
+public fun add_managed_struct<Config, Outcome, K: copy + drop + store, Struct: store>(
     account: &mut Account<Config, Outcome>, 
     key: K, 
-    asset: A,
+    `struct`: Struct,
     version: TypeName,
 ) {
     account.deps.assert_is_dep(version);
-    df::add(&mut account.id, key, asset);
+    df::add(&mut account.id, key, `struct`);
 }
 
-public fun has_managed_asset<Config, Outcome, K: copy + drop + store>(
+public fun has_managed_struct<Config, Outcome, K: copy + drop + store>(
     account: &Account<Config, Outcome>, 
     key: K, 
 ): bool {
     df::exists_(&account.id, key)
 }
 
-public fun borrow_managed_asset<Config, Outcome, K: copy + drop + store, A: store>(
+public fun borrow_managed_struct<Config, Outcome, K: copy + drop + store, Struct: store>(
     account: &Account<Config, Outcome>,
     key: K, 
     version: TypeName,
-): &A {
+): &Struct {
     account.deps.assert_is_dep(version);
     df::borrow(&account.id, key)
 }
 
-public fun borrow_managed_asset_mut<Config, Outcome, K: copy + drop + store, A: store>(
+public fun borrow_managed_struct_mut<Config, Outcome, K: copy + drop + store, Struct: store>(
     account: &mut Account<Config, Outcome>, 
     key: K, 
     version: TypeName,
-): &mut A {
+): &mut Struct {
     account.deps.assert_is_dep(version);
     df::borrow_mut(&mut account.id, key)
 }
 
-public fun remove_managed_asset<Config, Outcome, K: copy + drop + store, A: store>(
+public fun remove_managed_struct<Config, Outcome, K: copy + drop + store, A: store>(
     account: &mut Account<Config, Outcome>, 
     key: K, 
     version: TypeName,
 ): A {
     account.deps.assert_is_dep(version);
     df::remove(&mut account.id, key)
+}
+
+public fun add_managed_object<Config, Outcome, K: copy + drop + store, Obj: key + store>(
+    account: &mut Account<Config, Outcome>, 
+    key: K, 
+    obj: Obj,
+    version: TypeName,
+) {
+    account.deps.assert_is_dep(version);
+    dof::add(&mut account.id, key, obj);
+}
+
+public fun has_managed_object<Config, Outcome, K: copy + drop + store>(
+    account: &Account<Config, Outcome>, 
+    key: K, 
+): bool {
+    dof::exists_(&account.id, key)
+}
+
+public fun borrow_managed_object<Config, Outcome, K: copy + drop + store, Obj: key + store>(
+    account: &Account<Config, Outcome>,
+    key: K, 
+    version: TypeName,
+): &Obj {
+    account.deps.assert_is_dep(version);
+    dof::borrow(&account.id, key)
+}
+
+public fun borrow_managed_object_mut<Config, Outcome, K: copy + drop + store, Obj: key + store>(
+    account: &mut Account<Config, Outcome>, 
+    key: K, 
+    version: TypeName,
+): &mut Obj {
+    account.deps.assert_is_dep(version);
+    dof::borrow_mut(&mut account.id, key)
+}
+
+public fun remove_managed_object<Config, Outcome, K: copy + drop + store, Obj: key + store>(
+    account: &mut Account<Config, Outcome>, 
+    key: K, 
+    version: TypeName,
+): Obj {
+    account.deps.assert_is_dep(version);
+    dof::remove(&mut account.id, key)
 }
 
 // === Core Deps only functions ===

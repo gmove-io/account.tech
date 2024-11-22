@@ -58,12 +58,12 @@ const EMaxSupply: vector<u8> = b"Max supply exceeded";
 
 // === Structs ===    
 
-/// Dynamic Field key for the CurrencyLock
-public struct CurrencyKey<phantom CoinType> has copy, drop, store {}
+/// Dynamic Object Field key for the TreasuryCap
+public struct TreasuryCapKey<phantom CoinType> has copy, drop, store {}
+/// Dynamic Field key for the CurrencyRules
+public struct CurrencyRulesKey<phantom CoinType> has copy, drop, store {}
 /// Dynamic Field wrapper restricting access to a TreasuryCap, permissions are disabled forever if set
-public struct CurrencyLock<phantom CoinType> has store {
-    // the cap to lock
-    treasury_cap: TreasuryCap<CoinType>,
+public struct CurrencyRules<phantom CoinType> has store {
     // coin can have a fixed supply, can_mint must be true 
     max_supply: Option<u64>,
     // total amount minted
@@ -130,8 +130,7 @@ public fun lock_cap<Config, Outcome, CoinType>(
 ) {
     auth.verify_with_role<LockCommand>(account.addr(), b"".to_string());
 
-    let treasury_lock = CurrencyLock { 
-        treasury_cap,
+    let rules = CurrencyRules<CoinType> { 
         max_supply,
         total_minted: 0,
         total_burnt: 0,
@@ -142,55 +141,57 @@ public fun lock_cap<Config, Outcome, CoinType>(
         can_update_description: true,
         can_update_icon: true,
     };
-    account.add_managed_asset(CurrencyKey<CoinType> {}, treasury_lock, version::current());
+    account.add_managed_struct(CurrencyRulesKey<CoinType> {}, rules, version::current());
+    account.add_managed_object(TreasuryCapKey<CoinType> {}, treasury_cap, version::current());
 }
 
-public fun has_lock<Config, Outcome, CoinType>(
+public fun has_cap<Config, Outcome, CoinType>(
     account: &Account<Config, Outcome>
 ): bool {
-    account.has_managed_asset(CurrencyKey<CoinType> {})
+    account.has_managed_object(TreasuryCapKey<CoinType> {})
 }
 
-public fun borrow_lock<Config, Outcome, CoinType>(
+public fun borrow_rules<Config, Outcome, CoinType>(
     account: &Account<Config, Outcome>
-): &CurrencyLock<CoinType> {
-    account.borrow_managed_asset(CurrencyKey<CoinType> {}, version::current())
+): &CurrencyRules<CoinType> {
+    account.borrow_managed_struct(CurrencyRulesKey<CoinType> {}, version::current())
 }
 
 // getters
-public fun supply<CoinType>(lock: &CurrencyLock<CoinType>): u64 {
-    lock.treasury_cap.total_supply()
+public fun coin_type_supply<Config, Outcome, CoinType>(account: &Account<Config, Outcome>): u64 {
+    let cap: &TreasuryCap<CoinType> = account.borrow_managed_object(TreasuryCapKey<CoinType> {}, version::current());
+    cap.total_supply()
 }
 
-public fun total_minted<CoinType>(lock: &CurrencyLock<CoinType>): u64 {
+public fun total_minted<CoinType>(lock: &CurrencyRules<CoinType>): u64 {
     lock.total_minted
 }
 
-public fun total_burnt<CoinType>(lock: &CurrencyLock<CoinType>): u64 {
+public fun total_burnt<CoinType>(lock: &CurrencyRules<CoinType>): u64 {
     lock.total_burnt
 }
 
-public fun can_mint<CoinType>(lock: &CurrencyLock<CoinType>): bool {
+public fun can_mint<CoinType>(lock: &CurrencyRules<CoinType>): bool {
     lock.can_mint
 }
 
-public fun can_burn<CoinType>(lock: &CurrencyLock<CoinType>): bool {
+public fun can_burn<CoinType>(lock: &CurrencyRules<CoinType>): bool {
     lock.can_mint
 }
 
-public fun can_update_symbol<CoinType>(lock: &CurrencyLock<CoinType>): bool {
+public fun can_update_symbol<CoinType>(lock: &CurrencyRules<CoinType>): bool {
     lock.can_update_symbol
 }
 
-public fun can_update_name<CoinType>(lock: &CurrencyLock<CoinType>): bool {
+public fun can_update_name<CoinType>(lock: &CurrencyRules<CoinType>): bool {
     lock.can_update_name
 }
 
-public fun can_update_description<CoinType>(lock: &CurrencyLock<CoinType>): bool {
+public fun can_update_description<CoinType>(lock: &CurrencyRules<CoinType>): bool {
     lock.can_update_description
 }
 
-public fun can_update_icon<CoinType>(lock: &CurrencyLock<CoinType>): bool {
+public fun can_update_icon<CoinType>(lock: &CurrencyRules<CoinType>): bool {
     lock.can_update_icon
 }
 
@@ -199,13 +200,14 @@ public fun public_burn<Config, Outcome, CoinType>(
     account: &mut Account<Config, Outcome>, 
     coin: Coin<CoinType>
 ) {
-    assert!(has_lock<Config, Outcome, CoinType>(account), ENoLock);
+    assert!(has_cap<Config, Outcome, CoinType>(account), ENoLock);
 
-    let lock_mut: &mut CurrencyLock<CoinType> = account.borrow_managed_asset_mut(CurrencyKey<CoinType> {}, version::current());
-    assert!(lock_mut.can_burn, EBurnDisabled);
+    let rules_mut: &mut CurrencyRules<CoinType> = account.borrow_managed_struct_mut(CurrencyRulesKey<CoinType> {}, version::current());
+    assert!(rules_mut.can_burn, EBurnDisabled);
+    rules_mut.total_burnt = rules_mut.total_burnt + coin.value();
 
-    lock_mut.total_burnt = lock_mut.total_burnt + coin.value();
-    lock_mut.treasury_cap.burn(coin);
+    let cap_mut: &mut TreasuryCap<CoinType> = account.borrow_managed_object_mut(TreasuryCapKey<CoinType> {}, version::current());
+    cap_mut.burn(coin);
 }
 
 // === [PROPOSAL] Public functions ===
@@ -227,7 +229,7 @@ public fun propose_disable<Config, Outcome, CoinType>(
     disable_update_icon: bool,
     ctx: &mut TxContext
 ) {
-    assert!(has_lock<Config, Outcome, CoinType>(account), ENoLock);
+    assert!(has_cap<Config, Outcome, CoinType>(account), ENoLock);
 
     let mut proposal = account.create_proposal(
         auth,
@@ -279,10 +281,11 @@ public fun propose_mint<Config, Outcome, CoinType>(
     amount: u64,
     ctx: &mut TxContext
 ) {
-    assert!(has_lock<Config, Outcome, CoinType>(account), ENoLock);
-    let lock: &CurrencyLock<CoinType> = borrow_lock(account);
-    assert!(lock.can_mint, EMintDisabled);
-    if (lock.max_supply.is_some()) assert!(amount + lock.supply() <= *lock.max_supply.borrow(), EMaxSupply);
+    assert!(has_cap<Config, Outcome, CoinType>(account), ENoLock);
+    let rules: &CurrencyRules<CoinType> = borrow_rules(account);
+    assert!(rules.can_mint, EMintDisabled);
+    let supply = coin_type_supply<Config, Outcome, CoinType>(account);
+    if (rules.max_supply.is_some()) assert!(amount + supply <= *rules.max_supply.borrow(), EMaxSupply);
 
     let mut proposal = account.create_proposal(
         auth,
@@ -332,9 +335,9 @@ public fun propose_burn<Config, Outcome, CoinType>(
     amount: u64,
     ctx: &mut TxContext
 ) {
-    assert!(has_lock<Config, Outcome, CoinType>(account), ENoLock);
-    let lock: &CurrencyLock<CoinType> = borrow_lock(account);
-    assert!(lock.can_burn, EBurnDisabled);
+    assert!(has_cap<Config, Outcome, CoinType>(account), ENoLock);
+    let rules: &CurrencyRules<CoinType> = borrow_rules(account);
+    assert!(rules.can_burn, EBurnDisabled);
 
     let mut proposal = account.create_proposal(
         auth,
@@ -388,12 +391,12 @@ public fun propose_update<Config, Outcome, CoinType>(
     md_icon: Option<ascii::String>,
     ctx: &mut TxContext
 ) {
-    assert!(has_lock<Config, Outcome, CoinType>(account), ENoLock);
-    let lock: &CurrencyLock<CoinType> = borrow_lock(account);
-    if (!lock.can_update_symbol) assert!(md_symbol.is_none(), ECannotUpdateSymbol);
-    if (!lock.can_update_name) assert!(md_name.is_none(), ECannotUpdateName);
-    if (!lock.can_update_description) assert!(md_description.is_none(), ECannotUpdateDescription);
-    if (!lock.can_update_icon) assert!(md_icon.is_none(), ECannotUpdateIcon);
+    assert!(has_cap<Config, Outcome, CoinType>(account), ENoLock);
+    let rules: &CurrencyRules<CoinType> = borrow_rules(account);
+    if (!rules.can_update_symbol) assert!(md_symbol.is_none(), ECannotUpdateSymbol);
+    if (!rules.can_update_name) assert!(md_name.is_none(), ECannotUpdateName);
+    if (!rules.can_update_description) assert!(md_description.is_none(), ECannotUpdateDescription);
+    if (!rules.can_update_icon) assert!(md_icon.is_none(), ECannotUpdateIcon);
 
 
     let mut proposal = account.create_proposal(
@@ -446,13 +449,13 @@ public fun propose_transfer<Config, Outcome, CoinType>(
     recipients: vector<address>,
     ctx: &mut TxContext
 ) {
-    assert!(has_lock<Config, Outcome, CoinType>(account), ENoLock);
+    assert!(has_cap<Config, Outcome, CoinType>(account), ENoLock);
     assert!(amounts.length() == recipients.length(), EAmountsRecipentsNotSameLength);
 
-    let lock: &CurrencyLock<CoinType> = borrow_lock(account);
-    assert!(lock.can_mint, EMintDisabled);
+    let rules: &CurrencyRules<CoinType> = borrow_rules(account);
+    assert!(rules.can_mint, EMintDisabled);
     let sum = amounts.fold!(0, |sum, amount| sum + amount);
-    if (lock.max_supply.is_some()) assert!(sum <= *lock.max_supply.borrow(), EMaxSupply);
+    if (rules.max_supply.is_some()) assert!(sum <= *rules.max_supply.borrow(), EMaxSupply);
 
     let mut proposal = account.create_proposal(
         auth,
@@ -512,10 +515,10 @@ public fun propose_vesting<Config, Outcome, CoinType>(
     recipient: address,
     ctx: &mut TxContext
 ) {
-    assert!(has_lock<Config, Outcome, CoinType>(account), ENoLock);
-    let lock: &CurrencyLock<CoinType> = borrow_lock(account);
-    assert!(lock.can_mint, EMintDisabled);
-    if (lock.max_supply.is_some()) assert!(total_amount <= *lock.max_supply.borrow(), EMaxSupply);
+    assert!(has_cap<Config, Outcome, CoinType>(account), ENoLock);
+    let rules: &CurrencyRules<CoinType> = borrow_rules(account);
+    assert!(rules.can_mint, EMintDisabled);
+    if (rules.max_supply.is_some()) assert!(total_amount <= *rules.max_supply.borrow(), EMaxSupply);
 
     let mut proposal = account.create_proposal(
         auth,
@@ -577,14 +580,14 @@ public fun do_disable<Config, Outcome, CoinType, W: copy + drop>(
 ) {
     let DisableAction<CoinType> { mint, burn, update_name, update_symbol, update_description, update_icon } = 
         executable.action(account.addr(), version, witness);
-    let lock_mut: &mut CurrencyLock<CoinType> = account.borrow_managed_asset_mut(CurrencyKey<CoinType> {}, version);
+    let rules_mut: &mut CurrencyRules<CoinType> = account.borrow_managed_struct_mut(CurrencyRulesKey<CoinType> {}, version);
     // if disabled, can be true or false, it has no effect
-    if (mint) lock_mut.can_mint = false;
-    if (burn) lock_mut.can_burn = false;
-    if (update_symbol) lock_mut.can_update_symbol = false;
-    if (update_name) lock_mut.can_update_name = false;
-    if (update_description) lock_mut.can_update_description = false;
-    if (update_icon) lock_mut.can_update_icon = false;
+    if (mint) rules_mut.can_mint = false;
+    if (burn) rules_mut.can_burn = false;
+    if (update_symbol) rules_mut.can_update_symbol = false;
+    if (update_name) rules_mut.can_update_name = false;
+    if (update_description) rules_mut.can_update_description = false;
+    if (update_icon) rules_mut.can_update_icon = false;
 }
 
 public fun delete_disable_action<Outcome, CoinType>(expired: &mut Expired<Outcome>) {
@@ -608,12 +611,15 @@ public fun do_mint<Config, Outcome, CoinType, W: copy + drop>(
 ): Coin<CoinType> {
     let MintAction<CoinType> { amount } = executable.action(account.addr(), version, witness);
     
-    let lock_mut: &mut CurrencyLock<CoinType> = account.borrow_managed_asset_mut(CurrencyKey<CoinType> {}, version);
-    assert!(lock_mut.can_mint, EMintDisabled);
-    if (lock_mut.max_supply.is_some()) assert!(amount + lock_mut.supply() <= *lock_mut.max_supply.borrow(), EMaxSupply);
+    let total_supply = coin_type_supply<Config, Outcome, CoinType>(account);
+    let rules_mut: &mut CurrencyRules<CoinType> = account.borrow_managed_struct_mut(CurrencyRulesKey<CoinType> {}, version);
     
-    lock_mut.total_minted = lock_mut.total_minted + amount;
-    lock_mut.treasury_cap.mint(amount, ctx)
+    assert!(rules_mut.can_mint, EMintDisabled);
+    if (rules_mut.max_supply.is_some()) assert!(amount + total_supply <= *rules_mut.max_supply.borrow(), EMaxSupply);
+    rules_mut.total_minted = rules_mut.total_minted + amount;
+    
+    let cap_mut: &mut TreasuryCap<CoinType> = account.borrow_managed_object_mut(TreasuryCapKey<CoinType> {}, version);
+    cap_mut.mint(amount, ctx)
 }
 
 public fun delete_mint_action<Outcome, CoinType>(expired: &mut Expired<Outcome>) {
@@ -638,11 +644,12 @@ public fun do_burn<Config, Outcome, CoinType, W: copy + drop>(
     let BurnAction<CoinType> { amount } = executable.action(account.addr(), version, witness);
     assert!(amount == coin.value(), EWrongValue);
     
-    let lock_mut: &mut CurrencyLock<CoinType> = account.borrow_managed_asset_mut(CurrencyKey<CoinType> {}, version);
-    assert!(lock_mut.can_burn, EBurnDisabled);
+    let rules_mut: &mut CurrencyRules<CoinType> = account.borrow_managed_struct_mut(CurrencyRulesKey<CoinType> {}, version);
+    assert!(rules_mut.can_burn, EBurnDisabled);
+    rules_mut.total_burnt = rules_mut.total_burnt + amount;
 
-    lock_mut.total_burnt = lock_mut.total_burnt + amount;
-    lock_mut.treasury_cap.burn(coin);
+    let cap_mut: &mut TreasuryCap<CoinType> = account.borrow_managed_object_mut(TreasuryCapKey<CoinType> {}, version);
+    cap_mut.burn(coin);
 }
 
 public fun delete_burn_action<Outcome, CoinType>(expired: &mut Expired<Outcome>) {
@@ -670,19 +677,20 @@ public fun do_update<Config, Outcome, CoinType, W: copy + drop>(
 ) {
     let UpdateAction<CoinType> { symbol, name, description, icon_url } = 
         executable.action(account.addr(), version, witness);
-    let lock_mut: &mut CurrencyLock<CoinType> = account.borrow_managed_asset_mut(CurrencyKey<CoinType> {}, version);
+    let rules_mut: &mut CurrencyRules<CoinType> = account.borrow_managed_struct_mut(CurrencyRulesKey<CoinType> {}, version);
 
-    if (!lock_mut.can_update_symbol) assert!(symbol.is_none(), ECannotUpdateSymbol);
-    if (!lock_mut.can_update_name) assert!(name.is_none(), ECannotUpdateName);
-    if (!lock_mut.can_update_description) assert!(description.is_none(), ECannotUpdateDescription);
-    if (!lock_mut.can_update_icon) assert!(icon_url.is_none(), ECannotUpdateIcon);
+    if (!rules_mut.can_update_symbol) assert!(symbol.is_none(), ECannotUpdateSymbol);
+    if (!rules_mut.can_update_name) assert!(name.is_none(), ECannotUpdateName);
+    if (!rules_mut.can_update_description) assert!(description.is_none(), ECannotUpdateDescription);
+    if (!rules_mut.can_update_icon) assert!(icon_url.is_none(), ECannotUpdateIcon);
     
     let (default_symbol, default_name, default_description, default_icon_url) = (metadata.get_symbol(), metadata.get_name(), metadata.get_description(), metadata.get_icon_url().extract().inner_url());
+    let cap: &TreasuryCap<CoinType> = account.borrow_managed_object(TreasuryCapKey<CoinType> {}, version);
 
-    lock_mut.treasury_cap.update_symbol(metadata, symbol.get_with_default(default_symbol));
-    lock_mut.treasury_cap.update_name(metadata, name.get_with_default(default_name));
-    lock_mut.treasury_cap.update_description(metadata, description.get_with_default(default_description));
-    lock_mut.treasury_cap.update_icon_url(metadata, icon_url.get_with_default(default_icon_url));
+    cap.update_symbol(metadata, symbol.get_with_default(default_symbol));
+    cap.update_name(metadata, name.get_with_default(default_name));
+    cap.update_description(metadata, description.get_with_default(default_description));
+    cap.update_icon_url(metadata, icon_url.get_with_default(default_icon_url));
 }
 
 public fun delete_update_action<Outcome, CoinType>(expired: &mut Expired<Outcome>) {
@@ -700,36 +708,36 @@ fun type_to_name<T>(): String {
 
 #[test_only] 
 public fun toggle_can_mint<Config, Approvals, CoinType>(account: &mut Account<Config, Approvals>) {
-    let lock_mut: &mut CurrencyLock<CoinType> = account.borrow_managed_asset_mut(CurrencyKey<CoinType> {}, version::current());
-    lock_mut.can_mint = !lock_mut.can_mint;
+    let rules_mut: &mut CurrencyRules<CoinType> = account.borrow_managed_struct_mut(CurrencyRulesKey<CoinType> {}, version::current());
+    rules_mut.can_mint = !rules_mut.can_mint;
 }
 
 #[test_only] 
 public fun toggle_can_burn<Config, Approvals, CoinType>(account: &mut Account<Config, Approvals>) {
-    let lock_mut: &mut CurrencyLock<CoinType> = account.borrow_managed_asset_mut(CurrencyKey<CoinType> {}, version::current());
-    lock_mut.can_burn = !lock_mut.can_burn;
+    let rules_mut: &mut CurrencyRules<CoinType> = account.borrow_managed_struct_mut(CurrencyRulesKey<CoinType> {}, version::current());
+    rules_mut.can_burn = !rules_mut.can_burn;
 }
 
 #[test_only] 
 public fun toggle_can_update_symbol<Config, Approvals, CoinType>(account: &mut Account<Config, Approvals>) {
-    let lock_mut: &mut CurrencyLock<CoinType> = account.borrow_managed_asset_mut(CurrencyKey<CoinType> {}, version::current());
-    lock_mut.can_update_symbol = !lock_mut.can_update_symbol;
+    let rules_mut: &mut CurrencyRules<CoinType> = account.borrow_managed_struct_mut(CurrencyRulesKey<CoinType> {}, version::current());
+    rules_mut.can_update_symbol = !rules_mut.can_update_symbol;
 }
 
 #[test_only] 
 public fun toggle_can_update_name<Config, Approvals, CoinType>(account: &mut Account<Config, Approvals>) {
-    let lock_mut: &mut CurrencyLock<CoinType> = account.borrow_managed_asset_mut(CurrencyKey<CoinType> {}, version::current());
-    lock_mut.can_update_name = !lock_mut.can_update_name;
+    let rules_mut: &mut CurrencyRules<CoinType> = account.borrow_managed_struct_mut(CurrencyRulesKey<CoinType> {}, version::current());
+    rules_mut.can_update_name = !rules_mut.can_update_name;
 }
 
 #[test_only] 
 public fun toggle_can_update_description<Config, Approvals, CoinType>(account: &mut Account<Config, Approvals>) {
-    let lock_mut: &mut CurrencyLock<CoinType> = account.borrow_managed_asset_mut(CurrencyKey<CoinType> {}, version::current());
-    lock_mut.can_update_description = !lock_mut.can_update_description;
+    let rules_mut: &mut CurrencyRules<CoinType> = account.borrow_managed_struct_mut(CurrencyRulesKey<CoinType> {}, version::current());
+    rules_mut.can_update_description = !rules_mut.can_update_description;
 }
 
 #[test_only] 
 public fun toggle_can_update_icon<Config, Approvals, CoinType>(account: &mut Account<Config, Approvals>) {
-    let lock_mut: &mut CurrencyLock<CoinType> = account.borrow_managed_asset_mut(CurrencyKey<CoinType> {}, version::current());
-    lock_mut.can_update_icon = !lock_mut.can_update_icon;
+    let rules_mut: &mut CurrencyRules<CoinType> = account.borrow_managed_struct_mut(CurrencyRulesKey<CoinType> {}, version::current());
+    rules_mut.can_update_icon = !rules_mut.can_update_icon;
 }

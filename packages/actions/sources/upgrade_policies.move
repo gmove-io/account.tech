@@ -14,7 +14,6 @@ use std::{
 use sui::{
     package::{Self, UpgradeCap, UpgradeTicket, UpgradeReceipt},
     clock::Clock,
-    dynamic_field as df,
 };
 use account_protocol::{
     account::Account,
@@ -34,29 +33,28 @@ const EInvalidPolicy: vector<u8> = b"Invalid policy number";
 const ENoLock: vector<u8> = b"No lock with this name";
 #[error]
 const ELockAlreadyExists: vector<u8> = b"Lock with this name already exists";
+#[error]
+const EWrongUpgradeCap: vector<u8> = b"Wrong UpgradeCap for the UpgradeRules";
 
 // === Structs ===
 
+/// Dynamic Object Field key for the UpgradeLock
+public struct UpgradeCapKey has copy, drop, store {
+    // address of the package that issued the UpgradeCap
+    package: address,
+}
 /// Dynamic field key for the UpgradeLock
-public struct UpgradeKey has copy, drop, store {
+public struct UpgradeRulesKey has copy, drop, store {
     // address of the package that issued the UpgradeCap
     package: address,
 }
 /// Dynamic field wrapper restricting access to an UpgradeCap, with optional timelock
-public struct UpgradeLock has key, store {
-    id: UID,
+public struct UpgradeRules has store {
+    // id of the UpgradeCap
+    cap_id: ID,
     // name of the package
     name: String,
-    // the cap to lock
-    upgrade_cap: UpgradeCap,
-    // each package can define its own config
-    // DF: config: C,
-}
-
-/// Dynamic field key for TimeLock
-public struct TimeLockKey has copy, drop, store {}
-/// Dynamic field timelock config for the UpgradeLock
-public struct TimeLock has store {
+    // minimum delay between proposal and execution
     delay_ms: u64,
 }
 
@@ -84,94 +82,55 @@ public struct RestrictAction has store {
 
 // === [COMMAND] Public Functions ===
 
-/// Creates a new UpgradeLock and returns it
-public fun new_lock(
-    upgrade_cap: UpgradeCap,
-    name: String,
-    ctx: &mut TxContext
-): UpgradeLock {
-    UpgradeLock { 
-        id: object::new(ctx),
-        name,
-        upgrade_cap,
-    }
-}
-
-/// Adds a rule with any config to the upgrade lock
-public fun add_rule<K: copy + drop + store, R: store>(
-    lock: &mut UpgradeLock,
-    key: K,
-    rule: R,
-) {
-    df::add(&mut lock.id, key, rule);
-}
-
-/// Checks if a rule exists
-public fun has_rule<K: copy + drop + store>(
-    lock: &UpgradeLock,
-    key: K,
-): bool {
-    df::exists_(&lock.id, key)
-}
-
-public fun get_rule<K: copy + drop + store, R: store>(
-    lock: &UpgradeLock,
-    key: K,
-): &R {
-    df::borrow(&lock.id, key)
-}
-
-/// Attaches the UpgradeLock as a Dynamic Field to the account
+/// Attaches the UpgradeCap as a Dynamic Object Field to the account
 public fun lock_cap<Config, Outcome>(
     auth: Auth,
     account: &mut Account<Config, Outcome>,
-    lock: UpgradeLock,
+    cap: UpgradeCap,
+    name: String, // name of the package
+    delay_ms: u64, // minimum delay between proposal and execution
 ) {
     auth.verify_with_role<LockCommand>(account.addr(), b"".to_string());
-    let package = lock.upgrade_cap.package().to_address();
-    assert!(!has_lock(account, package), ELockAlreadyExists);
-    account.add_managed_asset(UpgradeKey { package }, lock, version::current());
+    let package = cap.package().to_address();
+    let cap_id = object::id(&cap);
+    assert!(!has_cap(account, package), ELockAlreadyExists);
+
+    account.add_managed_object(UpgradeCapKey { package }, cap, version::current());
+    account.add_managed_struct(UpgradeRulesKey { package }, UpgradeRules { cap_id, name, delay_ms }, version::current());
 }
 
-/// Locks a cap with a timelock rule
-public fun lock_cap_with_timelock<Config, Outcome>(
-    auth: Auth,
-    account: &mut Account<Config, Outcome>,
-    name: String,
-    delay_ms: u64,
-    upgrade_cap: UpgradeCap,
-    ctx: &mut TxContext
-) {
-    let mut lock = new_lock(upgrade_cap, name, ctx);
-    add_rule(&mut lock, TimeLockKey {}, TimeLock { delay_ms });
-    lock_cap(auth, account, lock);
-}
-
-public fun has_lock<Config, Outcome>(
+public fun has_cap<Config, Outcome>(
     account: &Account<Config, Outcome>, 
     package: address
 ): bool {
-    account.has_managed_asset(UpgradeKey { package })
+    account.has_managed_object(UpgradeCapKey { package })
 }
 
-public fun borrow_lock<Config, Outcome>(
+// ! is this risky?
+public fun borrow_cap<Config, Outcome>(
     account: &Account<Config, Outcome>, 
     package: address
-): &UpgradeLock {
-    account.borrow_managed_asset(UpgradeKey { package }, version::current())
-}
-
-public fun upgrade_cap(lock: &UpgradeLock): &UpgradeCap {
-    &lock.upgrade_cap
+): &UpgradeCap {
+    account.borrow_managed_object(UpgradeCapKey { package }, version::current())
 } 
 
-public fun has_timelock(lock: &UpgradeLock): bool {
-    lock.has_rule(TimeLockKey {})
+public fun borrow_rules<Config, Outcome>(
+    account: &Account<Config, Outcome>, 
+    package: address
+): &UpgradeRules {
+    account.borrow_managed_struct(UpgradeRulesKey { package }, version::current())
 }
 
-public fun time_delay(lock: &UpgradeLock): u64 {
-    let rule: &TimeLock = lock.get_rule(TimeLockKey {});
-    rule.delay_ms
+public fun cap_id(rules: &UpgradeRules): ID {
+    rules.cap_id
+}
+
+public fun name(rules: &UpgradeRules): String {
+    rules.name
+}
+
+public fun time_delay(rules: &UpgradeRules): u64 {
+    rules.delay_ms
 }
 
 // === [PROPOSAL] Public Functions ===
@@ -191,9 +150,8 @@ public fun propose_upgrade<Config, Outcome>(
     clock: &Clock,
     ctx: &mut TxContext
 ) {
-    assert!(has_lock(account, package), ENoLock);
-    let lock = borrow_lock(account, package);
-    let delay = if (lock.has_timelock()) lock.time_delay() else 0;
+    assert!(has_cap(account, package), ENoLock);
+    let delay = borrow_rules(account, package).delay_ms;
 
     let mut proposal = account.create_proposal(
         auth,
@@ -219,7 +177,7 @@ public fun propose_upgrade<Config, Outcome>(
 public fun execute_upgrade<Config, Outcome>(
     executable: &mut Executable,
     account: &mut Account<Config, Outcome>,
-): (UpgradeTicket, UpgradeLock) {
+): (UpgradeTicket, UpgradeCap, UpgradeRules) {
     do_upgrade(executable, account, version::current(), UpgradeProposal())
 }    
 
@@ -230,9 +188,10 @@ public fun complete_upgrade<Config, Outcome>(
     executable: Executable,
     account: &mut Account<Config, Outcome>,
     receipt: UpgradeReceipt,
-    lock: UpgradeLock,
+    cap: UpgradeCap,
+    rules: UpgradeRules,
 ) {
-    confirm_upgrade(&executable, account, receipt, lock, version::current(), UpgradeProposal());
+    confirm_upgrade(&executable, account, receipt, cap, rules, version::current(), UpgradeProposal());
     executable.destroy(version::current(), UpgradeProposal());
 }
 
@@ -250,10 +209,9 @@ public fun propose_restrict<Config, Outcome>(
     clock: &Clock,
     ctx: &mut TxContext
 ) {
-    assert!(has_lock(account, package), ENoLock);
-    let lock = borrow_lock(account, package);
-    let delay = if (lock.has_timelock()) lock.time_delay() else 0;
-    let current_policy = lock.upgrade_cap.policy();
+    assert!(has_cap(account, package), ENoLock);
+    let current_policy = borrow_cap(account, package).policy();
+    let delay = borrow_rules(account, package).delay_ms;
 
     let mut proposal = account.create_proposal(
         auth, 
@@ -300,32 +258,38 @@ public fun do_upgrade<Config, Outcome, W: copy + drop>(
     account: &mut Account<Config, Outcome>,
     version: TypeName,
     witness: W,
-): (UpgradeTicket, UpgradeLock) {
+): (UpgradeTicket, UpgradeCap, UpgradeRules) {
     let UpgradeAction { package, digest } = executable.action(account.addr(), version, witness);
-    let mut lock: UpgradeLock = account.remove_managed_asset(UpgradeKey { package }, version);
+    
+    let rules: UpgradeRules = account.remove_managed_struct(UpgradeRulesKey { package }, version);
+    let mut cap: UpgradeCap = account.remove_managed_object(UpgradeCapKey { package }, version);
 
-    let policy = lock.upgrade_cap.policy();
-    let ticket = lock.upgrade_cap.authorize_upgrade(policy, digest);
+    let policy = cap.policy();
+    let ticket = cap.authorize_upgrade(policy, digest);
 
-    (ticket, lock)
+    (ticket, cap, rules)
 }    
 
 public fun confirm_upgrade<Config, Outcome, W: copy + drop>(
     executable: &Executable,
     account: &mut Account<Config, Outcome>,
     receipt: UpgradeReceipt,
-    mut lock: UpgradeLock,
+    mut cap: UpgradeCap,
+    rules: UpgradeRules,
     version: TypeName,
     witness: W,
 ) {
+    assert!(object::id(&cap) == rules.cap_id, EWrongUpgradeCap);
     // same checks as in `executable.action()`
     executable.deps().assert_is_dep(version);
     executable.issuer().assert_is_constructor(witness);
     executable.issuer().assert_is_account(account.addr());
 
     let new_package = receipt.package().to_address();
-    package::commit_upgrade(&mut lock.upgrade_cap, receipt);
-    account.add_managed_asset(UpgradeKey { package: new_package }, lock, version);
+    package::commit_upgrade(&mut cap, receipt);
+
+    account.add_managed_object(UpgradeCapKey { package: new_package }, cap, version);
+    account.add_managed_struct(UpgradeRulesKey { package: new_package }, rules, version);
 }
 
 public fun delete_upgrade_action<Outcome>(expired: &mut Expired<Outcome>) {
@@ -359,15 +323,14 @@ public fun do_restrict<Config, Outcome, W: copy + drop>(
     let RestrictAction { package, policy } = executable.action(account.addr(), version, witness);
 
     if (policy == package::additive_policy()) {
-        let lock_mut: &mut UpgradeLock = account.borrow_managed_asset_mut(UpgradeKey { package }, version);
-        lock_mut.upgrade_cap.only_additive_upgrades();
+        let cap_mut: &mut UpgradeCap = account.borrow_managed_object_mut(UpgradeCapKey { package }, version);
+        cap_mut.only_additive_upgrades();
     } else if (policy == package::dep_only_policy()) {
-        let lock_mut: &mut UpgradeLock = account.borrow_managed_asset_mut(UpgradeKey { package }, version);
-        lock_mut.upgrade_cap.only_dep_upgrades();
+        let cap_mut: &mut UpgradeCap = account.borrow_managed_object_mut(UpgradeCapKey { package }, version);
+        cap_mut.only_dep_upgrades();
     } else {
-        let UpgradeLock { id, upgrade_cap, .. } = account.remove_managed_asset(UpgradeKey { package }, version);
-        package::make_immutable(upgrade_cap);
-        id.delete();
+        let cap: UpgradeCap = account.remove_managed_object(UpgradeCapKey { package }, version);
+        package::make_immutable(cap);
     };
 }
 
