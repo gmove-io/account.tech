@@ -13,5 +13,5 @@ rev = "framework/mainnet"
 local = "../extensions"
 
 [addresses]
-account_protocol = "0x0216b1790ffa86e5147b8ace8b2bdc0ba04fe5970d42eddcf33f8f3512134adc"
-account_extensions = "0x7d84a9d786503d6de795896df00a5729588de1723c433fd727edd5842d413624"
+account_protocol = "0xf5e80b75b4da9656c3e5bf4de7cd5904f6892050c707d84f2f17fcb55f429ecc"
+account_extensions = "0xc796940575f9cc85c2b7773907767be737bcc08e8df8d25f7b4a1e23cd83f86d"

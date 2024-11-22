@@ -1,14 +1,14 @@
 [
   {
+    "type": "package::Publisher",
+    "id": "0x813d20b5271b4423b52cbc454bb273c58adbe9c210a9177a7bbb6c1a56461cfc"
+  },
+  {
     "type": "package::UpgradeCap",
-    "id": "0x01ab79fdddb36cc11a4b59b21467010df0e78d2fd0d7e89223de4e4d6e9de598"
+    "id": "0xd568d5c7535d714373061e7186e15d6762b504d41ba5c8397e6cf8df45312014"
   },
   {
     "type": "AccountProtocol",
-    "id": "0x0216b1790ffa86e5147b8ace8b2bdc0ba04fe5970d42eddcf33f8f3512134adc"
-  },
-  {
-    "type": "package::Publisher",
-    "id": "0x9f0d96669d781ec19874f3c6e8d9ec271b77c005edd9c6c35cb82af017f03458"
+    "id": "0xf5e80b75b4da9656c3e5bf4de7cd5904f6892050c707d84f2f17fcb55f429ecc"
   }
 ]

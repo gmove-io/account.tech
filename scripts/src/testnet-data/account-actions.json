@@ -1,10 +1,10 @@
 [
   {
-    "type": "AccountActions",
-    "id": "0x44d7e0d34256670a0c41927282b8a738137a9a52d109db113cad5ab44e889676"
+    "type": "package::UpgradeCap",
+    "id": "0x4b937fe45cfccf53abce2c430a28f2498a3420fcba7c48023b4f56ae8f832c7a"
   },
   {
-    "type": "package::UpgradeCap",
-    "id": "0x96494a31f1cd4974b5eef799aafe948f8e57fe7231c395ee78bbbdc30838505c"
+    "type": "AccountActions",
+    "id": "0xf9ebf7a79462158e222d23e68325817fbbc37104b10c4651e7a9b6966619e3a6"
   }
 ]
