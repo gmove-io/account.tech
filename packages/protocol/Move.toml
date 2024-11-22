@@ -4,18 +4,10 @@ edition = "2024.beta"
 license = "MIT"
 authors = [ "Thouny (thouny@tuta.io)" ]
 
-# [dependencies.Sui]
-# git = "https://github.com/MystenLabs/sui.git"
-# subdir = "crates/sui-framework/packages/sui-framework"
-# rev = "framework/mainnet"
-
-# [dependencies.AccountExtensions]
-# local = "../extensions"
-
 [dependencies.Sui]
 git = "https://github.com/MystenLabs/sui.git"
 subdir = "crates/sui-framework/packages/sui-framework"
-rev = "testnet"
+rev = "framework/mainnet"
 
 [dependencies.AccountExtensions]
 local = "../extensions"
