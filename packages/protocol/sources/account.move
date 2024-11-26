@@ -158,7 +158,7 @@ public fun execute_proposal<Config, Outcome>(
 
 /// Removes a proposal if it has expired
 /// Needs to delete each action in the bag within their own module
-public fun delete_proposal<Config: drop, Outcome>(
+public fun delete_proposal<Config, Outcome>(
     account: &mut Account<Config, Outcome>, 
     key: String, 
     version: TypeName,
