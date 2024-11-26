@@ -1,3 +1,21 @@
+/// This module defines the DAO configuration and Votes proposal logic for account.tech.
+/// Proposals can be executed once the role threshold is reached (similar to multisig) or if the DAO rules are met.
+///
+/// The DAO can be configured with: 
+/// - a specific asset type for voting
+/// - a cooldown for unstaking (this will decrease the voting power linearly over time)
+/// - a voting rule (linear or quadratic, more can be added in the future)
+/// - a maximum voting power that can be used in a single vote
+/// - a minimum number of votes needed to pass a proposal (can be 0)
+/// - a global voting threshold between (0, 1e9], If 50% votes needed, then should be > 500_000_000
+/// 
+/// Participants have to stake their assets to construct a Vote object.
+/// They can stake their assets at any time, but they will have to wait for the cooldown period to pass before they can unstake them.
+/// Staked assets can be pushed into a Vote object, to vote on a proposal. This object can be unpacked once the vote ends.
+/// New assets can be added during vote, and vote can be changed. 
+/// 
+/// Alternatively, roles can be added to the DAO with a specific threshold, then roles can be assigned to members
+/// Members with the role can approve the proposals which can be executed once the role threshold is reached
 
 module account_config::dao;
 
@@ -69,6 +87,8 @@ const ERolesNotSameLength: vector<u8> = b"The role vectors are not the same leng
 const ERoleNotAdded: vector<u8> = b"Role not added so member cannot have it";
 #[error]
 const EThresholdTooHigh: vector<u8> = b"Threshold is too high";
+#[error]
+const EAlreadyUnstaked: vector<u8> = b"Cooldown already started";
 
 // === Structs ===
 
@@ -89,7 +109,7 @@ public struct Dao has copy, drop, store {
     // object type allowed for voting
     asset_type: TypeName,
     // cooldown when unstaking, voting power decreases linearly over time
-    staking_cooldown: u64,
+    unstaking_cooldown: u64,
     // type of voting mechanism, u8 so we can add more in the future
     voting_rule: u8,
     // maximum voting power that can be used in a single vote
@@ -134,16 +154,16 @@ public struct Votes has store {
     results: VecMap<String, u64>,
 }
 
-/// Struct for storing the answer and voting power of a voter
+/// Tuple struct for storing the answer and voting power of a voter
 public struct Voted(String, u64) has copy, drop, store;
 
-/// Soul bound object wrapping the staked assets used for voting in a specific dao
+/// Object wrapping the staked assets used for voting in a specific dao
 /// Staked assets cannot be retrieved during the voting period
 public struct Vote<Asset> has key, store {
     id: UID,
     // id of the dao account
     dao_id: ID,
-    // Proposal.actions.id if VotingPower is linked to a proposal
+    // the proposal voted on
     proposal_key: String,
     // answer chosen for the vote
     answer: String,
@@ -172,7 +192,7 @@ public struct Staked<Asset> has key, store {
 public fun new_account<AssetType>(
     extensions: &Extensions,
     name: String,
-    staking_cooldown: u64,
+    unstaking_cooldown: u64,
     voting_rule: u8,
     max_voting_power: u64,
     voting_quorum: u64,
@@ -185,7 +205,7 @@ public fun new_account<AssetType>(
             roles: vec_set::empty() 
         }],
         asset_type: type_name::get<AssetType>(),
-        staking_cooldown,
+        unstaking_cooldown,
         voting_rule,
         max_voting_power,
         voting_quorum,
@@ -196,6 +216,7 @@ public fun new_account<AssetType>(
     account::new(extensions, name, config, ctx)
 }
 
+// TODO: who can create a proposal?
 /// Authenticates the caller for a given role or globally
 public fun authenticate<Outcome>(
     extensions: &Extensions,
@@ -246,7 +267,7 @@ public fun new_vote<Asset: store>(
     }
 }
 
-/// Stakes a coin and calculates the voting power
+/// Stakes a coin and get its value
 public fun stake_coin<CoinType>(
     account: &mut Account<Dao, Votes>,
     coin: Coin<CoinType>,
@@ -261,7 +282,7 @@ public fun stake_coin<CoinType>(
     }
 }
 
-/// Stakes the asset and calculates the voting power
+/// Stakes the asset and adds 1 as value
 public fun stake_object<Asset: store>(
     account: &mut Account<Dao, Votes>,
     asset: Asset,
@@ -281,6 +302,7 @@ public fun unstake<Asset>(
     staked: &mut Staked<Asset>,
     clock: &Clock,
 ) {
+    assert!(staked.unstaked.is_none(), EAlreadyUnstaked);
     staked.unstaked = option::some(clock.timestamp_ms());    
 }
 
@@ -295,7 +317,7 @@ public fun claim<Asset>(
     
     assert!(dao_id == object::id(account), EInvalidAccount);
     assert!(unstaked.is_some(), ENotUnstaked);
-    assert!(clock.timestamp_ms() > account.config().staking_cooldown + unstaked.extract(), ENotUnstaked);
+    assert!(clock.timestamp_ms() > account.config().unstaking_cooldown + unstaked.extract(), ENotUnstaked);
 
     asset
 }
@@ -334,6 +356,7 @@ public fun vote<Asset: store>(
     ); // could change in the future
 
     let power = vote.get_voting_power(account, clock);
+    let power = math::min(power as u256, account.config().max_voting_power as u256) as u64;
     vote.answer = answer;
 
     account.proposals().all_idx(key).do!(|idx| {
@@ -458,7 +481,7 @@ public fun propose_config_dao(
     role_thresholds: vector<u64>,
     // dao rules
     asset_type: TypeName,
-    staking_cooldown: u64,
+    unstaking_cooldown: u64,
     voting_rule: u8,
     max_voting_power: u64,
     minimum_votes: u64,
@@ -486,7 +509,7 @@ public fun propose_config_dao(
         members: vector[], 
         roles: vector[], 
         asset_type, 
-        staking_cooldown, 
+        unstaking_cooldown, 
         voting_rule, 
         max_voting_power, 
         minimum_votes, 
@@ -680,8 +703,8 @@ fun get_voting_power<Asset>(
             MUL
         } else {
             let time_passed = clock.timestamp_ms() - *staked.unstaked.borrow();
-            if (time_passed > account.config().staking_cooldown) 0 else
-                (account.config().staking_cooldown - time_passed) * MUL / account.config().staking_cooldown
+            if (time_passed > account.config().unstaking_cooldown) 0 else
+                (account.config().unstaking_cooldown - time_passed) * MUL / account.config().unstaking_cooldown
         };
 
         total = total + staked.value * multiplier;
