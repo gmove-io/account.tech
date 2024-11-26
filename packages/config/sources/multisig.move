@@ -71,6 +71,7 @@ public struct Multisig has copy, drop, store {
 
 /// Child struct for managing and displaying members
 public struct Member has copy, drop, store {
+    // address of the member
     addr: address,
     // voting power of the member
     weight: u64,
@@ -103,7 +104,7 @@ public struct Invite has key {
     account_addr: address,
 }
 
-// === Public functions ===
+// === [ACCOUNT] Public functions ===
 
 // TODO: use built-in feature
 // public fun init_display(otw: MULTISIG, ctx: &mut TxContext) {
@@ -155,6 +156,19 @@ public fun new_account(
     account::new(extensions, name, config, ctx)
 }
 
+/// Authenticates the caller for a given role or globally
+public fun authenticate(
+    extensions: &Extensions,
+    account: &Account<Multisig, Approvals>,
+    role: String, // can be empty
+    ctx: &TxContext
+): Auth {
+    account.config().assert_is_member(ctx);
+    if (!role.is_empty()) assert!(account.config().member(ctx.sender()).has_role(role), ERoleNotFound);
+
+    auth::new(extensions, role, account.addr(), version::current())
+}
+
 /// Creates a new outcome to initiate a proposal
 public fun empty_outcome(
     account: &Account<Multisig, Approvals>,
@@ -167,19 +181,6 @@ public fun empty_outcome(
         role_weight: 0,
         approved: vec_set::empty(),
     }
-}
-
-/// Authenticates the caller for a given role or globally
-public fun authenticate(
-    extensions: &Extensions,
-    account: &Account<Multisig, Approvals>,
-    role: String, // can be empty
-    ctx: &TxContext
-): Auth {
-    account.config().assert_is_member(ctx);
-    if (!role.is_empty()) assert!(account.config().member(ctx.sender()).has_role(role), ERoleNotFound);
-
-    auth::new(extensions, role, account.addr(), version::current())
 }
 
 /// We assert that all Proposals with the same key have the same outcome state
