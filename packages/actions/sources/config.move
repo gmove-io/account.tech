@@ -25,7 +25,7 @@ use account_protocol::{
     proposals::{Proposal, Expired},
     executable::Executable,
     deps::{Self, Deps},
-    metadata::{Self, Metadata},
+    metadata,
     auth::Auth,
 };
 use account_extensions::extensions::Extensions;
@@ -53,63 +53,34 @@ const ENoExtensionOrUpgradeCap: vector<u8> = b"No extension or upgrade cap for t
 /// Those structs also define the different roles that members can have.
 /// Finally, they are used to parse the actions of the proposal off-chain.
 
-/// [PROPOSAL] witness defining the metadata proposal, and associated role
-public struct ConfigMetadataProposal() has copy, drop;
+/// [COMMAND] witness defining the metadata command, and associated role
+public struct ConfigMetadataCommand() has copy, drop;
 /// [PROPOSAL] witness defining the dependencies proposal, and associated role
 public struct ConfigDepsProposal() has copy, drop;
 
-/// [ACTION] struct wrapping the metadata account field into an action
-public struct ConfigMetadataAction has store {
-    metadata: Metadata,
-}
 /// [ACTION] struct wrapping the deps account field into an action
 public struct ConfigDepsAction has store {
     deps: Deps,
 }
 
-// === [PROPOSAL] Public functions ===
+// === [COMMAND] Public functions ===
 
-// step 1: propose to change the name and additional metadata
-public fun propose_config_metadata<Config, Outcome>(
+public fun edit_metadata<Config, Outcome>(
     auth: Auth,
-    account: &mut Account<Config, Outcome>, 
-    outcome: Outcome,
-    key: String,
-    description: String,
-    execution_time: u64,
-    expiration_time: u64,
+    account: &mut Account<Config, Outcome>,
     keys: vector<String>,
     values: vector<String>,
-    ctx: &mut TxContext
 ) {
-    let mut proposal = account.create_proposal(
-        auth,
-        outcome,
-        version::current(),
-        ConfigMetadataProposal(),
-        b"".to_string(),
-        key,
-        description,
-        execution_time,
-        expiration_time,
-        ctx
-    );
+    auth.verify_with_role<ConfigMetadataCommand>(account.addr(), b"".to_string());
 
-    new_config_metadata(&mut proposal, keys, values, ConfigMetadataProposal());
-    account.add_proposal(proposal, version::current(), ConfigMetadataProposal());
+    assert!(keys.length() == values.length(), EMetadataNotSameLength);
+    assert!(keys[0] == b"name".to_string(), EMetadataNameMissing);
+    assert!(values[0] != b"".to_string(), ENameCannotBeEmpty);
+
+    *account.metadata_mut(version::current()) = metadata::from_keys_values(keys, values);
 }
 
-// step 2: multiple members have to approve the proposal (account::approve_proposal)
-// step 3: execute the proposal and return the action (AccountConfig::module::execute_proposal)
-
-// step 4: execute the action and modify Account object
-public fun execute_config_metadata<Config, Outcome>(
-    mut executable: Executable,
-    account: &mut Account<Config, Outcome>, 
-) {
-    do_config_metadata(&mut executable, account, version::current(), ConfigMetadataProposal());
-    executable.destroy(version::current(), ConfigMetadataProposal());
-}
+// === [PROPOSAL] Public functions ===
 
 // step 1: propose to update the dependencies
 public fun propose_config_deps<Config, Outcome>(
@@ -156,36 +127,6 @@ public fun execute_config_deps<Config, Outcome>(
 }
 
 // === [ACTION] Public functions ===
-
-public fun new_config_metadata<Outcome, W: drop>(
-    proposal: &mut Proposal<Outcome>, 
-    keys: vector<String>,
-    values: vector<String>,
-    witness: W
-) {
-    assert!(keys.length() == values.length(), EMetadataNotSameLength);
-    assert!(keys[0] == b"name".to_string(), EMetadataNameMissing);
-    assert!(values[0] != b"".to_string(), ENameCannotBeEmpty);
-
-    proposal.add_action(
-        ConfigMetadataAction { metadata: metadata::from_keys_values(keys, values) }, 
-        witness
-    );
-}
-
-public fun do_config_metadata<Config, Outcome, W: copy + drop>(
-    executable: &mut Executable,
-    account: &mut Account<Config, Outcome>, 
-    version: TypeName,
-    witness: W,
-) {
-    let ConfigMetadataAction { metadata } = executable.action(account.addr(), version, witness);
-    *account.metadata_mut(version) = metadata;
-}
-
-public fun delete_config_metadata_action<Outcome>(expired: &mut Expired<Outcome>) {
-    let ConfigMetadataAction { .. } = expired.remove_expired_action();
-}
 
 public fun new_config_deps<Config, Outcome, W: drop>(
     proposal: &mut Proposal<Outcome>,
