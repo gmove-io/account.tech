@@ -72,8 +72,11 @@ public fun verify_with_role<Role>(
     name: String,
 ) {
     let mut r = type_name::get<Role>().into_string().to_string();  
-    r.append_utf8(b"::");
-    r.append(name);
+
+    if (!name.is_empty()) {
+        r.append_utf8(b"::");
+        r.append(name);
+    };
     
     let Auth { role, account_addr } = auth;
 

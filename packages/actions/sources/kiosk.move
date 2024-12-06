@@ -142,13 +142,13 @@ public fun delist<Config, Outcome, Nft: key + store>(
     account: &mut Account<Config, Outcome>, 
     kiosk: &mut Kiosk, 
     name: String,
-    nft: ID,
+    nft_id: ID,
 ) {
     auth.verify_with_role<DelistCommand>(account.addr(), name);
     assert!(has_lock(account, name), ENoLock);
 
     let cap: &KioskOwnerCap = account.borrow_managed_object(KioskOwnerKey { name }, version::current());
-    kiosk.delist<Nft>(cap, nft);
+    kiosk.delist<Nft>(cap, nft_id);
 }
 
 /// Members can withdraw the profits to the account

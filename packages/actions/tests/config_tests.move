@@ -78,8 +78,10 @@ fun role(action: vector<u8>, name: vector<u8>): String {
     let mut full_role = @account_actions.to_string();
     full_role.append_utf8(b"::config::");
     full_role.append_utf8(action);
-    full_role.append_utf8(b"::");
-    full_role.append_utf8(name);
+    if (!name.is_empty()) {
+        full_role.append_utf8(b"::");
+        full_role.append_utf8(name);
+    };
     full_role
 }
 
@@ -87,8 +89,10 @@ fun upgrade_policies_role(action: vector<u8>, name: vector<u8>): String {
     let mut full_role = @account_actions.to_string();
     full_role.append_utf8(b"::upgrade_policies::");
     full_role.append_utf8(action);
-    full_role.append_utf8(b"::");
-    full_role.append_utf8(name);
+    if (!name.is_empty()) {
+        full_role.append_utf8(b"::");
+        full_role.append_utf8(name);
+    };
     full_role
 }
 
