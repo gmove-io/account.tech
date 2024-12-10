@@ -71,15 +71,15 @@ public fun verify_with_role<Role>(
     addr: address,
     name: String,
 ) {
-    let mut r = type_name::get<Role>().into_string().to_string();  
+    let mut full_role = type_name::get<Role>().into_string().to_string();  
 
     if (!name.is_empty()) {
-        r.append_utf8(b"::");
-        r.append(name);
+        full_role.append_utf8(b"::");
+        full_role.append(name);
     };
     
     let Auth { role, account_addr } = auth;
 
     assert!(addr == account_addr, EWrongAccount);
-    assert!(role == r, EWrongRole);
+    assert!(role == full_role, EWrongRole);
 }

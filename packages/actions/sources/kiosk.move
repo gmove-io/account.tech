@@ -18,7 +18,7 @@ use sui::{
     kiosk::{Self, Kiosk, KioskOwnerCap},
     transfer_policy::{TransferPolicy, TransferRequest},
 };
-use kiosk::{kiosk_lock_rule, royalty_rule};
+use kiosk::{kiosk_lock_rule, royalty_rule, personal_kiosk_rule};
 use account_protocol::{
     account::Account,
     proposals::{Proposal, Expired},
@@ -132,6 +132,9 @@ public fun place<Config, Outcome, Nft: key + store>(
         royalty_rule::pay(policy, &mut request, coin::zero<SUI>(ctx));
     }; 
 
+    if (policy.has_rule<Nft, personal_kiosk_rule::Rule>()) {
+        personal_kiosk_rule::prove(account_kiosk, &mut request);
+    };
     // the request can be filled with arbitrary rules and must be confirmed afterwards
     request
 }
@@ -335,6 +338,10 @@ public fun do_take<Config, Outcome, Nft: key + store, W: copy + drop>(
     if (policy.has_rule<Nft, royalty_rule::Rule>()) {
         royalty_rule::pay(policy, &mut request, coin::zero<SUI>(ctx));
     }; 
+
+    if (policy.has_rule<Nft, personal_kiosk_rule::Rule>()) {
+        personal_kiosk_rule::prove(account_kiosk, &mut request);
+    };
     // the request can be filled with arbitrary rules and must be confirmed afterwards
     request
 }
