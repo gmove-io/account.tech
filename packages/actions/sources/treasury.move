@@ -95,6 +95,7 @@ public fun deposit_owned<Config, Outcome, CoinType: drop>(
     deposit<Config, Outcome, CoinType>(auth, account, name, coin);
 }
 
+// TODO: remove role name (any member can deposit)
 /// Deposits coins owned by a member into a treasury
 public fun deposit<Config, Outcome, CoinType: drop>(
     auth: Auth,

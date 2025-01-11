@@ -68,8 +68,8 @@ public struct CurrencyRules<phantom CoinType> has store {
     max_supply: Option<u64>,
     // total amount minted
     total_minted: u64,
-    // total amount burnt
-    total_burnt: u64,
+    // total amount burned
+    total_burned: u64,
     // permissions
     can_mint: bool,
     can_burn: bool,
@@ -133,7 +133,7 @@ public fun lock_cap<Config, Outcome, CoinType>(
     let rules = CurrencyRules<CoinType> { 
         max_supply,
         total_minted: 0,
-        total_burnt: 0,
+        total_burned: 0,
         can_mint: true,
         can_burn: true,
         can_update_symbol: true,
@@ -167,8 +167,8 @@ public fun total_minted<CoinType>(lock: &CurrencyRules<CoinType>): u64 {
     lock.total_minted
 }
 
-public fun total_burnt<CoinType>(lock: &CurrencyRules<CoinType>): u64 {
-    lock.total_burnt
+public fun total_burned<CoinType>(lock: &CurrencyRules<CoinType>): u64 {
+    lock.total_burned
 }
 
 public fun can_mint<CoinType>(lock: &CurrencyRules<CoinType>): bool {
@@ -204,7 +204,7 @@ public fun public_burn<Config, Outcome, CoinType>(
 
     let rules_mut: &mut CurrencyRules<CoinType> = account.borrow_managed_struct_mut(CurrencyRulesKey<CoinType> {}, version::current());
     assert!(rules_mut.can_burn, EBurnDisabled);
-    rules_mut.total_burnt = rules_mut.total_burnt + coin.value();
+    rules_mut.total_burned = rules_mut.total_burned + coin.value();
 
     let cap_mut: &mut TreasuryCap<CoinType> = account.borrow_managed_object_mut(TreasuryCapKey<CoinType> {}, version::current());
     cap_mut.burn(coin);
@@ -646,7 +646,7 @@ public fun do_burn<Config, Outcome, CoinType, W: copy + drop>(
     
     let rules_mut: &mut CurrencyRules<CoinType> = account.borrow_managed_struct_mut(CurrencyRulesKey<CoinType> {}, version);
     assert!(rules_mut.can_burn, EBurnDisabled);
-    rules_mut.total_burnt = rules_mut.total_burnt + amount;
+    rules_mut.total_burned = rules_mut.total_burned + amount;
 
     let cap_mut: &mut TreasuryCap<CoinType> = account.borrow_managed_object_mut(TreasuryCapKey<CoinType> {}, version);
     cap_mut.burn(coin);

@@ -367,7 +367,7 @@ public fun execute_config_multisig(
     executable.destroy(version::current(), ConfigMultisigProposal());
 }
 
-public fun delete_expired_config_multisig(expired: &mut Expired<Approvals>) {
+public fun delete_config_multisig_action(expired: &mut Expired<Approvals>) {
     let action = expired.remove_expired_action();
     let ConfigMultisigAction { .. } = action;
 }

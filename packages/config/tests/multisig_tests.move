@@ -420,7 +420,7 @@ fun test_config_multisig_deletion() {
         scenario.ctx()
     );
     let mut expired = multisig::delete_proposal(&mut account, b"config".to_string(), &clock);
-    multisig::delete_expired_config_multisig(&mut expired);
+    multisig::delete_config_multisig_action(&mut expired);
     multisig::delete_expired_outcome(expired);
 
     end(scenario, extensions, account, clock);
