@@ -20,9 +20,9 @@ use account_protocol::{
 
 /// Members can merge and split coins, no need for approvals
 /// Returns the IDs to use in a following proposal, conserve the order
-public fun merge_and_split<Config, Outcome, CoinType>(
+public fun merge_and_split<Config, CoinType>(
     _auth: &Auth, // must be an authorized member, done before proposal
-    account: &mut Account<Config, Outcome>, 
+    account: &mut Account<Config>, 
     to_merge: vector<Receiving<Coin<CoinType>>>, // there can be only one coin if we just want to split
     to_split: vector<u64>, // there can be no amount if we just want to merge
     ctx: &mut TxContext
@@ -54,8 +54,8 @@ fun merge<CoinType>(
     merged
 }
 
-fun split<Config, Outcome, CoinType>(
-    account: &Account<Config, Outcome>, 
+fun split<Config, CoinType>(
+    account: &mut Account<Config>, 
     mut coin: Coin<CoinType>,
     amounts: vector<u64>, 
     ctx: &mut TxContext

@@ -25,22 +25,20 @@ const EWrongRole: vector<u8> = b"Role doesn't match";
 
 /// Protected type ensuring provenance
 public struct Auth {
-    // type_name (+ opt name) of the witness that instantiated the auth
-    role: String,
     // address of the account that created the auth
     account_addr: address,
+    // type_name (+ opt name) of the witness that instantiated the auth
+    role: String,
 }
-
-// === Public Functions ===
 
 // === View Functions ===
 
-public fun role(auth: &Auth): String {
-    auth.role
-}
-
 public fun account_addr(auth: &Auth): address {
     auth.account_addr
+}
+
+public fun role(auth: &Auth): String {
+    auth.role
 }
 
 // === Core extensions functions ===
@@ -71,7 +69,9 @@ public fun verify_with_role<Role>(
     addr: address,
     name: String,
 ) {
-    let mut full_role = type_name::get<Role>().into_string().to_string();  
+    let mut full_role = type_name::get<Role>().get_address().to_string();
+    full_role.append_utf8(b"::");
+    full_role.append(type_name::get<Role>().get_module().to_string());
 
     if (!name.is_empty()) {
         full_role.append_utf8(b"::");

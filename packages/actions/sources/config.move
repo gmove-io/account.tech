@@ -16,13 +16,9 @@ module account_actions::config;
 
 // === Imports ===
 
-use std::{
-    type_name::TypeName,
-    string::String,
-};
+use std::string::String;
 use account_protocol::{
     account::Account,
-    proposals::{Proposal, Expired},
     executable::Executable,
     deps::{Self, Deps},
     metadata,
@@ -54,24 +50,22 @@ const ENoExtensionOrUpgradeCap: vector<u8> = b"No extension or upgrade cap for t
 /// Finally, they are used to parse the actions of the proposal off-chain.
 
 /// [COMMAND] witness defining the metadata command, and associated role
-public struct ConfigMetadataCommand() has copy, drop;
-/// [PROPOSAL] witness defining the dependencies proposal, and associated role
-public struct ConfigDepsProposal() has copy, drop;
+public struct Witness() has drop;
 
 /// [ACTION] struct wrapping the deps account field into an action
-public struct ConfigDepsAction has store {
+public struct ConfigDepsAction has drop, store {
     deps: Deps,
 }
 
 // === [COMMAND] Public functions ===
 
-public fun edit_metadata<Config, Outcome>(
+public fun edit_metadata<Config>(
     auth: Auth,
-    account: &mut Account<Config, Outcome>,
+    account: &mut Account<Config>,
     keys: vector<String>,
     values: vector<String>,
 ) {
-    auth.verify_with_role<ConfigMetadataCommand>(account.addr(), b"".to_string());
+    auth.verify_with_role<Witness>(account.addr(), b"".to_string());
 
     assert!(keys.length() == values.length(), EMetadataNotSameLength);
     assert!(keys[0] == b"name".to_string(), EMetadataNameMissing);
@@ -80,89 +74,58 @@ public fun edit_metadata<Config, Outcome>(
     *account.metadata_mut(version::current()) = metadata::from_keys_values(keys, values);
 }
 
-// === [PROPOSAL] Public functions ===
+// === Public functions ===
 
 // step 1: propose to update the dependencies
-public fun propose_config_deps<Config, Outcome>(
+public fun request_config_deps<Config, Outcome: store>(
     auth: Auth,
-    account: &mut Account<Config, Outcome>, 
-    outcome: Outcome,
+    account: &mut Account<Config>, 
+    extensions: &Extensions,
     key: String,
     description: String,
     execution_time: u64,
     expiration_time: u64,
-    extensions: &Extensions,
     names: vector<String>,
     addresses: vector<address>,
     versions: vector<u64>,
-    ctx: &mut TxContext
+    outcome: Outcome,
 ) {
-    let mut proposal = account.create_proposal(
+    let mut deps = deps::new(extensions);
+
+    names.zip_do!(addresses, |name, addr| {
+        let version = versions.remove(0);
+
+        if (extensions.is_extension(name, addr, version)) {
+            deps.add(extensions, name, addr, version);
+        } else if (upgrade_policies::has_cap(account, addr)) {
+            let cap = upgrade_policies::borrow_cap(account, addr);
+            deps.add_with_upgrade_cap(cap, name, addr, version);
+        } else abort ENoExtensionOrUpgradeCap;
+    });
+
+    account.create_intent(
         auth,
-        outcome,
-        version::current(),
-        ConfigDepsProposal(),
-        b"".to_string(),
         key,
         description,
         execution_time,
         expiration_time,
-        ctx
+        outcome,
+        ConfigDepsAction { deps },
+        version::current(),
+        Witness(),
+        b"".to_string(),
     );
-
-    new_config_deps(&mut proposal, account, extensions, names, addresses, versions, ConfigDepsProposal());
-    account.add_proposal(proposal, version::current(), ConfigDepsProposal());
 }
 
 // step 2: multiple members have to approve the proposal (account::approve_proposal)
 // step 3: execute the proposal and return the action (AccountConfig::module::execute_proposal)
 
 // step 4: execute the action and modify Account object
-public fun execute_config_deps<Config, Outcome>(
-    mut executable: Executable,
-    account: &mut Account<Config, Outcome>, 
+public fun execute_config_deps<Config>(
+    mut executable: Executable<ConfigDepsAction>,
+    account: &mut Account<Config>, 
 ) {
-    do_config_deps(&mut executable, account, version::current(), ConfigDepsProposal());
-    executable.destroy(version::current(), ConfigDepsProposal());
-}
-
-// === [ACTION] Public functions ===
-
-public fun new_config_deps<Config, Outcome, W: drop>(
-    proposal: &mut Proposal<Outcome>,
-    account: &Account<Config, Outcome>,
-    extensions: &Extensions,
-    names: vector<String>,
-    packages: vector<address>,
-    mut versions: vector<u64>,
-    witness: W,
-) {    
-    let mut deps = deps::new(extensions);
-
-    names.zip_do!(packages, |name, package| {
-        let version = versions.remove(0);
-
-        if (extensions.is_extension(name, package, version)) {
-            deps.add(extensions, name, package, version);
-        } else if (upgrade_policies::has_cap(account, package)) {
-            let cap = upgrade_policies::borrow_cap(account, package);
-            deps.add_with_upgrade_cap(cap, name, package, version);
-        } else abort ENoExtensionOrUpgradeCap;
-    });
-
-    proposal.add_action(ConfigDepsAction { deps }, witness);
-}
-
-public fun do_config_deps<Config, Outcome, W: copy + drop>(
-    executable: &mut Executable,
-    account: &mut Account<Config, Outcome>, 
-    version: TypeName,
-    witness: W,
-) {
-    let ConfigDepsAction { deps } = executable.action(account.addr(), version, witness);    
-    *account.deps_mut(version) = deps;
-}
-
-public fun delete_config_deps_action<Outcome>(expired: &mut Expired<Outcome>) {
-    let ConfigDepsAction { .. } = expired.remove_expired_action();
+    let action_mut = executable.action_mut(account.addr(), version::current(), Witness());    
+    *account.deps_mut(version::current()) = action_mut.deps;
+    executable.destroy(version::current(), Witness());
 }

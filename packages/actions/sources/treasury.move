@@ -19,12 +19,10 @@ use sui::{
 };
 use account_protocol::{
     account::Account,
-    proposals::{Proposal, Expired},
     executable::Executable,
     auth::Auth,
 };
 use account_actions::{
-    transfer as acc_transfer,
     vesting,
     version,
 };
@@ -46,6 +44,9 @@ const ECoinTypeDoesntExist: vector<u8> = b"Coin type doesn't exist in treasury";
 
 // === Structs ===
 
+/// [COMMAND] witness defining the treasury opening and closing commands, and associated role
+public struct Witness() has drop;
+
 /// Dynamic Field key for the Treasury
 public struct TreasuryKey has copy, drop, store { name: String }
 /// Dynamic field holding a budget with different coin types, key is name
@@ -54,56 +55,60 @@ public struct Treasury has store {
     bag: Bag
 }
 
-/// [COMMAND] witness defining the treasury opening and closing commands, and associated role
-public struct TreasuryCommand() has drop;
-/// [COMMAND] witness defining the treasury deposit command, and associated role
-public struct DepositCommand() has drop;
-/// [PROPOSAL] witness defining the treasury transfer proposal, and associated role
-public struct TransferProposal() has copy, drop;
-/// [PROPOSAL] witness defining the treasury pay proposal, and associated role
-public struct PayProposal() has copy, drop;
-
 /// [ACTION] struct to be used with specific proposals making good use of the returned coins, similar to owned::withdraw
-public struct SpendAction<phantom CoinType> has store {
+public struct SpendAndTransferAction<phantom CoinType> has drop, store {
+    // amount to withdraw
+    amounts: vector<u64>,
+    // recipient
+    recipients: vector<address>,
+}
+/// [ACTION]
+public struct SpendAndVestingAction<phantom CoinType> has drop, store {
     // amount to withdraw
     amount: u64,
+    // timestamp when coins can start to be claimed
+    start_timestamp: u64,
+    // timestamp when balance is totally unlocked
+    end_timestamp: u64,
+    // address to pay
+    recipient: address,
 }
 
 // === [COMMAND] Public Functions ===
 
 /// Members with role can open a treasury
-public fun open<Config, Outcome>(
+public fun open<Config>(
     auth: Auth,
-    account: &mut Account<Config, Outcome>,
+    account: &mut Account<Config>,
     name: String,
     ctx: &mut TxContext
 ) {
-    auth.verify_with_role<TreasuryCommand>(account.addr(), b"".to_string());
+    auth.verify_with_role<Witness>(account.addr(), b"".to_string());
     assert!(!has_treasury(account, name), EAlreadyExists);
 
     account.add_managed_struct(TreasuryKey { name }, Treasury { bag: bag::new(ctx) }, version::current());
 }
 
 /// Deposits coins owned by the account into a treasury
-public fun deposit_owned<Config, Outcome, CoinType: drop>(
+public fun deposit_owned<Config, CoinType: drop>(
     auth: Auth,
-    account: &mut Account<Config, Outcome>,
+    account: &mut Account<Config>,
     name: String, 
     receiving: Receiving<Coin<CoinType>>, 
 ) {
     let coin = account.receive(receiving, version::current());
-    deposit<Config, Outcome, CoinType>(auth, account, name, coin);
+    deposit<Config, CoinType>(auth, account, name, coin);
 }
 
 // TODO: remove role name (any member can deposit)
 /// Deposits coins owned by a member into a treasury
-public fun deposit<Config, Outcome, CoinType: drop>(
+public fun deposit<Config, CoinType: drop>(
     auth: Auth,
-    account: &mut Account<Config, Outcome>,
+    account: &mut Account<Config>,
     name: String, 
     coin: Coin<CoinType>, 
 ) {
-    auth.verify_with_role<DepositCommand>(account.addr(), name);
+    auth.verify_with_role<Witness>(account.addr(), b"".to_string());
     assert!(has_treasury(account, name), ETreasuryDoesntExist);
 
     let treasury: &mut Treasury = 
@@ -118,12 +123,12 @@ public fun deposit<Config, Outcome, CoinType: drop>(
 }
 
 /// Closes the treasury if empty
-public fun close<Config, Outcome>(
+public fun close<Config>(
     auth: Auth,
-    account: &mut Account<Config, Outcome>,
+    account: &mut Account<Config>,
     name: String,
 ) {
-    auth.verify_with_role<TreasuryCommand>(account.addr(), b"".to_string());
+    auth.verify_with_role<Witness>(account.addr(), b"".to_string());
 
     let Treasury { bag } = 
         account.remove_managed_struct(TreasuryKey { name }, version::current());
@@ -131,15 +136,15 @@ public fun close<Config, Outcome>(
     bag.destroy_empty();
 }
 
-public fun has_treasury<Config, Outcome>(
-    account: &Account<Config, Outcome>, 
+public fun has_treasury<Config>(
+    account: &Account<Config>, 
     name: String
 ): bool {
     account.has_managed_struct(TreasuryKey { name })
 }
 
-public fun borrow_treasury<Config, Outcome>(
-    account: &Account<Config, Outcome>, 
+public fun borrow_treasury<Config>(
+    account: &Account<Config>, 
     name: String
 ): &Treasury {
     assert!(has_treasury(account, name), ETreasuryDoesntExist);
@@ -157,10 +162,9 @@ public fun coin_type_value<CoinType: drop>(treasury: &Treasury): u64 {
 // === [PROPOSAL] Public Functions ===
 
 // step 1: propose to send managed coins
-public fun propose_transfer<Config, Outcome, CoinType: drop>(
+public fun request_spend_and_transfer<Config, Outcome: store, CoinType: drop>(
     auth: Auth,
-    account: &mut Account<Config, Outcome>, 
-    outcome: Outcome,
+    account: &mut Account<Config>, 
     key: String,
     description: String,
     execution_time: u64,
@@ -168,7 +172,7 @@ public fun propose_transfer<Config, Outcome, CoinType: drop>(
     treasury_name: String,
     amounts: vector<u64>,
     recipients: vector<address>,
-    ctx: &mut TxContext
+    outcome: Outcome,
 ) {
     assert!(amounts.length() == recipients.length(), ENotSameLength);
     let treasury = borrow_treasury(account, treasury_name);
@@ -176,127 +180,117 @@ public fun propose_transfer<Config, Outcome, CoinType: drop>(
     let sum = amounts.fold!(0, |sum, amount| sum + amount);
     if (treasury.coin_type_value<CoinType>() < sum) assert!(sum <= treasury.coin_type_value<CoinType>(), EInsufficientFunds);
 
-    let mut proposal = account.create_proposal(
+    let action = SpendAndTransferAction<CoinType> { amounts, recipients };
+
+    account.create_intent(
         auth,
-        outcome,
-        version::current(),
-        TransferProposal(),
-        treasury_name,
         key,
         description,
         execution_time,
         expiration_time,
-        ctx
+        action,
+        outcome,
+        version::current(),
+        Witness(),
+        treasury_name,
     );
-
-    recipients.zip_do!(amounts, |recipient, amount| {
-        new_spend<Outcome, CoinType, TransferProposal>(&mut proposal, amount, TransferProposal());
-        acc_transfer::new_transfer(&mut proposal, recipient, TransferProposal());
-    });
-
-    account.add_proposal(proposal, version::current(), TransferProposal());
 }
 
 // step 2: multiple members have to approve the proposal (account::approve_proposal)
 // step 3: execute the proposal and return the action (account::execute_proposal)
 
 // step 4: loop over transfer
-public fun execute_transfer<Config, Outcome, CoinType: drop>(
-    executable: &mut Executable, 
-    account: &mut Account<Config, Outcome>, 
+public fun execute_spend_and_transfer<Config, CoinType: drop>(
+    mut executable: Executable<SpendAndTransferAction<CoinType>>, 
+    account: &mut Account<Config>, 
     ctx: &mut TxContext
 ) {
-    let coin: Coin<CoinType> = do_spend(executable, account, version::current(), TransferProposal(), ctx);
-    acc_transfer::do_transfer(executable, account, coin, version::current(), TransferProposal());
+    let name = executable.issuer().opt_name();
+    let action_mut = executable.action_mut(account.addr(), version::current(), Witness());
+
+    action_mut.amounts.zip_do!(action_mut.recipients, |amount, recipient| {
+        let treasury: &mut Treasury = account.borrow_managed_struct_mut(TreasuryKey { name }, version::current());
+        let balance: &mut Balance<CoinType> = treasury.bag.borrow_mut(type_name::get<CoinType>());
+        let coin = coin::take(balance, amount, ctx);
+
+        if (balance.value() == 0) 
+            treasury.bag.remove<TypeName, Balance<CoinType>>(type_name::get<CoinType>()).destroy_zero();
+        
+        transfer::public_transfer(coin, recipient);
+    });
 }
 
 // step 5: complete acc_transfer and destroy the executable
-public fun complete_transfer(executable: Executable) {
-    executable.destroy(version::current(), TransferProposal());
+public fun complete_spend_and_transfer<CoinType>(executable: Executable<SpendAndTransferAction<CoinType>>) {
+    executable.destroy(version::current(), Witness());
 }
 
 // step 1(bis): same but from a treasury
-public fun propose_vesting<Config, Outcome, CoinType: drop>(
+public fun request_spend_and_vesting<Config, Outcome: store, CoinType: drop>(
     auth: Auth,
-    account: &mut Account<Config, Outcome>, 
-    outcome: Outcome,
+    account: &mut Account<Config>, 
     key: String,
     description: String,
     execution_time: u64,
     expiration_time: u64,
     treasury_name: String, 
-    coin_amount: u64, 
+    amount: u64, 
     start_timestamp: u64, 
     end_timestamp: u64, 
     recipient: address,
-    ctx: &mut TxContext
+    outcome: Outcome,
 ) {
     let treasury = borrow_treasury(account, treasury_name);
     assert!(treasury.coin_type_exists<CoinType>(), ECoinTypeDoesntExist);
-    assert!(treasury.coin_type_value<CoinType>() >= coin_amount, EInsufficientFunds);
+    assert!(treasury.coin_type_value<CoinType>() >= amount, EInsufficientFunds);
 
-    let mut proposal = account.create_proposal(
+    let action = SpendAndVestingAction<CoinType> { 
+        amount, 
+        start_timestamp, 
+        end_timestamp, 
+        recipient 
+    };
+
+    account.create_intent(
         auth,
-        outcome,
-        version::current(),
-        PayProposal(),
-        treasury_name,
         key,
         description,
         execution_time,
         expiration_time,
-        ctx
+        action,
+        outcome,
+        version::current(),
+        Witness(),
+        treasury_name,
     );
-
-    new_spend<Outcome, CoinType, PayProposal>(&mut proposal, coin_amount, PayProposal());
-    vesting::new_vesting(&mut proposal, start_timestamp, end_timestamp, recipient, PayProposal());
-    account.add_proposal(proposal, version::current(), PayProposal());
 }
 
 // step 2: multiple members have to approve the proposal (account::approve_proposal)
 // step 3: execute the proposal and return the action (account::execute_proposal)
 
 // step 4: loop over it in PTB, sends last object from the Send action
-public fun execute_vesting<Config, Outcome, CoinType: drop>(
-    mut executable: Executable, 
-    account: &mut Account<Config, Outcome>, 
+public fun execute_spend_and_vesting<Config, CoinType: drop>(
+    mut executable: Executable<SpendAndVestingAction<CoinType>>, 
+    account: &mut Account<Config>, 
     ctx: &mut TxContext
 ) {
-    let coin: Coin<CoinType> = do_spend(&mut executable, account, version::current(), PayProposal(), ctx);
-    vesting::do_vesting(&mut executable, account, coin, version::current(), PayProposal(), ctx);
-    executable.destroy(version::current(), PayProposal());
-}
+    let name = executable.issuer().opt_name();
+    let action_mut = executable.action_mut(account.addr(), version::current(), Witness());
 
-// === [ACTION] Public Functions ===
-
-public fun new_spend<Outcome, CoinType: drop, W: drop>(
-    proposal: &mut Proposal<Outcome>,
-    amount: u64,
-    witness: W,
-) {
-    proposal.add_action(SpendAction<CoinType> { amount }, witness);
-}
-
-public fun do_spend<Config, Outcome, CoinType: drop, W: copy + drop>(
-    executable: &mut Executable,
-    account: &mut Account<Config, Outcome>,
-    version: TypeName,
-    witness: W,
-    ctx: &mut TxContext
-): Coin<CoinType> {
-    let name = executable.issuer().role_name();
-    let SpendAction<CoinType> { amount } = executable.action(account.addr(), version, witness);
-    
-    let treasury: &mut Treasury = account.borrow_managed_struct_mut(TreasuryKey { name }, version);
+    let treasury: &mut Treasury = account.borrow_managed_struct_mut(TreasuryKey { name }, version::current());
     let balance: &mut Balance<CoinType> = treasury.bag.borrow_mut(type_name::get<CoinType>());
-    let coin = coin::take(balance, amount, ctx);
+    let coin = coin::take(balance, action_mut.amount, ctx);
 
     if (balance.value() == 0) 
         treasury.bag.remove<TypeName, Balance<CoinType>>(type_name::get<CoinType>()).destroy_zero();
     
-    coin
-}
+    vesting::create_stream(
+        coin, 
+        action_mut.start_timestamp, 
+        action_mut.end_timestamp, 
+        action_mut.recipient, 
+        ctx
+    );
 
-public fun delete_spend_action<Outcome, CoinType>(expired: &mut Expired<Outcome>) {
-    let SpendAction<CoinType> { .. } = expired.remove_expired_action();
+    executable.destroy(version::current(), Witness());
 }

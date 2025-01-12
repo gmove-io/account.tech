@@ -11,7 +11,6 @@ module account_protocol::executable;
 // === Imports ===
 
 use std::type_name::TypeName;
-use sui::bag::Bag;
 use account_protocol::{
     issuer::Issuer,
     deps::Deps,
@@ -27,77 +26,70 @@ const EActionsNotEmpty: vector<u8> = b"Actions have not been processed";
 // === Structs ===
 
 /// Hot potato ensuring the action in the proposal is executed as it can't be stored
-public struct Executable {
+public struct Executable<Action: store> {
     // copied deps from the Account
     deps: Deps,
     // module that issued the proposal and must destroy it
     issuer: Issuer,
-    // Bag start index, to reduce gas costs for large bags
-    start_idx: u64,
     // actions to be executed in order, heterogenous array
-    actions: Bag,
+    action: Action,
 }
 
 // === Public functions ===
 
 /// The following functions are called from action modules
 
-/// The action is removed from the actions bag
-public fun action<Action: store, W: drop>(
-    executable: &mut Executable, 
+/// Access the underlying action mutably
+public fun action_mut<Action: store, W: drop>(
+    executable: &mut Executable<Action>, 
     account_addr: address, // pass account address to ensure that the correct account will be modified
     version: TypeName,
     witness: W,
-): Action {
+): &mut Action {
     executable.deps.assert_is_dep(version);
     executable.issuer.assert_is_constructor(witness);
     executable.issuer.assert_is_account(account_addr);
-    assert!(executable.actions.contains_with_type<u64, Action>(executable.start_idx), EActionNotFound);
 
-    let action: Action = executable.actions.remove(executable.start_idx);
-    executable.start_idx = executable.start_idx + 1;
-
-    action
+    &mut executable.action
 }
 
 /// The executable is destroyed
-public fun destroy<W: drop>(
-    executable: Executable, 
+public fun destroy<Action: drop + store, W: drop>(
+    executable: Executable<Action>, 
     version: TypeName,
     witness: W
 ) {
     let Executable { 
         deps,
         issuer, 
-        actions,
         ..
     } = executable;
-
-    assert!(actions.is_empty(), EActionsNotEmpty);
     
     deps.assert_is_dep(version);
     issuer.assert_is_constructor(witness);
-    actions.destroy_empty();
 }
 
 // === View functions ===
 
-public fun deps(executable: &Executable): &Deps {
+public fun deps<Action: store>(executable: &Executable<Action>): &Deps {
     &executable.deps
 }
 
-public fun issuer(executable: &Executable): &Issuer {
+public fun issuer<Action: store>(executable: &Executable<Action>): &Issuer {
     &executable.issuer
 }
 
 // === Package functions ===
 
 /// Is only called from the account module
-public(package) fun new(deps: Deps, issuer: Issuer, actions: Bag): Executable {
+public(package) fun new<Action: store>(
+    deps: Deps, 
+    issuer: Issuer, 
+    action: Action
+): Executable<Action> {
     Executable { 
         deps,
         issuer,
-        start_idx: 0,
-        actions,
+        action,
     }
 }

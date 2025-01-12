@@ -30,7 +30,7 @@ use account_protocol::{
     issuer,
     metadata::{Self, Metadata},
     deps::{Self, Deps},
-    proposals::{Self, Proposals, Proposal, Expired},
+    intents::{Self, Intents, Intent},
     executable::{Self, Executable},
     auth::Auth,
 };
@@ -41,7 +41,7 @@ use account_extensions::extensions::Extensions;
 public struct ACCOUNT has drop {}
 
 /// Shared multisig Account object 
-public struct Account<Config, Outcome> has key {
+public struct Account<Config> has key {
     id: UID,
     // arbitrary data that can be proposed and added by members
     // first field is a human readable name to differentiate the multisig accounts
@@ -49,8 +49,8 @@ public struct Account<Config, Outcome> has key {
     // ids and versions of the packages this account is using
     // idx 0: account_protocol, idx 1: account_actions
     deps: Deps,
-    // open proposals, key should be a unique descriptive name
-    proposals: Proposals<Outcome>,
+    // active intents, key should be a unique descriptive name
+    intents: Intents,
     // config can be anything (e.g. Multisig, coin-based DAO, etc.)
     config: Config,
 }
@@ -62,28 +62,28 @@ fun init(otw: ACCOUNT, ctx: &mut TxContext) {
 }
 
 /// Creates a new Account object, called from AccountConfig
-public fun new<Config, Outcome>(
+public fun new<Config>(
     extensions: &Extensions,
     name: String, 
     config: Config, 
     ctx: &mut TxContext
-): Account<Config, Outcome> {
-    Account<Config, Outcome> { 
+): Account<Config> {
+    Account<Config> { 
         id: object::new(ctx),
         metadata: metadata::new(name),
         deps: deps::new(extensions),
-        proposals: proposals::empty(),
+        intents: intents::empty(ctx),
         config,
     }
 }
 
 /// Can be initialized by the creator before being shared
 #[allow(lint(share_owned))]
-public fun share<Config: store, Outcome: store>(account: Account<Config, Outcome>) {
+public fun share<Config: store>(account: Account<Config>) {
     transfer::share_object(account);
 }
 
-public fun keep<Config, Outcome, T: key + store>(account: &Account<Config, Outcome>, obj: T) {
+public fun keep<Config, Obj: key + store>(account: &Account<Config>, obj: Obj) {
     transfer::public_transfer(obj, account.addr());
 }
 
@@ -91,22 +91,22 @@ public fun keep<Config, Outcome, T: key + store>(account: &Account<Config, Outco
 
 /// Creates a new proposal that must be constructed in another module
 /// Only packages (instantiating the witness) allowed in extensions can create an issuer
-public fun create_proposal<Config, Outcome, W: drop>(
-    account: &mut Account<Config, Outcome>, 
+public fun create_intent<Config, Action: store, Outcome: store, W: drop>(
+    account: &mut Account<Config>, 
     auth: Auth, // proves that the caller is a member
-    outcome: Outcome, // vote settings
-    version: TypeName,
-    witness: W, // module's issuer witness (proposal/role witness)
-    w_name: String, // module's issuer name (role name)
     key: String, // proposal key
-    description: String,
+    description: String, // more details, optional 
     execution_time: u64, // timestamp in ms
     expiration_time: u64, // epoch when we can delete the proposal
-    ctx: &mut TxContext
-): Proposal<Outcome> {
+    outcome: Outcome, // intent settings
+    action: Action, // intent action
+    version: TypeName, // package type to check the package version
+    witness: W, // module's issuer witness (proposal/role witness)
+    w_name: String, // module's issuer name (role name)
+) {
     // ensures the caller is authorized for this account
     auth.verify(account.addr());
-    // only an account dependency can create a proposal
+    // only a dependency of the account can create a proposal
     account.deps().assert_is_dep(version);
 
     let issuer = issuer::construct(
@@ -116,82 +116,69 @@ public fun create_proposal<Config, Outcome, W: drop>(
         w_name
     );
 
-    proposals::new_proposal(
+    let intent = intents::new_intent(
         issuer,
         key,
         description,
         execution_time,
         expiration_time,
+        action,
         outcome,
-        ctx
-    )
-}
+    );
 
-/// Adds a proposal to the account
-/// must be called by the same proposal interface that created it
-public fun add_proposal<Config, Outcome, W: drop>(
-    account: &mut Account<Config, Outcome>, 
-    proposal: Proposal<Outcome>, 
-    version: TypeName,
-    witness: W
-) {
-    proposal.issuer().assert_is_account(account.addr());
-    account.deps().assert_is_dep(version);  
-    proposal.issuer().assert_is_constructor(witness);
-
-    account.proposals.add(proposal);
+    account.intents.add(intent);
 }
 
 /// Called by CoreDep only, AccountConfig
 /// Returns an Executable with the Proposal Outcome that must be validated in AccountCOnfig
-public fun execute_proposal<Config, Outcome>(
-    account: &mut Account<Config, Outcome>,
+public fun execute_intent<Config, Action: store, Outcome: store>(
+    account: &mut Account<Config>,
     key: String, 
     clock: &Clock,
     version: TypeName,
-): (Executable, Outcome) {
+): (Executable<Action>, Outcome) {
     account.deps().assert_is_core_dep(version);
-    let (issuer, actions, outcome) = account.proposals.remove(key, clock);
+    let (issuer, actions, outcome) = account.intents.remove(key, clock);
 
     (executable::new(account.deps, issuer, actions), outcome)
 }
 
 /// Removes a proposal if it has expired
 /// Needs to delete each action in the bag within their own module
-public fun delete_proposal<Config: drop, Outcome>(
-    account: &mut Account<Config, Outcome>, 
+public fun delete_intent<Config: drop, Action: drop + store, Outcome: drop + store>(
+    account: &mut Account<Config>, 
     key: String, 
-    version: TypeName,
     clock: &Clock,
-): Expired<Outcome> {
+    version: TypeName,
+) {
     account.deps().assert_is_core_dep(version);
 
-    account.proposals.delete(key, clock)
+    account.intents.delete<Outcome, Action>(key, clock);
 }
 
 // === View functions ===
 
-public fun addr<Config, Outcome>(account: &Account<Config, Outcome>): address {
+public fun addr<Config>(account: &Account<Config>): address {
     account.id.uid_to_inner().id_to_address()
 }
 
-public fun metadata<Config, Outcome>(account: &Account<Config, Outcome>): &Metadata {
+public fun metadata<Config>(account: &Account<Config>): &Metadata {
     &account.metadata
 }
 
-public fun deps<Config, Outcome>(account: &Account<Config, Outcome>): &Deps {
+public fun deps<Config>(account: &Account<Config>): &Deps {
     &account.deps
 }
 
-public fun proposals<Config, Outcome>(account: &Account<Config, Outcome>): &Proposals<Outcome> {
-    &account.proposals
+public fun intents<Config>(account: &Account<Config>): &Intents {
+    &account.intents
 }
 
-public fun proposal<Config, Outcome>(account: &Account<Config, Outcome>, key: String): &Proposal<Outcome> {
-    account.proposals.get(key)
+public fun intent<Config, Action: store, Outcome: store>(account: &Account<Config>, key: String): &Intent<Action, Outcome> {
+    account.intents.get(key)
 }
 
-public fun config<Config, Outcome>(account: &Account<Config, Outcome>): &Config {
+public fun config<Config>(account: &Account<Config>): &Config {
     &account.config
 }
 
@@ -203,8 +190,8 @@ public fun config<Config, Outcome>(account: &Account<Config, Outcome>): &Config 
 /// Keys must be custom types defined in the same module where the function is called
 /// The version typename should be issued from the same package and is checked against dependencies
 
-public fun add_managed_struct<Config, Outcome, K: copy + drop + store, Struct: store>(
-    account: &mut Account<Config, Outcome>, 
+public fun add_managed_struct<Config, K: copy + drop + store, Struct: store>(
+    account: &mut Account<Config>, 
     key: K, 
     `struct`: Struct,
     version: TypeName,
@@ -213,15 +200,15 @@ public fun add_managed_struct<Config, Outcome, K: copy + drop + store, Struct: s
     df::add(&mut account.id, key, `struct`);
 }
 
-public fun has_managed_struct<Config, Outcome, K: copy + drop + store>(
-    account: &Account<Config, Outcome>, 
+public fun has_managed_struct<Config, K: copy + drop + store>(
+    account: &Account<Config>, 
     key: K, 
 ): bool {
     df::exists_(&account.id, key)
 }
 
-public fun borrow_managed_struct<Config, Outcome, K: copy + drop + store, Struct: store>(
-    account: &Account<Config, Outcome>,
+public fun borrow_managed_struct<Config, K: copy + drop + store, Struct: store>(
+    account: &Account<Config>,
     key: K, 
     version: TypeName,
 ): &Struct {
@@ -229,8 +216,8 @@ public fun borrow_managed_struct<Config, Outcome, K: copy + drop + store, Struct
     df::borrow(&account.id, key)
 }
 
-public fun borrow_managed_struct_mut<Config, Outcome, K: copy + drop + store, Struct: store>(
-    account: &mut Account<Config, Outcome>, 
+public fun borrow_managed_struct_mut<Config, K: copy + drop + store, Struct: store>(
+    account: &mut Account<Config>, 
     key: K, 
     version: TypeName,
 ): &mut Struct {
@@ -238,8 +225,8 @@ public fun borrow_managed_struct_mut<Config, Outcome, K: copy + drop + store, St
     df::borrow_mut(&mut account.id, key)
 }
 
-public fun remove_managed_struct<Config, Outcome, K: copy + drop + store, A: store>(
-    account: &mut Account<Config, Outcome>, 
+public fun remove_managed_struct<Config, K: copy + drop + store, A: store>(
+    account: &mut Account<Config>, 
     key: K, 
     version: TypeName,
 ): A {
@@ -247,8 +234,8 @@ public fun remove_managed_struct<Config, Outcome, K: copy + drop + store, A: sto
     df::remove(&mut account.id, key)
 }
 
-public fun add_managed_object<Config, Outcome, K: copy + drop + store, Obj: key + store>(
-    account: &mut Account<Config, Outcome>, 
+public fun add_managed_object<Config, K: copy + drop + store, Obj: key + store>(
+    account: &mut Account<Config>, 
     key: K, 
     obj: Obj,
     version: TypeName,
@@ -257,15 +244,15 @@ public fun add_managed_object<Config, Outcome, K: copy + drop + store, Obj: key 
     dof::add(&mut account.id, key, obj);
 }
 
-public fun has_managed_object<Config, Outcome, K: copy + drop + store>(
-    account: &Account<Config, Outcome>, 
+public fun has_managed_object<Config, K: copy + drop + store>(
+    account: &Account<Config>, 
     key: K, 
 ): bool {
     dof::exists_(&account.id, key)
 }
 
-public fun borrow_managed_object<Config, Outcome, K: copy + drop + store, Obj: key + store>(
-    account: &Account<Config, Outcome>,
+public fun borrow_managed_object<Config, K: copy + drop + store, Obj: key + store>(
+    account: &Account<Config>,
     key: K, 
     version: TypeName,
 ): &Obj {
@@ -273,8 +260,8 @@ public fun borrow_managed_object<Config, Outcome, K: copy + drop + store, Obj: k
     dof::borrow(&account.id, key)
 }
 
-public fun borrow_managed_object_mut<Config, Outcome, K: copy + drop + store, Obj: key + store>(
-    account: &mut Account<Config, Outcome>, 
+public fun borrow_managed_object_mut<Config, K: copy + drop + store, Obj: key + store>(
+    account: &mut Account<Config>, 
     key: K, 
     version: TypeName,
 ): &mut Obj {
@@ -282,8 +269,8 @@ public fun borrow_managed_object_mut<Config, Outcome, K: copy + drop + store, Ob
     dof::borrow_mut(&mut account.id, key)
 }
 
-public fun remove_managed_object<Config, Outcome, K: copy + drop + store, Obj: key + store>(
-    account: &mut Account<Config, Outcome>, 
+public fun remove_managed_object<Config, K: copy + drop + store, Obj: key + store>(
+    account: &mut Account<Config>, 
     key: K, 
     version: TypeName,
 ): Obj {
@@ -293,11 +280,10 @@ public fun remove_managed_object<Config, Outcome, K: copy + drop + store, Obj: k
 
 // === Core Deps only functions ===
 
-/// Owned objects:
-/// Objects owned by the account
+/// Account's owned objects
 
-public fun receive<Config, Outcome, T: key + store>(
-    account: &mut Account<Config, Outcome>, 
+public fun receive<Config, T: key + store>(
+    account: &mut Account<Config>, 
     receiving: Receiving<T>,
     version: TypeName,
 ): T {
@@ -305,35 +291,34 @@ public fun receive<Config, Outcome, T: key + store>(
     transfer::public_receive(&mut account.id, receiving)
 }
 
-/// Fields:
-/// Fields of the account object
+/// Account's fields
 
-public fun metadata_mut<Config, Outcome>(
-    account: &mut Account<Config, Outcome>, 
+public fun metadata_mut<Config>(
+    account: &mut Account<Config>, 
     version: TypeName,
 ): &mut Metadata {
     account.deps.assert_is_core_dep(version);
     &mut account.metadata
 }
 
-public fun deps_mut<Config, Outcome>(
-    account: &mut Account<Config, Outcome>, 
+public fun deps_mut<Config>(
+    account: &mut Account<Config>, 
     version: TypeName,
 ): &mut Deps {
     account.deps.assert_is_core_dep(version);
     &mut account.deps
 }
 
-public fun proposals_mut<Config, Outcome>(
-    account: &mut Account<Config, Outcome>, 
+public fun intents_mut<Config>(
+    account: &mut Account<Config>, 
     version: TypeName,
-): &mut Proposals<Outcome> {
+): &mut Intents {
     account.deps.assert_is_core_dep(version);
-    &mut account.proposals
+    &mut account.intents
 }
 
-public fun config_mut<Config, Outcome>(
-    account: &mut Account<Config, Outcome>, 
+public fun config_mut<Config>(
+    account: &mut Account<Config>, 
     version: TypeName,
 ): &mut Config {
     account.deps.assert_is_core_dep(version);
@@ -341,13 +326,13 @@ public fun config_mut<Config, Outcome>(
 }
 
 // Only called in AccountConfig
-public fun proposal_mut<Config, Outcome>(
-    account: &mut Account<Config, Outcome>, 
+public fun intent_mut<Config, Action: store, Outcome: store>(
+    account: &mut Account<Config>, 
     idx: u64,
     version: TypeName,
-): &mut Proposal<Outcome> {
+): &mut Intent<Action, Outcome> {
     account.deps.assert_is_core_dep(version);
-    account.proposals.get_mut(idx)
+    account.intents.get_mut(idx)
 }
 
 // === Test functions ===

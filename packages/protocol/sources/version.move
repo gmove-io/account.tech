@@ -20,6 +20,7 @@ public fun get(): u64 {
     VERSION
 }
 
+// must never be made public 
 public(package) fun current(): TypeName {
     type_name::get<V1>()
 }

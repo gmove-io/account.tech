@@ -13,7 +13,6 @@ use account_extensions::extensions::Extensions;
 use account_protocol::{
     account::{Self, Account},
     executable::Executable,
-    proposals::Expired,
     issuer::Issuer,
     auth::{Self, Auth},
 };
@@ -52,10 +51,10 @@ const ENotMember: vector<u8> = b"User is not a member of the account";
 // === Structs ===
 
 /// [PROPOSAL] modifies the members and thresholds of the account
-public struct ConfigMultisigProposal() has drop;
+public struct Witness() has drop;
 
 /// [ACTION] wraps a Multisig struct into an action
-public struct ConfigMultisigAction has store {
+public struct ConfigMultisigAction has drop, store {
     config: Multisig,
 }
 
@@ -141,7 +140,7 @@ public fun new_account(
     extensions: &Extensions,
     name: String,
     ctx: &mut TxContext,
-): Account<Multisig, Approvals> {
+): Account<Multisig> {
     let config = Multisig {
         members: vector[Member { 
             addr: ctx.sender(), 
@@ -157,7 +156,7 @@ public fun new_account(
 
 /// Creates a new outcome to initiate a proposal
 public fun empty_outcome(
-    account: &Account<Multisig, Approvals>,
+    account: &Account<Multisig>,
     ctx: &TxContext
 ): Approvals {
     account.config().assert_is_member(ctx);
@@ -172,7 +171,7 @@ public fun empty_outcome(
 /// Authenticates the caller for a given role or globally
 public fun authenticate(
     extensions: &Extensions,
-    account: &Account<Multisig, Approvals>,
+    account: &Account<Multisig>,
     role: String, // can be empty
     ctx: &TxContext
 ): Auth {
@@ -184,22 +183,22 @@ public fun authenticate(
 
 /// We assert that all Proposals with the same key have the same outcome state
 /// Approves all proposals with the same key
-public fun approve_proposal(
-    account: &mut Account<Multisig, Approvals>, 
+public fun approve_intent<Action: store>(
+    account: &mut Account<Multisig>, 
     key: String,
     ctx: &TxContext
 ) {
     assert!(
-        !account.proposal(key).outcome().approved.contains(&ctx.sender()), 
+        !account.intent<Multisig, Action, Approvals>(key).outcome().approved.contains(&ctx.sender()), 
         EAlreadyApproved
     );
 
-    let role = account.proposal(key).issuer().full_role();
+    let role = account.intent<Multisig, Action, Approvals>(key).issuer().full_role();
     let member = account.config().member(ctx.sender());
     let has_role = member.has_role(role);
 
-    account.proposals().all_idx(key).do!(|idx| {
-        let outcome_mut = account.proposal_mut(idx, version::current()).outcome_mut();
+    account.intents<Multisig>().all_idx(key).do!(|idx| {
+        let outcome_mut = account.intent_mut<Multisig, Action, Approvals>(idx, version::current()).outcome_mut();
         outcome_mut.approved.insert(ctx.sender()); // throws if already approved
         outcome_mut.total_weight = outcome_mut.total_weight + member.weight;
         if (has_role)
@@ -209,22 +208,22 @@ public fun approve_proposal(
 
 /// We assert that all Proposals with the same key have the same outcome state
 /// Approves all proposals with the same key
-public fun disapprove_proposal(
-    account: &mut Account<Multisig, Approvals>, 
+public fun disapprove_intent<Action: store>(
+    account: &mut Account<Multisig>, 
     key: String,
     ctx: &TxContext
 ) {
     assert!(
-        account.proposal(key).outcome().approved.contains(&ctx.sender()), 
+        account.intent<Multisig, Action, Approvals>(key).outcome().approved.contains(&ctx.sender()), 
         ENotApproved
     );
     
-    let role = account.proposal(key).issuer().full_role();
+    let role = account.intent<Multisig, Action, Approvals>(key).issuer().full_role();
     let member = account.config().member(ctx.sender());
     let has_role = member.has_role(role);
 
-    account.proposals().all_idx(key).do!(|idx| {
-        let outcome_mut = account.proposal_mut(idx, version::current()).outcome_mut();
+    account.intents<Multisig>().all_idx(key).do!(|idx| {
+        let outcome_mut = account.intent_mut<Multisig, Action, Approvals>(idx, version::current()).outcome_mut();
         outcome_mut.approved.remove(&ctx.sender()); // throws if already approved
         outcome_mut.total_weight = if (outcome_mut.total_weight < member.weight) 0 else outcome_mut.total_weight - member.weight;
         if (has_role)
@@ -234,44 +233,45 @@ public fun disapprove_proposal(
 
 /// Returns an executable if the number of signers is >= (global || role) threshold
 /// Anyone can execute a proposal, this allows to automate the execution of proposals
-public fun execute_proposal(
-    account: &mut Account<Multisig, Approvals>, 
+public fun execute_intent<Action: store>(
+    account: &mut Account<Multisig>, 
     key: String, 
     clock: &Clock,
-): Executable {
-    let (executable, outcome) = account.execute_proposal(key, clock, version::current());
+): Executable<Action> {
+    let (executable, outcome) = 
+        account.execute_intent<Multisig, Action, Approvals>(key, clock, version::current());
     outcome.validate(account.config(), executable.issuer());
 
     executable
 }
 
-public fun delete_proposal(
-    account: &mut Account<Multisig, Approvals>, 
-    key: String,
-    clock: &Clock,
-): Expired<Approvals> {
-    account.delete_proposal(key, version::current(), clock)
-}
+// public fun delete_proposal(
+//     account: &mut Account<Multisig>, 
+//     key: String,
+//     clock: &Clock,
+// ): Expired<Approvals> {
+//     account.delete_proposal(key, version::current(), clock)
+// }
 
 /// Actions must have been removed and deleted before calling this function
-public fun delete_expired_outcome(
-    expired: Expired<Approvals>
-) {
-    let Approvals { .. } = expired.remove_expired_outcome();
-}
+// public fun delete_expired_outcome(
+//     expired: Expired<Approvals>
+// ) {
+//     let Approvals { .. } = expired.remove_expired_outcome();
+// }
 
 /// Inserts account_id in User, aborts if already joined
-public fun join(user: &mut User, account: &mut Account<Multisig, Approvals>) {
+public fun join(user: &mut User, account: &mut Account<Multisig>) {
     user.add_account(account.addr(), b"multisig".to_string());
 }
 
 /// Removes account_id from User, aborts if not joined
-public fun leave(user: &mut User, account: &mut Account<Multisig, Approvals>) {
+public fun leave(user: &mut User, account: &mut Account<Multisig>) {
     user.remove_account(account.addr(), b"multisig".to_string());
 }
 
 /// Invites can be sent by an Account member (upon Account creation for instance)
-public fun send_invite(account: &Account<Multisig, Approvals>, recipient: address, ctx: &mut TxContext) {
+public fun send_invite(account: &Account<Multisig>, recipient: address, ctx: &mut TxContext) {
     // user inviting must be member
     account.config().assert_is_member(ctx);
     // invited user must be member
@@ -304,8 +304,7 @@ public fun refuse_invite(invite: Invite) {
 // threshold has to be valid (reachable and different from 0 for global)
 public fun propose_config_multisig(
     auth: Auth,
-    account: &mut Account<Multisig, Approvals>, 
-    outcome: Approvals,
+    account: &mut Account<Multisig>, 
     key: String,
     description: String,
     execution_time: u64,
@@ -318,25 +317,12 @@ public fun propose_config_multisig(
     global: u64,
     role_names: vector<String>,
     role_thresholds: vector<u64>,
-    ctx: &mut TxContext
+    outcome: Approvals,
 ) {
     // verify new rules are valid
     verify_new_rules(addresses, weights, roles, global, role_names, role_thresholds);
 
-    let mut proposal = account.create_proposal(
-        auth,
-        outcome,
-        version::current(),
-        ConfigMultisigProposal(),
-        b"".to_string(),
-        key,
-        description,
-        execution_time,
-        expiration_time,
-        ctx
-    );
     // must modify members before modifying thresholds to ensure they are reachable
-
     let mut config = Multisig { members: vector[], global: 0, roles: vector[] };
     addresses.zip_do!(weights, |addr, weight| {
         config.members.push_back(Member {
@@ -351,25 +337,32 @@ public fun propose_config_multisig(
         config.roles.push_back(Role { name: role, threshold });
     });
 
-    proposal.add_action(ConfigMultisigAction { config }, ConfigMultisigProposal());
-    account.add_proposal(proposal, version::current(), ConfigMultisigProposal());
+    let action = ConfigMultisigAction { config };
+
+    account.create_intent(
+        auth,
+        key,
+        description,
+        execution_time,
+        expiration_time,
+        action,
+        outcome,
+        version::current(),
+        Witness(),
+        b"".to_string(),
+    );
 }
 
 // step 2: multiple members have to approve the proposal (account::approve_proposal)
 
 // step 3: execute the action and modify Account Multisig
 public fun execute_config_multisig(
-    mut executable: Executable,
-    account: &mut Account<Multisig, Approvals>, 
+    mut executable: Executable<ConfigMultisigAction>,
+    account: &mut Account<Multisig>, 
 ) {
-    let ConfigMultisigAction { config } = executable.action(account.addr(), version::current(), ConfigMultisigProposal());
-    *account.config_mut(version::current()) = config;
-    executable.destroy(version::current(), ConfigMultisigProposal());
-}
-
-public fun delete_config_multisig_action(expired: &mut Expired<Approvals>) {
-    let action = expired.remove_expired_action();
-    let ConfigMultisigAction { .. } = action;
+    let action_mut = executable.action_mut(account.addr(), version::current(), Witness());
+    *account.config_mut(version::current()) = action_mut.config;
+    executable.destroy(version::current(), Witness());
 }
 
 // === Accessors ===

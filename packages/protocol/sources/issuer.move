@@ -12,7 +12,7 @@ module account_protocol::issuer;
 
 use std::{
     string::String,
-    type_name::{Self, TypeName},
+    type_name,
 };
 
 // === Errors ===
@@ -28,10 +28,12 @@ const EWrongAccount: vector<u8> = b"Account address doesn't match the issuer";
 public struct Issuer has store, drop {
     // address of the account that created the issuer
     account_addr: address,
-    // type_name of the role_type that instantiated the issuer (proposal witness)
-    role_type: TypeName,
-    // name of the issuer (can be empty)
-    role_name: String,
+    // package id where the issuer has been created
+    package_id: String,
+    // module name where the issuer has been created
+    module_name: String,
+    // additional name of the container & role (can be empty)
+    opt_name: String,
 }
 
 // === Public Functions ===
@@ -43,19 +45,24 @@ public fun assert_is_account(issuer: &Issuer, account_addr: address) {
 
 /// Used by modules to execute an action
 public fun assert_is_constructor<W: drop>(issuer: &Issuer, _: W) {
-    let role_type = type_name::get<W>();
-    assert!(issuer.role_type == role_type, EWrongWitness);
+    let intent_type = type_name::get<W>();
+    assert!(issuer.package_id == intent_type.get_address().to_string(), EWrongWitness);
+    assert!(issuer.module_name == intent_type.get_module().to_string(), EWrongWitness);
 }
 
 /// Converts a issuer into a role
-/// role is package::module::struct::name or package::module::struct
+/// role is package::module::name or package::module
 public fun full_role(issuer: &Issuer): String {
-    let mut auth_to_role = issuer.role_type.into_string().to_string();
-    if (!issuer.role_name.is_empty()) {
-        auth_to_role.append_utf8(b"::");  
-        auth_to_role.append(issuer.role_name);
+    let mut role_type = issuer.package_id;
+    role_type.append_utf8(b"::");
+    role_type.append(issuer.module_name);
+
+    if (!issuer.opt_name.is_empty()) {
+        role_type.append_utf8(b"::");  
+        role_type.append(issuer.opt_name);
     };
-    auth_to_role
+
+    role_type
 }
 
 // === View Functions ===
@@ -64,12 +71,16 @@ public fun account_addr(issuer: &Issuer): address {
     issuer.account_addr
 }
 
-public fun role_type(issuer: &Issuer): TypeName {
-    issuer.role_type
+public fun package_id(issuer: &Issuer): String {
+    issuer.package_id
 }
 
-public fun role_name(issuer: &Issuer): String {
-    issuer.role_name
+public fun module_name(issuer: &Issuer): String {
+    issuer.module_name
+}
+
+public fun opt_name(issuer: &Issuer): String {
+    issuer.opt_name
 }
 
 // === Package functions ===
@@ -79,9 +90,10 @@ public(package) fun construct<V: drop, W: drop>(
     account_addr: address,
     _version: V, 
     _role: W, 
-    role_name: String, 
+    opt_name: String, 
 ): Issuer {
-    let role_type = type_name::get<W>();
+    let package_id = type_name::get<W>().get_address().to_string();
+    let module_name = type_name::get<W>().get_module().to_string();
     
-    Issuer { account_addr, role_type, role_name }
+    Issuer { account_addr, package_id, module_name, opt_name }
 }

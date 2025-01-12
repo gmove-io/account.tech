@@ -19,12 +19,11 @@ module account_actions::access_control;
 // === Imports ===
 
 use std::{
-    type_name::{Self, TypeName},
+    type_name,
     string::String
 };
 use account_protocol::{
     account::Account,
-    proposals::{Proposal, Expired},
     executable::Executable,
     auth::Auth,
 };
@@ -41,18 +40,15 @@ const EWrongAccount: vector<u8> = b"This Cap has not been borrowed from this acc
 
 // === Structs ===    
 
+public struct Witness() has drop;
+
 /// Dynamic Object Field key for the Cap
 public struct CapKey<phantom Cap> has copy, drop, store {}
 
-/// [COMMAND] witness defining the lock cap command, and associated role
-public struct LockCommand() has drop;
-/// [PROPOSAL] witness defining the access cap proposal, and associated role
-public struct AccessProposal() has copy, drop;
-
 /// [ACTION] struct giving access to the Cap
-public struct AccessAction<phantom Cap> has store {}
+public struct AccessAction<phantom Cap> has drop, store {}
 
-/// This struct is created upon approval to ensure the cap is returned
+/// This struct is created upon execution to ensure the cap is returned
 public struct Borrow<phantom Cap> {
     account_addr: address
 }
@@ -60,18 +56,18 @@ public struct Borrow<phantom Cap> {
 // === [COMMAND] Public functions ===
 
 /// Only a member can lock a Cap, the Cap must have at least store ability
-public fun lock_cap<Config, Outcome, Cap: key + store>(
+public fun lock_cap<Config, Cap: key + store>(
     auth: Auth,
-    account: &mut Account<Config, Outcome>,
+    account: &mut Account<Config>,
     cap: Cap,
 ) {
-    auth.verify_with_role<LockCommand>(account.addr(), b"".to_string());
-    assert!(!has_lock<Config, Outcome, Cap>(account), EAlreadyLocked);
+    auth.verify_with_role<Witness>(account.addr(), b"".to_string());
+    assert!(!has_lock<Config, Cap>(account), EAlreadyLocked);
     account.add_managed_object(CapKey<Cap> {}, cap, version::current());
 }
 
-public fun has_lock<Config, Outcome, Cap>(
-    account: &Account<Config, Outcome>
+public fun has_lock<Config, Cap>(
+    account: &Account<Config>
 ): bool {
     account.has_managed_object(CapKey<Cap> {})
 }
@@ -79,98 +75,57 @@ public fun has_lock<Config, Outcome, Cap>(
 // === [PROPOSAL] Public functions ===
 
 // step 1: propose to mint an amount of a coin that will be transferred to the Account
-public fun propose_access<Config, Outcome, Cap>(
+public fun request_access<Config, Outcome: store, Cap>(
     auth: Auth,
-    account: &mut Account<Config, Outcome>,
-    outcome: Outcome,
+    account: &mut Account<Config>,
     key: String,
     description: String,
     execution_time: u64,
     expiration_time: u64,
-    ctx: &mut TxContext
+    outcome: Outcome,
 ) {
-    assert!(has_lock<Config, Outcome, Cap>(account), ENoLock);
+    assert!(has_lock<Config, Cap>(account), ENoLock);
 
-    let mut proposal = account.create_proposal(
+    account.create_intent(
         auth,
-        outcome,
-        version::current(),
-        AccessProposal(), 
-        type_to_name<Cap>(), // the cap type is the witness role name 
         key, 
         description, 
         execution_time, 
         expiration_time, 
-        ctx
+        outcome,
+        AccessAction<Cap> {},
+        version::current(),
+        Witness(), 
+        type_name::get<Cap>().into_string().to_string(), // the cap type is the witness role name 
     );
-
-    new_access<Outcome, Cap, AccessProposal>(&mut proposal, AccessProposal());
-    account.add_proposal(proposal, version::current(), AccessProposal());
 }
 
 // step 2: multiple members have to approve the proposal (account::approve_proposal)
 // step 3: execute the proposal and return the action (AccountConfig::module::execute_proposal)
 
 // step 4: mint the coins and send them to the account
-public fun execute_access<Config, Outcome, Cap: key + store>(
-    executable: &mut Executable,
-    account: &mut Account<Config, Outcome>,
+public fun execute_access<Config, Cap: key + store>(
+    executable: &mut Executable<AccessAction<Cap>>,
+    account: &mut Account<Config>,
 ): (Borrow<Cap>, Cap) {
-    do_access(executable, account, version::current(), AccessProposal())
-}
-
-// step 5: return the cap to destroy Borrow, the action and executable
-public fun complete_access<Config, Outcome, Cap: key + store>(
-    executable: Executable, 
-    account: &mut Account<Config, Outcome>,
-    borrow: Borrow<Cap>, 
-    cap: Cap
-) {
-    return_cap(account, borrow, cap, version::current());
-    executable.destroy(version::current(), AccessProposal());
-}
-
-// === [ACTION] Public functions ===
-
-public fun new_access<Outcome, Cap, W: drop>(
-    proposal: &mut Proposal<Outcome>, 
-    witness: W,    
-) {
-    proposal.add_action(AccessAction<Cap> {}, witness);
-}
-
-public fun do_access<Config, Outcome, Cap: key + store, W: copy + drop>(
-    executable: &mut Executable, 
-    account: &mut Account<Config, Outcome>,
-    version: TypeName,
-    witness: W, 
-): (Borrow<Cap>, Cap) {
-    assert!(has_lock<Config, Outcome, Cap>(account), ENoLock);
+    assert!(has_lock<Config, Cap>(account), ENoLock);
     // check to be sure this cap type has been approved
-    let AccessAction<Cap> {} = executable.action(account.addr(), version, witness);
-    let cap = account.remove_managed_object(CapKey<Cap> {}, version);
+    let _ = executable.action_mut(account.addr(), version::current(), Witness());
+    let cap = account.remove_managed_object(CapKey<Cap> {}, version::current());
     
     (Borrow<Cap> { account_addr: account.addr() }, cap)
 }
 
-public fun return_cap<Config, Outcome, Cap: key + store>(
-    account: &mut Account<Config, Outcome>,
-    borrow: Borrow<Cap>,
-    cap: Cap,
-    version: TypeName,
+// step 5: return the cap to destroy Borrow, the action and executable
+public fun complete_access<Config, Cap: key + store>(
+    executable: Executable<AccessAction<Cap>>, 
+    account: &mut Account<Config>,
+    borrow: Borrow<Cap>, 
+    cap: Cap
 ) {
     let Borrow<Cap> { account_addr } = borrow;
     assert!(account_addr == account.addr(), EWrongAccount);
 
-    account.add_managed_object(CapKey<Cap> {}, cap, version);
-}
-
-public fun delete_access_action<Outcome, Cap>(expired: &mut Expired<Outcome>) {
-    let AccessAction<Cap> { .. } = expired.remove_expired_action();
-}
-
-// === Private functions ===
-
-fun type_to_name<T>(): String {
-    type_name::get<T>().into_string().to_string()
+    account.add_managed_object(CapKey<Cap> {}, cap, version::current());
+    executable.destroy(version::current(), Witness());
 }
