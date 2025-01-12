@@ -10,7 +10,10 @@ module account_protocol::executable;
 
 // === Imports ===
 
-use std::type_name::TypeName;
+use std::{
+    type_name::TypeName,
+    string::String,
+};
 use account_protocol::{
     issuer::Issuer,
     deps::Deps,
@@ -26,7 +29,9 @@ const EActionsNotEmpty: vector<u8> = b"Actions have not been processed";
 // === Structs ===
 
 /// Hot potato ensuring the action in the proposal is executed as it can't be stored
-public struct Executable<Action: store> {
+public struct Executable<Action> {
+    // key of the intent that created the executable
+    key: String,
     // copied deps from the Account
     deps: Deps,
     // module that issued the proposal and must destroy it
@@ -40,54 +45,57 @@ public struct Executable<Action: store> {
 /// The following functions are called from action modules
 
 /// Access the underlying action mutably
-public fun action_mut<Action: store, W: drop>(
+public fun action_mut<Action>(
     executable: &mut Executable<Action>, 
     account_addr: address, // pass account address to ensure that the correct account will be modified
     version: TypeName,
-    witness: W,
 ): &mut Action {
     executable.deps.assert_is_dep(version);
-    executable.issuer.assert_is_constructor(witness);
     executable.issuer.assert_is_account(account_addr);
 
     &mut executable.action
 }
 
-/// The executable is destroyed
-public fun destroy<Action: drop + store, W: drop>(
-    executable: Executable<Action>, 
-    version: TypeName,
-    witness: W
-) {
-    let Executable { 
-        deps,
-        issuer, 
-        ..
-    } = executable;
-    
-    deps.assert_is_dep(version);
-    issuer.assert_is_constructor(witness);
+/// The executable is destroyed and the key is returned
+public fun destroy<Action>(
+    executable: Executable<Action>,
+    version: TypeName, 
+): Action {
+    executable.deps.assert_is_dep(version);
+    let Executable { action, .. } = executable;
+
+    action
 }
 
 // === View functions ===
 
-public fun deps<Action: store>(executable: &Executable<Action>): &Deps {
+public fun key<Action>(executable: &Executable<Action>): String {
+    executable.key
+}
+
+public fun deps<Action>(executable: &Executable<Action>): &Deps {
     &executable.deps
 }
 
-public fun issuer<Action: store>(executable: &Executable<Action>): &Issuer {
+public fun issuer<Action>(executable: &Executable<Action>): &Issuer {
     &executable.issuer
+}
+
+public fun action<Action>(executable: &Executable<Action>): &Action {
+    &executable.action
 }
 
 // === Package functions ===
 
 /// Is only called from the account module
-public(package) fun new<Action: store>(
+public(package) fun new<Action>(
+    key: String,
     deps: Deps, 
     issuer: Issuer, 
     action: Action
 ): Executable<Action> {
     Executable { 
+        key,
         deps,
         issuer,
         action,

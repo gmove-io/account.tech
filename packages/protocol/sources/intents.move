@@ -22,8 +22,6 @@ const ECantBeExecutedYet: vector<u8> = b"Intent hasn't reached execution time";
 #[error]
 const EHasntExpired: vector<u8> = b"Intent hasn't reached expiration time";
 #[error]
-const EHasExpired: vector<u8> = b"Intent has already expired";
-#[error]
 const EIntentNotFound: vector<u8> = b"Intent not found for key";
 #[error]
 const EExpirationBeforeExecution: vector<u8> = b"Expiration time must be greater than execution time";
@@ -31,6 +29,12 @@ const EExpirationBeforeExecution: vector<u8> = b"Expiration time must be greater
 const EObjectAlreadyLocked: vector<u8> = b"Object already locked";
 #[error]
 const EObjectNotLocked: vector<u8> = b"Object not locked";
+#[error]
+const ENoExecutionTime: vector<u8> = b"No execution time";
+#[error]
+const EExecutionTimesNotAscending: vector<u8> = b"Execution times are not ascending";
+#[error]
+const ECantBeDestroyedYet: vector<u8> = b"Intent can't be destroyed yet";
 
 // === Structs ===
 
@@ -55,7 +59,8 @@ public struct Intent<Action, Outcome> has store {
     description: String,
     // proposer can add a timestamp_ms before which the proposal can't be executed
     // can be used to schedule actions via a backend
-    execution_time: u64,
+    // recurring intents can be executed at these times
+    execution_times: vector<u64>,
     // the proposal can be deleted from this timestamp
     expiration_time: u64,
     // heterogenous array of actions to be executed from last to first
@@ -112,18 +117,6 @@ public fun get_idx<Action: store, Outcome: store>(intents: &Intents, key: String
     idx
 }
 
-// public fun all_idx<Action: store, Outcome: store>(intents: &Intents, key: String): vector<u64> {
-//     let mut idx = vector[];
-//     let mut i = 0;
-//     while (i < intents.size) {
-//         if (df::borrow<u64, Intent<Action, Outcome>>(&intents.id, i).key == key) 
-//             idx.push_back(i);
-//         i = i + 1;
-//     };
-
-//     idx
-// }
-
 public fun get<Action: store, Outcome: store>(intents: &Intents, key: String): &Intent<Action, Outcome> {
     assert!(intents.contains<Action, Outcome>(key), EIntentNotFound);
     let idx = intents.get_idx<Action, Outcome>(key);
@@ -138,12 +131,16 @@ public fun description<Action: store, Outcome: store>(intent: &Intent<Action, Ou
     intent.description
 }
 
-public fun execution_time<Action: store, Outcome: store>(intent: &Intent<Action, Outcome>): u64 {
-    intent.execution_time
+public fun execution_times<Action: store, Outcome: store>(intent: &Intent<Action, Outcome>): vector<u64> {
+    intent.execution_times
 }
 
 public fun expiration_time<Action: store, Outcome: store>(intent: &Intent<Action, Outcome>): u64 {
     intent.expiration_time
+}
+
+public fun action<Action: store, Outcome: store>(intent: &Intent<Action, Outcome>): &Action {
+    &intent.action
 }
 
 public fun outcome<Action: store, Outcome: store>(intent: &Intent<Action, Outcome>): &Outcome {
@@ -164,22 +161,28 @@ public(package) fun empty(ctx: &mut TxContext): Intents {
     Intents { id: object::new(ctx), size: 0, locked: vec_set::empty() }
 }
 
-public(package) fun new_intent<Action: store, Outcome: store>(
+public(package) fun new_intent<Action, Outcome>(
     issuer: Issuer,
     key: String,
     description: String,
-    execution_time: u64, // timestamp in ms
+    execution_times: vector<u64>,
     expiration_time: u64,
     action: Action,
     outcome: Outcome,
 ): Intent<Action, Outcome> {
-    assert!(execution_time < expiration_time, EExpirationBeforeExecution);
+    assert!(execution_times[0] < expiration_time, EExpirationBeforeExecution);
+    assert!(!execution_times.is_empty(), ENoExecutionTime);
+    let i = 0;
+    while (i < vector::length(&execution_times) - 1) {
+        assert!(execution_times[i] < execution_times[i + 1], EExecutionTimesNotAscending);
+        i = i + 1;
+    };
 
     Intent<Action, Outcome> { 
         issuer,
         key,
         description,
-        execution_time,
+        execution_times,
         expiration_time,
         action,
         outcome,
@@ -196,45 +199,47 @@ public(package) fun add<Action: store, Outcome: store>(
 
 public(package) fun get_mut<Action: store, Outcome: store>(
     intents: &mut Intents, 
-    idx: u64
+    key: String
 ): &mut Intent<Action, Outcome> {
-    assert!(idx < intents.size, EIntentNotFound);
+    let idx = intents.get_idx<Action, Outcome>(key);
     df::borrow_mut<u64, Intent<Action, Outcome>>(&mut intents.id, idx)
+}
+
+public(package) fun pop_front_execution_time<Action: store, Outcome: store>(
+    intent: &mut Intent<Action, Outcome>,
+    clock: &Clock,
+) {
+    let time = intent.execution_times.remove(0);
+    assert!(clock.timestamp_ms() >= time, ECantBeExecutedYet);
 }
 
 /// Removes an proposal being executed if the execution_time is reached
 /// Outcome must be validated in AccountConfig to be destroyed
-public(package) fun remove<Action: store, Outcome: store>(
+public(package) fun destroy<Action: store, Outcome: drop + store>(
     intents: &mut Intents,
     key: String,
-    clock: &Clock,
-): (Issuer, Action, Outcome) {
-    let Intent<Action, Outcome> { 
-        execution_time, 
-        expiration_time, 
-        issuer, 
-        action, 
-        outcome, 
-        .. 
-    } = swap_remove(intents, key);
+): Action {
+    let Intent<Action, Outcome> { action, execution_times, .. } = swap_remove(intents, key);
     
-    assert!(clock.timestamp_ms() >= execution_time, ECantBeExecutedYet);
-    assert!(clock.timestamp_ms() < expiration_time, EHasExpired);
+    assert!(execution_times.is_empty(), ECantBeDestroyedYet);
 
-    (issuer, action, outcome)
+    action
 }
 
-public(package) fun delete<Action: drop + store, Outcome: drop + store>(
+public(package) fun delete<Action: store, Outcome: drop + store>(
     intents: &mut Intents,
     key: String,
     clock: &Clock
-) {
+): Action {
     let Intent<Action, Outcome> { 
         expiration_time,
+        action,
         .. 
     } = intents.swap_remove(key);
 
     assert!(clock.timestamp_ms() >= expiration_time, EHasntExpired);
+
+    action
 }
 
 // === Private functions ===

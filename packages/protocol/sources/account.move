@@ -91,36 +91,30 @@ public fun keep<Config, Obj: key + store>(account: &Account<Config>, obj: Obj) {
 
 /// Creates a new proposal that must be constructed in another module
 /// Only packages (instantiating the witness) allowed in extensions can create an issuer
-public fun create_intent<Config, Action: store, Outcome: store, W: drop>(
+public fun create_intent<Config, Action: store, Outcome: store>(
     account: &mut Account<Config>, 
     auth: Auth, // proves that the caller is a member
     key: String, // proposal key
     description: String, // more details, optional 
-    execution_time: u64, // timestamp in ms
+    execution_times: vector<u64>, // timestamps in ms
     expiration_time: u64, // epoch when we can delete the proposal
     outcome: Outcome, // intent settings
     action: Action, // intent action
     version: TypeName, // package type to check the package version
-    witness: W, // module's issuer witness (proposal/role witness)
-    w_name: String, // module's issuer name (role name)
+    opt_name: String, // module's issuer name (role name)
 ) {
     // ensures the caller is authorized for this account
     auth.verify(account.addr());
     // only a dependency of the account can create a proposal
     account.deps().assert_is_dep(version);
 
-    let issuer = issuer::construct(
-        account.addr(), 
-        version,
-        witness, 
-        w_name
-    );
+    let issuer = issuer::construct<Action>(account.addr(), opt_name);
 
     let intent = intents::new_intent(
         issuer,
         key,
         description,
-        execution_time,
+        execution_times,
         expiration_time,
         action,
         outcome,
@@ -130,30 +124,41 @@ public fun create_intent<Config, Action: store, Outcome: store, W: drop>(
 }
 
 /// Called by CoreDep only, AccountConfig
-/// Returns an Executable with the Proposal Outcome that must be validated in AccountCOnfig
-public fun execute_intent<Config, Action: store, Outcome: store>(
+/// Returns an Executable with the Proposal Outcome that must be validated in AccountConfig
+public fun execute_intent<Config, Action: copy + store, Outcome: copy + store>(
     account: &mut Account<Config>,
     key: String, 
     clock: &Clock,
     version: TypeName,
 ): (Executable<Action>, Outcome) {
     account.deps().assert_is_core_dep(version);
-    let (issuer, actions, outcome) = account.intents.remove(key, clock);
+    let intent = account.intents.get_mut<Action, Outcome>(key);
+    intent.pop_front_execution_time<Action, Outcome>(clock);
 
-    (executable::new(account.deps, issuer, actions), outcome)
+    (
+        executable::new(key, account.deps, *intent.issuer(), *intent.action()), 
+        *intent.outcome()
+    )
 }
 
-/// Removes a proposal if it has expired
-/// Needs to delete each action in the bag within their own module
-public fun delete_intent<Config: drop, Action: drop + store, Outcome: drop + store>(
+/// Destroys a proposal if it has expired or if there are no more execution times scheduled
+public fun destroy_empty_intent<Config, Action: store, Outcome: drop + store>(
+    account: &mut Account<Config>, 
+    key: String, 
+    version: TypeName,
+): Action {
+    account.deps().assert_is_dep(version);
+    account.intents.destroy<Action, Outcome>(key)
+}
+
+public fun delete_expired_intent<Config, Action: store, Outcome: drop + store>(
     account: &mut Account<Config>, 
     key: String, 
     clock: &Clock,
     version: TypeName,
-) {
-    account.deps().assert_is_core_dep(version);
-
-    account.intents.delete<Outcome, Action>(key, clock);
+): Action {
+    account.deps().assert_is_dep(version);
+    account.intents.delete<Action, Outcome>(key, clock)
 }
 
 // === View functions ===
@@ -328,11 +333,11 @@ public fun config_mut<Config>(
 // Only called in AccountConfig
 public fun intent_mut<Config, Action: store, Outcome: store>(
     account: &mut Account<Config>, 
-    idx: u64,
+    key: String,
     version: TypeName,
 ): &mut Intent<Action, Outcome> {
     account.deps.assert_is_core_dep(version);
-    account.intents.get_mut(idx)
+    account.intents.get_mut<Action, Outcome>(key)
 }
 
 // === Test functions ===

@@ -25,7 +25,7 @@ const EWrongAccount: vector<u8> = b"Account address doesn't match the issuer";
 // === Structs ===
 
 /// Protected type ensuring provenance
-public struct Issuer has store, drop {
+public struct Issuer has copy, drop, store {
     // address of the account that created the issuer
     account_addr: address,
     // package id where the issuer has been created
@@ -43,12 +43,13 @@ public fun assert_is_account(issuer: &Issuer, account_addr: address) {
     assert!(issuer.account_addr == account_addr, EWrongAccount);
 }
 
+// TODO: is this still needed?
 /// Used by modules to execute an action
-public fun assert_is_constructor<W: drop>(issuer: &Issuer, _: W) {
-    let intent_type = type_name::get<W>();
-    assert!(issuer.package_id == intent_type.get_address().to_string(), EWrongWitness);
-    assert!(issuer.module_name == intent_type.get_module().to_string(), EWrongWitness);
-}
+// public fun assert_is_constructor<W: drop>(issuer: &Issuer, _: W) {
+//     let intent_type = type_name::get<W>();
+//     assert!(issuer.package_id == intent_type.get_address().to_string(), EWrongWitness);
+//     assert!(issuer.module_name == intent_type.get_module().to_string(), EWrongWitness);
+// }
 
 /// Converts a issuer into a role
 /// role is package::module::name or package::module
@@ -86,14 +87,12 @@ public fun opt_name(issuer: &Issuer): String {
 // === Package functions ===
 
 /// Constructs an issuer from a Witness, an (optional) name and a account id
-public(package) fun construct<V: drop, W: drop>(
+public(package) fun construct<Action>(
     account_addr: address,
-    _version: V, 
-    _role: W, 
     opt_name: String, 
 ): Issuer {
-    let package_id = type_name::get<W>().get_address().to_string();
-    let module_name = type_name::get<W>().get_module().to_string();
+    let package_id = type_name::get<Action>().get_address().to_string();
+    let module_name = type_name::get<Action>().get_module().to_string();
     
     Issuer { account_addr, package_id, module_name, opt_name }
 }

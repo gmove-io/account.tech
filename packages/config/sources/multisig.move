@@ -86,7 +86,7 @@ public struct Role has copy, drop, store {
 }
 
 /// Outcome field for the Proposals, must be validated before destruction
-public struct Approvals has store {
+public struct Approvals has copy, drop, store {
     // total weight of all members that approved the proposal
     total_weight: u64,
     // sum of the weights of members who approved and have the role
@@ -154,6 +154,19 @@ public fun new_account(
     account::new(extensions, name, config, ctx)
 }
 
+/// Authenticates the caller for a given role or globally
+public fun authenticate(
+    extensions: &Extensions,
+    account: &Account<Multisig>,
+    role: String, // can be empty
+    ctx: &TxContext
+): Auth {
+    account.config().assert_is_member(ctx);
+    if (!role.is_empty()) assert!(account.config().member(ctx.sender()).has_role(role), ERoleNotFound);
+
+    auth::new(extensions, role, account.addr(), version::current())
+}
+
 /// Creates a new outcome to initiate a proposal
 public fun empty_outcome(
     account: &Account<Multisig>,
@@ -166,19 +179,6 @@ public fun empty_outcome(
         role_weight: 0,
         approved: vec_set::empty(),
     }
-}
-
-/// Authenticates the caller for a given role or globally
-public fun authenticate(
-    extensions: &Extensions,
-    account: &Account<Multisig>,
-    role: String, // can be empty
-    ctx: &TxContext
-): Auth {
-    account.config().assert_is_member(ctx);
-    if (!role.is_empty()) assert!(account.config().member(ctx.sender()).has_role(role), ERoleNotFound);
-
-    auth::new(extensions, role, account.addr(), version::current())
 }
 
 /// We assert that all Proposals with the same key have the same outcome state
@@ -197,13 +197,11 @@ public fun approve_intent<Action: store>(
     let member = account.config().member(ctx.sender());
     let has_role = member.has_role(role);
 
-    account.intents<Multisig>().all_idx(key).do!(|idx| {
-        let outcome_mut = account.intent_mut<Multisig, Action, Approvals>(idx, version::current()).outcome_mut();
-        outcome_mut.approved.insert(ctx.sender()); // throws if already approved
-        outcome_mut.total_weight = outcome_mut.total_weight + member.weight;
-        if (has_role)
-            outcome_mut.role_weight = outcome_mut.role_weight + member.weight;
-    });
+    let outcome_mut = account.intent_mut<Multisig, Action, Approvals>(key, version::current()).outcome_mut();
+    outcome_mut.approved.insert(ctx.sender()); // throws if already approved
+    outcome_mut.total_weight = outcome_mut.total_weight + member.weight;
+    if (has_role)
+        outcome_mut.role_weight = outcome_mut.role_weight + member.weight;
 }
 
 /// We assert that all Proposals with the same key have the same outcome state
@@ -222,18 +220,16 @@ public fun disapprove_intent<Action: store>(
     let member = account.config().member(ctx.sender());
     let has_role = member.has_role(role);
 
-    account.intents<Multisig>().all_idx(key).do!(|idx| {
-        let outcome_mut = account.intent_mut<Multisig, Action, Approvals>(idx, version::current()).outcome_mut();
-        outcome_mut.approved.remove(&ctx.sender()); // throws if already approved
-        outcome_mut.total_weight = if (outcome_mut.total_weight < member.weight) 0 else outcome_mut.total_weight - member.weight;
-        if (has_role)
-            outcome_mut.role_weight = if (outcome_mut.role_weight < member.weight) 0 else outcome_mut.role_weight - member.weight;
-    });
+    let outcome_mut = account.intent_mut<Multisig, Action, Approvals>(key, version::current()).outcome_mut();
+    outcome_mut.approved.remove(&ctx.sender()); // throws if already approved
+    outcome_mut.total_weight = if (outcome_mut.total_weight < member.weight) 0 else outcome_mut.total_weight - member.weight;
+    if (has_role)
+        outcome_mut.role_weight = if (outcome_mut.role_weight < member.weight) 0 else outcome_mut.role_weight - member.weight;
 }
 
 /// Returns an executable if the number of signers is >= (global || role) threshold
 /// Anyone can execute a proposal, this allows to automate the execution of proposals
-public fun execute_intent<Action: store>(
+public fun execute_intent<Action: copy + store>(
     account: &mut Account<Multisig>, 
     key: String, 
     clock: &Clock,
@@ -244,21 +240,6 @@ public fun execute_intent<Action: store>(
 
     executable
 }
-
-// public fun delete_proposal(
-//     account: &mut Account<Multisig>, 
-//     key: String,
-//     clock: &Clock,
-// ): Expired<Approvals> {
-//     account.delete_proposal(key, version::current(), clock)
-// }
-
-/// Actions must have been removed and deleted before calling this function
-// public fun delete_expired_outcome(
-//     expired: Expired<Approvals>
-// ) {
-//     let Approvals { .. } = expired.remove_expired_outcome();
-// }
 
 /// Inserts account_id in User, aborts if already joined
 public fun join(user: &mut User, account: &mut Account<Multisig>) {
@@ -307,7 +288,7 @@ public fun propose_config_multisig(
     account: &mut Account<Multisig>, 
     key: String,
     description: String,
-    execution_time: u64,
+    execution_times: vector<u64>,
     expiration_time: u64,
     // members 
     addresses: vector<address>,
@@ -343,12 +324,11 @@ public fun propose_config_multisig(
         auth,
         key,
         description,
-        execution_time,
+        execution_times,
         expiration_time,
         action,
         outcome,
         version::current(),
-        Witness(),
         b"".to_string(),
     );
 }
@@ -360,9 +340,12 @@ public fun execute_config_multisig(
     mut executable: Executable<ConfigMultisigAction>,
     account: &mut Account<Multisig>, 
 ) {
-    let action_mut = executable.action_mut(account.addr(), version::current(), Witness());
+    let action_mut = executable.action_mut(account.addr(), version::current());
     *account.config_mut(version::current()) = action_mut.config;
-    executable.destroy(version::current(), Witness());
+
+    let ConfigMultisigAction { .. } = 
+        account.destroy_empty_intent<Multisig, ConfigMultisigAction, Approvals>(executable.key(), version::current());
+    let ConfigMultisigAction { .. } = executable.destroy(version::current());
 }
 
 // === Accessors ===
