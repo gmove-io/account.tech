@@ -24,7 +24,7 @@ use std::{
 };
 use account_protocol::{
     account::Account,
-    proposals::{Proposal, Expired},
+    intents::{Intent, Expired},
     executable::Executable,
     auth::Auth,
 };
@@ -47,7 +47,7 @@ public struct CapKey<phantom Cap> has copy, drop, store {}
 /// [COMMAND] witness defining the lock cap command, and associated role
 public struct LockCommand() has drop;
 /// [PROPOSAL] witness defining the access cap proposal, and associated role
-public struct AccessProposal() has copy, drop;
+public struct AccessIntent() has copy, drop;
 
 /// [ACTION] struct giving access to the Cap
 public struct AccessAction<phantom Cap> has store {}
@@ -79,33 +79,33 @@ public fun has_lock<Config, Outcome, Cap>(
 // === [PROPOSAL] Public functions ===
 
 // step 1: propose to mint an amount of a coin that will be transferred to the Account
-public fun propose_access<Config, Outcome, Cap>(
+public fun request_access<Config, Outcome, Cap>(
     auth: Auth,
-    account: &mut Account<Config, Outcome>,
     outcome: Outcome,
+    account: &mut Account<Config, Outcome>,
     key: String,
     description: String,
-    execution_time: u64,
+    execution_times: vector<u64>,
     expiration_time: u64,
     ctx: &mut TxContext
 ) {
     assert!(has_lock<Config, Outcome, Cap>(account), ENoLock);
 
-    let mut proposal = account.create_proposal(
+    let mut intent = account.create_intent(
         auth,
-        outcome,
-        version::current(),
-        AccessProposal(), 
-        type_to_name<Cap>(), // the cap type is the witness role name 
         key, 
         description, 
-        execution_time, 
+        execution_times, 
         expiration_time, 
+        outcome,
+        version::current(),
+        AccessIntent(), 
+        type_to_name<Cap>(), // the cap type is the witness role name 
         ctx
     );
 
-    new_access<Outcome, Cap, AccessProposal>(&mut proposal, AccessProposal());
-    account.add_proposal(proposal, version::current(), AccessProposal());
+    new_access<Outcome, Cap, AccessIntent>(&mut intent, AccessIntent());
+    account.add_intent(intent, version::current(), AccessIntent());
 }
 
 // step 2: multiple members have to approve the proposal (account::approve_proposal)
@@ -116,7 +116,7 @@ public fun execute_access<Config, Outcome, Cap: key + store>(
     executable: &mut Executable,
     account: &mut Account<Config, Outcome>,
 ): (Borrow<Cap>, Cap) {
-    do_access(executable, account, version::current(), AccessProposal())
+    do_access(executable, account, version::current(), AccessIntent())
 }
 
 // step 5: return the cap to destroy Borrow, the action and executable
@@ -127,16 +127,16 @@ public fun complete_access<Config, Outcome, Cap: key + store>(
     cap: Cap
 ) {
     return_cap(account, borrow, cap, version::current());
-    executable.destroy(version::current(), AccessProposal());
+    account.confirm_execution(executable, version::current(), AccessIntent());
 }
 
 // === [ACTION] Public functions ===
 
 public fun new_access<Outcome, Cap, W: drop>(
-    proposal: &mut Proposal<Outcome>, 
+    intent: &mut Intent<Outcome>, 
     witness: W,    
 ) {
-    proposal.add_action(AccessAction<Cap> {}, witness);
+    intent.add_action(AccessAction<Cap> {}, witness);
 }
 
 public fun do_access<Config, Outcome, Cap: key + store, W: copy + drop>(
@@ -147,7 +147,7 @@ public fun do_access<Config, Outcome, Cap: key + store, W: copy + drop>(
 ): (Borrow<Cap>, Cap) {
     assert!(has_lock<Config, Outcome, Cap>(account), ENoLock);
     // check to be sure this cap type has been approved
-    let AccessAction<Cap> {} = executable.action(account.addr(), version, witness);
+    let AccessAction<Cap> {} = account.process_action(executable, version, witness);
     let cap = account.remove_managed_object(CapKey<Cap> {}, version);
     
     (Borrow<Cap> { account_addr: account.addr() }, cap)
@@ -165,8 +165,11 @@ public fun return_cap<Config, Outcome, Cap: key + store>(
     account.add_managed_object(CapKey<Cap> {}, cap, version);
 }
 
-public fun delete_access_action<Outcome, Cap>(expired: &mut Expired<Outcome>) {
-    let AccessAction<Cap> { .. } = expired.remove_expired_action();
+public fun delete_access<Cap>(
+    expired: &mut Expired, 
+    idx: u64,
+) {
+    let AccessAction<Cap> { .. } = expired.actions_mut().remove(idx);
 }
 
 // === Private functions ===

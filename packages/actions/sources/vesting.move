@@ -14,7 +14,7 @@ use sui::{
 };
 use account_protocol::{
     account::Account,
-    proposals::{Proposal, Expired},
+    intents::{Intent, Expired},
     executable::Executable,
     auth::Auth,
 };
@@ -132,13 +132,13 @@ public fun destroy_cap(cap: ClaimCap) {
 // === [ACTION] Public Functions ===
 
 public fun new_vesting<Outcome, W: drop>(
-    proposal: &mut Proposal<Outcome>, 
+    intent: &mut Intent<Outcome>, 
     start_timestamp: u64,
     end_timestamp: u64,
     recipient: address,
     witness: W,
 ) {
-    proposal.add_action(VestingAction { start_timestamp, end_timestamp, recipient }, witness);
+    intent.add_action(VestingAction { start_timestamp, end_timestamp, recipient }, witness);
 }
 
 public fun do_vesting<Config, Outcome, CoinType, W: copy + drop>(
@@ -149,21 +149,20 @@ public fun do_vesting<Config, Outcome, CoinType, W: copy + drop>(
     witness: W,
     ctx: &mut TxContext
 ) {    
-    let VestingAction { start_timestamp, end_timestamp, recipient } = 
-        executable.action(account.addr(), version, witness);
+    let action: &VestingAction = account.process_action(executable, version, witness);
 
     transfer::share_object(Stream<CoinType> { 
         id: object::new(ctx), 
         balance: coin.into_balance(), 
         last_claimed: 0,
-        start_timestamp,
-        end_timestamp,
-        recipient
+        start_timestamp: action.start_timestamp,
+        end_timestamp: action.end_timestamp,
+        recipient: action.recipient
     });
 }
 
-public fun delete_vesting_action<Outcome>(expired: &mut Expired<Outcome>) {
-    let VestingAction { .. } = expired.remove_expired_action();
+public fun delete_vesting(expired: &mut Expired) {
+    let VestingAction { .. } = expired.remove_action();
 }
 
 // === View Functions ===

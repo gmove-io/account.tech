@@ -20,7 +20,7 @@ use sui::{
 };
 use account_protocol::{
     account::Account,
-    proposals::{Proposal, Expired},
+    intents::{Intent, Expired},
     executable::Executable,
     auth::Auth
 };
@@ -82,17 +82,17 @@ public struct CurrencyRules<phantom CoinType> has store {
 /// [PROPOSAL] witness defining the TreasuryCap lock command, and associated role
 public struct LockCommand() has drop;
 /// [PROPOSAL] witness defining the proposal to disable one or more permissions
-public struct DisableProposal() has copy, drop;
+public struct DisableIntent() has copy, drop;
 /// [PROPOSAL] witness defining the proposal to mint new coins from a locked TreasuryCap
-public struct MintProposal() has copy, drop;
+public struct MintIntent() has copy, drop;
 /// [PROPOSAL] witness defining the proposal to burn coins from the account using a locked TreasuryCap
-public struct BurnProposal() has copy, drop;
+public struct BurnIntent() has copy, drop;
 /// [PROPOSAL] witness defining the proposal to update the CoinMetadata associated with a locked TreasuryCap
-public struct UpdateProposal() has copy, drop;
+public struct UpdateIntent() has copy, drop;
 /// [PROPOSAL] witness defining the proposal to transfer a minted coin 
-public struct TransferProposal() has copy, drop;
+public struct TransferIntent() has copy, drop;
 /// [PROPOSAL] witness defining the proposal to pay from a minted coin
-public struct PayProposal() has copy, drop;
+public struct VestingIntent() has copy, drop;
 
 /// [ACTION] disables permissions marked as true, cannot be reenabled
 public struct DisableAction<phantom CoinType> has store {
@@ -213,10 +213,10 @@ public fun public_burn<Config, Outcome, CoinType>(
 // === [PROPOSAL] Public functions ===
 
 // step 1: propose to disable minting for the coin forever
-public fun propose_disable<Config, Outcome, CoinType>(
+public fun request_disable<Config, Outcome, CoinType>(
     auth: Auth,
-    account: &mut Account<Config, Outcome>,
     outcome: Outcome,
+    account: &mut Account<Config, Outcome>,
     key: String,
     description: String,
     execution_time: u64,
@@ -231,30 +231,30 @@ public fun propose_disable<Config, Outcome, CoinType>(
 ) {
     assert!(has_cap<Config, Outcome, CoinType>(account), ENoLock);
 
-    let mut proposal = account.create_proposal(
+    let mut intent = account.create_intent(
         auth,
-        outcome,
-        version::current(),
-        DisableProposal(), 
-        type_to_name<CoinType>(), // the coin type is the auth name 
         key, 
         description, 
-        execution_time, 
+        vector[execution_time], 
         expiration_time, 
+        outcome,
+        version::current(),
+        DisableIntent(), 
+        type_to_name<CoinType>(), // the coin type is the auth name 
         ctx
     );
 
-    new_disable<Outcome, CoinType, DisableProposal>(
-        &mut proposal, 
+    new_disable<Outcome, CoinType, DisableIntent>(
+        &mut intent, 
         disable_mint,
         disable_burn,
         disable_update_symbol,
         disable_update_name,
         disable_update_description,
         disable_update_icon,
-        DisableProposal()
+        DisableIntent()
     );
-    account.add_proposal(proposal, version::current(), DisableProposal());
+    account.add_intent(intent, version::current(), DisableIntent());
 }
 
 // step 2: multiple members have to approve the proposal (account::approve_proposal)
@@ -265,18 +265,18 @@ public fun execute_disable<Config, Outcome, CoinType>(
     mut executable: Executable,
     account: &mut Account<Config, Outcome>,
 ) {
-    do_disable<Config, Outcome, CoinType, DisableProposal>(&mut executable, account, version::current(), DisableProposal());   
-    executable.destroy(version::current(), DisableProposal());
+    do_disable<Config, Outcome, CoinType, DisableIntent>(&mut executable, account, version::current(), DisableIntent());   
+    account.confirm_execution(executable, version::current(), DisableIntent());
 }
 
 // step 1: propose to mint an amount of a coin that will be transferred to the Account
-public fun propose_mint<Config, Outcome, CoinType>(
+public fun request_mint<Config, Outcome, CoinType>(
     auth: Auth,
-    account: &mut Account<Config, Outcome>,
     outcome: Outcome,
+    account: &mut Account<Config, Outcome>,
     key: String,
     description: String,
-    execution_time: u64,
+    execution_times: vector<u64>,
     expiration_time: u64,
     amount: u64,
     ctx: &mut TxContext
@@ -287,25 +287,25 @@ public fun propose_mint<Config, Outcome, CoinType>(
     let supply = coin_type_supply<Config, Outcome, CoinType>(account);
     if (rules.max_supply.is_some()) assert!(amount + supply <= *rules.max_supply.borrow(), EMaxSupply);
 
-    let mut proposal = account.create_proposal(
+    let mut intent = account.create_intent(
         auth,
-        outcome,
-        version::current(),
-        MintProposal(), 
-        type_to_name<CoinType>(), // the coin type is the auth name 
         key, 
         description, 
-        execution_time, 
+        execution_times, 
         expiration_time, 
+        outcome,
+        version::current(),
+        MintIntent(), 
+        type_to_name<CoinType>(), // the coin type is the auth name 
         ctx
     );
 
-    new_mint<Outcome, CoinType, MintProposal>(
-        &mut proposal, 
+    new_mint<Outcome, CoinType, MintIntent>(
+        &mut intent, 
         amount, 
-        MintProposal()
+        MintIntent()
     );
-    account.add_proposal(proposal, version::current(), MintProposal());
+    account.add_intent(intent, version::current(), MintIntent());
 }
 
 // step 2: multiple members have to approve the proposal (account::approve_proposal)
@@ -317,19 +317,19 @@ public fun execute_mint<Config, Outcome, CoinType>(
     account: &mut Account<Config, Outcome>,
     ctx: &mut TxContext
 ) {
-    let coin = do_mint<Config, Outcome, CoinType, MintProposal>(&mut executable, account, version::current(), MintProposal(), ctx);
+    let coin = do_mint<Config, Outcome, CoinType, MintIntent>(&mut executable, account, version::current(), MintIntent(), ctx);
     account.keep(coin);
-    executable.destroy(version::current(), MintProposal());
+    account.confirm_execution(executable, version::current(), MintIntent());
 }
 
 // step 1: propose to burn an amount of a coin owned by the account
-public fun propose_burn<Config, Outcome, CoinType>(
+public fun request_burn<Config, Outcome, CoinType>(
     auth: Auth,
-    account: &mut Account<Config, Outcome>,
     outcome: Outcome,
+    account: &mut Account<Config, Outcome>,
     key: String,
     description: String,
-    execution_time: u64,
+    execution_times: vector<u64>,
     expiration_time: u64,
     coin_id: ID,
     amount: u64,
@@ -339,27 +339,27 @@ public fun propose_burn<Config, Outcome, CoinType>(
     let rules: &CurrencyRules<CoinType> = borrow_rules(account);
     assert!(rules.can_burn, EBurnDisabled);
 
-    let mut proposal = account.create_proposal(
+    let mut intent = account.create_intent(
         auth,
-        outcome,
-        version::current(),
-        BurnProposal(), 
-        type_to_name<CoinType>(), // the coin type is the auth name 
         key, 
         description, 
-        execution_time, 
+        execution_times, 
         expiration_time, 
+        outcome,
+        version::current(),
+        BurnIntent(), 
+        type_to_name<CoinType>(), // the coin type is the auth name 
         ctx
     );
 
-    owned::new_withdraw(&mut proposal, coin_id, BurnProposal());
-    new_burn<Outcome, CoinType, BurnProposal>(
-        &mut proposal, 
+    owned::new_withdraw(&mut intent, coin_id, BurnIntent());
+    new_burn<Outcome, CoinType, BurnIntent>(
+        &mut intent, 
         amount, 
-        BurnProposal()
+        BurnIntent()
     );
 
-    account.add_proposal(proposal, version::current(), BurnProposal());
+    account.add_intent(intent, version::current(), BurnIntent());
 }
 
 // step 2: multiple members have to approve the proposal (account::approve_proposal)
@@ -371,16 +371,16 @@ public fun execute_burn<Config, Outcome, CoinType>(
     account: &mut Account<Config, Outcome>,
     receiving: Receiving<Coin<CoinType>>,
 ) {
-    let coin = owned::do_withdraw(&mut executable, account, receiving, version::current(), BurnProposal());
-    do_burn<Config, Outcome, CoinType, BurnProposal>(&mut executable, account, coin, version::current(), BurnProposal());
-    executable.destroy(version::current(), BurnProposal());
+    let coin = owned::do_withdraw(&mut executable, account, receiving, version::current(), BurnIntent());
+    do_burn<Config, Outcome, CoinType, BurnIntent>(&mut executable, account, coin, version::current(), BurnIntent());
+    account.confirm_execution(executable, version::current(), BurnIntent());
 }
 
 // step 1: propose to update the CoinMetadata
-public fun propose_update<Config, Outcome, CoinType>(
+public fun request_update<Config, Outcome, CoinType>(
     auth: Auth,
-    account: &mut Account<Config, Outcome>,
     outcome: Outcome,
+    account: &mut Account<Config, Outcome>,
     key: String,
     description: String,
     execution_time: u64,
@@ -399,28 +399,28 @@ public fun propose_update<Config, Outcome, CoinType>(
     if (!rules.can_update_icon) assert!(md_icon.is_none(), ECannotUpdateIcon);
 
 
-    let mut proposal = account.create_proposal(
+    let mut intent = account.create_intent(
         auth,
-        outcome,
-        version::current(),
-        UpdateProposal(),
-        type_to_name<CoinType>(), // the coin type is the auth name 
         key,
         description,
-        execution_time,
+        vector[execution_time],
         expiration_time,
+        outcome,
+        version::current(),
+        UpdateIntent(),
+        type_to_name<CoinType>(), // the coin type is the auth name 
         ctx
     );
 
-    new_update<Outcome, CoinType, UpdateProposal>(
-        &mut proposal, 
+    new_update<Outcome, CoinType, UpdateIntent>(
+        &mut intent, 
         md_symbol, 
         md_name, 
         md_description, 
         md_icon, 
-        UpdateProposal()
+        UpdateIntent()
     );
-    account.add_proposal(proposal, version::current(), UpdateProposal());
+    account.add_intent(intent, version::current(), UpdateIntent());
 }
 
 // step 2: multiple members have to approve the proposal (account::approve_proposal)
@@ -432,18 +432,18 @@ public fun execute_update<Config, Outcome, CoinType>(
     account: &mut Account<Config, Outcome>,
     metadata: &mut CoinMetadata<CoinType>,
 ) {
-    do_update(&mut executable, account, metadata, version::current(), UpdateProposal());
-    executable.destroy(version::current(), UpdateProposal());
+    do_update(&mut executable, account, metadata, version::current(), UpdateIntent());
+    account.confirm_execution(executable, version::current(), UpdateIntent());
 }
 
 // step 1: propose to send managed coins
-public fun propose_transfer<Config, Outcome, CoinType>(
+public fun request_transfer<Config, Outcome, CoinType>(
     auth: Auth,
-    account: &mut Account<Config, Outcome>,
     outcome: Outcome,
+    account: &mut Account<Config, Outcome>,
     key: String,
     description: String,
-    execution_time: u64,
+    execution_times: vector<u64>,
     expiration_time: u64,
     amounts: vector<u64>,
     recipients: vector<address>,
@@ -457,29 +457,29 @@ public fun propose_transfer<Config, Outcome, CoinType>(
     let sum = amounts.fold!(0, |sum, amount| sum + amount);
     if (rules.max_supply.is_some()) assert!(sum <= *rules.max_supply.borrow(), EMaxSupply);
 
-    let mut proposal = account.create_proposal(
+    let mut intent = account.create_intent(
         auth,
-        outcome,
-        version::current(),
-        TransferProposal(),
-        b"".to_string(),
         key,
         description,
-        execution_time,
+        execution_times,
         expiration_time,
+        outcome,
+        version::current(),
+        TransferIntent(),
+        b"".to_string(),
         ctx
     );
 
     amounts.zip_do!(recipients, |amount, recipient| {
-        new_mint<Outcome, CoinType, TransferProposal>(
-            &mut proposal, 
+        new_mint<Outcome, CoinType, TransferIntent>(
+            &mut intent, 
             amount, 
-            TransferProposal()
+            TransferIntent()
         );
-        acc_transfer::new_transfer(&mut proposal, recipient, TransferProposal());
+        acc_transfer::new_transfer(&mut intent, recipient, TransferIntent());
     });
 
-    account.add_proposal(proposal, version::current(), TransferProposal());
+    account.add_intent(intent, version::current(), TransferIntent());
 }
 
 // step 2: multiple members have to approve the proposal (account::approve_proposal)
@@ -491,20 +491,23 @@ public fun execute_transfer<Config, Outcome, CoinType>(
     account: &mut Account<Config, Outcome>, 
     ctx: &mut TxContext
 ) {
-    let coin: Coin<CoinType> = do_mint(executable, account, version::current(), TransferProposal(), ctx);
-    acc_transfer::do_transfer(executable, account, coin, version::current(), TransferProposal());
+    let coin: Coin<CoinType> = do_mint(executable, account, version::current(), TransferIntent(), ctx);
+    acc_transfer::do_transfer(executable, account, coin, version::current(), TransferIntent());
 }
 
 // step 5: complete acc_transfer and destroy the executable
-public fun complete_transfer(executable: Executable) {
-    executable.destroy(version::current(), TransferProposal());
+public fun complete_transfer<Config, Outcome>(
+    executable: Executable,
+    account: &Account<Config, Outcome>,
+) {
+    account.confirm_execution(executable, version::current(), TransferIntent());
 }
 
 // step 1: propose to pay from a minted coin
-public fun propose_vesting<Config, Outcome, CoinType>(
+public fun request_vesting<Config, Outcome, CoinType>(
     auth: Auth,
-    account: &mut Account<Config, Outcome>, 
     outcome: Outcome,
+    account: &mut Account<Config, Outcome>, 
     key: String,
     description: String,
     execution_time: u64,
@@ -520,26 +523,26 @@ public fun propose_vesting<Config, Outcome, CoinType>(
     assert!(rules.can_mint, EMintDisabled);
     if (rules.max_supply.is_some()) assert!(total_amount <= *rules.max_supply.borrow(), EMaxSupply);
 
-    let mut proposal = account.create_proposal(
+    let mut intent = account.create_intent(
         auth,
-        outcome,
-        version::current(),
-        PayProposal(),
-        b"".to_string(),
         key,
         description,
-        execution_time,
+        vector[execution_time],
         expiration_time,
+        outcome,
+        version::current(),
+        VestingIntent(),
+        b"".to_string(),
         ctx
     );
 
-    new_mint<Outcome, CoinType, PayProposal>(
-        &mut proposal, 
+    new_mint<Outcome, CoinType, VestingIntent>(
+        &mut intent, 
         total_amount, 
-        PayProposal()
+        VestingIntent()
     );
-    vesting::new_vesting(&mut proposal, start_timestamp, end_timestamp, recipient, PayProposal());
-    account.add_proposal(proposal, version::current(), PayProposal());
+    vesting::new_vesting(&mut intent, start_timestamp, end_timestamp, recipient, VestingIntent());
+    account.add_intent(intent, version::current(), VestingIntent());
 }
 
 // step 2: multiple members have to approve the proposal (account::approve_proposal)
@@ -551,15 +554,15 @@ public fun execute_vesting<Config, Outcome, CoinType>(
     account: &mut Account<Config, Outcome>, 
     ctx: &mut TxContext
 ) {
-    let coin: Coin<CoinType> = do_mint(&mut executable, account, version::current(), PayProposal(), ctx);
-    vesting::do_vesting(&mut executable, account, coin, version::current(), PayProposal(), ctx);
-    executable.destroy(version::current(), PayProposal());
+    let coin: Coin<CoinType> = do_mint(&mut executable, account, version::current(), VestingIntent(), ctx);
+    vesting::do_vesting(&mut executable, account, coin, version::current(), VestingIntent(), ctx);
+    account.confirm_execution(executable, version::current(), VestingIntent());
 }
 
 // === [ACTION] Public functions ===
 
 public fun new_disable<Outcome, CoinType, W: drop>(
-    proposal: &mut Proposal<Outcome>,
+    intent: &mut Intent<Outcome>,
     mint: bool,
     burn: bool,
     update_symbol: bool,
@@ -569,7 +572,7 @@ public fun new_disable<Outcome, CoinType, W: drop>(
     witness: W,
 ) {
     assert!(mint || burn || update_symbol || update_name || update_description || update_icon, ENoChange);
-    proposal.add_action(DisableAction<CoinType> { mint, burn, update_name, update_symbol, update_description, update_icon }, witness);
+    intent.add_action(DisableAction<CoinType> { mint, burn, update_name, update_symbol, update_description, update_icon }, witness);
 }
 
 public fun do_disable<Config, Outcome, CoinType, W: copy + drop>(
@@ -578,28 +581,27 @@ public fun do_disable<Config, Outcome, CoinType, W: copy + drop>(
     version: TypeName,
     witness: W,
 ) {
-    let DisableAction<CoinType> { mint, burn, update_name, update_symbol, update_description, update_icon } = 
-        executable.action(account.addr(), version, witness);
+    let action: &DisableAction<CoinType> = account.process_action(executable, version, witness);
     let rules_mut: &mut CurrencyRules<CoinType> = account.borrow_managed_struct_mut(CurrencyRulesKey<CoinType> {}, version);
     // if disabled, can be true or false, it has no effect
-    if (mint) rules_mut.can_mint = false;
-    if (burn) rules_mut.can_burn = false;
-    if (update_symbol) rules_mut.can_update_symbol = false;
-    if (update_name) rules_mut.can_update_name = false;
-    if (update_description) rules_mut.can_update_description = false;
-    if (update_icon) rules_mut.can_update_icon = false;
+    if (action.mint) rules_mut.can_mint = false;
+    if (action.burn) rules_mut.can_burn = false;
+    if (action.update_symbol) rules_mut.can_update_symbol = false;
+    if (action.update_name) rules_mut.can_update_name = false;
+    if (action.update_description) rules_mut.can_update_description = false;
+    if (action.update_icon) rules_mut.can_update_icon = false;
 }
 
-public fun delete_disable_action<Outcome, CoinType>(expired: &mut Expired<Outcome>) {
-    let DisableAction<CoinType> { .. } = expired.remove_expired_action();
+public fun delete_disable<CoinType>(expired: &mut Expired) {
+    let DisableAction<CoinType> { .. } = expired.remove_action();
 }
 
 public fun new_mint<Outcome, CoinType, W: drop>(
-    proposal: &mut Proposal<Outcome>, 
+    intent: &mut Intent<Outcome>, 
     amount: u64,
     witness: W,    
 ) {
-    proposal.add_action(MintAction<CoinType> { amount }, witness);
+    intent.add_action(MintAction<CoinType> { amount }, witness);
 }
 
 public fun do_mint<Config, Outcome, CoinType, W: copy + drop>(
@@ -609,29 +611,28 @@ public fun do_mint<Config, Outcome, CoinType, W: copy + drop>(
     witness: W, 
     ctx: &mut TxContext
 ): Coin<CoinType> {
-    let MintAction<CoinType> { amount } = executable.action(account.addr(), version, witness);
-    
+    let action: &MintAction<CoinType> = account.process_action(executable, version, witness);
     let total_supply = coin_type_supply<Config, Outcome, CoinType>(account);
     let rules_mut: &mut CurrencyRules<CoinType> = account.borrow_managed_struct_mut(CurrencyRulesKey<CoinType> {}, version);
     
     assert!(rules_mut.can_mint, EMintDisabled);
-    if (rules_mut.max_supply.is_some()) assert!(amount + total_supply <= *rules_mut.max_supply.borrow(), EMaxSupply);
-    rules_mut.total_minted = rules_mut.total_minted + amount;
+    if (rules_mut.max_supply.is_some()) assert!(action.amount + total_supply <= *rules_mut.max_supply.borrow(), EMaxSupply);
+    rules_mut.total_minted = rules_mut.total_minted + action.amount;
     
     let cap_mut: &mut TreasuryCap<CoinType> = account.borrow_managed_object_mut(TreasuryCapKey<CoinType> {}, version);
-    cap_mut.mint(amount, ctx)
+    cap_mut.mint(action.amount, ctx)
 }
 
-public fun delete_mint_action<Outcome, CoinType>(expired: &mut Expired<Outcome>) {
-    let MintAction<CoinType> { .. } = expired.remove_expired_action();
+public fun delete_mint<CoinType>(expired: &mut Expired) {
+    let MintAction<CoinType> { .. } = expired.remove_action();
 }
 
 public fun new_burn<Outcome, CoinType, W: drop>(
-    proposal: &mut Proposal<Outcome>, 
+    intent: &mut Intent<Outcome>, 
     amount: u64, 
     witness: W
 ) {
-    proposal.add_action(BurnAction<CoinType> { amount }, witness);
+    intent.add_action(BurnAction<CoinType> { amount }, witness);
 }
 
 public fun do_burn<Config, Outcome, CoinType, W: copy + drop>(
@@ -641,23 +642,23 @@ public fun do_burn<Config, Outcome, CoinType, W: copy + drop>(
     version: TypeName,
     witness: W, 
 ) {
-    let BurnAction<CoinType> { amount } = executable.action(account.addr(), version, witness);
-    assert!(amount == coin.value(), EWrongValue);
+    let action: &BurnAction<CoinType> = account.process_action(executable, version, witness);
+    assert!(action.amount == coin.value(), EWrongValue);
     
     let rules_mut: &mut CurrencyRules<CoinType> = account.borrow_managed_struct_mut(CurrencyRulesKey<CoinType> {}, version);
     assert!(rules_mut.can_burn, EBurnDisabled);
-    rules_mut.total_burned = rules_mut.total_burned + amount;
+    rules_mut.total_burned = rules_mut.total_burned + action.amount;
 
     let cap_mut: &mut TreasuryCap<CoinType> = account.borrow_managed_object_mut(TreasuryCapKey<CoinType> {}, version);
     cap_mut.burn(coin);
 }
 
-public fun delete_burn_action<Outcome, CoinType>(expired: &mut Expired<Outcome>) {
-    let BurnAction<CoinType> { .. } = expired.remove_expired_action();
+public fun delete_burn<CoinType>(expired: &mut Expired) {
+    let BurnAction<CoinType> { .. } = expired.remove_action();
 }
 
 public fun new_update<Outcome, CoinType, W: drop>(
-    proposal: &mut Proposal<Outcome>,
+    intent: &mut Intent<Outcome>,
     symbol: Option<ascii::String>,
     name: Option<String>,
     description: Option<String>,
@@ -665,7 +666,7 @@ public fun new_update<Outcome, CoinType, W: drop>(
     witness: W,
 ) {
     assert!(symbol.is_some() || name.is_some() || description.is_some() || icon_url.is_some(), ENoChange);
-    proposal.add_action(UpdateAction<CoinType> { symbol, name, description, icon_url }, witness);
+    intent.add_action(UpdateAction<CoinType> { symbol, name, description, icon_url }, witness);
 }
 
 public fun do_update<Config, Outcome, CoinType, W: copy + drop>(
@@ -675,26 +676,25 @@ public fun do_update<Config, Outcome, CoinType, W: copy + drop>(
     version: TypeName,
     witness: W,
 ) {
-    let UpdateAction<CoinType> { symbol, name, description, icon_url } = 
-        executable.action(account.addr(), version, witness);
+    let action: &UpdateAction<CoinType> = account.process_action(executable, version, witness);
     let rules_mut: &mut CurrencyRules<CoinType> = account.borrow_managed_struct_mut(CurrencyRulesKey<CoinType> {}, version);
 
-    if (!rules_mut.can_update_symbol) assert!(symbol.is_none(), ECannotUpdateSymbol);
-    if (!rules_mut.can_update_name) assert!(name.is_none(), ECannotUpdateName);
-    if (!rules_mut.can_update_description) assert!(description.is_none(), ECannotUpdateDescription);
-    if (!rules_mut.can_update_icon) assert!(icon_url.is_none(), ECannotUpdateIcon);
+    if (!rules_mut.can_update_symbol) assert!(action.symbol.is_none(), ECannotUpdateSymbol);
+    if (!rules_mut.can_update_name) assert!(action.name.is_none(), ECannotUpdateName);
+    if (!rules_mut.can_update_description) assert!(action.description.is_none(), ECannotUpdateDescription);
+    if (!rules_mut.can_update_icon) assert!(action.icon_url.is_none(), ECannotUpdateIcon);
     
     let (default_symbol, default_name, default_description, default_icon_url) = (metadata.get_symbol(), metadata.get_name(), metadata.get_description(), metadata.get_icon_url().extract().inner_url());
     let cap: &TreasuryCap<CoinType> = account.borrow_managed_object(TreasuryCapKey<CoinType> {}, version);
 
-    cap.update_symbol(metadata, symbol.get_with_default(default_symbol));
-    cap.update_name(metadata, name.get_with_default(default_name));
-    cap.update_description(metadata, description.get_with_default(default_description));
-    cap.update_icon_url(metadata, icon_url.get_with_default(default_icon_url));
+    cap.update_symbol(metadata, action.symbol.get_with_default(default_symbol));
+    cap.update_name(metadata, action.name.get_with_default(default_name));
+    cap.update_description(metadata, action.description.get_with_default(default_description));
+    cap.update_icon_url(metadata, action.icon_url.get_with_default(default_icon_url));
 }
 
-public fun delete_update_action<Outcome, CoinType>(expired: &mut Expired<Outcome>) {
-    let UpdateAction<CoinType> { .. } = expired.remove_expired_action();
+public fun delete_update<CoinType>(expired: &mut Expired) {
+    let UpdateAction<CoinType> { .. } = expired.remove_action();
 }
 
 

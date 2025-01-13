@@ -17,7 +17,7 @@ use sui::{
 };
 use account_protocol::{
     account::Account,
-    proposals::{Proposal, Expired},
+    intents::{Intent, Expired},
     executable::Executable,
     auth::Auth,
 };
@@ -61,9 +61,9 @@ public struct UpgradeRules has store {
 /// [COMMAND] witness defining the command to lock an UpgradeCap
 public struct LockCommand() has drop;
 /// [PROPOSAL] witness defining the proposal to upgrade a package
-public struct UpgradeProposal() has copy, drop;
+public struct UpgradeIntent() has copy, drop;
 /// [PROPOSAL] witness defining the proposal to restrict an UpgradeCap
-public struct RestrictProposal() has copy, drop;
+public struct RestrictIntent() has copy, drop;
 
 /// [ACTION] upgrades a package
 public struct UpgradeAction has store {
@@ -138,10 +138,10 @@ public fun time_delay(rules: &UpgradeRules): u64 {
 // step 1: propose an UpgradeAction by passing the digest of the package build
 // execution_time is automatically set to now + timelock
 // if timelock = 0, it means that upgrade can be executed at any time
-public fun propose_upgrade<Config, Outcome>(
+public fun request_upgrade<Config, Outcome>(
     auth: Auth,
-    account: &mut Account<Config, Outcome>, 
     outcome: Outcome,
+    account: &mut Account<Config, Outcome>, 
     key: String,
     description: String,
     expiration_time: u64,
@@ -153,21 +153,21 @@ public fun propose_upgrade<Config, Outcome>(
     assert!(has_cap(account, package), ENoLock);
     let delay = borrow_rules(account, package).delay_ms;
 
-    let mut proposal = account.create_proposal(
+    let mut intent = account.create_intent(
         auth,
-        outcome,
-        version::current(),
-        UpgradeProposal(),
-        b"".to_string(),
         key,
         description,
-        clock.timestamp_ms() + delay,
+        vector[clock.timestamp_ms() + delay],
         expiration_time,
+        outcome,
+        version::current(),
+        UpgradeIntent(),
+        b"".to_string(),
         ctx
     );
 
-    new_upgrade(&mut proposal, package, digest, UpgradeProposal());
-    account.add_proposal(proposal, version::current(), UpgradeProposal());
+    new_upgrade(&mut intent, package, digest, UpgradeIntent());
+    account.add_intent(intent, version::current(), UpgradeIntent());
 }
 
 // step 2: multiple members have to approve the proposal (account::approve_proposal)
@@ -178,7 +178,7 @@ public fun execute_upgrade<Config, Outcome>(
     executable: &mut Executable,
     account: &mut Account<Config, Outcome>,
 ): (UpgradeTicket, UpgradeCap, UpgradeRules) {
-    do_upgrade(executable, account, version::current(), UpgradeProposal())
+    do_upgrade(executable, account, version::current(), UpgradeIntent())
 }    
 
 // step 5: consume the ticket to upgrade  
@@ -191,43 +191,42 @@ public fun complete_upgrade<Config, Outcome>(
     cap: UpgradeCap,
     rules: UpgradeRules,
 ) {
-    confirm_upgrade(&executable, account, receipt, cap, rules, version::current(), UpgradeProposal());
-    executable.destroy(version::current(), UpgradeProposal());
+    confirm_upgrade(&executable, account, receipt, cap, rules, version::current(), UpgradeIntent());
+    account.confirm_execution(executable, version::current(), UpgradeIntent());
 }
 
 // step 1: propose an UpgradeAction by passing the digest of the package build
 // execution_time is automatically set to now + timelock
-public fun propose_restrict<Config, Outcome>(
+public fun request_restrict<Config, Outcome>(
     auth: Auth,
-    account: &mut Account<Config, Outcome>, 
     outcome: Outcome,
+    account: &mut Account<Config, Outcome>, 
     key: String,
     description: String,
+    execution_time: u64,
     expiration_time: u64,
     package: address,
     policy: u8,
-    clock: &Clock,
     ctx: &mut TxContext
 ) {
     assert!(has_cap(account, package), ENoLock);
     let current_policy = borrow_cap(account, package).policy();
-    let delay = borrow_rules(account, package).delay_ms;
 
-    let mut proposal = account.create_proposal(
+    let mut intent = account.create_intent(
         auth, 
-        outcome,
-        version::current(),
-        RestrictProposal(),
-        b"".to_string(),
         key,
         description,
-        clock.timestamp_ms() + delay,
+        vector[execution_time],
         expiration_time,
+        outcome,
+        version::current(),
+        RestrictIntent(),
+        b"".to_string(),
         ctx
     );
 
-    new_restrict(&mut proposal, package, current_policy, policy, RestrictProposal());
-    account.add_proposal(proposal, version::current(), RestrictProposal());
+    new_restrict(&mut intent, package, current_policy, policy, RestrictIntent());
+    account.add_intent(intent, version::current(), RestrictIntent());
 }
 
 // step 2: multiple members have to approve the proposal (account::approve_proposal)
@@ -238,19 +237,19 @@ public fun execute_restrict<Config, Outcome>(
     mut executable: Executable,
     account: &mut Account<Config, Outcome>,
 ) {
-    do_restrict(&mut executable, account, version::current(), RestrictProposal());
-    executable.destroy(version::current(), RestrictProposal());
+    do_restrict(&mut executable, account, version::current(), RestrictIntent());
+    account.confirm_execution(executable, version::current(), RestrictIntent());
 }
 
 // === [ACTION] Public Functions ===
 
 public fun new_upgrade<Outcome, W: drop>(
-    proposal: &mut Proposal<Outcome>, 
+    intent: &mut Intent<Outcome>, 
     package: address,
     digest: vector<u8>, 
     witness: W
 ) {
-    proposal.add_action(UpgradeAction { package, digest }, witness);
+    intent.add_action(UpgradeAction { package, digest }, witness);
 }    
 
 public fun do_upgrade<Config, Outcome, W: copy + drop>(
@@ -259,8 +258,9 @@ public fun do_upgrade<Config, Outcome, W: copy + drop>(
     version: TypeName,
     witness: W,
 ): (UpgradeTicket, UpgradeCap, UpgradeRules) {
-    let UpgradeAction { package, digest } = executable.action(account.addr(), version, witness);
-    
+    let action: &UpgradeAction = account.process_action(executable, version, witness);
+    let (package, digest) = (action.package, action.digest);
+
     let rules: UpgradeRules = account.remove_managed_struct(UpgradeRulesKey { package }, version);
     let mut cap: UpgradeCap = account.remove_managed_object(UpgradeCapKey { package }, version);
 
@@ -281,7 +281,7 @@ public fun confirm_upgrade<Config, Outcome, W: copy + drop>(
 ) {
     assert!(object::id(&cap) == rules.cap_id, EWrongUpgradeCap);
     // same checks as in `executable.action()`
-    executable.deps().assert_is_dep(version);
+    account.deps().assert_is_dep(version);
     executable.issuer().assert_is_constructor(witness);
     executable.issuer().assert_is_account(account.addr());
 
@@ -292,12 +292,12 @@ public fun confirm_upgrade<Config, Outcome, W: copy + drop>(
     account.add_managed_struct(UpgradeRulesKey { package: new_package }, rules, version);
 }
 
-public fun delete_upgrade_action<Outcome>(expired: &mut Expired<Outcome>) {
-    let UpgradeAction { .. } = expired.remove_expired_action();
+public fun delete_upgrade(expired: &mut Expired) {
+    let UpgradeAction { .. } = expired.remove_action();
 }
 
 public fun new_restrict<Outcome, W: drop>(
-    proposal: &mut Proposal<Outcome>, 
+    intent: &mut Intent<Outcome>, 
     package: address,
     current_policy: u8, 
     policy: u8, 
@@ -311,7 +311,7 @@ public fun new_restrict<Outcome, W: drop>(
         EInvalidPolicy
     );
 
-    proposal.add_action(RestrictAction { package, policy }, witness);
+    intent.add_action(RestrictAction { package, policy }, witness);
 }    
 
 public fun do_restrict<Config, Outcome, W: copy + drop>(
@@ -320,7 +320,8 @@ public fun do_restrict<Config, Outcome, W: copy + drop>(
     version: TypeName,
     witness: W,
 ) {
-    let RestrictAction { package, policy } = executable.action(account.addr(), version, witness);
+    let action: &RestrictAction = account.process_action(executable, version, witness);
+    let (package, policy) = (action.package, action.policy);
 
     if (policy == package::additive_policy()) {
         let cap_mut: &mut UpgradeCap = account.borrow_managed_object_mut(UpgradeCapKey { package }, version);
@@ -334,6 +335,6 @@ public fun do_restrict<Config, Outcome, W: copy + drop>(
     };
 }
 
-public fun delete_restrict_action<Outcome>(expired: &mut Expired<Outcome>) {
-    let RestrictAction { .. } = expired.remove_expired_action();
+public fun delete_restrict(expired: &mut Expired) {
+    let RestrictAction { .. } = expired.remove_action();
 }

@@ -19,12 +19,8 @@ public struct Metadata has copy, drop, store {
 // === Public functions ===
 
 /// Creates a new Metadata struct with a name
-public fun new(name: String): Metadata {
-    Metadata { 
-        inner: vec_map::from_keys_values(
-            vector[b"name".to_string()], 
-            vector[name])
-    }
+public fun new(): Metadata {
+    Metadata { inner: vec_map::empty() }
 }
 
 /// Adds a key-value pair to the metadata

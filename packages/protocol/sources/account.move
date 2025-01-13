@@ -30,7 +30,7 @@ use account_protocol::{
     issuer,
     metadata::{Self, Metadata},
     deps::{Self, Deps},
-    proposals::{Self, Proposals, Proposal, Expired},
+    intents::{Self, Intents, Intent, Expired},
     executable::{Self, Executable},
     auth::Auth,
 };
@@ -41,7 +41,7 @@ use account_extensions::extensions::Extensions;
 public struct ACCOUNT has drop {}
 
 /// Shared multisig Account object 
-public struct Account<Config, Outcome> has key {
+public struct Account<Config, Outcome> has key, store {
     id: UID,
     // arbitrary data that can be proposed and added by members
     // first field is a human readable name to differentiate the multisig accounts
@@ -50,7 +50,7 @@ public struct Account<Config, Outcome> has key {
     // idx 0: account_protocol, idx 1: account_actions
     deps: Deps,
     // open proposals, key should be a unique descriptive name
-    proposals: Proposals<Outcome>,
+    intents: Intents<Outcome>,
     // config can be anything (e.g. Multisig, coin-based DAO, etc.)
     config: Config,
 }
@@ -64,23 +64,16 @@ fun init(otw: ACCOUNT, ctx: &mut TxContext) {
 /// Creates a new Account object, called from AccountConfig
 public fun new<Config, Outcome>(
     extensions: &Extensions,
-    name: String, 
     config: Config, 
     ctx: &mut TxContext
 ): Account<Config, Outcome> {
     Account<Config, Outcome> { 
         id: object::new(ctx),
-        metadata: metadata::new(name),
+        metadata: metadata::new(),
         deps: deps::new(extensions),
-        proposals: proposals::empty(),
+        intents: intents::empty(),
         config,
     }
-}
-
-/// Can be initialized by the creator before being shared
-#[allow(lint(share_owned))]
-public fun share<Config: store, Outcome: store>(account: Account<Config, Outcome>) {
-    transfer::share_object(account);
 }
 
 public fun keep<Config, Outcome, T: key + store>(account: &Account<Config, Outcome>, obj: T) {
@@ -91,19 +84,19 @@ public fun keep<Config, Outcome, T: key + store>(account: &Account<Config, Outco
 
 /// Creates a new proposal that must be constructed in another module
 /// Only packages (instantiating the witness) allowed in extensions can create an issuer
-public fun create_proposal<Config, Outcome, W: drop>(
+public fun create_intent<Config, Outcome, W: drop>(
     account: &mut Account<Config, Outcome>, 
     auth: Auth, // proves that the caller is a member
+    key: String, // proposal key
+    description: String,
+    execution_times: vector<u64>, // timestamps in ms
+    expiration_time: u64, // epoch when we can delete the proposal
     outcome: Outcome, // vote settings
     version: TypeName,
     witness: W, // module's issuer witness (proposal/role witness)
-    w_name: String, // module's issuer name (role name)
-    key: String, // proposal key
-    description: String,
-    execution_time: u64, // timestamp in ms
-    expiration_time: u64, // epoch when we can delete the proposal
+    opt_name: String, // module's issuer name (role name)
     ctx: &mut TxContext
-): Proposal<Outcome> {
+): Intent<Outcome> {
     // ensures the caller is authorized for this account
     auth.verify(account.addr());
     // only an account dependency can create a proposal
@@ -111,62 +104,118 @@ public fun create_proposal<Config, Outcome, W: drop>(
 
     let issuer = issuer::construct(
         account.addr(), 
-        version,
         witness, 
-        w_name
+        opt_name
     );
 
-    proposals::new_proposal(
+    intents::new_intent(
         issuer,
         key,
         description,
-        execution_time,
+        execution_times,
         expiration_time,
         outcome,
         ctx
     )
 }
 
-/// Adds a proposal to the account
-/// must be called by the same proposal interface that created it
-public fun add_proposal<Config, Outcome, W: drop>(
-    account: &mut Account<Config, Outcome>, 
-    proposal: Proposal<Outcome>, 
+public fun lock_object<Config, Outcome, W: drop>(
+    account: &mut Account<Config, Outcome>,
+    intent: &Intent<Outcome>, 
+    id: ID,
     version: TypeName,
     witness: W
 ) {
-    proposal.issuer().assert_is_account(account.addr());
+    intent.issuer().assert_is_account(account.addr());
     account.deps().assert_is_dep(version);  
-    proposal.issuer().assert_is_constructor(witness);
+    intent.issuer().assert_is_constructor(witness);
 
-    account.proposals.add(proposal);
+    account.intents_mut(version).lock(id);
+}
+
+public fun unlock_object<Config, Outcome, W: drop>(
+    account: &mut Account<Config, Outcome>,
+    expired: &Expired, 
+    id: ID,
+    version: TypeName,
+    witness: W
+) {
+    expired.issuer().assert_is_account(account.addr());
+    account.deps().assert_is_dep(version);  
+    expired.issuer().assert_is_constructor(witness);
+
+    account.intents_mut(version).unlock(id);
+}
+
+/// Adds a proposal to the account
+/// must be called by the same proposal interface that created it
+public fun add_intent<Config, Outcome, W: drop>(
+    account: &mut Account<Config, Outcome>, 
+    intent: Intent<Outcome>, 
+    version: TypeName,
+    witness: W
+) {
+    intent.issuer().assert_is_account(account.addr());
+    account.deps().assert_is_dep(version);  
+    intent.issuer().assert_is_constructor(witness);
+
+    account.intents.add(intent);
 }
 
 /// Called by CoreDep only, AccountConfig
 /// Returns an Executable with the Proposal Outcome that must be validated in AccountCOnfig
-public fun execute_proposal<Config, Outcome>(
+public fun execute_intent<Config, Outcome: copy>(
     account: &mut Account<Config, Outcome>,
     key: String, 
     clock: &Clock,
     version: TypeName,
 ): (Executable, Outcome) {
     account.deps().assert_is_core_dep(version);
-    let (issuer, actions, outcome) = account.proposals.remove(key, clock);
+    let intent = account.intents.get_mut(key);
+    intent.pop_front_execution_time(clock);
 
-    (executable::new(account.deps, issuer, actions), outcome)
+    (executable::new(key, *intent.issuer()), *intent.outcome())
+}
+
+public fun process_action<Config, Outcome, Action: store, W: drop>(
+    account: &Account<Config, Outcome>, 
+    executable: &mut Executable,
+    version: TypeName,
+    witness: W,
+): &Action {
+    account.deps().assert_is_dep(version);
+
+    let (key, idx) = executable.next_action(account.addr(), witness);
+    account.intents.get(key).actions().borrow(idx)
+}
+
+public fun confirm_execution<Config, Outcome, W: drop>(
+    account: &Account<Config, Outcome>, 
+    executable: Executable,
+    version: TypeName,
+    witness: W,
+) {
+    account.deps().assert_is_dep(version);    
+
+    let intent = account.intents.get(executable.key());
+    executable.destroy(intent.actions().length(), witness);
+}
+
+public fun destroy_empty_intent<Config, Outcome: drop>(
+    account: &mut Account<Config, Outcome>, 
+    key: String, 
+): Expired {
+    account.intents.destroy(account.addr(), key)
 }
 
 /// Removes a proposal if it has expired
 /// Needs to delete each action in the bag within their own module
-public fun delete_proposal<Config: drop, Outcome>(
+public fun delete_expired_intent<Config, Outcome: drop>(
     account: &mut Account<Config, Outcome>, 
     key: String, 
-    version: TypeName,
     clock: &Clock,
-): Expired<Outcome> {
-    account.deps().assert_is_core_dep(version);
-
-    account.proposals.delete(key, clock)
+): Expired {
+    account.intents.delete(account.addr(), key, clock)
 }
 
 // === View functions ===
@@ -183,12 +232,8 @@ public fun deps<Config, Outcome>(account: &Account<Config, Outcome>): &Deps {
     &account.deps
 }
 
-public fun proposals<Config, Outcome>(account: &Account<Config, Outcome>): &Proposals<Outcome> {
-    &account.proposals
-}
-
-public fun proposal<Config, Outcome>(account: &Account<Config, Outcome>, key: String): &Proposal<Outcome> {
-    account.proposals.get(key)
+public fun intents<Config, Outcome>(account: &Account<Config, Outcome>): &Intents<Outcome> {
+    &account.intents
 }
 
 public fun config<Config, Outcome>(account: &Account<Config, Outcome>): &Config {
@@ -324,12 +369,12 @@ public fun deps_mut<Config, Outcome>(
     &mut account.deps
 }
 
-public fun proposals_mut<Config, Outcome>(
+public fun intents_mut<Config, Outcome>(
     account: &mut Account<Config, Outcome>, 
     version: TypeName,
-): &mut Proposals<Outcome> {
+): &mut Intents<Outcome> {
     account.deps.assert_is_core_dep(version);
-    &mut account.proposals
+    &mut account.intents
 }
 
 public fun config_mut<Config, Outcome>(
@@ -338,16 +383,6 @@ public fun config_mut<Config, Outcome>(
 ): &mut Config {
     account.deps.assert_is_core_dep(version);
     &mut account.config
-}
-
-// Only called in AccountConfig
-public fun proposal_mut<Config, Outcome>(
-    account: &mut Account<Config, Outcome>, 
-    idx: u64,
-    version: TypeName,
-): &mut Proposal<Outcome> {
-    account.deps.assert_is_core_dep(version);
-    account.proposals.get_mut(idx)
 }
 
 // === Test functions ===

@@ -19,7 +19,7 @@ use sui::{
 };
 use account_protocol::{
     account::Account,
-    proposals::{Proposal, Expired},
+    intents::{Intent, Expired},
     executable::Executable,
     auth::Auth,
 };
@@ -59,9 +59,9 @@ public struct TreasuryCommand() has drop;
 /// [COMMAND] witness defining the treasury deposit command, and associated role
 public struct DepositCommand() has drop;
 /// [PROPOSAL] witness defining the treasury transfer proposal, and associated role
-public struct TransferProposal() has copy, drop;
+public struct TransferIntent() has copy, drop;
 /// [PROPOSAL] witness defining the treasury pay proposal, and associated role
-public struct PayProposal() has copy, drop;
+public struct VestingIntent() has copy, drop;
 
 /// [ACTION] struct to be used with specific proposals making good use of the returned coins, similar to owned::withdraw
 public struct SpendAction<phantom CoinType> has store {
@@ -157,13 +157,13 @@ public fun coin_type_value<CoinType: drop>(treasury: &Treasury): u64 {
 // === [PROPOSAL] Public Functions ===
 
 // step 1: propose to send managed coins
-public fun propose_transfer<Config, Outcome, CoinType: drop>(
+public fun request_transfer<Config, Outcome, CoinType: drop>(
     auth: Auth,
     account: &mut Account<Config, Outcome>, 
     outcome: Outcome,
     key: String,
     description: String,
-    execution_time: u64,
+    execution_times: vector<u64>,
     expiration_time: u64,
     treasury_name: String,
     amounts: vector<u64>,
@@ -176,25 +176,25 @@ public fun propose_transfer<Config, Outcome, CoinType: drop>(
     let sum = amounts.fold!(0, |sum, amount| sum + amount);
     if (treasury.coin_type_value<CoinType>() < sum) assert!(sum <= treasury.coin_type_value<CoinType>(), EInsufficientFunds);
 
-    let mut proposal = account.create_proposal(
+    let mut intent = account.create_intent(
         auth,
-        outcome,
-        version::current(),
-        TransferProposal(),
-        treasury_name,
         key,
         description,
-        execution_time,
+        execution_times,
         expiration_time,
+        outcome,
+        version::current(),
+        TransferIntent(),
+        treasury_name,
         ctx
     );
 
     recipients.zip_do!(amounts, |recipient, amount| {
-        new_spend<Outcome, CoinType, TransferProposal>(&mut proposal, amount, TransferProposal());
-        acc_transfer::new_transfer(&mut proposal, recipient, TransferProposal());
+        new_spend<Outcome, CoinType, TransferIntent>(&mut intent, amount, TransferIntent());
+        acc_transfer::new_transfer(&mut intent, recipient, TransferIntent());
     });
 
-    account.add_proposal(proposal, version::current(), TransferProposal());
+    account.add_intent(intent, version::current(), TransferIntent());
 }
 
 // step 2: multiple members have to approve the proposal (account::approve_proposal)
@@ -206,20 +206,23 @@ public fun execute_transfer<Config, Outcome, CoinType: drop>(
     account: &mut Account<Config, Outcome>, 
     ctx: &mut TxContext
 ) {
-    let coin: Coin<CoinType> = do_spend(executable, account, version::current(), TransferProposal(), ctx);
-    acc_transfer::do_transfer(executable, account, coin, version::current(), TransferProposal());
+    let coin: Coin<CoinType> = do_spend(executable, account, version::current(), TransferIntent(), ctx);
+    acc_transfer::do_transfer(executable, account, coin, version::current(), TransferIntent());
 }
 
 // step 5: complete acc_transfer and destroy the executable
-public fun complete_transfer(executable: Executable) {
-    executable.destroy(version::current(), TransferProposal());
+public fun complete_transfer<Config, Outcome>(
+    executable: Executable,
+    account: &mut Account<Config, Outcome>,
+) {
+    account.confirm_execution(executable, version::current(), TransferIntent());
 }
 
 // step 1(bis): same but from a treasury
-public fun propose_vesting<Config, Outcome, CoinType: drop>(
+public fun request_vesting<Config, Outcome, CoinType: drop>(
     auth: Auth,
-    account: &mut Account<Config, Outcome>, 
     outcome: Outcome,
+    account: &mut Account<Config, Outcome>, 
     key: String,
     description: String,
     execution_time: u64,
@@ -235,22 +238,22 @@ public fun propose_vesting<Config, Outcome, CoinType: drop>(
     assert!(treasury.coin_type_exists<CoinType>(), ECoinTypeDoesntExist);
     assert!(treasury.coin_type_value<CoinType>() >= coin_amount, EInsufficientFunds);
 
-    let mut proposal = account.create_proposal(
+    let mut intent = account.create_intent(
         auth,
-        outcome,
-        version::current(),
-        PayProposal(),
-        treasury_name,
         key,
         description,
-        execution_time,
+        vector[execution_time],
         expiration_time,
+        outcome,
+        version::current(),
+        VestingIntent(),
+        treasury_name,
         ctx
     );
 
-    new_spend<Outcome, CoinType, PayProposal>(&mut proposal, coin_amount, PayProposal());
-    vesting::new_vesting(&mut proposal, start_timestamp, end_timestamp, recipient, PayProposal());
-    account.add_proposal(proposal, version::current(), PayProposal());
+    new_spend<Outcome, CoinType, VestingIntent>(&mut intent, coin_amount, VestingIntent());
+    vesting::new_vesting(&mut intent, start_timestamp, end_timestamp, recipient, VestingIntent());
+    account.add_intent(intent, version::current(), VestingIntent());
 }
 
 // step 2: multiple members have to approve the proposal (account::approve_proposal)
@@ -262,19 +265,19 @@ public fun execute_vesting<Config, Outcome, CoinType: drop>(
     account: &mut Account<Config, Outcome>, 
     ctx: &mut TxContext
 ) {
-    let coin: Coin<CoinType> = do_spend(&mut executable, account, version::current(), PayProposal(), ctx);
-    vesting::do_vesting(&mut executable, account, coin, version::current(), PayProposal(), ctx);
-    executable.destroy(version::current(), PayProposal());
+    let coin: Coin<CoinType> = do_spend(&mut executable, account, version::current(), VestingIntent(), ctx);
+    vesting::do_vesting(&mut executable, account, coin, version::current(), VestingIntent(), ctx);
+    account.confirm_execution(executable, version::current(), VestingIntent());
 }
 
 // === [ACTION] Public Functions ===
 
 public fun new_spend<Outcome, CoinType: drop, W: drop>(
-    proposal: &mut Proposal<Outcome>,
+    intent: &mut Intent<Outcome>,
     amount: u64,
     witness: W,
 ) {
-    proposal.add_action(SpendAction<CoinType> { amount }, witness);
+    intent.add_action(SpendAction<CoinType> { amount }, witness);
 }
 
 public fun do_spend<Config, Outcome, CoinType: drop, W: copy + drop>(
@@ -285,11 +288,11 @@ public fun do_spend<Config, Outcome, CoinType: drop, W: copy + drop>(
     ctx: &mut TxContext
 ): Coin<CoinType> {
     let name = executable.issuer().role_name();
-    let SpendAction<CoinType> { amount } = executable.action(account.addr(), version, witness);
+    let action: &SpendAction<CoinType> = account.process_action(executable, version, witness);
     
     let treasury: &mut Treasury = account.borrow_managed_struct_mut(TreasuryKey { name }, version);
     let balance: &mut Balance<CoinType> = treasury.bag.borrow_mut(type_name::get<CoinType>());
-    let coin = coin::take(balance, amount, ctx);
+    let coin = coin::take(balance, action.amount, ctx);
 
     if (balance.value() == 0) 
         treasury.bag.remove<TypeName, Balance<CoinType>>(type_name::get<CoinType>()).destroy_zero();
@@ -297,6 +300,6 @@ public fun do_spend<Config, Outcome, CoinType: drop, W: copy + drop>(
     coin
 }
 
-public fun delete_spend_action<Outcome, CoinType>(expired: &mut Expired<Outcome>) {
-    let SpendAction<CoinType> { .. } = expired.remove_expired_action();
+public fun delete_spend<CoinType>(expired: &mut Expired) {
+    let SpendAction<CoinType> { .. } = expired.remove_action();
 }

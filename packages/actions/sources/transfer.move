@@ -8,7 +8,7 @@ module account_actions::transfer;
 use std::type_name::TypeName;
 use account_protocol::{
     account::Account,
-    proposals::{Proposal, Expired},
+    intents::{Intent, Expired},
     executable::Executable,
 };
 
@@ -23,11 +23,11 @@ public struct TransferAction has store {
 // === [ACTION] Public functions ===
 
 public fun new_transfer<Outcome, W: drop>(
-    proposal: &mut Proposal<Outcome>, 
+    intent: &mut Intent<Outcome>, 
     recipient: address,
     witness: W,
 ) {
-    proposal.add_action(TransferAction { recipient }, witness);
+    intent.add_action(TransferAction { recipient }, witness);
 }
 
 public fun do_transfer<Config, Outcome, T: key + store, W: drop>(
@@ -37,10 +37,10 @@ public fun do_transfer<Config, Outcome, T: key + store, W: drop>(
     version: TypeName,
     witness: W,
 ) {
-    let TransferAction { recipient } = executable.action(account.addr(), version, witness);
-    transfer::public_transfer(object, recipient);
+    let action: &TransferAction = account.process_action(executable, version, witness);
+    transfer::public_transfer(object, action.recipient);
 }
 
-public fun delete_transfer_action<Outcome>(expired: &mut Expired<Outcome>) {
-    let TransferAction { .. } = expired.remove_expired_action();
+public fun delete_transfer(expired: &mut Expired) {
+    let TransferAction { .. } = expired.remove_action();
 }
