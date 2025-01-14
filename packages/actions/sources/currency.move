@@ -58,6 +58,21 @@ const EMaxSupply: vector<u8> = b"Max supply exceeded";
 
 // === Structs ===    
 
+/// [PROPOSAL] witness defining the TreasuryCap lock command, and associated role
+public struct LockCommand() has drop;
+/// [PROPOSAL] witness defining the proposal to disable one or more permissions
+public struct DisableIntent() has copy, drop;
+/// [PROPOSAL] witness defining the proposal to mint new coins from a locked TreasuryCap
+public struct MintIntent() has copy, drop;
+/// [PROPOSAL] witness defining the proposal to burn coins from the account using a locked TreasuryCap
+public struct BurnIntent() has copy, drop;
+/// [PROPOSAL] witness defining the proposal to update the CoinMetadata associated with a locked TreasuryCap
+public struct UpdateIntent() has copy, drop;
+/// [PROPOSAL] witness defining the proposal to transfer a minted coin 
+public struct TransferIntent() has copy, drop;
+/// [PROPOSAL] witness defining the proposal to pay from a minted coin
+public struct VestingIntent() has copy, drop;
+
 /// Dynamic Object Field key for the TreasuryCap
 public struct TreasuryCapKey<phantom CoinType> has copy, drop, store {}
 /// Dynamic Field key for the CurrencyRules
@@ -78,21 +93,6 @@ public struct CurrencyRules<phantom CoinType> has store {
     can_update_description: bool,
     can_update_icon: bool,
 }
-
-/// [PROPOSAL] witness defining the TreasuryCap lock command, and associated role
-public struct LockCommand() has drop;
-/// [PROPOSAL] witness defining the proposal to disable one or more permissions
-public struct DisableIntent() has copy, drop;
-/// [PROPOSAL] witness defining the proposal to mint new coins from a locked TreasuryCap
-public struct MintIntent() has copy, drop;
-/// [PROPOSAL] witness defining the proposal to burn coins from the account using a locked TreasuryCap
-public struct BurnIntent() has copy, drop;
-/// [PROPOSAL] witness defining the proposal to update the CoinMetadata associated with a locked TreasuryCap
-public struct UpdateIntent() has copy, drop;
-/// [PROPOSAL] witness defining the proposal to transfer a minted coin 
-public struct TransferIntent() has copy, drop;
-/// [PROPOSAL] witness defining the proposal to pay from a minted coin
-public struct VestingIntent() has copy, drop;
 
 /// [ACTION] disables permissions marked as true, cannot be reenabled
 public struct DisableAction<phantom CoinType> has store {

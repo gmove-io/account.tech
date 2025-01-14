@@ -41,13 +41,13 @@ const EWrongAccount: vector<u8> = b"This Cap has not been borrowed from this acc
 
 // === Structs ===    
 
-/// Dynamic Object Field key for the Cap
-public struct CapKey<phantom Cap> has copy, drop, store {}
-
 /// [COMMAND] witness defining the lock cap command, and associated role
 public struct LockCommand() has drop;
 /// [PROPOSAL] witness defining the access cap proposal, and associated role
 public struct AccessIntent() has copy, drop;
+
+/// Dynamic Object Field key for the Cap
+public struct CapKey<phantom Cap> has copy, drop, store {}
 
 /// [ACTION] struct giving access to the Cap
 public struct AccessAction<phantom Cap> has store {}

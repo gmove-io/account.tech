@@ -46,6 +46,13 @@ const ECoinTypeDoesntExist: vector<u8> = b"Coin type doesn't exist in treasury";
 
 // === Structs ===
 
+/// [COMMAND] witness defining the treasury opening and closing commands, and associated role
+public struct TreasuryCommand() has drop;
+/// [PROPOSAL] witness defining the treasury transfer proposal, and associated role
+public struct TransferIntent() has copy, drop;
+/// [PROPOSAL] witness defining the treasury pay proposal, and associated role
+public struct VestingIntent() has copy, drop;
+
 /// Dynamic Field key for the Treasury
 public struct TreasuryKey has copy, drop, store { name: String }
 /// Dynamic field holding a budget with different coin types, key is name
@@ -53,15 +60,6 @@ public struct Treasury has store {
     // heterogeneous array of Balances, TypeName -> Balance<CoinType>
     bag: Bag
 }
-
-/// [COMMAND] witness defining the treasury opening and closing commands, and associated role
-public struct TreasuryCommand() has drop;
-/// [COMMAND] witness defining the treasury deposit command, and associated role
-public struct DepositCommand() has drop;
-/// [PROPOSAL] witness defining the treasury transfer proposal, and associated role
-public struct TransferIntent() has copy, drop;
-/// [PROPOSAL] witness defining the treasury pay proposal, and associated role
-public struct VestingIntent() has copy, drop;
 
 /// [ACTION] struct to be used with specific proposals making good use of the returned coins, similar to owned::withdraw
 public struct SpendAction<phantom CoinType> has store {
@@ -103,7 +101,7 @@ public fun deposit<Config, Outcome, CoinType: drop>(
     name: String, 
     coin: Coin<CoinType>, 
 ) {
-    auth.verify_with_role<DepositCommand>(account.addr(), name);
+    auth.verify_with_role<TreasuryCommand>(account.addr(), b"".to_string());
     assert!(has_treasury(account, name), ETreasuryDoesntExist);
 
     let treasury: &mut Treasury = 

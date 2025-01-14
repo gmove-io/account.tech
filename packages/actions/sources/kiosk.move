@@ -40,19 +40,15 @@ const EAlreadyExists: vector<u8> = b"There already is a Kiosk with this name";
 
 // === Structs ===    
 
-/// Dynamic Object Field key for the KioskOwnerCap
-public struct KioskOwnerKey has copy, drop, store { name: String }
-
 /// [COMMAND] witness defining the command to place into a Kiosk
 public struct KioskCommand() has drop;
-/// [COMMAND] witness defining the command to place into a Kiosk
-public struct PlaceCommand() has drop;
-/// [COMMAND] witness defining the command to delist from a Kiosk
-public struct DelistCommand() has drop;
 /// [PROPOSAL] witness defining the proposal to take nfts from a kiosk managed by a account
 public struct TakeIntent() has copy, drop;
 /// [PROPOSAL] witness defining the proposal to list nfts in a kiosk managed by a account
 public struct ListIntent() has copy, drop;
+
+/// Dynamic Object Field key for the KioskOwnerCap
+public struct KioskOwnerKey has copy, drop, store { name: String }
 
 /// [ACTION] struct transferring nfts from the account's kiosk to another one
 public struct TakeAction has store {
@@ -111,7 +107,7 @@ public fun place<Config, Outcome, Nft: key + store>(
     nft_id: ID,
     ctx: &mut TxContext
 ): TransferRequest<Nft> {
-    auth.verify_with_role<PlaceCommand>(account.addr(), name);
+    auth.verify_with_role<KioskCommand>(account.addr(), b"".to_string());
     assert!(has_lock(account, name), ENoLock);
 
     let cap: &KioskOwnerCap = account.borrow_managed_object(KioskOwnerKey { name }, version::current());
@@ -147,7 +143,7 @@ public fun delist<Config, Outcome, Nft: key + store>(
     name: String,
     nft_id: ID,
 ) {
-    auth.verify_with_role<DelistCommand>(account.addr(), name);
+    auth.verify_with_role<KioskCommand>(account.addr(), b"".to_string());
     assert!(has_lock(account, name), ENoLock);
 
     let cap: &KioskOwnerCap = account.borrow_managed_object(KioskOwnerKey { name }, version::current());

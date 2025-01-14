@@ -43,6 +43,13 @@ const ENoPackageDoesntExist: vector<u8> = b"No package with this name";
 
 // === Structs ===
 
+/// [COMMAND] witness defining the command to lock an UpgradeCap
+public struct LockCommand() has drop;
+/// [PROPOSAL] witness defining the proposal to upgrade a package
+public struct UpgradeIntent() has copy, drop;
+/// [PROPOSAL] witness defining the proposal to restrict an UpgradeCap
+public struct RestrictIntent() has copy, drop;
+
 /// Dynamic Object Field key for the UpgradeLock
 public struct UpgradeCapKey has copy, drop, store {
     // name of the package
@@ -66,13 +73,6 @@ public struct UpgradeIndex has store {
     // map of package name to address
     packages_info: VecMap<String, address>,
 }
-
-/// [COMMAND] witness defining the command to lock an UpgradeCap
-public struct LockCommand() has drop;
-/// [PROPOSAL] witness defining the proposal to upgrade a package
-public struct UpgradeIntent() has copy, drop;
-/// [PROPOSAL] witness defining the proposal to restrict an UpgradeCap
-public struct RestrictIntent() has copy, drop;
 
 /// [ACTION] upgrades a package
 public struct UpgradeAction has store {
