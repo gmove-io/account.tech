@@ -144,7 +144,7 @@ public fun new_config_deps<Config, Outcome, W: drop>(
 
         if (extensions.is_extension(name, package, version)) {
             deps.add(extensions, name, package, version);
-        } else if (upgrade_policies::has_cap(account, package)) {
+        } else if (upgrade_policies::is_package_managed(account, package)) {
             let cap = upgrade_policies::borrow_cap(account, package);
             deps.add_with_upgrade_cap(cap, name, package, version);
         } else abort ENoExtensionOrUpgradeCap;
@@ -155,7 +155,7 @@ public fun new_config_deps<Config, Outcome, W: drop>(
 
 public fun do_config_deps<Config, Outcome, W: copy + drop>(
     executable: &mut Executable,
-    account: &mut Account<Config, Outcome>, 
+    account: &mut Account<Config, Outcome>,
     version: TypeName,
     witness: W,
 ) {

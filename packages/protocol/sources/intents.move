@@ -250,10 +250,9 @@ public(package) fun destroy<Outcome: drop>(
     intents: &mut Intents<Outcome>,
     account_addr: address,
     key: String,
-    issuer: Issuer,
 ): Expired {
     let idx = intents.get_idx(key);
-    let Intent { key, execution_times, actions, .. } = intents.inner.remove(idx);
+    let Intent { issuer, key, execution_times, actions, .. } = intents.inner.remove(idx);
     
     assert!(execution_times.is_empty(), ECantBeRemovedYet);
 
@@ -264,11 +263,10 @@ public(package) fun delete<Outcome: drop>(
     intents: &mut Intents<Outcome>,
     account_addr: address,
     key: String,
-    issuer: Issuer,
     clock: &Clock
 ): Expired {
     let idx = intents.get_idx(key);
-    let Intent<Outcome> { key, expiration_time, actions, .. } = intents.inner.remove(idx);
+    let Intent<Outcome> { issuer, key, expiration_time, actions, .. } = intents.inner.remove(idx);
 
     assert!(clock.timestamp_ms() >= expiration_time, EHasntExpired);
 
