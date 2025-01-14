@@ -224,7 +224,7 @@ public fun request_upgrade<Config, Outcome>(
         outcome,
         version::current(),
         UpgradeIntent(),
-        b"".to_string(),
+        package_name,
         ctx
     );
 
@@ -282,7 +282,7 @@ public fun request_restrict<Config, Outcome>(
         outcome,
         version::current(),
         RestrictIntent(),
-        b"".to_string(),
+        package_name,
         ctx
     );
 
