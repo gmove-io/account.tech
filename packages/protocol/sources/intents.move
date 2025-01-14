@@ -86,6 +86,10 @@ public fun length<Outcome>(intents: &Intents<Outcome>): u64 {
     intents.inner.length()
 }
 
+public fun locked<Outcome>(intents: &Intents<Outcome>): &VecSet<ID> {
+    &intents.locked
+}
+
 public fun contains<Outcome>(intents: &Intents<Outcome>, key: String): bool {
     intents.inner.any!(|intent| intent.key == key)
 }
@@ -200,9 +204,8 @@ public(package) fun new_intent<Outcome>(
     outcome: Outcome,
     ctx: &mut TxContext
 ): Intent<Outcome> {
-    assert!(execution_times[0] < expiration_time, EExpirationBeforeExecution);
     assert!(!execution_times.is_empty(), ENoExecutionTime);
-    let i = 0;
+    let mut i = 0;
     while (i < vector::length(&execution_times) - 1) {
         assert!(execution_times[i] < execution_times[i + 1], EExecutionTimesNotAscending);
         i = i + 1;

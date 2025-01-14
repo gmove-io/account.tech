@@ -34,3 +34,12 @@ public fun from_keys_values(keys: vector<String>, values: vector<String>): Metad
 public fun get(metadata: &Metadata, key: String): String {
     *metadata.inner.get(&key)
 }
+
+public fun get_entry_by_idx(metadata: &Metadata, idx: u64): (String, String) {
+    let (key, value) = metadata.inner.get_entry_by_idx(idx);
+    (*key, *value)
+}
+
+public fun size(metadata: &Metadata): u64 {
+    metadata.inner.size()
+}

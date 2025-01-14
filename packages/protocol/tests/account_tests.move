@@ -28,7 +28,7 @@ const ALICE: address = @0xA11CE;
 
 // === Structs ===
 
-public struct DummyProposal() has drop;
+public struct DummyIntent() has drop;
 public struct WrongWitness() has drop;
 
 public struct Key has copy, drop, store {}
@@ -55,7 +55,7 @@ fun start(): (Scenario, Extensions, Account<bool, bool>) {
     extensions.add(&cap, b"AccountConfig".to_string(), @0x1, 1);
     extensions.add(&cap, b"AccountActions".to_string(), @0x2, 1);
     // Account generic types are dummy types (bool, bool)
-    let account = account::new(&extensions, b"Main".to_string(), true, scenario.ctx());
+    let account = account::new(&extensions, true, scenario.ctx());
     // create world
     destroy(cap);
     (scenario, extensions, account)
@@ -69,7 +69,7 @@ fun end(scenario: Scenario, extensions: Extensions, account: Account<bool, bool>
 
 fun full_role(): String {
     let mut full_role = @account_protocol.to_string();
-    full_role.append_utf8(b"::account_tests::DummyProposal::Degen");
+    full_role.append_utf8(b"::account_tests::DummyIntent::Degen");
     full_role
 }
 
@@ -83,7 +83,7 @@ fun wrong_version(): TypeName {
 fun test_create_and_share_account() {
     let (scenario, extensions, account) = start();
 
-    account.share();
+    transfer::public_share_object(account);
 
     destroy(extensions);
     scenario.end();
@@ -103,89 +103,79 @@ fun test_keep_object() {
 
 #[test]
 fun test_account_getters() {
-    let (mut scenario, extensions, mut account) = start();
+    let (scenario, extensions, account) = start();
 
     assert!(account.addr() == object::id(&account).to_address());
-    assert!(account.metadata().get(b"name".to_string()) == b"Main".to_string());
+    assert!(account.metadata().size() == 0);
     assert!(account.deps().contains_name(b"AccountProtocol".to_string()));
     assert!(account.deps().contains_name(b"AccountConfig".to_string()));
     assert!(account.deps().contains_name(b"AccountActions".to_string()));
-    assert!(account.proposals().length() == 0);
-    // proposal
-    let auth = auth::new(&extensions, full_role(), account.addr(), version::current());
-    let proposal = account.create_proposal(
-        auth, 
-        true, 
-        version::current(), 
-        DummyProposal(), 
-        b"Degen".to_string(), 
-        b"one".to_string(), 
-        b"description".to_string(), 
-        0,
-        1, 
-        scenario.ctx()
-    );
-    account.add_proposal(proposal, version::current(), DummyProposal());
-    assert!(account.proposals().length() == 1);
-    assert!(account.proposal(b"one".to_string()).execution_time() == 0);
-    assert!(account.proposal(b"one".to_string()).outcome() == true);
+    assert!(account.intents().length() == 0);
+    assert!(account.config() == true);
 
     end(scenario, extensions, account);
 }
 
 #[test]
-fun test_proposal_execute_flow() {
+fun test_intent_execute_flow() {
     let (mut scenario, extensions, mut account) = start();
     let clock = clock::create_for_testing(scenario.ctx());
 
     let auth = auth::new(&extensions, full_role(), account.addr(), version::current());
-    let proposal = account.create_proposal(
+    let intent = account.create_intent(
         auth, 
-        true, 
-        version::current(), 
-        DummyProposal(), 
-        b"Degen".to_string(), 
         b"one".to_string(), 
         b"description".to_string(), 
-        0,
+        vector[0],
         1, 
+        true, 
+        version::current(), 
+        DummyIntent(), 
+        b"Degen".to_string(), 
         scenario.ctx()
     );
-    account.add_proposal(proposal, version::current(), DummyProposal());
-    let (executable, outcome) = account.execute_proposal(
+    account.add_intent(intent, version::current(), DummyIntent());
+
+    let (mut executable, outcome) = account.execute_intent(
         b"one".to_string(), 
         &clock, 
         version::current(), 
     );
+    let _: &bool = account.process_action(&mut executable, version::current(), DummyIntent());
+    assert!(account.intents().get(b"one".to_string()).execution_times().length() == 0);
+    account.confirm_execution(executable, version::current(), DummyIntent());
+    assert!(account.intents().get(b"one".to_string()).actions().length() == 1);
+    let expired = account.destroy_empty_intent(b"one".to_string());
+    assert!(account.intents().get(b"one".to_string()).actions().length() == 0);
 
+    destroy(expired);
     destroy(outcome);
-    destroy(executable);
     destroy(clock);
     end(scenario, extensions, account);
 }
 
 #[test]
-fun test_anyone_can_execute_proposal() {
+fun test_anyone_can_execute_intent() {
     let (mut scenario, extensions, mut account) = start();
     let clock = clock::create_for_testing(scenario.ctx());
 
     let auth = auth::new(&extensions, full_role(), account.addr(), version::current());
-    let proposal = account.create_proposal(
+    let intent = account.create_intent(
         auth, 
-        true, 
-        version::current(), 
-        DummyProposal(), 
-        b"Degen".to_string(), 
         b"one".to_string(), 
         b"description".to_string(), 
-        0,
+        vector[0],
         1, 
+        true, 
+        version::current(), 
+        DummyIntent(), 
+        b"Degen".to_string(), 
         scenario.ctx()
     );
-    account.add_proposal(proposal, version::current(), DummyProposal());
+    account.add_intent(intent, version::current(), DummyIntent());
 
     scenario.next_tx(ALICE);
-    let (executable, outcome) = account.execute_proposal(
+    let (executable, outcome) = account.execute_intent(
         b"one".to_string(), 
         &clock, 
         version::current(), 
@@ -198,32 +188,64 @@ fun test_anyone_can_execute_proposal() {
 }
 
 #[test]
-fun test_proposal_delete_flow() {
+fun test_intent_delete_flow() {
     let (mut scenario, extensions, mut account) = start();
     let mut clock = clock::create_for_testing(scenario.ctx());
     clock.increment_for_testing(1);
 
     let auth = auth::new(&extensions, full_role(), account.addr(), version::current());
-    let proposal = account.create_proposal(
+    let intent = account.create_intent(
         auth, 
-        true, 
-        version::current(), 
-        DummyProposal(), 
-        b"Degen".to_string(), 
         b"one".to_string(), 
         b"description".to_string(), 
-        0,
+        vector[0],
         1, 
+        true, 
+        version::current(), 
+        DummyIntent(), 
+        b"Degen".to_string(), 
         scenario.ctx()
     );
-    account.add_proposal(proposal, version::current(), DummyProposal());
-    let expired = account.delete_proposal(
-        b"one".to_string(), 
-        version::current(), 
-        &clock, 
-    );
+    account.add_intent(intent, version::current(), DummyIntent());
+
+    assert!(account.intents().get(b"one".to_string()).actions().length() == 1);
+    let expired = account.delete_expired_intent(b"one".to_string(), &clock);
+    assert!(account.intents().get(b"one".to_string()).actions().length() == 0);
 
     destroy(expired);
+    destroy(clock);
+    end(scenario, extensions, account);
+}
+
+#[test]
+fun test_lock_object() {
+    let (mut scenario, extensions, mut account) = start();
+    let mut clock = clock::create_for_testing(scenario.ctx());
+    clock.increment_for_testing(1);
+
+    let auth = auth::new(&extensions, full_role(), account.addr(), version::current());
+    let intent = account.create_intent(
+        auth, 
+        b"one".to_string(), 
+        b"description".to_string(), 
+        vector[0],
+        1, 
+        true, 
+        version::current(), 
+        DummyIntent(), 
+        b"Degen".to_string(), 
+        scenario.ctx()
+    );
+
+    account.lock_object(&intent, @0x1D.to_id(), version::current(), DummyIntent());
+    assert!(account.intents().locked().contains(&@0x1D.to_id()));
+
+    let expired = account.delete_expired_intent(b"one".to_string(), &clock);
+    account.unlock_object(&expired, @0x1D.to_id(), version::current(), DummyIntent());
+    assert!(!account.intents().locked().contains(&@0x1D.to_id()));
+
+    destroy(expired);
+    destroy(intent);
     destroy(clock);
     end(scenario, extensions, account);
 }
@@ -278,167 +300,140 @@ fun test_account_getters_mut() {
     assert!(account.deps_mut(version::current()).contains_name(b"AccountProtocol".to_string()));
     assert!(account.deps_mut(version::current()).contains_name(b"AccountConfig".to_string()));
     assert!(account.deps_mut(version::current()).contains_name(b"AccountActions".to_string()));
-    assert!(account.proposals_mut(version::current()).length() == 0);
+    assert!(account.intents_mut(version::current()).length() == 0);
     assert!(account.config_mut(version::current()) == true);
-    // proposal
+    // intent
     let auth = auth::new(&extensions, full_role(), account.addr(), version::current());
-    let proposal = account.create_proposal(
+    let intent = account.create_intent(
         auth, 
-        true, 
-        version::current(), 
-        DummyProposal(), 
-        b"Degen".to_string(), 
         b"one".to_string(), 
         b"description".to_string(), 
-        0,
+        vector[0],
         1, 
+        true, 
+        version::current(), 
+        DummyIntent(), 
+        b"Degen".to_string(), 
         scenario.ctx()
     );
-    account.add_proposal(proposal, version::current(), DummyProposal());
-    assert!(account.proposals_mut(version::current()).length() == 1);
-    assert!(account.proposal_mut(0, version::current()).actions_length() == 0);
+    account.add_intent(intent, version::current(), DummyIntent());
+    assert!(account.intents_mut(version::current()).length() == 1);
+    assert!(account.intents_mut(version::current()).get_mut(b"one".to_string()).actions().length() == 0);
 
     end(scenario, extensions, account);
 }
 
 #[test, expected_failure(abort_code = auth::EWrongAccount)]
-fun test_error_cannot_create_proposal_with_wrong_account() {
+fun test_error_cannot_create_intent_with_wrong_account() {
     let (mut scenario, extensions, mut account) = start();
 
     let auth = auth::new(&extensions, full_role(), @0xFA15E, version::current());
-    let proposal = account.create_proposal(
+    let intent = account.create_intent(
         auth, 
-        true, 
-        version::current(), 
-        DummyProposal(), 
-        b"Degen".to_string(), 
         b"one".to_string(), 
         b"description".to_string(), 
-        0,
+        vector[0],
         1, 
+        true, 
+        version::current(), 
+        DummyIntent(), 
+        b"Degen".to_string(), 
         scenario.ctx()
     );
 
-    destroy(proposal);
+    destroy(intent);
     end(scenario, extensions, account);
 }
 
 #[test, expected_failure(abort_code = deps::ENotDep)]
-fun test_error_cannot_create_proposal_from_not_dependent_package() {
+fun test_error_cannot_create_intent_from_not_dependent_package() {
     let (mut scenario, extensions, mut account) = start();
 
     let auth = auth::new(&extensions, full_role(), account.addr(), version::current());
-    let proposal = account.create_proposal(
+    let intent = account.create_intent(
         auth, 
+        b"one".to_string(), 
+        b"description".to_string(), 
+        vector[0],
+        1, 
         true, 
         wrong_version(), 
-        DummyProposal(), 
+        DummyIntent(), 
         b"Degen".to_string(), 
-        b"one".to_string(), 
-        b"description".to_string(), 
-        0,
-        1, 
         scenario.ctx()
     );
 
-    destroy(proposal);
+    destroy(intent);
     end(scenario, extensions, account);
 }
 
 #[test, expected_failure(abort_code = deps::ENotDep)]
-fun test_error_cannot_add_proposal_from_not_dependent_package() {
+fun test_error_cannot_add_intent_from_not_dependent_package() {
     let (mut scenario, extensions, mut account) = start();
 
     let auth = auth::new(&extensions, full_role(), account.addr(), version::current());
-    let proposal = account.create_proposal(
+    let intent = account.create_intent(
         auth, 
-        true, 
-        version::current(), 
-        DummyProposal(), 
-        b"Degen".to_string(), 
         b"one".to_string(), 
         b"description".to_string(), 
-        0,
+        vector[0],
         1, 
+        true, 
+        version::current(), 
+        DummyIntent(), 
+        b"Degen".to_string(), 
         scenario.ctx()
     );
-    account.add_proposal(proposal, wrong_version(), DummyProposal());
+    account.add_intent(intent, wrong_version(), DummyIntent());
 
     end(scenario, extensions, account);
 }
 
 #[test, expected_failure(abort_code = issuer::EWrongWitness)]
-fun test_error_cannot_add_proposal_with_wrong_witness() {
+fun test_error_cannot_add_intent_with_wrong_witness() {
     let (mut scenario, extensions, mut account) = start();
 
     let auth = auth::new(&extensions, full_role(), account.addr(), version::current());
-    let proposal = account.create_proposal(
+    let intent = account.create_intent(
         auth, 
-        true, 
-        version::current(), 
-        DummyProposal(), 
-        b"Degen".to_string(), 
         b"one".to_string(), 
         b"description".to_string(), 
-        0,
+        vector[0],
         1, 
+        true, 
+        version::current(), 
+        DummyIntent(), 
+        b"Degen".to_string(), 
         scenario.ctx()
     );
-    account.add_proposal(proposal, version::current(), WrongWitness());
+    account.add_intent(intent, version::current(), WrongWitness());
 
     end(scenario, extensions, account);
 }
 
 #[test, expected_failure(abort_code = deps::EDepNotFound)]
-fun test_error_cannot_execute_proposal_from_not_core_dep() {
+fun test_error_cannot_execute_intent_from_not_core_dep() {
     let (mut scenario, extensions, mut account) = start();
     let clock = clock::create_for_testing(scenario.ctx());
 
     let auth = auth::new(&extensions, full_role(), account.addr(), version::current());
-    let proposal = account.create_proposal(
+    let intent = account.create_intent(
         auth, 
-        true, 
-        version::current(), 
-        DummyProposal(), 
-        b"Degen".to_string(), 
         b"one".to_string(), 
         b"description".to_string(), 
-        0,
+        vector[0],
         1, 
+        true, 
+        version::current(), 
+        DummyIntent(), 
+        b"Degen".to_string(), 
         scenario.ctx()
     );
-    account.add_proposal(proposal, version::current(), DummyProposal());
-    let (executable, outcome) = account.execute_proposal(b"one".to_string(), &clock, wrong_version());
+    account.add_intent(intent, version::current(), DummyIntent());
+    let (executable, outcome) = account.execute_intent(b"one".to_string(), &clock, wrong_version());
 
     destroy(executable);
     destroy(outcome);
-    destroy(clock);
-    end(scenario, extensions, account);
-}
-
-#[test, expected_failure(abort_code = deps::EDepNotFound)]
-fun test_error_cannot_delete_proposal_from_not_core_dep() {
-    let (mut scenario, extensions, mut account) = start();
-    let mut clock = clock::create_for_testing(scenario.ctx());
-    clock.increment_for_testing(1);
-
-    let auth = auth::new(&extensions, full_role(), account.addr(), version::current());
-    let proposal = account.create_proposal(
-        auth, 
-        true, 
-        version::current(), 
-        DummyProposal(), 
-        b"Degen".to_string(), 
-        b"one".to_string(), 
-        b"description".to_string(), 
-        0,
-        1, 
-        scenario.ctx()
-    );
-    account.add_proposal(proposal, version::current(), DummyProposal());
-    let expired = account.delete_proposal(b"one".to_string(), wrong_version(), &clock);
-
-    destroy(expired);
     destroy(clock);
     end(scenario, extensions, account);
 }
@@ -560,10 +555,10 @@ fun test_error_cannot_access_deps_mut_from_not_core_dep() {
 }
 
 #[test, expected_failure(abort_code = deps::EDepNotFound)]
-fun test_error_cannot_access_proposals_mut_from_not_core_dep() {
+fun test_error_cannot_access_intents_mut_from_not_core_dep() {
     let (scenario, extensions, mut account) = start();
 
-    assert!(account.proposals_mut(wrong_version()).length() == 0);
+    assert!(account.intents_mut(wrong_version()).length() == 0);
 
     end(scenario, extensions, account);
 }
@@ -573,31 +568,6 @@ fun test_error_cannot_access_config_mut_from_not_core_dep() {
     let (scenario, extensions, mut account) = start();
 
     assert!(account.config_mut(wrong_version()) == true);
-
-    end(scenario, extensions, account);
-}
-
-#[test, expected_failure(abort_code = deps::EDepNotFound)]
-fun test_error_cannot_access_proposal_mut_from_not_core_dep() {
-    let (mut scenario, extensions, mut account) = start();
-
-    assert!(account.proposals_mut(version::current()).length() == 0);
-    // proposal
-    let auth = auth::new(&extensions, full_role(), account.addr(), version::current());
-    let proposal = account.create_proposal(
-        auth, 
-        true, 
-        version::current(), 
-        DummyProposal(), 
-        b"Degen".to_string(), 
-        b"one".to_string(), 
-        b"description".to_string(), 
-        0,
-        1, 
-        scenario.ctx()
-    );
-    account.add_proposal(proposal, version::current(), DummyProposal());
-    assert!(account.proposal_mut(0, wrong_version()).actions_length() == 0);
 
     end(scenario, extensions, account);
 }
