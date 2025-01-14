@@ -18,7 +18,7 @@ use account_protocol::issuer::Issuer;
 #[error]
 const EActionNotFound: vector<u8> = b"Action not found for type";
 #[error]
-const EActionsNotEmpty: vector<u8> = b"Actions have not been processed";
+const EActionsRemaining: vector<u8> = b"Actions have not been processed";
 
 // === Structs ===
 
@@ -85,7 +85,7 @@ public(package) fun destroy<W: drop>(
         ..
     } = executable;
 
-    assert!(action_idx == actions_length, EActionsNotEmpty);
+    assert!(action_idx == actions_length, EActionsRemaining);
     
     issuer.assert_is_constructor(witness);
 }

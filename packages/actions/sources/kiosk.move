@@ -322,7 +322,7 @@ public fun do_take<Config, Outcome, Nft: key + store, W: copy + drop>(
     witness: W,
     ctx: &mut TxContext
 ): TransferRequest<Nft> {
-    let name = executable.issuer().role_name();
+    let name = executable.issuer().opt_name();
     let action: &TakeAction = account.process_action(executable, version, witness);
     let cap: &KioskOwnerCap = account.borrow_managed_object(KioskOwnerKey { name }, version);
     assert!(action.recipient == ctx.sender(), EWrongReceiver);
@@ -368,7 +368,7 @@ public fun do_list<Config, Outcome, Nft: key + store, W: copy + drop>(
     version: TypeName,
     witness: W,
 ) {
-    let name = executable.issuer().role_name();
+    let name = executable.issuer().opt_name();
     let action: &ListAction = account.process_action(executable, version, witness);
     let cap: &KioskOwnerCap = account.borrow_managed_object(KioskOwnerKey { name }, version);
 

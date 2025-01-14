@@ -285,7 +285,7 @@ public fun do_spend<Config, Outcome, CoinType: drop, W: copy + drop>(
     witness: W,
     ctx: &mut TxContext
 ): Coin<CoinType> {
-    let name = executable.issuer().role_name();
+    let name = executable.issuer().opt_name();
     let action: &SpendAction<CoinType> = account.process_action(executable, version, witness);
     
     let treasury: &mut Treasury = account.borrow_managed_struct_mut(TreasuryKey { name }, version);

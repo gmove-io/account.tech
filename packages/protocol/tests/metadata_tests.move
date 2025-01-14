@@ -20,8 +20,8 @@ const OWNER: address = @0xCAFE;
 fun test_metadata_new() {
     let scenario = ts::begin(OWNER);
 
-    let metadata = metadata::new(b"Name".to_string());
-    assert!(metadata.get(b"name".to_string()) == b"Name".to_string());
+    let metadata = metadata::new();
+    assert!(metadata.size() == 0);
 
     scenario.end();
 }
@@ -41,7 +41,9 @@ fun test_metadata_from_keys_values() {
 
     let metadata = metadata::from_keys_values(keys, values);
     assert!(metadata.get(b"name".to_string()) == b"Name".to_string());
-    assert!(metadata.get(b"description".to_string()) == b"Description".to_string());
+    let (key, value) = metadata.get_entry_by_idx(1);
+    assert!(key == b"description".to_string());
+    assert!(value == b"Description".to_string());
     
     scenario.end();
 }

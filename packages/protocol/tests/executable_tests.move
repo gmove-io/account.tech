@@ -5,15 +5,11 @@ module account_protocol::executable_tests;
 
 use sui::{
     test_utils::destroy,
-    test_scenario::{Self as ts, Scenario},
-    bag,
+    test_scenario as ts,
 };
-use account_extensions::extensions::{Self, Extensions, AdminCap};
 use account_protocol::{
     executable,
-    deps,
     issuer,
-    version,
 };
 
 // === Constants ===
@@ -22,86 +18,63 @@ const OWNER: address = @0xCAFE;
 
 // === Structs ===
 
-public struct DummyProposal() has drop;
-
-public struct DummyAction has store {}
-public struct WrongAction has store {}
-
-// === Helpers ===
-
-fun start(): (Scenario, Extensions) {
-    let mut scenario = ts::begin(OWNER);
-    // publish package
-    extensions::init_for_testing(scenario.ctx());
-    // retrieve objects
-    scenario.next_tx(OWNER);
-    let mut extensions = scenario.take_shared<Extensions>();
-    let cap = scenario.take_from_sender<AdminCap>();
-    // add core deps
-    extensions.add(&cap, b"AccountProtocol".to_string(), @account_protocol, 1);
-    extensions.add(&cap, b"AccountConfig".to_string(), @0x1, 1);
-    extensions.add(&cap, b"AccountActions".to_string(), @0x2, 1);
-    extensions.add(&cap, b"External".to_string(), @0xA, 1);
-    // create world
-    destroy(cap);
-    (scenario, extensions)
-}
-
-fun end(scenario: Scenario, extensions: Extensions) {
-    destroy(extensions);
-    ts::end(scenario);
-}
+public struct DummyIntent() has drop;
+public struct WrongIntent() has drop;
 
 // === Tests ===
 
 #[test]
 fun test_executable_flow() {
-    let (mut scenario, extensions) = start();
+    let scenario = ts::begin(OWNER);
 
-    let deps = deps::new(&extensions);
-    let issuer = issuer::construct(@0x0, version::current(), DummyProposal(), b"".to_string());
-    let mut actions = bag::new(scenario.ctx());
-    actions.add(0, DummyAction {});
-    let mut executable = executable::new(deps, issuer, actions);
+    let issuer = issuer::construct(@0x0, DummyIntent(), b"".to_string());
+    let mut executable = executable::new(b"one".to_string(), issuer);
     // verify initial state (pending action)
-    assert!(executable.deps().length() == 3);
+    assert!(executable.key() == b"one".to_string());
     assert!(executable.issuer().account_addr() == @0x0);
+    assert!(executable.action_idx() == 0);
     // first step: execute action
-    let DummyAction {} = executable.action<DummyAction, DummyProposal>(@0x0, version::current(), DummyProposal());
+    let (key, action_idx) = executable.next_action<DummyIntent>(@0x0, DummyIntent());
+    assert!(key == b"one".to_string());
+    assert!(action_idx == 0);
+    assert!(executable.action_idx() == 1);
     // second step: destroy executable
-    executable.destroy(version::current(), DummyProposal());
+    executable.destroy(1, DummyIntent());
 
-    end(scenario, extensions);
+    ts::end(scenario);
 }
 
-#[test, expected_failure(abort_code = executable::EActionNotFound)]
-fun test_error_cannot_load_action() {
-    let (mut scenario, extensions) = start();
+#[test, expected_failure(abort_code = issuer::EWrongWitness)]
+fun test_error_cannot_next_action_wrong_witness() {
+    let scenario = ts::begin(OWNER);
 
-    let deps = deps::new(&extensions);
-    let issuer = issuer::construct(@0x0, version::current(), DummyProposal(), b"".to_string());
-    let mut actions = bag::new(scenario.ctx());
-    actions.add(0, DummyAction {});
-    let mut executable = executable::new(deps, issuer, actions);
-    let WrongAction {} = executable.action<WrongAction, DummyProposal>(@0x0, version::current(), DummyProposal());
+    let issuer = issuer::construct(@0x0, DummyIntent(), b"".to_string());
+    let mut executable = executable::new(b"one".to_string(), issuer);
+    let (_, _) = executable.next_action(@0x0, issuer::wrong_witness());
 
     destroy(executable);
-    end(scenario, extensions);
+    ts::end(scenario);
 }
 
-#[test, expected_failure(abort_code = executable::EActionsNotEmpty)]
-fun test_error_cannot_terminate_pending_remaining() {
-    let (mut scenario, extensions) = start();
+#[test, expected_failure(abort_code = issuer::EWrongAccount)]
+fun test_error_cannot_next_action_wrong_account() {
+    let scenario = ts::begin(OWNER);
 
-    let deps = deps::new(&extensions);
-    let issuer = issuer::construct(@0x0, version::current(), DummyProposal(), b"".to_string());
-    let mut actions = bag::new(scenario.ctx());
-    actions.add(0, DummyAction {});
-    actions.add(1, DummyAction {});
+    let issuer = issuer::construct(@0x0, DummyIntent(), b"".to_string());
+    let mut executable = executable::new(b"one".to_string(), issuer);
+    let (_, _) = executable.next_action<DummyIntent>(@0x1, DummyIntent());
 
-    let mut executable = executable::new(deps, issuer, actions);
-    let DummyAction {} = executable.action<DummyAction, DummyProposal>(@0x0, version::current(), DummyProposal());
-    executable.destroy(version::current(), DummyProposal());
+    destroy(executable);
+    ts::end(scenario);
+}
 
-    end(scenario, extensions);
+#[test, expected_failure(abort_code = executable::EActionsRemaining)]
+fun test_error_cannot_destroy_actions_remaining() {
+    let scenario = ts::begin(OWNER);
+
+    let issuer = issuer::construct(@0x0, DummyIntent(), b"".to_string());
+    let executable = executable::new(b"one".to_string(), issuer);
+    executable.destroy(1, DummyIntent());
+
+    ts::end(scenario);
 }

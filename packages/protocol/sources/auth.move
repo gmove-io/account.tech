@@ -25,36 +25,36 @@ const EWrongRole: vector<u8> = b"Role doesn't match";
 
 /// Protected type ensuring provenance
 public struct Auth {
-    // type_name (+ opt name) of the witness that instantiated the auth
-    role: String,
     // address of the account that created the auth
     account_addr: address,
+    // type_name (+ opt name) of the witness that instantiated the auth
+    role: String,
 }
 
 // === Public Functions ===
 
 // === View Functions ===
 
-public fun role(auth: &Auth): String {
-    auth.role
-}
-
 public fun account_addr(auth: &Auth): address {
     auth.account_addr
+}
+
+public fun role(auth: &Auth): String {
+    auth.role
 }
 
 // === Core extensions functions ===
 
 public fun new(
     extensions: &Extensions,
-    role: String, 
     account_addr: address,
+    role: String, 
     version: TypeName,
 ): Auth {
     let addr = address::from_bytes(hex::decode(version.get_address().into_bytes()));
     extensions.assert_is_core_extension(addr);
 
-    Auth { role, account_addr }
+    Auth { account_addr, role }
 }
 
 public fun verify(
@@ -78,7 +78,7 @@ public fun verify_with_role<Role>(
         full_role.append(name);
     };
     
-    let Auth { role, account_addr } = auth;
+    let Auth { account_addr, role } = auth;
 
     assert!(addr == account_addr, EWrongAccount);
     assert!(role == full_role, EWrongRole);

@@ -17,7 +17,7 @@ module account_protocol::account;
 
 use std::{
     string::String,
-    type_name::TypeName,
+    type_name::{Self, TypeName},
 };
 use sui::{
     transfer::Receiving,
@@ -124,25 +124,29 @@ public fun lock_object<Config, Outcome, W: drop>(
     intent: &Intent<Outcome>, 
     id: ID,
     version: TypeName,
-    witness: W
+    witness: W,
 ) {
-    intent.issuer().assert_is_account(account.addr());
     account.deps().assert_is_dep(version);  
+    intent.issuer().assert_is_account(account.addr());
     intent.issuer().assert_is_constructor(witness);
 
     account.intents_mut(version).lock(id);
 }
 
-public fun unlock_object<Config, Outcome, W: drop>(
+public fun unlock_object<Config, Outcome, Action, W: drop>(
     account: &mut Account<Config, Outcome>,
     expired: &Expired, 
+    _action: &Action,
     id: ID,
     version: TypeName,
-    witness: W
+    _: W, // this one is to check that unlock is called from the module that defined the action
 ) {
-    expired.issuer().assert_is_account(account.addr());
     account.deps().assert_is_dep(version);  
-    expired.issuer().assert_is_constructor(witness);
+    expired.issuer().assert_is_account(account.addr());
+    assert!(
+        type_name::get<Action>().get_address() == type_name::get<W>().get_address() && 
+        type_name::get<Action>().get_module() == type_name::get<W>().get_module()
+    );
 
     account.intents_mut(version).unlock(id);
 }
@@ -153,10 +157,10 @@ public fun add_intent<Config, Outcome, W: drop>(
     account: &mut Account<Config, Outcome>, 
     intent: Intent<Outcome>, 
     version: TypeName,
-    witness: W
+    witness: W,
 ) {
-    intent.issuer().assert_is_account(account.addr());
     account.deps().assert_is_dep(version);  
+    intent.issuer().assert_is_account(account.addr());
     intent.issuer().assert_is_constructor(witness);
 
     account.intents.add(intent);
@@ -205,7 +209,7 @@ public fun destroy_empty_intent<Config, Outcome: drop>(
     account: &mut Account<Config, Outcome>, 
     key: String, 
 ): Expired {
-    account.intents.destroy(account.addr(), key)
+    account.intents.destroy(key)
 }
 
 /// Removes a proposal if it has expired
@@ -215,7 +219,7 @@ public fun delete_expired_intent<Config, Outcome: drop>(
     key: String, 
     clock: &Clock,
 ): Expired {
-    account.intents.delete(account.addr(), key, clock)
+    account.intents.delete(key, clock)
 }
 
 // === View functions ===

@@ -79,7 +79,7 @@ public fun module_name(issuer: &Issuer): String {
     issuer.module_name
 }
 
-public fun role_name(issuer: &Issuer): String {
+public fun opt_name(issuer: &Issuer): String {
     issuer.opt_name
 }
 
@@ -95,4 +95,14 @@ public(package) fun construct<W: drop>(
     let module_name = type_name::get<W>().get_module().to_string();
     
     Issuer { account_addr, package_id, module_name, opt_name }
+}
+
+// === Test functions ===
+
+#[test_only]
+public struct WrongWitness() has drop;
+
+#[test_only]
+public fun wrong_witness(): WrongWitness {
+    WrongWitness()
 }

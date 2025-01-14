@@ -37,7 +37,7 @@ fun start(): (Scenario, Extensions, Account<bool, bool>) {
     extensions.add(&cap, b"AccountConfig".to_string(), @0x1, 1);
     extensions.add(&cap, b"AccountActions".to_string(), @0x2, 1);
     // Account generic types are dummy types (bool, bool)
-    let account = account::new(&extensions, b"Main".to_string(), true, scenario.ctx());
+    let account = account::new(&extensions, true, scenario.ctx());
     // create world
     destroy(cap);
     (scenario, extensions, account)
@@ -51,7 +51,7 @@ fun end(scenario: Scenario, extensions: Extensions, account: Account<bool, bool>
 
 fun full_role(): String {
     let mut full_role = @account_protocol.to_string();
-    full_role.append_utf8(b"::auth_tests::DummyProposal::Degen");
+    full_role.append_utf8(b"::auth_tests::DummyIntent::Degen");
     full_role
 }
 
@@ -75,7 +75,7 @@ fun test_merge_and_split_2_coins() {
     
     scenario.next_tx(OWNER);
     let receiving_to_split = ts::most_recent_receiving_ticket<Coin<SUI>>(&object::id(&account));
-    let auth = auth::new(&extensions, full_role(), account.addr(), version::current());
+    let auth = auth::new(&extensions, account.addr(), full_role(), version::current());
     let split_coin_ids = coin_operations::merge_and_split<bool, bool, SUI>(
         &auth,
         &mut account,
@@ -110,7 +110,7 @@ fun test_merge_2_coins_and_split() {
     let id1 = keep_coin(account_address, 60, &mut scenario);
     let id2 = keep_coin(account_address, 40, &mut scenario);
 
-    let auth = auth::new(&extensions, full_role(), account.addr(), version::current());
+    let auth = auth::new(&extensions, account.addr(), full_role(), version::current());
     let merge_coin_id = coin_operations::merge_and_split<bool, bool, SUI>(
         &auth,
         &mut account,

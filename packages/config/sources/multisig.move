@@ -8,7 +8,6 @@ use sui::{
     vec_set::{Self, VecSet},
     vec_map::{Self, VecMap},
     clock::Clock,
-    bag::Bag,
 };
 use account_extensions::extensions::Extensions;
 use account_protocol::{
@@ -16,6 +15,7 @@ use account_protocol::{
     executable::Executable,
     issuer::Issuer,
     auth::{Self, Auth},
+    intents::Expired,
 };
 use account_config::{
     version,
@@ -164,7 +164,7 @@ public fun authenticate(
     account.config().assert_is_member(ctx);
     if (!role.is_empty()) assert!(account.config().member(ctx.sender()).has_role(role), ERoleNotFound);
 
-    auth::new(extensions, role, account.addr(), version::current())
+    auth::new(extensions, account.addr(), role, version::current())
 }
 
 /// Creates a new outcome to initiate a proposal
@@ -345,6 +345,10 @@ public fun execute_config_multisig(
     let action: &ConfigMultisigAction = account.process_action(&mut executable, version::current(), ConfigMultisigProposal());
     *account.config_mut(version::current()) = action.config;
     account.confirm_execution(executable, version::current(), ConfigMultisigProposal());
+}
+
+public fun delete_config_multisig(expired: &mut Expired) {
+    let ConfigMultisigAction { .. } = expired.remove_action();
 }
 
 // === Accessors ===

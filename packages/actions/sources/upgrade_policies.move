@@ -35,8 +35,6 @@ const ENoLock: vector<u8> = b"No lock with this name";
 #[error]
 const ELockAlreadyExists: vector<u8> = b"Lock with this name already exists";
 #[error]
-const EWrongUpgradeCap: vector<u8> = b"Wrong UpgradeCap for the UpgradeRules";
-#[error]
 const EUpgradeTooEarly: vector<u8> = b"Upgrade too early";
 #[error]
 const ENoPackageDoesntExist: vector<u8> = b"No package with this name";
@@ -311,7 +309,7 @@ public fun new_upgrade<Config, Outcome, W: drop>(
     clock: &Clock,
     witness: W
 ) {
-    let name = intent.issuer().role_name();
+    let name = intent.issuer().opt_name();
     let upgrade_time = clock.timestamp_ms() + get_time_delay(account, name);
 
     intent.add_action(UpgradeAction { digest, upgrade_time }, witness);
@@ -326,7 +324,7 @@ public fun do_upgrade<Config, Outcome, W: copy + drop>(
 ): UpgradeTicket {
     let action: &UpgradeAction = account.process_action(executable, version, witness);
     assert!(action.upgrade_time <= clock.timestamp_ms(), EUpgradeTooEarly);
-    let name = executable.issuer().role_name();
+    let name = executable.issuer().opt_name();
 
     let mut cap: &mut UpgradeCap = account.borrow_managed_object_mut(UpgradeCapKey { name }, version);
     let policy = cap.policy();
@@ -346,7 +344,7 @@ public fun confirm_upgrade<Config, Outcome, W: copy + drop>(
     executable.issuer().assert_is_constructor(witness);
     executable.issuer().assert_is_account(account.addr());
 
-    let name = executable.issuer().role_name();
+    let name = executable.issuer().opt_name();
     let mut cap_mut: &mut UpgradeCap = account.borrow_managed_object_mut(UpgradeCapKey { name }, version);
     cap_mut.commit_upgrade(receipt);
 
@@ -383,7 +381,7 @@ public fun do_restrict<Config, Outcome, W: copy + drop>(
     witness: W,
 ) {
     let action: &RestrictAction = account.process_action(executable, version, witness);
-    let name = executable.issuer().role_name();
+    let name = executable.issuer().opt_name();
 
     if (action.policy == package::additive_policy()) {
         let cap_mut: &mut UpgradeCap = account.borrow_managed_object_mut(UpgradeCapKey { name }, version);

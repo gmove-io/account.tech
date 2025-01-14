@@ -24,8 +24,6 @@ const EHasntExpired: vector<u8> = b"Proposal hasn't reached expiration time";
 #[error]
 const EProposalNotFound: vector<u8> = b"Proposal not found for key";
 #[error]
-const EExpirationBeforeExecution: vector<u8> = b"Expiration time must be greater than execution time";
-#[error]
 const EObjectAlreadyLocked: vector<u8> = b"Object already locked";
 #[error]
 const EObjectNotLocked: vector<u8> = b"Object not locked";
@@ -68,8 +66,6 @@ public struct Intent<Outcome> has store {
 
 /// Hot potato wrapping actions from an intent that expired or has been executed
 public struct Expired {
-    // address of the account that added the actions
-    account_addr: address,
     // key of the intent that expired
     key: String,
     // issuer of the intent that expired
@@ -95,11 +91,12 @@ public fun contains<Outcome>(intents: &Intents<Outcome>, key: String): bool {
 }
 
 public fun get_idx<Outcome>(intents: &Intents<Outcome>, key: String): u64 {
-    intents.inner.find_index!(|intent| intent.key == key).destroy_some()
+    let opt_idx = intents.inner.find_index!(|intent| intent.key == key);
+    assert!(opt_idx.is_some(), EProposalNotFound);
+    opt_idx.destroy_some()
 }
 
 public fun get<Outcome>(intents: &Intents<Outcome>, key: String): &Intent<Outcome> {
-    assert!(intents.contains(key), EProposalNotFound);
     let idx = intents.get_idx(key);
     &intents.inner[idx]
 }
@@ -143,11 +140,6 @@ public fun outcome_mut<Outcome>(intent: &mut Intent<Outcome>): &mut Outcome {
     &mut intent.outcome
 }
 
-public use fun expired_account_addr as Expired.account_addr;
-public fun expired_account_addr(expired: &Expired): address {
-    expired.account_addr
-}
-
 public use fun expired_key as Expired.key;
 public fun expired_key(expired: &Expired): String {
     expired.key
@@ -158,9 +150,14 @@ public fun expired_issuer(expired: &Expired): &Issuer {
     &expired.issuer
 }
 
-public use fun expired_actions_mut as Expired.actions_mut;
-public fun expired_actions_mut(expired: &mut Expired): &mut Bag {
-    &mut expired.actions
+public use fun expired_start_index as Expired.start_index;
+public fun expired_start_index(expired: &Expired): u64 {
+    expired.start_index
+}
+
+public use fun expired_actions as Expired.actions;
+public fun expired_actions(expired: &Expired): &Bag {
+    &expired.actions
 }
 
 // === Proposal functions ===
@@ -222,6 +219,14 @@ public(package) fun new_intent<Outcome>(
     }
 }
 
+public(package) fun pop_front_execution_time<Outcome>(
+    intent: &mut Intent<Outcome>,
+    clock: &Clock,
+) {
+    let time = intent.execution_times.remove(0);
+    assert!(clock.timestamp_ms() >= time, ECantBeExecutedYet);
+}
+
 public(package) fun add<Outcome>(
     intents: &mut Intents<Outcome>,
     intent: Intent<Outcome>,
@@ -239,19 +244,10 @@ public(package) fun unlock<Outcome>(intents: &mut Intents<Outcome>, id: ID) {
     intents.locked.remove(&id);
 }
 
-public(package) fun pop_front_execution_time<Outcome>(
-    intent: &mut Intent<Outcome>,
-    clock: &Clock,
-) {
-    let time = intent.execution_times.remove(0);
-    assert!(clock.timestamp_ms() >= time, ECantBeExecutedYet);
-}
-
 /// Removes an proposal being executed if the execution_time is reached
 /// Outcome must be validated in AccountConfig to be destroyed
 public(package) fun destroy<Outcome: drop>(
     intents: &mut Intents<Outcome>,
-    account_addr: address,
     key: String,
 ): Expired {
     let idx = intents.get_idx(key);
@@ -259,12 +255,11 @@ public(package) fun destroy<Outcome: drop>(
     
     assert!(execution_times.is_empty(), ECantBeRemovedYet);
 
-    Expired { account_addr, key, issuer, start_index: 0, actions }
+    Expired { key, issuer, start_index: 0, actions }
 }
 
 public(package) fun delete<Outcome: drop>(
     intents: &mut Intents<Outcome>,
-    account_addr: address,
     key: String,
     clock: &Clock
 ): Expired {
@@ -272,6 +267,6 @@ public(package) fun delete<Outcome: drop>(
     let Intent<Outcome> { issuer, key, expiration_time, actions, .. } = intents.inner.remove(idx);
 
     assert!(clock.timestamp_ms() >= expiration_time, EHasntExpired);
-
-    Expired { account_addr, key, issuer, start_index: 0, actions }
+        
+    Expired { key, issuer, start_index: 0, actions }
 }

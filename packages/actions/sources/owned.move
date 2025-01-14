@@ -186,6 +186,9 @@ public fun delete_withdraw<Config, Outcome>(
     account: &mut Account<Config, Outcome>,
     expired: &mut Expired, 
 ) {
-    let WithdrawAction { object_id } = expired.remove_action();
-    account.unlock_object(expired, object_id, version::current(), TransferIntent());
+    let action: WithdrawAction = expired.remove_action();
+    let object_id = action.object_id;
+
+    account.unlock_object(expired, &action, object_id, version::current(), TransferIntent());
+    let WithdrawAction { .. } = action;
 }

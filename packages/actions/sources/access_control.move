@@ -165,11 +165,8 @@ public fun return_cap<Config, Outcome, Cap: key + store>(
     account.add_managed_object(CapKey<Cap> {}, cap, version);
 }
 
-public fun delete_access<Cap>(
-    expired: &mut Expired, 
-    idx: u64,
-) {
-    let AccessAction<Cap> { .. } = expired.actions_mut().remove(idx);
+public fun delete_access<Cap>(expired: &mut Expired) {
+    let AccessAction<Cap> { .. } = expired.remove_action();
 }
 
 // === Private functions ===
