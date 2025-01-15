@@ -36,6 +36,13 @@ use account_protocol::{
 };
 use account_extensions::extensions::Extensions;
 
+// === Errors ===
+
+const EInvalidAction: u64 = 0;
+const ECantBeRemovedYet: u64 = 1;
+const EHasntExpired: u64 = 2;
+const ECantBeExecutedYet: u64 = 3;
+
 // === Structs ===
 
 public struct ACCOUNT has drop {}
@@ -145,7 +152,8 @@ public fun unlock_object<Config, Outcome, Action, W: drop>(
     expired.issuer().assert_is_account(account.addr());
     assert!(
         type_name::get<Action>().get_address() == type_name::get<W>().get_address() && 
-        type_name::get<Action>().get_module() == type_name::get<W>().get_module()
+        type_name::get<Action>().get_module() == type_name::get<W>().get_module(),
+        EInvalidAction
     );
 
     account.intents_mut(version).unlock(id);
@@ -176,11 +184,14 @@ public fun execute_intent<Config, Outcome: copy>(
 ): (Executable, Outcome) {
     account.deps().assert_is_core_dep(version);
     let intent = account.intents.get_mut(key);
-    intent.pop_front_execution_time(clock);
+
+    let time = intent.pop_front_execution_time();
+    assert!(clock.timestamp_ms() >= time, ECantBeExecutedYet);
 
     (executable::new(key, *intent.issuer()), *intent.outcome())
 }
 
+/// Called in action modules
 public fun process_action<Config, Outcome, Action: store, W: drop>(
     account: &Account<Config, Outcome>, 
     executable: &mut Executable,
@@ -193,6 +204,7 @@ public fun process_action<Config, Outcome, Action: store, W: drop>(
     account.intents.get(key).actions().borrow(idx)
 }
 
+/// Called in action modules
 public fun confirm_execution<Config, Outcome, W: drop>(
     account: &Account<Config, Outcome>, 
     executable: Executable,
@@ -205,13 +217,16 @@ public fun confirm_execution<Config, Outcome, W: drop>(
     executable.destroy(intent.actions().length(), witness);
 }
 
+/// Called in config modules
 public fun destroy_empty_intent<Config, Outcome: drop>(
     account: &mut Account<Config, Outcome>, 
     key: String, 
 ): Expired {
+    assert!(account.intents.get(key).execution_times().is_empty(), ECantBeRemovedYet);
     account.intents.destroy(key)
 }
 
+/// Called in config modules
 /// Removes a proposal if it has expired
 /// Needs to delete each action in the bag within their own module
 public fun delete_expired_intent<Config, Outcome: drop>(
@@ -219,7 +234,8 @@ public fun delete_expired_intent<Config, Outcome: drop>(
     key: String, 
     clock: &Clock,
 ): Expired {
-    account.intents.delete(key, clock)
+    assert!(clock.timestamp_ms() >= account.intents.get(key).expiration_time(), EHasntExpired);
+    account.intents.destroy(key)
 }
 
 // === View functions ===

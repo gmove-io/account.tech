@@ -8,7 +8,6 @@ module account_protocol::intents;
 use std::string::String;
 use sui::{
     bag::{Self, Bag},
-    clock::Clock,
     vec_set::{Self, VecSet},
 };
 use account_protocol::{
@@ -17,10 +16,6 @@ use account_protocol::{
 
 // === Errors ===
 
-#[error]
-const ECantBeExecutedYet: vector<u8> = b"Proposal hasn't reached execution time";
-#[error]
-const EHasntExpired: vector<u8> = b"Proposal hasn't reached expiration time";
 #[error]
 const EProposalNotFound: vector<u8> = b"Proposal not found for key";
 #[error]
@@ -31,8 +26,6 @@ const EObjectNotLocked: vector<u8> = b"Object not locked";
 const ENoExecutionTime: vector<u8> = b"No execution time provided";
 #[error]
 const EExecutionTimesNotAscending: vector<u8> = b"Execution times must be in ascending order";
-#[error]
-const ECantBeRemovedYet: vector<u8> = b"Proposal hasn't reached expiration time";
 #[error]
 const EActionsNotEmpty: vector<u8> = b"Actions are not empty";
 
@@ -230,10 +223,8 @@ public(package) fun new_intent<Outcome>(
 
 public(package) fun pop_front_execution_time<Outcome>(
     intent: &mut Intent<Outcome>,
-    clock: &Clock,
-) {
-    let time = intent.execution_times.remove(0);
-    assert!(clock.timestamp_ms() >= time, ECantBeExecutedYet);
+): u64 {
+    intent.execution_times.remove(0)
 }
 
 public(package) fun add<Outcome>(
@@ -260,22 +251,7 @@ public(package) fun destroy<Outcome: drop>(
     key: String,
 ): Expired {
     let idx = intents.get_idx(key);
-    let Intent { issuer, key, execution_times, actions, .. } = intents.inner.remove(idx);
+    let Intent { issuer, key, actions, .. } = intents.inner.remove(idx);
     
-    assert!(execution_times.is_empty(), ECantBeRemovedYet);
-
-    Expired { key, issuer, start_index: 0, actions }
-}
-
-public(package) fun delete<Outcome: drop>(
-    intents: &mut Intents<Outcome>,
-    key: String,
-    clock: &Clock
-): Expired {
-    let idx = intents.get_idx(key);
-    let Intent<Outcome> { issuer, key, expiration_time, actions, .. } = intents.inner.remove(idx);
-
-    assert!(clock.timestamp_ms() >= expiration_time, EHasntExpired);
-        
     Expired { key, issuer, start_index: 0, actions }
 }

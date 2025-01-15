@@ -61,7 +61,7 @@ fun test_getters() {
     assert!(outcome == true);
 
     // check expired getters
-    let expired = intents.delete(b"one".to_string(), &clock);
+    let expired = intents.destroy(b"one".to_string());
     assert!(expired.key() == b"one".to_string());
     assert!(expired.issuer().account_addr() == @0x0);
     assert!(expired.start_index() == 0);
@@ -86,7 +86,7 @@ fun test_add_remove_action() {
     assert!(intent.actions().length() == 1);
     intents.add(intent);
 
-    let mut expired = intents.delete(b"one".to_string(), &clock);
+    let mut expired = intents.destroy(b"one".to_string());
     let DummyAction {} = expired.remove_action();
 
     destroy(intents);
@@ -104,7 +104,7 @@ fun test_pop_front_execution_time() {
     let issuer = issuer::construct(@0x0, DummyIntent(), b"".to_string());
     let mut intent = intents::new_intent(issuer, b"one".to_string(), b"".to_string(), vector[0], 1, true, scenario.ctx());
     
-    intent.pop_front_execution_time(&clock);
+    let _time = intent.pop_front_execution_time();
     assert!(intent.execution_times().is_empty());
 
     destroy(clock);
@@ -136,7 +136,7 @@ fun test_add_destroy_intent() {
     let intent = intents::new_intent(issuer, b"one".to_string(), b"".to_string(), vector[0], 1, true, scenario.ctx());
     intents.add(intent);
     // remove intent
-    intents.get_mut(b"one".to_string()).pop_front_execution_time(&clock);
+    let _time = intents.get_mut(b"one".to_string()).pop_front_execution_time();
     let expired = intents.destroy(b"one".to_string());
     assert!(expired.key() == b"one".to_string());
     assert!(expired.issuer().account_addr() == @0x0);
@@ -146,29 +146,6 @@ fun test_add_destroy_intent() {
 
     destroy(clock);
     destroy(intents);
-    scenario.end();
-}
-
-#[test]
-fun test_delete_intent() {
-    let mut scenario = ts::begin(OWNER);
-    let mut clock = clock::create_for_testing(scenario.ctx());
-    clock.increment_for_testing(1);
-
-    let mut intents = intents::empty<bool>();
-    let issuer = issuer::construct(@0x0, DummyIntent(), b"".to_string());
-    let intent = intents::new_intent(issuer, b"one".to_string(), b"".to_string(), vector[0], 1, true, scenario.ctx());
-    intents.add(intent);
-    // remove intent
-    let expired = intents.delete(b"one".to_string(), &clock);
-    assert!(expired.key() == b"one".to_string());
-    assert!(expired.issuer().account_addr() == @0x0);
-    assert!(expired.start_index() == 0);
-    assert!(expired.actions().length() == 0);
-
-    destroy(expired);
-    destroy(intents);
-    destroy(clock);
     scenario.end();
 }
 
@@ -206,7 +183,7 @@ fun test_error_delete_intent_actions_not_empty() {
     intent.add_action(DummyAction {}, DummyIntent());
     intents.add(intent);
     // remove intent
-    let expired = intents.delete(b"one".to_string(), &clock);
+    let expired = intents.destroy(b"one".to_string());
     expired.destroy();
 
     destroy(intents);
@@ -244,21 +221,6 @@ fun test_error_execution_times_not_ascending() {
     scenario.end();
 }
 
-#[test, expected_failure(abort_code = intents::ECantBeExecutedYet)]
-fun test_error_cant_be_executed_yet() {
-    let mut scenario = ts::begin(OWNER);
-    let clock = clock::create_for_testing(scenario.ctx());
-
-    let issuer = issuer::construct(@0x0, DummyIntent(), b"".to_string());
-    let mut intent = intents::new_intent(issuer, b"one".to_string(), b"".to_string(), vector[1], 1, true, scenario.ctx());
-    // remove intent
-    intent.pop_front_execution_time(&clock);
-
-    destroy(intent);
-    destroy(clock);
-    scenario.end();
-}
-
 #[test, expected_failure(abort_code = intents::EObjectAlreadyLocked)]
 fun test_error_lock_object_already_locked() {
     let scenario = ts::begin(OWNER);
@@ -282,41 +244,3 @@ fun test_error_unlock_object_not_locked() {
     destroy(intents);
     scenario.end();
 }
-
-#[test, expected_failure(abort_code = intents::ECantBeRemovedYet)]
-fun test_error_cant_be_removed_yet() {
-    let mut scenario = ts::begin(OWNER);
-    let clock = clock::create_for_testing(scenario.ctx());
-
-    let mut intents = intents::empty<bool>();
-    let issuer = issuer::construct(@0x0, DummyIntent(), b"".to_string());
-    let intent = intents::new_intent(issuer, b"one".to_string(), b"".to_string(), vector[1], 1, true, scenario.ctx());
-    // remove intent
-    intents.add(intent);
-    let expired = intents.destroy(b"one".to_string());
-
-    destroy(expired);
-    destroy(intents);
-    destroy(clock);
-    scenario.end();
-}
-
-#[test, expected_failure(abort_code = intents::EHasntExpired)]
-fun test_error_cant_delete_intent_not_expired() {
-    let mut scenario = ts::begin(OWNER);
-    let clock = clock::create_for_testing(scenario.ctx()); 
-
-    let mut intents = intents::empty<bool>();
-    let issuer = issuer::construct(@0x0, DummyIntent(), b"".to_string());
-    let mut intent = intents::new_intent(issuer, b"one".to_string(), b"".to_string(), vector[0], 1, true, scenario.ctx());
-    intent.add_action(DummyAction {}, DummyIntent());
-    intents.add(intent);
-    // remove intent
-    let expired = intents.delete(b"one".to_string(), &clock);
-
-    destroy(expired);
-    destroy(intents);
-    destroy(clock);
-    scenario.end();
-}
-

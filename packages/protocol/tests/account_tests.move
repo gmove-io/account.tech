@@ -315,7 +315,7 @@ fun test_account_getters_mut() {
         1, 
         true, 
         version::current(), 
-        DummyIntent(), 
+        DummyIntent(),
         b"Degen".to_string(), 
         scenario.ctx()
     );
@@ -440,6 +440,51 @@ fun test_error_cannot_execute_intent_from_not_core_dep() {
     destroy(clock);
     end(scenario, extensions, account);
 }
+
+#[test, expected_failure(abort_code = account::ECantBeExecutedYet)]
+fun test_error_cannot_execute_intent_before_execution_time() {
+    let (mut scenario, extensions, mut account) = start();
+    let clock = clock::create_for_testing(scenario.ctx());
+
+    let auth = auth::new(&extensions, account.addr(), full_role(), version::current());
+    let intent = account.create_intent(auth, b"one".to_string(), b"".to_string(), vector[1], 1, true, version::current(), DummyIntent(), b"".to_string(), scenario.ctx());
+    account.add_intent(intent, version::current(), DummyIntent());
+    let (executable, outcome) = account.execute_intent(b"one".to_string(), &clock, version::current());
+
+    destroy(executable);
+    destroy(outcome);
+    destroy(clock);
+    end(scenario, extensions, account);
+}
+
+#[test, expected_failure(abort_code = account::ECantBeRemovedYet)]
+fun test_error_cannot_destroy_intent_without_executing_the_action() {
+    let (mut scenario, extensions, mut account) = start();
+
+    let auth = auth::new(&extensions, account.addr(), full_role(), version::current());
+    let intent = account.create_intent(auth, b"one".to_string(), b"".to_string(), vector[1], 1, true, version::current(), DummyIntent(), b"".to_string(), scenario.ctx());
+    account.add_intent(intent, version::current(), DummyIntent());
+    let expired = account.destroy_empty_intent(b"one".to_string());
+
+    destroy(expired);
+    end(scenario, extensions, account);
+}
+
+#[test, expected_failure(abort_code = account::EHasntExpired)]
+fun test_error_cant_delete_intent_not_expired() {
+    let (mut scenario, extensions, mut account) = start();
+    let clock = clock::create_for_testing(scenario.ctx());
+    
+    let auth = auth::new(&extensions, account.addr(), full_role(), version::current());
+    let intent = account.create_intent(auth, b"one".to_string(), b"".to_string(), vector[1], 1, true, version::current(), DummyIntent(), b"".to_string(), scenario.ctx());
+    account.add_intent(intent, version::current(), DummyIntent());
+    let expired = account.delete_expired_intent(b"one".to_string(), &clock);
+
+    destroy(expired);
+    destroy(clock);
+    end(scenario, extensions, account);
+}
+
 
 #[test, expected_failure(abort_code = deps::ENotDep)]
 fun test_error_cannot_add_managed_asset_from_not_dependent_package() {
