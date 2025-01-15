@@ -157,8 +157,8 @@ public fun coin_type_value<CoinType: drop>(treasury: &Treasury): u64 {
 // step 1: propose to send managed coins
 public fun request_transfer<Config, Outcome, CoinType: drop>(
     auth: Auth,
-    account: &mut Account<Config, Outcome>, 
     outcome: Outcome,
+    account: &mut Account<Config, Outcome>, 
     key: String,
     description: String,
     execution_times: vector<u64>,

@@ -52,7 +52,7 @@ const ENotMember: vector<u8> = b"User is not a member of the account";
 // === Structs ===
 
 /// [PROPOSAL] modifies the members and thresholds of the account
-public struct ConfigMultisigProposal() has drop;
+public struct ConfigMultisigIntent() has drop;
 
 /// [ACTION] wraps a Multisig struct into an action
 public struct ConfigMultisigAction has drop, store {
@@ -240,6 +240,23 @@ public fun execute_intent(
     executable
 }
 
+public fun destroy_empty_intent(
+    account: &mut Account<Multisig, Approvals>, 
+    key: String, 
+): Expired {
+    account.destroy_empty_intent(key)
+}
+
+/// Removes a proposal if it has expired
+/// Needs to delete each action in the bag within their own module
+public fun delete_expired_intent(
+    account: &mut Account<Multisig, Approvals>, 
+    key: String, 
+    clock: &Clock,
+): Expired {
+    account.delete_expired_intent(key, clock)
+}
+
 /// Inserts account_id in User, aborts if already joined
 public fun join(user: &mut User, account: &mut Account<Multisig, Approvals>) {
     user.add_account(account.addr(), b"multisig".to_string());
@@ -284,6 +301,7 @@ public fun refuse_invite(invite: Invite) {
 // threshold has to be valid (reachable and different from 0 for global)
 public fun request_config_multisig(
     auth: Auth,
+    outcome: Approvals,
     account: &mut Account<Multisig, Approvals>, 
     key: String,
     description: String,
@@ -297,7 +315,6 @@ public fun request_config_multisig(
     global: u64,
     role_names: vector<String>,
     role_thresholds: vector<u64>,
-    outcome: Approvals,
     ctx: &mut TxContext
 ) {
     // verify new rules are valid
@@ -311,7 +328,7 @@ public fun request_config_multisig(
         expiration_time,
         outcome,
         version::current(),
-        ConfigMultisigProposal(),
+        ConfigMultisigIntent(),
         b"".to_string(),
         ctx
     );
@@ -331,8 +348,8 @@ public fun request_config_multisig(
         config.roles.push_back(Role { name: role, threshold });
     });
 
-    intent.add_action(ConfigMultisigAction { config }, ConfigMultisigProposal());
-    account.add_intent(intent, version::current(), ConfigMultisigProposal());
+    intent.add_action(ConfigMultisigAction { config }, ConfigMultisigIntent());
+    account.add_intent(intent, version::current(), ConfigMultisigIntent());
 }
 
 // step 2: multiple members have to approve the proposal (account::approve_proposal)
@@ -342,9 +359,9 @@ public fun execute_config_multisig(
     mut executable: Executable,
     account: &mut Account<Multisig, Approvals>, 
 ) {
-    let action: &ConfigMultisigAction = account.process_action(&mut executable, version::current(), ConfigMultisigProposal());
+    let action: &ConfigMultisigAction = account.process_action(&mut executable, version::current(), ConfigMultisigIntent());
     *account.config_mut(version::current()) = action.config;
-    account.confirm_execution(executable, version::current(), ConfigMultisigProposal());
+    account.confirm_execution(executable, version::current(), ConfigMultisigIntent());
 }
 
 public fun delete_config_multisig(expired: &mut Expired) {

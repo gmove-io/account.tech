@@ -33,6 +33,8 @@ const ENoExecutionTime: vector<u8> = b"No execution time provided";
 const EExecutionTimesNotAscending: vector<u8> = b"Execution times must be in ascending order";
 #[error]
 const ECantBeRemovedYet: vector<u8> = b"Proposal hasn't reached expiration time";
+#[error]
+const EActionsNotEmpty: vector<u8> = b"Actions are not empty";
 
 // === Structs ===
 
@@ -182,6 +184,13 @@ public fun remove_action<Action: store>(
     expired.start_index = idx + 1;
 
     expired.actions.remove(idx)
+}
+
+public use fun destroy_expired as Expired.destroy;
+public fun destroy_expired(expired: Expired) {
+    let Expired { actions, .. } = expired;
+    assert!(actions.is_empty(), EActionsNotEmpty);
+    actions.destroy_empty();
 }
 
 // === Package functions ===

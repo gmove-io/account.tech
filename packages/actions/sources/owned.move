@@ -57,8 +57,8 @@ public struct WithdrawAction has store {
 // step 1: propose to send owned objects
 public fun request_transfer<Config, Outcome>(
     auth: Auth,
-    account: &mut Account<Config, Outcome>, 
     outcome: Outcome,
+    account: &mut Account<Config, Outcome>, 
     key: String,
     description: String,
     execution_time: u64,
@@ -113,8 +113,8 @@ public fun complete_transfer<Config, Outcome>(
 // step 1: propose to create a Stream with a specific amount to be paid at each interval
 public fun request_vesting<Config, Outcome>(
     auth: Auth,
-    account: &mut Account<Config, Outcome>, 
     outcome: Outcome,
+    account: &mut Account<Config, Outcome>, 
     key: String,
     description: String,
     execution_time: u64,

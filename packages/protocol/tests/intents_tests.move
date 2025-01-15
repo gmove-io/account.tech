@@ -142,15 +142,15 @@ fun test_add_destroy_intent() {
     assert!(expired.issuer().account_addr() == @0x0);
     assert!(expired.start_index() == 0);
     assert!(expired.actions().length() == 0);
+    expired.destroy();
 
     destroy(clock);
-    destroy(expired);
     destroy(intents);
     scenario.end();
 }
 
 #[test]
-fun test_delete_proposal() {
+fun test_delete_intent() {
     let mut scenario = ts::begin(OWNER);
     let mut clock = clock::create_for_testing(scenario.ctx());
     clock.increment_for_testing(1);
@@ -173,7 +173,7 @@ fun test_delete_proposal() {
 }
 
 #[test, expected_failure(abort_code = intents::EProposalNotFound)]
-fun test_error_get_proposal() {
+fun test_error_get_intent() {
     let scenario = ts::begin(OWNER);
 
     let intents = intents::empty<bool>();
@@ -184,13 +184,33 @@ fun test_error_get_proposal() {
 }
 
 #[test, expected_failure(abort_code = intents::EProposalNotFound)]
-fun test_error_get_mut_proposal() {
+fun test_error_get_mut_intent() {
     let scenario = ts::begin(OWNER);
 
     let mut intents = intents::empty<bool>();
     let _ = intents.get_mut(b"one".to_string());
 
     destroy(intents);
+    scenario.end();
+}
+
+#[test, expected_failure(abort_code = intents::EActionsNotEmpty)]
+fun test_error_delete_intent_actions_not_empty() {
+    let mut scenario = ts::begin(OWNER);
+    let mut clock = clock::create_for_testing(scenario.ctx());
+    clock.increment_for_testing(1);
+
+    let mut intents = intents::empty<bool>();
+    let issuer = issuer::construct(@0x0, DummyIntent(), b"".to_string());
+    let mut intent = intents::new_intent(issuer, b"one".to_string(), b"".to_string(), vector[0], 1, true, scenario.ctx());
+    intent.add_action(DummyAction {}, DummyIntent());
+    intents.add(intent);
+    // remove intent
+    let expired = intents.delete(b"one".to_string(), &clock);
+    expired.destroy();
+
+    destroy(intents);
+    destroy(clock);
     scenario.end();
 }
 
@@ -282,7 +302,7 @@ fun test_error_cant_be_removed_yet() {
 }
 
 #[test, expected_failure(abort_code = intents::EHasntExpired)]
-fun test_error_cant_delete_proposal_not_expired() {
+fun test_error_cant_delete_intent_not_expired() {
     let mut scenario = ts::begin(OWNER);
     let clock = clock::create_for_testing(scenario.ctx()); 
 

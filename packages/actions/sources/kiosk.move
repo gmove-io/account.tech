@@ -192,8 +192,8 @@ public fun close<Config, Outcome>(
 // step 1: propose to transfer nfts to another kiosk
 public fun request_take<Config, Outcome>(
     auth: Auth,
-    account: &mut Account<Config, Outcome>,
     outcome: Outcome,
+    account: &mut Account<Config, Outcome>,
     key: String,
     description: String,
     execution_time: u64,
