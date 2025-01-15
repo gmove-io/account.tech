@@ -53,8 +53,6 @@ const ENoExtensionOrUpgradeCap: vector<u8> = b"No extension or upgrade cap for t
 /// Those structs also define the different roles that members can have.
 /// Finally, they are used to parse the actions of the proposal off-chain.
 
-/// [COMMAND] witness defining the metadata command, and associated role
-public struct ConfigMetadataCommand() has copy, drop;
 /// [PROPOSAL] witness defining the dependencies proposal, and associated role
 public struct ConfigDepsIntent() has copy, drop;
 
@@ -71,7 +69,7 @@ public fun edit_metadata<Config, Outcome>(
     keys: vector<String>,
     values: vector<String>,
 ) {
-    auth.verify_with_role<ConfigMetadataCommand>(account.addr(), b"".to_string());
+    auth.verify(account.addr());
 
     assert!(keys.length() == values.length(), EMetadataNotSameLength);
     assert!(keys[0] == b"name".to_string(), EMetadataNameMissing);

@@ -3,10 +3,7 @@ module account_protocol::account_tests;
 
 // === Imports ===
 
-use std::{
-    type_name::{Self, TypeName},
-    string::String,
-};
+use std::type_name::{Self, TypeName};
 use sui::{
     test_utils::destroy,
     test_scenario::{Self as ts, Scenario},
@@ -14,7 +11,6 @@ use sui::{
 };
 use account_protocol::{
     account::{Self, Account},
-    auth,
     version,
     deps,
     issuer,
@@ -67,12 +63,6 @@ fun end(scenario: Scenario, extensions: Extensions, account: Account<bool, bool>
     ts::end(scenario);
 }
 
-fun full_role(): String {
-    let mut full_role = @account_protocol.to_string();
-    full_role.append_utf8(b"::account_tests::DummyIntent::Degen");
-    full_role
-}
-
 fun wrong_version(): TypeName {
     type_name::get<Extensions>()
 }
@@ -121,7 +111,7 @@ fun test_intent_execute_flow() {
     let (mut scenario, extensions, mut account) = start();
     let clock = clock::create_for_testing(scenario.ctx());
 
-    let auth = auth::new(&extensions, account.addr(), full_role(), version::current());
+    let auth = account::new_auth(&extensions, account.addr(), version::current());
     let mut intent = account.create_intent(
         auth, 
         b"one".to_string(), 
@@ -160,7 +150,7 @@ fun test_anyone_can_execute_intent() {
     let (mut scenario, extensions, mut account) = start();
     let clock = clock::create_for_testing(scenario.ctx());
 
-    let auth = auth::new(&extensions, account.addr(), full_role(), version::current());
+    let auth = account::new_auth(&extensions, account.addr(), version::current());
     let intent = account.create_intent(
         auth, 
         b"one".to_string(), 
@@ -194,7 +184,7 @@ fun test_intent_delete_flow() {
     let mut clock = clock::create_for_testing(scenario.ctx());
     clock.increment_for_testing(1);
 
-    let auth = auth::new(&extensions, account.addr(), full_role(), version::current());
+    let auth = account::new_auth(&extensions, account.addr(), version::current());
     let intent = account.create_intent(
         auth, 
         b"one".to_string(), 
@@ -224,7 +214,7 @@ fun test_lock_object() {
     let mut clock = clock::create_for_testing(scenario.ctx());
     clock.increment_for_testing(1);
 
-    let auth = auth::new(&extensions, account.addr(), full_role(), version::current());
+    let auth = account::new_auth(&extensions, account.addr(), version::current());
     let intent = account.create_intent(
         auth, 
         b"one".to_string(), 
@@ -306,7 +296,7 @@ fun test_account_getters_mut() {
     assert!(account.intents_mut(version::current()).length() == 0);
     assert!(account.config_mut(version::current()) == true);
     // intent
-    let auth = auth::new(&extensions, account.addr(), full_role(), version::current());
+    let auth = account::new_auth(&extensions, account.addr(), version::current());
     let intent = account.create_intent(
         auth, 
         b"one".to_string(), 
@@ -326,11 +316,11 @@ fun test_account_getters_mut() {
     end(scenario, extensions, account);
 }
 
-#[test, expected_failure(abort_code = auth::EWrongAccount)]
+#[test, expected_failure(abort_code = account::EWrongAccount)]
 fun test_error_cannot_create_intent_with_wrong_account() {
     let (mut scenario, extensions, mut account) = start();
 
-    let auth = auth::new(&extensions, @0xFA15E, full_role(), version::current());
+    let auth = account::new_auth(&extensions, @0xFA15E, version::current());
     let intent = account.create_intent(
         auth, 
         b"one".to_string(), 
@@ -352,7 +342,7 @@ fun test_error_cannot_create_intent_with_wrong_account() {
 fun test_error_cannot_create_intent_from_not_dependent_package() {
     let (mut scenario, extensions, mut account) = start();
 
-    let auth = auth::new(&extensions, account.addr(), full_role(), version::current());
+    let auth = account::new_auth(&extensions, account.addr(), version::current());
     let intent = account.create_intent(
         auth, 
         b"one".to_string(), 
@@ -374,7 +364,7 @@ fun test_error_cannot_create_intent_from_not_dependent_package() {
 fun test_error_cannot_add_intent_from_not_dependent_package() {
     let (mut scenario, extensions, mut account) = start();
 
-    let auth = auth::new(&extensions, account.addr(), full_role(), version::current());
+    let auth = account::new_auth(&extensions, account.addr(), version::current());
     let intent = account.create_intent(
         auth, 
         b"one".to_string(), 
@@ -396,7 +386,7 @@ fun test_error_cannot_add_intent_from_not_dependent_package() {
 fun test_error_cannot_add_intent_with_wrong_witness() {
     let (mut scenario, extensions, mut account) = start();
 
-    let auth = auth::new(&extensions, account.addr(), full_role(), version::current());
+    let auth = account::new_auth(&extensions, account.addr(), version::current());
     let intent = account.create_intent(
         auth, 
         b"one".to_string(), 
@@ -419,7 +409,7 @@ fun test_error_cannot_execute_intent_from_not_core_dep() {
     let (mut scenario, extensions, mut account) = start();
     let clock = clock::create_for_testing(scenario.ctx());
 
-    let auth = auth::new(&extensions, account.addr(), full_role(), version::current());
+    let auth = account::new_auth(&extensions, account.addr(), version::current());
     let intent = account.create_intent(
         auth, 
         b"one".to_string(), 
@@ -446,7 +436,7 @@ fun test_error_cannot_execute_intent_before_execution_time() {
     let (mut scenario, extensions, mut account) = start();
     let clock = clock::create_for_testing(scenario.ctx());
 
-    let auth = auth::new(&extensions, account.addr(), full_role(), version::current());
+    let auth = account::new_auth(&extensions, account.addr(), version::current());
     let intent = account.create_intent(auth, b"one".to_string(), b"".to_string(), vector[1], 1, true, version::current(), DummyIntent(), b"".to_string(), scenario.ctx());
     account.add_intent(intent, version::current(), DummyIntent());
     let (executable, outcome) = account.execute_intent(b"one".to_string(), &clock, version::current());
@@ -461,7 +451,7 @@ fun test_error_cannot_execute_intent_before_execution_time() {
 fun test_error_cannot_destroy_intent_without_executing_the_action() {
     let (mut scenario, extensions, mut account) = start();
 
-    let auth = auth::new(&extensions, account.addr(), full_role(), version::current());
+    let auth = account::new_auth(&extensions, account.addr(), version::current());
     let intent = account.create_intent(auth, b"one".to_string(), b"".to_string(), vector[1], 1, true, version::current(), DummyIntent(), b"".to_string(), scenario.ctx());
     account.add_intent(intent, version::current(), DummyIntent());
     let expired = account.destroy_empty_intent(b"one".to_string());
@@ -475,7 +465,7 @@ fun test_error_cant_delete_intent_not_expired() {
     let (mut scenario, extensions, mut account) = start();
     let clock = clock::create_for_testing(scenario.ctx());
 
-    let auth = auth::new(&extensions, account.addr(), full_role(), version::current());
+    let auth = account::new_auth(&extensions, account.addr(), version::current());
     let intent = account.create_intent(auth, b"one".to_string(), b"".to_string(), vector[1], 1, true, version::current(), DummyIntent(), b"".to_string(), scenario.ctx());
     account.add_intent(intent, version::current(), DummyIntent());
     let expired = account.delete_expired_intent(b"one".to_string(), &clock);

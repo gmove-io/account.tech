@@ -11,8 +11,7 @@ use sui::{
     transfer::Receiving
 };
 use account_protocol::{
-    account::Account,
-    auth::Auth,
+    account::{Account, Auth},
     version,
 };
 

@@ -46,8 +46,6 @@ const ECoinTypeDoesntExist: vector<u8> = b"Coin type doesn't exist in treasury";
 
 // === Structs ===
 
-/// [COMMAND] witness defining the treasury opening and closing commands, and associated role
-public struct TreasuryCommand() has drop;
 /// [PROPOSAL] witness defining the treasury transfer proposal, and associated role
 public struct TransferIntent() has copy, drop;
 /// [PROPOSAL] witness defining the treasury pay proposal, and associated role
@@ -76,7 +74,7 @@ public fun open<Config, Outcome>(
     name: String,
     ctx: &mut TxContext
 ) {
-    auth.verify_with_role<TreasuryCommand>(account.addr(), b"".to_string());
+    auth.verify(account.addr());
     assert!(!has_treasury(account, name), EAlreadyExists);
 
     account.add_managed_struct(TreasuryKey { name }, Treasury { bag: bag::new(ctx) }, version::current());
@@ -101,7 +99,7 @@ public fun deposit<Config, Outcome, CoinType: drop>(
     name: String, 
     coin: Coin<CoinType>, 
 ) {
-    auth.verify_with_role<TreasuryCommand>(account.addr(), b"".to_string());
+    auth.verify(account.addr());
     assert!(has_treasury(account, name), ETreasuryDoesntExist);
 
     let treasury: &mut Treasury = 
@@ -121,7 +119,7 @@ public fun close<Config, Outcome>(
     account: &mut Account<Config, Outcome>,
     name: String,
 ) {
-    auth.verify_with_role<TreasuryCommand>(account.addr(), b"".to_string());
+    auth.verify(account.addr());
 
     let Treasury { bag } = 
         account.remove_managed_struct(TreasuryKey { name }, version::current());
@@ -287,10 +285,11 @@ public fun do_spend<Config, Outcome, CoinType: drop, W: copy + drop>(
 ): Coin<CoinType> {
     let name = executable.issuer().opt_name();
     let action: &SpendAction<CoinType> = account.process_action(executable, version, witness);
+    let amount = action.amount;
     
     let treasury: &mut Treasury = account.borrow_managed_struct_mut(TreasuryKey { name }, version);
     let balance: &mut Balance<CoinType> = treasury.bag.borrow_mut(type_name::get<CoinType>());
-    let coin = coin::take(balance, action.amount, ctx);
+    let coin = coin::take(balance, amount, ctx);
 
     if (balance.value() == 0) 
         treasury.bag.remove<TypeName, Balance<CoinType>>(type_name::get<CoinType>()).destroy_zero();

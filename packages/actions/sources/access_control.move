@@ -41,8 +41,6 @@ const EWrongAccount: vector<u8> = b"This Cap has not been borrowed from this acc
 
 // === Structs ===    
 
-/// [COMMAND] witness defining the lock cap command, and associated role
-public struct LockCommand() has drop;
 /// [PROPOSAL] witness defining the access cap proposal, and associated role
 public struct AccessIntent() has copy, drop;
 
@@ -65,7 +63,7 @@ public fun lock_cap<Config, Outcome, Cap: key + store>(
     account: &mut Account<Config, Outcome>,
     cap: Cap,
 ) {
-    auth.verify_with_role<LockCommand>(account.addr(), b"".to_string());
+    auth.verify(account.addr());
     assert!(!has_lock<Config, Outcome, Cap>(account), EAlreadyLocked);
     account.add_managed_object(CapKey<Cap> {}, cap, version::current());
 }

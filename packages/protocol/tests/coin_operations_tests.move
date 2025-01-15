@@ -3,7 +3,6 @@ module account_protocol::coin_operations_tests;
 
 // === Imports ===
 
-use std::string::String;
 use sui::{
     sui::SUI,
     coin::{Self, Coin},
@@ -13,7 +12,6 @@ use sui::{
 use account_protocol::{
     account::{Self, Account},
     version,
-    auth,
     coin_operations,
 };
 use account_extensions::extensions::{Self, Extensions, AdminCap};
@@ -49,12 +47,6 @@ fun end(scenario: Scenario, extensions: Extensions, account: Account<bool, bool>
     ts::end(scenario);
 }
 
-fun full_role(): String {
-    let mut full_role = @account_protocol.to_string();
-    full_role.append_utf8(b"::auth_tests::DummyIntent::Degen");
-    full_role
-}
-
 fun keep_coin(addr: address, amount: u64, scenario: &mut Scenario): ID {
     let coin = coin::mint_for_testing<SUI>(amount, scenario.ctx());
     let id = object::id(&coin);
@@ -75,7 +67,7 @@ fun test_merge_and_split_2_coins() {
     
     scenario.next_tx(OWNER);
     let receiving_to_split = ts::most_recent_receiving_ticket<Coin<SUI>>(&object::id(&account));
-    let auth = auth::new(&extensions, account.addr(), full_role(), version::current());
+    let auth = account::new_auth(&extensions, account.addr(), version::current());
     let split_coin_ids = coin_operations::merge_and_split<bool, bool, SUI>(
         &auth,
         &mut account,
@@ -110,7 +102,7 @@ fun test_merge_2_coins_and_split() {
     let id1 = keep_coin(account_address, 60, &mut scenario);
     let id2 = keep_coin(account_address, 40, &mut scenario);
 
-    let auth = auth::new(&extensions, account.addr(), full_role(), version::current());
+    let auth = account::new_auth(&extensions, account.addr(), version::current());
     let merge_coin_id = coin_operations::merge_and_split<bool, bool, SUI>(
         &auth,
         &mut account,

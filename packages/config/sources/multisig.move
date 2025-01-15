@@ -11,10 +11,9 @@ use sui::{
 };
 use account_extensions::extensions::Extensions;
 use account_protocol::{
-    account::{Self, Account},
+    account::{Self, Account, Auth},
     executable::Executable,
     issuer::Issuer,
-    auth::{Self, Auth},
     intents::Expired,
 };
 use account_config::{
@@ -158,13 +157,10 @@ public fun new_account(
 public fun authenticate(
     extensions: &Extensions,
     account: &Account<Multisig, Approvals>,
-    role: String, // can be empty
     ctx: &TxContext
 ): Auth {
     account.config().assert_is_member(ctx);
-    if (!role.is_empty()) assert!(account.config().member(ctx.sender()).has_role(role), ERoleNotFound);
-
-    auth::new(extensions, account.addr(), role, version::current())
+    account::new_auth(extensions, account.addr(), version::current())
 }
 
 /// Creates a new outcome to initiate a proposal

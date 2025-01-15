@@ -41,8 +41,6 @@ const ENoPackageDoesntExist: vector<u8> = b"No package with this name";
 
 // === Structs ===
 
-/// [COMMAND] witness defining the command to lock an UpgradeCap
-public struct LockCommand() has drop;
 /// [PROPOSAL] witness defining the proposal to upgrade a package
 public struct UpgradeIntent() has copy, drop;
 /// [PROPOSAL] witness defining the proposal to restrict an UpgradeCap
@@ -95,7 +93,7 @@ public fun lock_cap<Config, Outcome>(
     name: String, // name of the package
     delay_ms: u64, // minimum delay between proposal and execution
 ) {
-    auth.verify_with_role<LockCommand>(account.addr(), b"".to_string());
+    auth.verify(account.addr());
     assert!(!has_cap(account, name), ELockAlreadyExists);
 
     if (!account.has_managed_struct(UpgradeIndexKey {}))
@@ -158,13 +156,16 @@ public fun is_package_managed<Config, Outcome>(
     account: &Account<Config, Outcome>,
     package_addr: address
 ): bool {
+    if (!account.has_managed_struct(UpgradeIndexKey {})) return false;
     let index: &UpgradeIndex = account.borrow_managed_struct(UpgradeIndexKey {}, version::current());
+    
     let mut i = 0;
     while (i < index.packages_info.size()) {
         let (_, value) = index.packages_info.get_entry_by_idx(i);
         if (value == package_addr) return true;
         i = i + 1;
     };
+
     false
 }
 
@@ -181,16 +182,17 @@ public fun get_package_name<Config, Outcome>(
     package_addr: address
 ): String {
     let index: &UpgradeIndex = account.borrow_managed_struct(UpgradeIndexKey {}, version::current());
-    let (mut i, mut name) = (0, b"".to_string());
+    let (mut i, mut package_name) = (0, b"".to_string());
     loop {
         let (name, addr) = index.packages_info.get_entry_by_idx(i);
-        if (addr == package_addr) break *name;
+        package_name = *name;
+        if (addr == package_addr) break package_name;
         
         i = i + 1;
         if (i == index.packages_info.size()) abort ENoPackageDoesntExist;
     };
-
-    name
+    
+    package_name
 }
 
 // === [PROPOSAL] Public Functions ===
@@ -323,13 +325,14 @@ public fun do_upgrade<Config, Outcome, W: copy + drop>(
     witness: W,
 ): UpgradeTicket {
     let action: &UpgradeAction = account.process_action(executable, version, witness);
-    assert!(action.upgrade_time <= clock.timestamp_ms(), EUpgradeTooEarly);
+    let (digest, upgrade_time) = (action.digest, action.upgrade_time);
+    assert!(upgrade_time <= clock.timestamp_ms(), EUpgradeTooEarly);
     let name = executable.issuer().opt_name();
 
-    let mut cap: &mut UpgradeCap = account.borrow_managed_object_mut(UpgradeCapKey { name }, version);
+    let cap: &mut UpgradeCap = account.borrow_managed_object_mut(UpgradeCapKey { name }, version);
     let policy = cap.policy();
 
-    cap.authorize_upgrade(policy, action.digest)
+    cap.authorize_upgrade(policy, digest)
 }    
 
 public fun confirm_upgrade<Config, Outcome, W: copy + drop>(
@@ -345,12 +348,13 @@ public fun confirm_upgrade<Config, Outcome, W: copy + drop>(
     executable.issuer().assert_is_account(account.addr());
 
     let name = executable.issuer().opt_name();
-    let mut cap_mut: &mut UpgradeCap = account.borrow_managed_object_mut(UpgradeCapKey { name }, version);
+    let cap_mut: &mut UpgradeCap = account.borrow_managed_object_mut(UpgradeCapKey { name }, version);
     cap_mut.commit_upgrade(receipt);
+    let new_package_addr = cap_mut.package().to_address();
 
     // update the index with the new package address
     let index_mut: &mut UpgradeIndex = account.borrow_managed_struct_mut(UpgradeIndexKey {}, version);
-    *index_mut.packages_info.get_mut(&name) = cap_mut.package().to_address();
+    *index_mut.packages_info.get_mut(&name) = new_package_addr;
 }
 
 public fun delete_upgrade(expired: &mut Expired) {

@@ -20,6 +20,8 @@ use std::{
     type_name::{Self, TypeName},
 };
 use sui::{
+    hex,
+    address,
     transfer::Receiving,
     clock::Clock, 
     dynamic_field as df,
@@ -32,7 +34,6 @@ use account_protocol::{
     deps::{Self, Deps},
     intents::{Self, Intents, Intent, Expired},
     executable::{Self, Executable},
-    auth::Auth,
 };
 use account_extensions::extensions::Extensions;
 
@@ -42,6 +43,7 @@ const EInvalidAction: u64 = 0;
 const ECantBeRemovedYet: u64 = 1;
 const EHasntExpired: u64 = 2;
 const ECantBeExecutedYet: u64 = 3;
+const EWrongAccount: u64 = 4;
 
 // === Structs ===
 
@@ -60,6 +62,12 @@ public struct Account<Config, Outcome> has key, store {
     intents: Intents<Outcome>,
     // config can be anything (e.g. Multisig, coin-based DAO, etc.)
     config: Config,
+}
+
+/// Protected type ensuring provenance
+public struct Auth {
+    // address of the account that created the auth
+    account_addr: address,
 }
 
 // === Public mutative functions ===
@@ -85,6 +93,26 @@ public fun new<Config, Outcome>(
 
 public fun keep<Config, Outcome, T: key + store>(account: &Account<Config, Outcome>, obj: T) {
     transfer::public_transfer(obj, account.addr());
+}
+
+public fun new_auth(
+    extensions: &Extensions,
+    account_addr: address,
+    version: TypeName,
+): Auth {
+    let addr = address::from_bytes(hex::decode(version.get_address().into_bytes()));
+    extensions.assert_is_core_extension(addr);
+
+    Auth { account_addr }
+}
+
+public fun verify(
+    auth: Auth,
+    addr: address,
+) {
+    let Auth { account_addr } = auth;
+
+    assert!(addr == account_addr, EWrongAccount);
 }
 
 // === Proposal functions ===

@@ -70,7 +70,7 @@ fun create_and_add_dummy_intent(
     account: &mut Account<Multisig, Approvals>, 
     extensions: &Extensions, 
 ) {
-    let auth = multisig::authenticate(extensions, account, full_role(), scenario.ctx());
+    let auth = multisig::authenticate(extensions, account, scenario.ctx());
     let outcome = multisig::empty_outcome(account, scenario.ctx());
     let intent = account.create_intent(
         auth, 
@@ -92,7 +92,7 @@ fun create_and_add_other_intent(
     account: &mut Account<Multisig, Approvals>, 
     extensions: &Extensions, 
 ) {
-    let auth = multisig::authenticate(extensions, account, b"".to_string(), scenario.ctx());
+    let auth = multisig::authenticate(extensions, account, scenario.ctx());
     let outcome = multisig::empty_outcome(account, scenario.ctx());
     let intent = account.create_intent(
         auth, 
@@ -326,7 +326,7 @@ fun test_intent_deletion() {
 #[test]
 fun test_config_multisig() {
     let (mut scenario, extensions, mut account, clock) = start();
-    let auth = multisig::authenticate(&extensions, &account, full_role(), scenario.ctx());
+    let auth = multisig::authenticate(&extensions, &account, scenario.ctx());
     let outcome = multisig::empty_outcome(&account, scenario.ctx());
 
     multisig::request_config_multisig(
@@ -351,7 +351,7 @@ fun test_config_multisig() {
 
     let mut expired = multisig::destroy_empty_intent(&mut account, b"config".to_string());
     multisig::delete_config_multisig(&mut expired);
-    expired.destroy();
+    expired.destroy_empty();
 
     assert!(account.config().addresses() == vector[OWNER, @0xBABE]);
     assert!(account.config().member(OWNER).weight() == 2);
@@ -368,7 +368,7 @@ fun test_config_multisig() {
 fun test_config_multisig_deletion() {
     let (mut scenario, extensions, mut account, mut clock) = start();
     clock.increment_for_testing(1);
-    let auth = multisig::authenticate(&extensions, &account, full_role(), scenario.ctx());
+    let auth = multisig::authenticate(&extensions, &account, scenario.ctx());
     let outcome = multisig::empty_outcome(&account, scenario.ctx());
 
     multisig::request_config_multisig(
@@ -380,7 +380,7 @@ fun test_config_multisig_deletion() {
         vector[0],
         1, 
         vector[OWNER, @0xBABE], 
-        vector[2, 1], 
+        vector[2, 1],
         vector[vector[full_role()], vector[]], 
         2, 
         vector[full_role()], 
@@ -389,7 +389,7 @@ fun test_config_multisig_deletion() {
     );
     let mut expired = multisig::delete_expired_intent(&mut account, b"config".to_string(), &clock);
     multisig::delete_config_multisig(&mut expired);
-    expired.destroy();
+    expired.destroy_empty();
 
     end(scenario, extensions, account, clock);
 }
@@ -410,19 +410,7 @@ fun test_error_authenticate_not_member() {
     let (mut scenario, extensions, account, clock) = start();
 
     scenario.next_tx(ALICE);
-    let auth = multisig::authenticate(&extensions, &account, full_role(), scenario.ctx());
-
-    destroy(auth);
-    end(scenario, extensions, account, clock);
-}
-
-#[test, expected_failure(abort_code = multisig::ERoleNotFound)]
-fun test_error_authenticate_member_no_role() {
-    let (mut scenario, extensions, mut account, clock) = start();
-    account.config_mut(version::current()).add_member(ALICE);
-
-    scenario.next_tx(ALICE);
-    let auth = multisig::authenticate(&extensions, &account, full_role(), scenario.ctx());
+    let auth = multisig::authenticate(&extensions, &account, scenario.ctx());
 
     destroy(auth);
     end(scenario, extensions, account, clock);
@@ -512,7 +500,7 @@ fun test_error_outcome_validate_no_threshold_reached() {
 #[test, expected_failure(abort_code = multisig::EMembersNotSameLength)]
 fun test_error_verify_rules_addresses_weights_not_same_length() {
     let (mut scenario, extensions, mut account, clock) = start();
-    let auth = multisig::authenticate(&extensions, &account, full_role(), scenario.ctx());
+    let auth = multisig::authenticate(&extensions, &account, scenario.ctx());
     let outcome = multisig::empty_outcome(&account, scenario.ctx());
 
     multisig::request_config_multisig(
@@ -538,7 +526,7 @@ fun test_error_verify_rules_addresses_weights_not_same_length() {
 #[test, expected_failure(abort_code = multisig::EMembersNotSameLength)]
 fun test_error_verify_rules_addresses_roles_not_same_length() {
     let (mut scenario, extensions, mut account, clock) = start();
-    let auth = multisig::authenticate(&extensions, &account, full_role(), scenario.ctx());
+    let auth = multisig::authenticate(&extensions, &account, scenario.ctx());
     let outcome = multisig::empty_outcome(&account, scenario.ctx());
 
     multisig::request_config_multisig(
@@ -564,7 +552,7 @@ fun test_error_verify_rules_addresses_roles_not_same_length() {
 #[test, expected_failure(abort_code = multisig::ERolesNotSameLength)]
 fun test_error_verify_rules_roles_not_same_length() {
     let (mut scenario, extensions, mut account, clock) = start();
-    let auth = multisig::authenticate(&extensions, &account, full_role(), scenario.ctx());
+    let auth = multisig::authenticate(&extensions, &account, scenario.ctx());
     let outcome = multisig::empty_outcome(&account, scenario.ctx());
 
     multisig::request_config_multisig(
@@ -590,7 +578,7 @@ fun test_error_verify_rules_roles_not_same_length() {
 #[test, expected_failure(abort_code = multisig::EThresholdTooHigh)]
 fun test_error_verify_rules_global_threshold_too_high() {
     let (mut scenario, extensions, mut account, clock) = start();
-    let auth = multisig::authenticate(&extensions, &account, full_role(), scenario.ctx());
+    let auth = multisig::authenticate(&extensions, &account, scenario.ctx());
     let outcome = multisig::empty_outcome(&account, scenario.ctx());
 
     multisig::request_config_multisig(
@@ -616,7 +604,7 @@ fun test_error_verify_rules_global_threshold_too_high() {
 #[test, expected_failure(abort_code = multisig::EThresholdNull)]
 fun test_error_verify_rules_global_threshold_null() {
     let (mut scenario, extensions, mut account, clock) = start();
-    let auth = multisig::authenticate(&extensions, &account, full_role(), scenario.ctx());
+    let auth = multisig::authenticate(&extensions, &account, scenario.ctx());
     let outcome = multisig::empty_outcome(&account, scenario.ctx());
 
     multisig::request_config_multisig(
@@ -642,7 +630,7 @@ fun test_error_verify_rules_global_threshold_null() {
 #[test, expected_failure(abort_code = multisig::ERoleNotAdded)]
 fun test_error_verify_rules_role_not_added_but_given() {
     let (mut scenario, extensions, mut account, clock) = start();
-    let auth = multisig::authenticate(&extensions, &account, full_role(), scenario.ctx());
+    let auth = multisig::authenticate(&extensions, &account, scenario.ctx());
     let outcome = multisig::empty_outcome(&account, scenario.ctx());
 
     multisig::request_config_multisig(
@@ -668,7 +656,7 @@ fun test_error_verify_rules_role_not_added_but_given() {
 #[test, expected_failure(abort_code = multisig::EThresholdTooHigh)]
 fun test_error_verify_rules_role_threshold_too_high() {
     let (mut scenario, extensions, mut account, clock) = start();
-    let auth = multisig::authenticate(&extensions, &account, full_role(), scenario.ctx());
+    let auth = multisig::authenticate(&extensions, &account, scenario.ctx());
     let outcome = multisig::empty_outcome(&account, scenario.ctx());
 
     multisig::request_config_multisig(

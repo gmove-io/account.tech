@@ -40,8 +40,6 @@ const EAlreadyExists: vector<u8> = b"There already is a Kiosk with this name";
 
 // === Structs ===    
 
-/// [COMMAND] witness defining the command to place into a Kiosk
-public struct KioskCommand() has drop;
 /// [PROPOSAL] witness defining the proposal to take nfts from a kiosk managed by a account
 public struct TakeIntent() has copy, drop;
 /// [PROPOSAL] witness defining the proposal to list nfts in a kiosk managed by a account
@@ -76,7 +74,7 @@ public fun open<Config, Outcome>(
     name: String, 
     ctx: &mut TxContext
 ) {
-    auth.verify_with_role<KioskCommand>(account.addr(), b"".to_string());
+    auth.verify(account.addr());
     assert!(!has_lock<Config, Outcome>(account, name), EAlreadyExists);
 
     let (mut kiosk, kiosk_owner_cap) = kiosk::new(ctx);
@@ -107,7 +105,7 @@ public fun place<Config, Outcome, Nft: key + store>(
     nft_id: ID,
     ctx: &mut TxContext
 ): TransferRequest<Nft> {
-    auth.verify_with_role<KioskCommand>(account.addr(), b"".to_string());
+    auth.verify(account.addr());
     assert!(has_lock(account, name), ENoLock);
 
     let cap: &KioskOwnerCap = account.borrow_managed_object(KioskOwnerKey { name }, version::current());
@@ -143,7 +141,7 @@ public fun delist<Config, Outcome, Nft: key + store>(
     name: String,
     nft_id: ID,
 ) {
-    auth.verify_with_role<KioskCommand>(account.addr(), b"".to_string());
+    auth.verify(account.addr());
     assert!(has_lock(account, name), ENoLock);
 
     let cap: &KioskOwnerCap = account.borrow_managed_object(KioskOwnerKey { name }, version::current());
@@ -158,7 +156,7 @@ public fun withdraw_profits<Config, Outcome>(
     name: String,
     ctx: &mut TxContext
 ) {
-    auth.verify_with_role<KioskCommand>(account.addr(), b"".to_string());
+    auth.verify(account.addr());
     assert!(has_lock(account, name), ENoLock);
 
     let cap: &KioskOwnerCap = account.borrow_managed_object(KioskOwnerKey { name }, version::current());
@@ -178,7 +176,7 @@ public fun close<Config, Outcome>(
     kiosk: Kiosk,
     ctx: &mut TxContext
 ) {
-    auth.verify_with_role<KioskCommand>(account.addr(), b"".to_string());
+    auth.verify(account.addr());
     assert!(has_lock(account, name), ENoLock);
 
     let cap: KioskOwnerCap = account.remove_managed_object(KioskOwnerKey { name }, version::current());
@@ -241,7 +239,7 @@ public fun execute_take<Config, Outcome, Nft: key + store>(
 // step 5: destroy the executable
 public fun complete_take<Config, Outcome>(
     executable: Executable,
-    account: &mut Account<Config, Outcome>,
+    account: &Account<Config, Outcome>,
 ) {
     account.confirm_execution(executable, version::current(), TakeIntent());
 }
@@ -295,7 +293,7 @@ public fun execute_list<Config, Outcome, Nft: key + store>(
 // step 5: destroy the executable
 public fun complete_list<Config, Outcome>(
     executable: Executable,
-    account: &mut Account<Config, Outcome>,
+    account: &Account<Config, Outcome>,
 ) {
     account.confirm_execution(executable, version::current(), ListIntent());
 }
