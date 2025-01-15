@@ -142,7 +142,7 @@ fun test_add_destroy_intent() {
     assert!(expired.issuer().account_addr() == @0x0);
     assert!(expired.start_index() == 0);
     assert!(expired.actions().length() == 0);
-    expired.destroy();
+    expired.destroy_empty();
 
     destroy(clock);
     destroy(intents);
@@ -184,7 +184,7 @@ fun test_error_delete_intent_actions_not_empty() {
     intents.add(intent);
     // remove intent
     let expired = intents.destroy(b"one".to_string());
-    expired.destroy();
+    expired.destroy_empty();
 
     destroy(intents);
     destroy(clock);

@@ -212,8 +212,8 @@ fun test_intent_delete_flow() {
     assert!(account.intents().length() == 1);
     let expired = account.delete_expired_intent(b"one".to_string(), &clock);
     assert!(account.intents().length() == 0);
+    expired.destroy_empty();
 
-    destroy(expired);
     destroy(clock);
     end(scenario, extensions, account);
 }
@@ -474,7 +474,7 @@ fun test_error_cannot_destroy_intent_without_executing_the_action() {
 fun test_error_cant_delete_intent_not_expired() {
     let (mut scenario, extensions, mut account) = start();
     let clock = clock::create_for_testing(scenario.ctx());
-    
+
     let auth = auth::new(&extensions, account.addr(), full_role(), version::current());
     let intent = account.create_intent(auth, b"one".to_string(), b"".to_string(), vector[1], 1, true, version::current(), DummyIntent(), b"".to_string(), scenario.ctx());
     account.add_intent(intent, version::current(), DummyIntent());

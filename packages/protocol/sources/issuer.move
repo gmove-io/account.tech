@@ -53,16 +53,16 @@ public fun assert_is_constructor<W: drop>(issuer: &Issuer, _: W) {
 /// Converts a issuer into a role
 /// role is package::module::struct::name or package::module::struct
 public fun full_role(issuer: &Issuer): String {
-    let mut role_type = issuer.package_id;
-    role_type.append_utf8(b"::");
-    role_type.append(issuer.module_name);
+    let mut full_role = issuer.package_id;
+    full_role.append_utf8(b"::");
+    full_role.append(issuer.module_name);
 
     if (!issuer.opt_name.is_empty()) {
-        role_type.append_utf8(b"::");  
-        role_type.append(issuer.opt_name);
+        full_role.append_utf8(b"::");  
+        full_role.append(issuer.opt_name);
     };
 
-    role_type
+    full_role
 }
 
 // === View Functions ===
@@ -100,7 +100,7 @@ public(package) fun construct<W: drop>(
 // === Test functions ===
 
 #[test_only]
-public struct WrongWitness() has drop;
+public struct WrongWitness() has copy, drop;
 
 #[test_only]
 public fun wrong_witness(): WrongWitness {

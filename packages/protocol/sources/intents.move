@@ -179,8 +179,8 @@ public fun remove_action<Action: store>(
     expired.actions.remove(idx)
 }
 
-public use fun destroy_expired as Expired.destroy;
-public fun destroy_expired(expired: Expired) {
+public use fun destroy_empty_expired as Expired.destroy_empty;
+public fun destroy_empty_expired(expired: Expired) {
     let Expired { actions, .. } = expired;
     assert!(actions.is_empty(), EActionsNotEmpty);
     actions.destroy_empty();
