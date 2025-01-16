@@ -23,10 +23,9 @@ use std::{
     string::String
 };
 use account_protocol::{
-    account::Account,
+    account::{Account, Auth},
     intents::{Intent, Expired},
     executable::Executable,
-    auth::Auth,
 };
 use account_actions::version;
 

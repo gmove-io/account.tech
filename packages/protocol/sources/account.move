@@ -161,7 +161,7 @@ public fun lock_object<Config, Outcome, W: drop>(
     version: TypeName,
     witness: W,
 ) {
-    account.deps().assert_is_dep(version);  
+    account.deps().assert_is_core_dep(version);  
     intent.issuer().assert_is_account(account.addr());
     intent.issuer().assert_is_constructor(witness);
 
@@ -176,7 +176,7 @@ public fun unlock_object<Config, Outcome, Action, W: drop>(
     version: TypeName,
     _: W, // this one is to check that unlock is called from the module that defined the action
 ) {
-    account.deps().assert_is_dep(version);  
+    account.deps().assert_is_core_dep(version);  
     expired.issuer().assert_is_account(account.addr());
     assert!(
         type_name::get<Action>().get_address() == type_name::get<W>().get_address() && 

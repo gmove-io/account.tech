@@ -21,12 +21,11 @@ use std::{
     string::String,
 };
 use account_protocol::{
-    account::Account,
+    account::{Account, Auth},
     intents::{Intent, Expired},
     executable::Executable,
     deps::{Self, Deps},
     metadata,
-    auth::Auth,
 };
 use account_extensions::extensions::Extensions;
 use account_actions::{

@@ -21,10 +21,9 @@ use sui::{
     coin::Coin,
 };
 use account_protocol::{
-    account::Account,
+    account::{Account, Auth},
     intents::{Intent, Expired},
     executable::Executable,
-    auth::Auth,
 };
 use account_actions::{
     transfer as acc_transfer,
@@ -82,7 +81,7 @@ public fun request_transfer<Config, Outcome>(
     );
 
     object_ids.zip_do!(recipients, |object_id, recipient| {
-        new_withdraw(&mut intent, object_id, TransferIntent());
+        new_withdraw(&mut intent, account, object_id, TransferIntent());
         acc_transfer::new_transfer(&mut intent, recipient, TransferIntent());
     });
 
@@ -138,7 +137,7 @@ public fun request_vesting<Config, Outcome>(
         ctx
     );
     
-    new_withdraw(&mut intent, coin_id, VestingIntent());
+    new_withdraw(&mut intent, account, coin_id, VestingIntent());
     vesting::new_vesting(&mut intent, start_timestamp, end_timestamp, recipient, VestingIntent());
 
     account.add_intent(intent, version::current(), VestingIntent());
@@ -161,11 +160,13 @@ public fun execute_vesting<Config, Outcome, C: drop>(
 
 // === [ACTION] Public functions ===
 
-public fun new_withdraw<Outcome, W: drop>(
+public fun new_withdraw<Config, Outcome, W: copy + drop>(
     intent: &mut Intent<Outcome>, 
+    account: &mut Account<Config, Outcome>,
     object_id: ID, 
     witness: W,
 ) {
+    account.lock_object(intent, object_id, version::current(), witness);
     intent.add_action(WithdrawAction { object_id }, witness);
 }
 
@@ -183,8 +184,8 @@ public fun do_withdraw<Config, Outcome, T: key + store, W: copy + drop>(
 }
 
 public fun delete_withdraw<Config, Outcome>(
-    account: &mut Account<Config, Outcome>,
     expired: &mut Expired, 
+    account: &mut Account<Config, Outcome>,
 ) {
     let action: WithdrawAction = expired.remove_action();
     let object_id = action.object_id;

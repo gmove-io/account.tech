@@ -20,10 +20,9 @@ use sui::{
 };
 use kiosk::{kiosk_lock_rule, royalty_rule, personal_kiosk_rule};
 use account_protocol::{
-    account::Account,
+    account::{Account, Auth},
     intents::{Intent, Expired},
     executable::Executable,
-    auth::Auth,
 };
 use account_actions::version;
 

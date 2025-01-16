@@ -17,10 +17,9 @@ use sui::{
     vec_map::{Self, VecMap},
 };
 use account_protocol::{
-    account::Account,
+    account::{Account, Auth},
     intents::{Intent, Expired},
     executable::Executable,
-    auth::Auth,
 };
 use account_actions::version;
 
@@ -228,7 +227,7 @@ public fun request_upgrade<Config, Outcome>(
         ctx
     );
 
-    new_upgrade(&mut intent, digest, account, clock, UpgradeIntent());
+    new_upgrade(&mut intent, account, digest, clock, UpgradeIntent());
     account.add_intent(intent, version::current(), UpgradeIntent());
 }
 
@@ -306,8 +305,8 @@ public fun execute_restrict<Config, Outcome>(
 
 public fun new_upgrade<Config, Outcome, W: drop>(
     intent: &mut Intent<Outcome>, 
-    digest: vector<u8>, 
     account: &Account<Config, Outcome>,
+    digest: vector<u8>, 
     clock: &Clock,
     witness: W
 ) {

@@ -19,10 +19,9 @@ use sui::{
     coin::{Coin, TreasuryCap, CoinMetadata},
 };
 use account_protocol::{
-    account::Account,
+    account::{Account, Auth},
     intents::{Intent, Expired},
     executable::Executable,
-    auth::Auth
 };
 use account_actions::{
     owned,
@@ -350,7 +349,7 @@ public fun request_burn<Config, Outcome, CoinType>(
         ctx
     );
 
-    owned::new_withdraw(&mut intent, coin_id, BurnIntent());
+    owned::new_withdraw(&mut intent, account, coin_id, BurnIntent());
     new_burn<Outcome, CoinType, BurnIntent>(
         &mut intent, 
         amount, 

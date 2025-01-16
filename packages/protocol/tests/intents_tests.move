@@ -149,7 +149,7 @@ fun test_add_destroy_intent() {
     scenario.end();
 }
 
-#[test, expected_failure(abort_code = intents::EProposalNotFound)]
+#[test, expected_failure(abort_code = intents::EIntentNotFound)]
 fun test_error_get_intent() {
     let scenario = ts::begin(OWNER);
 
@@ -160,7 +160,7 @@ fun test_error_get_intent() {
     scenario.end();
 }
 
-#[test, expected_failure(abort_code = intents::EProposalNotFound)]
+#[test, expected_failure(abort_code = intents::EIntentNotFound)]
 fun test_error_get_mut_intent() {
     let scenario = ts::begin(OWNER);
 

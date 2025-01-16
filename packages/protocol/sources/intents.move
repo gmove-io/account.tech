@@ -17,7 +17,7 @@ use account_protocol::{
 // === Errors ===
 
 #[error]
-const EProposalNotFound: vector<u8> = b"Proposal not found for key";
+const EIntentNotFound: vector<u8> = b"Proposal not found for key";
 #[error]
 const EObjectAlreadyLocked: vector<u8> = b"Object already locked";
 #[error]
@@ -87,7 +87,7 @@ public fun contains<Outcome>(intents: &Intents<Outcome>, key: String): bool {
 
 public fun get_idx<Outcome>(intents: &Intents<Outcome>, key: String): u64 {
     let opt_idx = intents.inner.find_index!(|intent| intent.key == key);
-    assert!(opt_idx.is_some(), EProposalNotFound);
+    assert!(opt_idx.is_some(), EIntentNotFound);
     opt_idx.destroy_some()
 }
 

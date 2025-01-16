@@ -18,10 +18,9 @@ use sui::{
     transfer::Receiving,
 };
 use account_protocol::{
-    account::Account,
+    account::{Account, Auth},
     intents::{Intent, Expired},
     executable::Executable,
-    auth::Auth,
 };
 use account_actions::{
     transfer as acc_transfer,
@@ -209,7 +208,7 @@ public fun execute_transfer<Config, Outcome, CoinType: drop>(
 // step 5: complete acc_transfer and destroy the executable
 public fun complete_transfer<Config, Outcome>(
     executable: Executable,
-    account: &mut Account<Config, Outcome>,
+    account: &Account<Config, Outcome>,
 ) {
     account.confirm_execution(executable, version::current(), TransferIntent());
 }
