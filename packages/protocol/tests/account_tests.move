@@ -215,7 +215,7 @@ fun test_lock_object() {
     clock.increment_for_testing(1);
 
     let auth = account::new_auth(&extensions, account.addr(), version::current());
-    let intent = account.create_intent(
+    let mut intent = account.create_intent(
         auth, 
         b"one".to_string(), 
         b"description".to_string(), 
@@ -228,7 +228,9 @@ fun test_lock_object() {
         scenario.ctx()
     );
 
-    account.lock_object(&intent, @0x1D.to_id(), version::current(), DummyIntent());
+    let action = Struct { inner: true };
+    account.lock_object(&intent, &action, @0x1D.to_id(), version::current(), DummyIntent());
+    intent.add_action(action, DummyIntent());
     assert!(account.intents().locked().contains(&@0x1D.to_id()));
 
     account.add_intent(intent, version::current(), DummyIntent());

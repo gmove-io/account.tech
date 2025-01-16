@@ -10,12 +10,11 @@ module account_actions::currency;
 // === Imports ===
 
 use std::{
-    type_name::{Self, TypeName},
+    type_name::TypeName,
     string::String,
     ascii,
 };
 use sui::{
-    transfer::Receiving,
     coin::{Coin, TreasuryCap, CoinMetadata},
 };
 use account_protocol::{
@@ -23,12 +22,7 @@ use account_protocol::{
     intents::{Intent, Expired},
     executable::Executable,
 };
-use account_actions::{
-    owned,
-    transfer as acc_transfer,
-    vesting,
-    version,
-};
+use account_actions::version;
 
 // === Errors ===
 
@@ -38,8 +32,6 @@ const ENoChange: vector<u8> = b"Proposal must change something";
 const EWrongValue: vector<u8> = b"Coin has the wrong value";
 #[error]
 const ENoLock: vector<u8> = b"No lock for this coin type";
-#[error]
-const EAmountsRecipentsNotSameLength: vector<u8> = b"Transfer amounts and recipients are not the same length";
 #[error]
 const EMintDisabled: vector<u8> = b"Mint disabled";
 #[error]
@@ -56,19 +48,6 @@ const ECannotUpdateIcon: vector<u8> = b"Cannot update icon";
 const EMaxSupply: vector<u8> = b"Max supply exceeded";
 
 // === Structs ===    
-
-/// [PROPOSAL] witness defining the proposal to disable one or more permissions
-public struct DisableIntent() has copy, drop;
-/// [PROPOSAL] witness defining the proposal to mint new coins from a locked TreasuryCap
-public struct MintIntent() has copy, drop;
-/// [PROPOSAL] witness defining the proposal to burn coins from the account using a locked TreasuryCap
-public struct BurnIntent() has copy, drop;
-/// [PROPOSAL] witness defining the proposal to update the CoinMetadata associated with a locked TreasuryCap
-public struct UpdateIntent() has copy, drop;
-/// [PROPOSAL] witness defining the proposal to transfer a minted coin 
-public struct TransferIntent() has copy, drop;
-/// [PROPOSAL] witness defining the proposal to pay from a minted coin
-public struct VestingIntent() has copy, drop;
 
 /// Dynamic Object Field key for the TreasuryCap
 public struct TreasuryCapKey<phantom CoinType> has copy, drop, store {}
@@ -160,6 +139,10 @@ public fun coin_type_supply<Config, Outcome, CoinType>(account: &Account<Config,
     cap.total_supply()
 }
 
+public fun max_supply<CoinType>(lock: &CurrencyRules<CoinType>): Option<u64> {
+    lock.max_supply
+}
+
 public fun total_minted<CoinType>(lock: &CurrencyRules<CoinType>): u64 {
     lock.total_minted
 }
@@ -173,7 +156,7 @@ public fun can_mint<CoinType>(lock: &CurrencyRules<CoinType>): bool {
 }
 
 public fun can_burn<CoinType>(lock: &CurrencyRules<CoinType>): bool {
-    lock.can_mint
+    lock.can_burn
 }
 
 public fun can_update_symbol<CoinType>(lock: &CurrencyRules<CoinType>): bool {
@@ -205,355 +188,6 @@ public fun public_burn<Config, Outcome, CoinType>(
 
     let cap_mut: &mut TreasuryCap<CoinType> = account.borrow_managed_object_mut(TreasuryCapKey<CoinType> {}, version::current());
     cap_mut.burn(coin);
-}
-
-// === [PROPOSAL] Public functions ===
-
-// step 1: propose to disable minting for the coin forever
-public fun request_disable<Config, Outcome, CoinType>(
-    auth: Auth,
-    outcome: Outcome,
-    account: &mut Account<Config, Outcome>,
-    key: String,
-    description: String,
-    execution_time: u64,
-    expiration_time: u64,
-    disable_mint: bool,
-    disable_burn: bool,
-    disable_update_symbol: bool,
-    disable_update_name: bool,
-    disable_update_description: bool,
-    disable_update_icon: bool,
-    ctx: &mut TxContext
-) {
-    assert!(has_cap<Config, Outcome, CoinType>(account), ENoLock);
-
-    let mut intent = account.create_intent(
-        auth,
-        key, 
-        description, 
-        vector[execution_time], 
-        expiration_time, 
-        outcome,
-        version::current(),
-        DisableIntent(), 
-        type_to_name<CoinType>(), // the coin type is the auth name 
-        ctx
-    );
-
-    new_disable<Outcome, CoinType, DisableIntent>(
-        &mut intent, 
-        disable_mint,
-        disable_burn,
-        disable_update_symbol,
-        disable_update_name,
-        disable_update_description,
-        disable_update_icon,
-        DisableIntent()
-    );
-    account.add_intent(intent, version::current(), DisableIntent());
-}
-
-// step 2: multiple members have to approve the proposal (account::approve_proposal)
-// step 3: execute the proposal and return the action (AccountConfig::module::execute_proposal)
-
-// step 4: disable minting for the coin forever
-public fun execute_disable<Config, Outcome, CoinType>(
-    mut executable: Executable,
-    account: &mut Account<Config, Outcome>,
-) {
-    do_disable<Config, Outcome, CoinType, DisableIntent>(&mut executable, account, version::current(), DisableIntent());   
-    account.confirm_execution(executable, version::current(), DisableIntent());
-}
-
-// step 1: propose to mint an amount of a coin that will be transferred to the Account
-public fun request_mint<Config, Outcome, CoinType>(
-    auth: Auth,
-    outcome: Outcome,
-    account: &mut Account<Config, Outcome>,
-    key: String,
-    description: String,
-    execution_times: vector<u64>,
-    expiration_time: u64,
-    amount: u64,
-    ctx: &mut TxContext
-) {
-    assert!(has_cap<Config, Outcome, CoinType>(account), ENoLock);
-    let rules: &CurrencyRules<CoinType> = borrow_rules(account);
-    assert!(rules.can_mint, EMintDisabled);
-    let supply = coin_type_supply<Config, Outcome, CoinType>(account);
-    if (rules.max_supply.is_some()) assert!(amount + supply <= *rules.max_supply.borrow(), EMaxSupply);
-
-    let mut intent = account.create_intent(
-        auth,
-        key, 
-        description, 
-        execution_times, 
-        expiration_time, 
-        outcome,
-        version::current(),
-        MintIntent(), 
-        type_to_name<CoinType>(), // the coin type is the auth name 
-        ctx
-    );
-
-    new_mint<Outcome, CoinType, MintIntent>(
-        &mut intent, 
-        amount, 
-        MintIntent()
-    );
-    account.add_intent(intent, version::current(), MintIntent());
-}
-
-// step 2: multiple members have to approve the proposal (account::approve_proposal)
-// step 3: execute the proposal and return the action (AccountConfig::module::execute_proposal)
-
-// step 4: mint the coins and send them to the account
-public fun execute_mint<Config, Outcome, CoinType>(
-    mut executable: Executable,
-    account: &mut Account<Config, Outcome>,
-    ctx: &mut TxContext
-) {
-    let coin = do_mint<Config, Outcome, CoinType, MintIntent>(&mut executable, account, version::current(), MintIntent(), ctx);
-    account.keep(coin);
-    account.confirm_execution(executable, version::current(), MintIntent());
-}
-
-// step 1: propose to burn an amount of a coin owned by the account
-public fun request_burn<Config, Outcome, CoinType>(
-    auth: Auth,
-    outcome: Outcome,
-    account: &mut Account<Config, Outcome>,
-    key: String,
-    description: String,
-    execution_time: u64,
-    expiration_time: u64,
-    coin_id: ID,
-    amount: u64,
-    ctx: &mut TxContext
-) {
-    assert!(has_cap<Config, Outcome, CoinType>(account), ENoLock);
-    let rules: &CurrencyRules<CoinType> = borrow_rules(account);
-    assert!(rules.can_burn, EBurnDisabled);
-
-    let mut intent = account.create_intent(
-        auth,
-        key, 
-        description, 
-        vector[execution_time], 
-        expiration_time, 
-        outcome,
-        version::current(),
-        BurnIntent(), 
-        type_to_name<CoinType>(), // the coin type is the auth name 
-        ctx
-    );
-
-    owned::new_withdraw(&mut intent, account, coin_id, BurnIntent());
-    new_burn<Outcome, CoinType, BurnIntent>(
-        &mut intent, 
-        amount, 
-        BurnIntent()
-    );
-
-    account.add_intent(intent, version::current(), BurnIntent());
-}
-
-// step 2: multiple members have to approve the proposal (account::approve_proposal)
-// step 3: execute the proposal and return the action (AccountConfig::module::execute_proposal)
-
-// step 4: burn the coin initially owned by the account
-public fun execute_burn<Config, Outcome, CoinType>(
-    mut executable: Executable,
-    account: &mut Account<Config, Outcome>,
-    receiving: Receiving<Coin<CoinType>>,
-) {
-    let coin = owned::do_withdraw(&mut executable, account, receiving, version::current(), BurnIntent());
-    do_burn<Config, Outcome, CoinType, BurnIntent>(&mut executable, account, coin, version::current(), BurnIntent());
-    account.confirm_execution(executable, version::current(), BurnIntent());
-}
-
-// step 1: propose to update the CoinMetadata
-public fun request_update<Config, Outcome, CoinType>(
-    auth: Auth,
-    outcome: Outcome,
-    account: &mut Account<Config, Outcome>,
-    key: String,
-    description: String,
-    execution_time: u64,
-    expiration_time: u64,
-    md_symbol: Option<ascii::String>,
-    md_name: Option<String>,
-    md_description: Option<String>,
-    md_icon: Option<ascii::String>,
-    ctx: &mut TxContext
-) {
-    assert!(has_cap<Config, Outcome, CoinType>(account), ENoLock);
-    let rules: &CurrencyRules<CoinType> = borrow_rules(account);
-    if (!rules.can_update_symbol) assert!(md_symbol.is_none(), ECannotUpdateSymbol);
-    if (!rules.can_update_name) assert!(md_name.is_none(), ECannotUpdateName);
-    if (!rules.can_update_description) assert!(md_description.is_none(), ECannotUpdateDescription);
-    if (!rules.can_update_icon) assert!(md_icon.is_none(), ECannotUpdateIcon);
-
-
-    let mut intent = account.create_intent(
-        auth,
-        key,
-        description,
-        vector[execution_time],
-        expiration_time,
-        outcome,
-        version::current(),
-        UpdateIntent(),
-        type_to_name<CoinType>(), // the coin type is the auth name 
-        ctx
-    );
-
-    new_update<Outcome, CoinType, UpdateIntent>(
-        &mut intent, 
-        md_symbol, 
-        md_name, 
-        md_description, 
-        md_icon, 
-        UpdateIntent()
-    );
-    account.add_intent(intent, version::current(), UpdateIntent());
-}
-
-// step 2: multiple members have to approve the proposal (account::approve_proposal)
-// step 3: execute the proposal and return the action (AccountConfig::module::execute_proposal)
-
-// step 4: update the CoinMetadata
-public fun execute_update<Config, Outcome, CoinType>(
-    mut executable: Executable,
-    account: &mut Account<Config, Outcome>,
-    metadata: &mut CoinMetadata<CoinType>,
-) {
-    do_update(&mut executable, account, metadata, version::current(), UpdateIntent());
-    account.confirm_execution(executable, version::current(), UpdateIntent());
-}
-
-// step 1: propose to send managed coins
-public fun request_transfer<Config, Outcome, CoinType>(
-    auth: Auth,
-    outcome: Outcome,
-    account: &mut Account<Config, Outcome>,
-    key: String,
-    description: String,
-    execution_times: vector<u64>,
-    expiration_time: u64,
-    amounts: vector<u64>,
-    recipients: vector<address>,
-    ctx: &mut TxContext
-) {
-    assert!(has_cap<Config, Outcome, CoinType>(account), ENoLock);
-    assert!(amounts.length() == recipients.length(), EAmountsRecipentsNotSameLength);
-
-    let rules: &CurrencyRules<CoinType> = borrow_rules(account);
-    assert!(rules.can_mint, EMintDisabled);
-    let sum = amounts.fold!(0, |sum, amount| sum + amount);
-    if (rules.max_supply.is_some()) assert!(sum <= *rules.max_supply.borrow(), EMaxSupply);
-
-    let mut intent = account.create_intent(
-        auth,
-        key,
-        description,
-        execution_times,
-        expiration_time,
-        outcome,
-        version::current(),
-        TransferIntent(),
-        b"".to_string(),
-        ctx
-    );
-
-    amounts.zip_do!(recipients, |amount, recipient| {
-        new_mint<Outcome, CoinType, TransferIntent>(
-            &mut intent, 
-            amount, 
-            TransferIntent()
-        );
-        acc_transfer::new_transfer(&mut intent, recipient, TransferIntent());
-    });
-
-    account.add_intent(intent, version::current(), TransferIntent());
-}
-
-// step 2: multiple members have to approve the proposal (account::approve_proposal)
-// step 3: execute the proposal and return the action (account::execute_proposal)
-
-// step 4: loop over transfer
-public fun execute_transfer<Config, Outcome, CoinType>(
-    executable: &mut Executable, 
-    account: &mut Account<Config, Outcome>, 
-    ctx: &mut TxContext
-) {
-    let coin: Coin<CoinType> = do_mint(executable, account, version::current(), TransferIntent(), ctx);
-    acc_transfer::do_transfer(executable, account, coin, version::current(), TransferIntent());
-}
-
-// step 5: complete acc_transfer and destroy the executable
-public fun complete_transfer<Config, Outcome>(
-    executable: Executable,
-    account: &Account<Config, Outcome>,
-) {
-    account.confirm_execution(executable, version::current(), TransferIntent());
-}
-
-// step 1: propose to pay from a minted coin
-public fun request_vesting<Config, Outcome, CoinType>(
-    auth: Auth,
-    outcome: Outcome,
-    account: &mut Account<Config, Outcome>, 
-    key: String,
-    description: String,
-    execution_time: u64,
-    expiration_time: u64,
-    total_amount: u64,
-    start_timestamp: u64, 
-    end_timestamp: u64, 
-    recipient: address,
-    ctx: &mut TxContext
-) {
-    assert!(has_cap<Config, Outcome, CoinType>(account), ENoLock);
-    let rules: &CurrencyRules<CoinType> = borrow_rules(account);
-    assert!(rules.can_mint, EMintDisabled);
-    if (rules.max_supply.is_some()) assert!(total_amount <= *rules.max_supply.borrow(), EMaxSupply);
-
-    let mut intent = account.create_intent(
-        auth,
-        key,
-        description,
-        vector[execution_time],
-        expiration_time,
-        outcome,
-        version::current(),
-        VestingIntent(),
-        b"".to_string(),
-        ctx
-    );
-
-    new_mint<Outcome, CoinType, VestingIntent>(
-        &mut intent, 
-        total_amount, 
-        VestingIntent()
-    );
-    vesting::new_vesting(&mut intent, start_timestamp, end_timestamp, recipient, VestingIntent());
-    account.add_intent(intent, version::current(), VestingIntent());
-}
-
-// step 2: multiple members have to approve the proposal (account::approve_proposal)
-// step 3: execute the proposal and return the action (account::execute_proposal)
-
-// step 4: loop over it in PTB, sends last object from the Send action
-public fun execute_vesting<Config, Outcome, CoinType>(
-    mut executable: Executable, 
-    account: &mut Account<Config, Outcome>, 
-    ctx: &mut TxContext
-) {
-    let coin: Coin<CoinType> = do_mint(&mut executable, account, version::current(), VestingIntent(), ctx);
-    vesting::do_vesting(&mut executable, account, coin, version::current(), VestingIntent(), ctx);
-    account.confirm_execution(executable, version::current(), VestingIntent());
 }
 
 // === [ACTION] Public functions ===
@@ -697,13 +331,6 @@ public fun do_update<Config, Outcome, CoinType, W: copy + drop>(
 
 public fun delete_update<CoinType>(expired: &mut Expired) {
     let UpdateAction<CoinType> { .. } = expired.remove_action();
-}
-
-
-// === Private functions ===
-
-fun type_to_name<T>(): String {
-    type_name::get<T>().into_string().to_string()
 }
 
 // === Test functions ===

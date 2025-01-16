@@ -46,21 +46,12 @@ const ENoExtensionOrUpgradeCap: vector<u8> = b"No extension or upgrade cap for t
 
 // === Structs ===
 
-/// The following structs are delegated witnesses (copy & drop abilities).
-/// They are used to authenticate the account proposals.
-/// Only the proposal that instantiated the witness can also destroy it.
-/// Those structs also define the different roles that members can have.
-/// Finally, they are used to parse the actions of the proposal off-chain.
-
-/// [PROPOSAL] witness defining the dependencies proposal, and associated role
-public struct ConfigDepsIntent() has copy, drop;
-
 /// [ACTION] struct wrapping the deps account field into an action
 public struct ConfigDepsAction has store {
     deps: Deps,
 }
 
-// === [COMMAND] Public functions ===
+// === Public functions ===
 
 public fun edit_metadata<Config, Outcome>(
     auth: Auth,
@@ -77,53 +68,7 @@ public fun edit_metadata<Config, Outcome>(
     *account.metadata_mut(version::current()) = metadata::from_keys_values(keys, values);
 }
 
-// === [PROPOSAL] Public functions ===
-
-// step 1: propose to update the dependencies
-public fun request_config_deps<Config, Outcome>(
-    auth: Auth,
-    outcome: Outcome,
-    account: &mut Account<Config, Outcome>, 
-    key: String,
-    description: String,
-    execution_time: u64,
-    expiration_time: u64,
-    extensions: &Extensions,
-    names: vector<String>,
-    addresses: vector<address>,
-    versions: vector<u64>,
-    ctx: &mut TxContext
-) {
-    let mut intent = account.create_intent(
-        auth,
-        key,
-        description,
-        vector[execution_time],
-        expiration_time,
-        outcome,
-        version::current(),
-        ConfigDepsIntent(),
-        b"".to_string(),
-        ctx
-    );
-
-    new_config_deps(&mut intent, account, extensions, names, addresses, versions, ConfigDepsIntent());
-    account.add_intent(intent, version::current(), ConfigDepsIntent());
-}
-
-// step 2: multiple members have to approve the proposal (account::approve_proposal)
-// step 3: execute the proposal and return the action (AccountConfig::module::execute_proposal)
-
-// step 4: execute the action and modify Account object
-public fun execute_config_deps<Config, Outcome>(
-    mut executable: Executable,
-    account: &mut Account<Config, Outcome>, 
-) {
-    do_config_deps(&mut executable, account, version::current(), ConfigDepsIntent());
-    account.confirm_execution(executable, version::current(), ConfigDepsIntent());
-}
-
-// === [ACTION] Public functions ===
+// must be called in intent modules
 
 public fun new_config_deps<Config, Outcome, W: drop>(
     intent: &mut Intent<Outcome>,

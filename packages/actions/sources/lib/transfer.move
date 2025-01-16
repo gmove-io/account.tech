@@ -20,7 +20,7 @@ public struct TransferAction has store {
     recipient: address,
 }
 
-// === [ACTION] Public functions ===
+// === Public functions ===
 
 public fun new_transfer<Outcome, W: drop>(
     intent: &mut Intent<Outcome>, 

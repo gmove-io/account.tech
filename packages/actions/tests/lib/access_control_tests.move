@@ -106,43 +106,6 @@ fun test_lock_cap() {
 }
 
 #[test]
-fun test_request_execute_access() {
-    let (mut scenario, extensions, mut account, clock) = start();
-    let auth = multisig::authenticate(&extensions, &account, scenario.ctx());
-    access_control::lock_cap(auth, &mut account, cap(&mut scenario));
-    let key = b"dummy".to_string();
-
-    let auth = multisig::authenticate(&extensions, &account, scenario.ctx());
-    let outcome = multisig::empty_outcome(&account, scenario.ctx());
-    access_control::request_access<Multisig, Approvals, Cap>(
-        auth, 
-        outcome, 
-        &mut account, 
-        key, 
-        b"".to_string(), 
-        vector[0],
-        1, 
-        scenario.ctx()
-    );
-
-    multisig::approve_intent(&mut account, key, scenario.ctx());
-    let mut executable = multisig::execute_intent(&mut account, key, &clock);
-    
-    assert!(access_control::has_lock<Multisig, Approvals, Cap>(&account));
-    let (borrow, cap) = access_control::execute_access<Multisig, Approvals, Cap>(&mut executable, &mut account);
-    assert!(!access_control::has_lock<Multisig, Approvals, Cap>(&account));
-    // do something with the cap
-    access_control::complete_access(executable, &mut account, borrow, cap);
-    assert!(access_control::has_lock<Multisig, Approvals, Cap>(&account)); 
-
-    let mut expired = account.destroy_empty_intent(key);
-    access_control::delete_access<Cap>(&mut expired);
-    expired.destroy_empty();
-
-    end(scenario, extensions, account, clock);
-}
-
-#[test]
 fun test_access_flow() {
     let (mut scenario, extensions, mut account, clock) = start();
     let key = b"dummy".to_string();
@@ -196,27 +159,6 @@ fun test_error_lock_cap_already_locked() {
     access_control::lock_cap(auth, &mut account, cap(&mut scenario));
     let auth = multisig::authenticate(&extensions, &account, scenario.ctx());
     access_control::lock_cap(auth, &mut account, cap(&mut scenario));
-
-    end(scenario, extensions, account, clock);
-}
-
-#[test, expected_failure(abort_code = access_control::ENoLock)]
-fun test_error_request_access_no_lock() {
-    let (mut scenario, extensions, mut account, clock) = start();
-    let key = b"dummy".to_string();
-
-    let auth = multisig::authenticate(&extensions, &account, scenario.ctx());
-    let outcome = multisig::empty_outcome(&account, scenario.ctx());
-    access_control::request_access<Multisig, Approvals, Cap>(
-        auth, 
-        outcome, 
-        &mut account, 
-        key, 
-        b"".to_string(), 
-        vector[0],
-        1, 
-        scenario.ctx()
-    );
 
     end(scenario, extensions, account, clock);
 }

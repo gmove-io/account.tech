@@ -111,44 +111,6 @@ fun test_edit_config_metadata() {
 }
 
 #[test]
-fun test_request_execute_config_deps() {
-    let (mut scenario, extensions, mut account, clock) = start();    
-    let key = b"dummy".to_string();
-
-    let auth = multisig::authenticate(&extensions, &account, scenario.ctx());
-    let outcome = multisig::empty_outcome(&account, scenario.ctx());
-    config::request_config_deps(
-        auth, 
-        outcome, 
-        &mut account, 
-        key, 
-        b"".to_string(), 
-        0, 
-        1, 
-        &extensions,
-        vector[b"External".to_string()], 
-        vector[@0xABC], 
-        vector[1], 
-        scenario.ctx()
-    );
-    assert!(!account.deps().contains_name(b"External".to_string()));
-
-    multisig::approve_intent(&mut account, key, scenario.ctx());
-    let executable = multisig::execute_intent(&mut account, key, &clock);
-    config::execute_config_deps(executable, &mut account);
-
-    let mut expired = account.destroy_empty_intent(key);
-    config::delete_config_deps(&mut expired);
-    expired.destroy_empty();
-    
-    let package = account.deps().get_from_name(b"External".to_string());
-    assert!(package.addr() == @0xABC);
-    assert!(package.version() == 1);
-
-    end(scenario, extensions, account, clock);
-}
-
-#[test]
 fun test_config_deps_flow() {
     let (mut scenario, extensions, mut account, clock) = start();
     let key = b"dummy".to_string();

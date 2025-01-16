@@ -154,16 +154,21 @@ public fun create_intent<Config, Outcome, W: drop>(
     )
 }
 
-public fun lock_object<Config, Outcome, W: drop>(
+public fun lock_object<Config, Outcome, Action, W: drop>(
     account: &mut Account<Config, Outcome>,
     intent: &Intent<Outcome>, 
+    action: &Action,
     id: ID,
     version: TypeName,
-    witness: W,
+    _: W, // this one is to check that unlock is called from the module that defined the action
 ) {
     account.deps().assert_is_core_dep(version);  
     intent.issuer().assert_is_account(account.addr());
-    intent.issuer().assert_is_constructor(witness);
+    assert!(
+        type_name::get<Action>().get_address() == type_name::get<W>().get_address() && 
+        type_name::get<Action>().get_module() == type_name::get<W>().get_module(),
+        EInvalidAction
+    );
 
     account.intents_mut(version).lock(id);
 }

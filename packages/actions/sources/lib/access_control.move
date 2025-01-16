@@ -18,10 +18,7 @@ module account_actions::access_control;
 
 // === Imports ===
 
-use std::{
-    type_name::{Self, TypeName},
-    string::String
-};
+use std::type_name::TypeName;
 use account_protocol::{
     account::{Account, Auth},
     intents::{Intent, Expired},
@@ -40,9 +37,6 @@ const EWrongAccount: vector<u8> = b"This Cap has not been borrowed from this acc
 
 // === Structs ===    
 
-/// [PROPOSAL] witness defining the access cap proposal, and associated role
-public struct AccessIntent() has copy, drop;
-
 /// Dynamic Object Field key for the Cap
 public struct CapKey<phantom Cap> has copy, drop, store {}
 
@@ -54,7 +48,7 @@ public struct Borrow<phantom Cap> {
     account_addr: address
 }
 
-// === [COMMAND] Public functions ===
+// === Public functions ===
 
 /// Only a member can lock a Cap, the Cap must have at least store ability
 public fun lock_cap<Config, Outcome, Cap: key + store>(
@@ -73,61 +67,7 @@ public fun has_lock<Config, Outcome, Cap>(
     account.has_managed_object(CapKey<Cap> {})
 }
 
-// === [PROPOSAL] Public functions ===
-
-// step 1: propose to mint an amount of a coin that will be transferred to the Account
-public fun request_access<Config, Outcome, Cap>(
-    auth: Auth,
-    outcome: Outcome,
-    account: &mut Account<Config, Outcome>,
-    key: String,
-    description: String,
-    execution_times: vector<u64>,
-    expiration_time: u64,
-    ctx: &mut TxContext
-) {
-    assert!(has_lock<Config, Outcome, Cap>(account), ENoLock);
-
-    let mut intent = account.create_intent(
-        auth,
-        key, 
-        description, 
-        execution_times, 
-        expiration_time, 
-        outcome,
-        version::current(),
-        AccessIntent(), 
-        type_to_name<Cap>(), // the cap type is the witness role name 
-        ctx
-    );
-
-    new_access<Outcome, Cap, AccessIntent>(&mut intent, AccessIntent());
-    account.add_intent(intent, version::current(), AccessIntent());
-}
-
-// step 2: multiple members have to approve the proposal (account::approve_proposal)
-// step 3: execute the proposal and return the action (AccountConfig::module::execute_proposal)
-
-// step 4: mint the coins and send them to the account
-public fun execute_access<Config, Outcome, Cap: key + store>(
-    executable: &mut Executable,
-    account: &mut Account<Config, Outcome>,
-): (Borrow<Cap>, Cap) {
-    do_access(executable, account, version::current(), AccessIntent())
-}
-
-// step 5: return the cap to destroy Borrow, the action and executable
-public fun complete_access<Config, Outcome, Cap: key + store>(
-    executable: Executable, 
-    account: &mut Account<Config, Outcome>,
-    borrow: Borrow<Cap>, 
-    cap: Cap
-) {
-    return_cap(account, borrow, cap, version::current());
-    account.confirm_execution(executable, version::current(), AccessIntent());
-}
-
-// === [ACTION] Public functions ===
+// must be called in intent modules
 
 public fun new_access<Outcome, Cap, W: drop>(
     intent: &mut Intent<Outcome>, 
@@ -164,10 +104,4 @@ public fun return_cap<Config, Outcome, Cap: key + store>(
 
 public fun delete_access<Cap>(expired: &mut Expired) {
     let AccessAction<Cap> { .. } = expired.remove_action();
-}
-
-// === Private functions ===
-
-fun type_to_name<T>(): String {
-    type_name::get<T>().into_string().to_string()
 }
