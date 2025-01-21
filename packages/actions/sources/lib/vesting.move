@@ -6,7 +6,6 @@ module account_actions::vesting;
 
 // === Imports ===
 
-use std::type_name::TypeName;
 use sui::{
     balance::Balance,
     coin::{Self, Coin},
@@ -16,6 +15,7 @@ use account_protocol::{
     account::{Account, Auth},
     intents::{Intent, Expired},
     executable::Executable,
+    version_witness::VersionWitness,
 };
 
 // === Errors ===
@@ -105,7 +105,7 @@ public fun cancel_payment<Config, Outcome, CoinType>(
     account: &Account<Config, Outcome>,
     ctx: &mut TxContext
 ) {
-    auth.verify(account.addr());
+    account.verify(auth);
 
     let Stream { id, balance, .. } = stream;
     id.delete();
@@ -130,25 +130,27 @@ public fun destroy_cap(cap: ClaimCap) {
 
 // === [ACTION] Public Functions ===
 
-public fun new_vesting<Outcome, W: drop>(
+public fun new_vesting<Config, Outcome, IW: drop>(
     intent: &mut Intent<Outcome>, 
+    account: &Account<Config, Outcome>,
     start_timestamp: u64,
     end_timestamp: u64,
     recipient: address,
-    witness: W,
+    version_witness: VersionWitness,
+    intent_witness: IW,
 ) {
-    intent.add_action(VestingAction { start_timestamp, end_timestamp, recipient }, witness);
+    account.add_action(intent, VestingAction { start_timestamp, end_timestamp, recipient }, version_witness, intent_witness);
 }
 
-public fun do_vesting<Config, Outcome, CoinType, W: copy + drop>(
+public fun do_vesting<Config, Outcome, CoinType, IW: copy + drop>(
     executable: &mut Executable, 
     account: &mut Account<Config, Outcome>, 
     coin: Coin<CoinType>,
-    version: TypeName,
-    witness: W,
+    version_witness: VersionWitness,
+    intent_witness: IW,
     ctx: &mut TxContext
 ) {    
-    let action: &VestingAction = account.process_action(executable, version, witness);
+    let action: &VestingAction = account.process_action(executable, version_witness, intent_witness);
 
     transfer::share_object(Stream<CoinType> { 
         id: object::new(ctx), 

@@ -3,7 +3,6 @@ module account_actions::treasury_tests;
 
 // === Imports ===
 
-use std::type_name::{Self, TypeName};
 use sui::{
     test_utils::destroy,
     test_scenario::{Self as ts, Scenario},
@@ -17,6 +16,7 @@ use account_protocol::{
     intents::Intent,
     issuer,
     deps,
+    version_witness,
 };
 use account_config::multisig::{Self, Multisig, Approvals};
 use account_actions::{
@@ -33,6 +33,7 @@ const OWNER: address = @0xCAFE;
 public struct TREASURY_TESTS has drop {}
 
 public struct DummyIntent() has copy, drop;
+public struct WrongWitness() has copy, drop;
 
 // === Helpers ===
 
@@ -48,8 +49,9 @@ fun start(): (Scenario, Extensions, Account<Multisig, Approvals>, Clock) {
     extensions.add(&cap, b"AccountProtocol".to_string(), @account_protocol, 1);
     extensions.add(&cap, b"AccountConfig".to_string(), @account_config, 1);
     extensions.add(&cap, b"AccountActions".to_string(), @account_actions, 1);
-    // Account generic types are dummy types (bool, bool)
-    let account = multisig::new_account(&extensions, scenario.ctx());
+
+    let mut account = multisig::new_account(&extensions, scenario.ctx());
+    account.deps_mut_for_testing().add(&extensions, b"AccountActions".to_string(), @account_actions, 1);
     let clock = clock::create_for_testing(scenario.ctx());
     // create world
     destroy(cap);
@@ -63,36 +65,29 @@ fun end(scenario: Scenario, extensions: Extensions, account: Account<Multisig, A
     ts::end(scenario);
 }
 
-fun wrong_version(): TypeName {
-    type_name::get<Extensions>()
-}
-
-fun keep_coin(addr: address, amount: u64, scenario: &mut Scenario): ID {
-    let coin = coin::mint_for_testing<SUI>(amount, scenario.ctx());
-    let id = object::id(&coin);
-    transfer::public_transfer(coin, addr);
+// fun keep_coin(addr: address, amount: u64, scenario: &mut Scenario): ID {
+//     let coin = coin::mint_for_testing<SUI>(amount, scenario.ctx());
+//     let id = object::id(&coin);
+//     transfer::public_transfer(coin, addr);
     
-    scenario.next_tx(OWNER);
-    id
-}
+//     scenario.next_tx(OWNER);
+//     id
+// }
 
 fun create_dummy_intent(
     scenario: &mut Scenario,
     account: &mut Account<Multisig, Approvals>, 
-    extensions: &Extensions, 
 ): Intent<Approvals> {
-    let auth = multisig::authenticate(extensions, account, scenario.ctx());
-    let outcome = multisig::empty_outcome(account, scenario.ctx());
+    let outcome = multisig::empty_outcome();
     account.create_intent(
-        auth, 
         b"dummy".to_string(), 
         b"".to_string(), 
         vector[0],
         1, 
+        b"Degen".to_string(), 
         outcome, 
         version::current(), 
         DummyIntent(), 
-        b"Degen".to_string(), 
         scenario.ctx()
     )
 }
@@ -104,58 +99,58 @@ fun test_open_treasury() {
     let (mut scenario, extensions, mut account, clock) = start();
 
     assert!(!treasury::has_treasury(&account, b"Degen".to_string()));
-    let auth = multisig::authenticate(&extensions, &account, scenario.ctx());
+    let auth = multisig::authenticate(&account, scenario.ctx());
     treasury::open(auth, &mut account, b"Degen".to_string(), scenario.ctx());
     assert!(treasury::has_treasury(&account, b"Degen".to_string()));
 
     end(scenario, extensions, account, clock);
 }
 
-#[test]
-fun test_deposit_owned() {
-    let (mut scenario, extensions, mut account, clock) = start();
+// #[test]
+// fun test_deposit_owned() {
+//     let (mut scenario, extensions, mut account, clock) = start();
 
-    let auth = multisig::authenticate(&extensions, &account, scenario.ctx());
-    treasury::open(auth, &mut account, b"Degen".to_string(), scenario.ctx());
+//     let auth = multisig::authenticate(&account, scenario.ctx());
+//     treasury::open(auth, &mut account, b"Degen".to_string(), scenario.ctx());
 
-    let id = keep_coin(account.addr(), 5, &mut scenario);
-    let auth = multisig::authenticate(&extensions, &account, scenario.ctx());
-    treasury::deposit_owned<Multisig, Approvals, SUI>(
-        auth, 
-        &mut account, 
-        b"Degen".to_string(), 
-        ts::receiving_ticket_by_id(id)
-    );
+//     let id = keep_coin(account.addr(), 5, &mut scenario);
+//     let auth = multisig::authenticate(&account, scenario.ctx());
+//     treasury::deposit_owned<Multisig, Approvals, SUI>(
+//         auth, 
+//         &mut account, 
+//         b"Degen".to_string(), 
+//         ts::receiving_ticket_by_id(id)
+//     );
 
-    let treasury = treasury::borrow_treasury(&account, b"Degen".to_string());
-    assert!(treasury.coin_type_exists<SUI>());
-    assert!(treasury.coin_type_value<SUI>() == 5);
+//     let treasury = treasury::borrow_treasury(&account, b"Degen".to_string());
+//     assert!(treasury.coin_type_exists<SUI>());
+//     assert!(treasury.coin_type_value<SUI>() == 5);
 
-    end(scenario, extensions, account, clock);
-}
+//     end(scenario, extensions, account, clock);
+// }
 
 #[test]
 fun test_deposit() {
     let (mut scenario, extensions, mut account, clock) = start();
 
-    let auth = multisig::authenticate(&extensions, &account, scenario.ctx());
+    let auth = multisig::authenticate(&account, scenario.ctx());
     treasury::open(auth, &mut account, b"Degen".to_string(), scenario.ctx());
 
-    let auth = multisig::authenticate(&extensions, &account, scenario.ctx());
+    let auth = multisig::authenticate(&account, scenario.ctx());
     treasury::deposit<Multisig, Approvals, SUI>(
         auth, 
         &mut account, 
         b"Degen".to_string(), 
         coin::mint_for_testing<SUI>(5, scenario.ctx())
     );
-    let auth = multisig::authenticate(&extensions, &account, scenario.ctx());
+    let auth = multisig::authenticate(&account, scenario.ctx());
     treasury::deposit<Multisig, Approvals, SUI>(
         auth, 
         &mut account, 
         b"Degen".to_string(), 
         coin::mint_for_testing<SUI>(5, scenario.ctx())
     );
-    let auth = multisig::authenticate(&extensions, &account, scenario.ctx());
+    let auth = multisig::authenticate(&account, scenario.ctx());
     treasury::deposit<Multisig, Approvals, TREASURY_TESTS>(
         auth, 
         &mut account, 
@@ -176,11 +171,11 @@ fun test_deposit() {
 fun test_close_treasury() {
     let (mut scenario, extensions, mut account, clock) = start();
 
-    let auth = multisig::authenticate(&extensions, &account, scenario.ctx());
+    let auth = multisig::authenticate(&account, scenario.ctx());
     treasury::open(auth, &mut account, b"Degen".to_string(), scenario.ctx());
     assert!(treasury::has_treasury(&account, b"Degen".to_string()));
 
-    let auth = multisig::authenticate(&extensions, &account, scenario.ctx());
+    let auth = multisig::authenticate(&account, scenario.ctx());
     treasury::deposit<Multisig, Approvals, SUI>(
         auth, 
         &mut account, 
@@ -188,10 +183,12 @@ fun test_close_treasury() {
         coin::mint_for_testing<SUI>(5, scenario.ctx())
     );
 
-    let mut intent = create_dummy_intent(&mut scenario, &mut account, &extensions);
-    treasury::new_spend<Approvals, SUI, DummyIntent>(
+    let mut intent = create_dummy_intent(&mut scenario, &mut account);
+    treasury::new_spend<Multisig, Approvals, SUI, DummyIntent>(
         &mut intent, 
+        &account,
         5,
+        version::current(),
         DummyIntent(),
     );
     account.add_intent(intent, version::current(), DummyIntent());
@@ -206,7 +203,7 @@ fun test_close_treasury() {
     );
     account.confirm_execution(executable, version::current(), DummyIntent());
 
-    let auth = multisig::authenticate(&extensions, &account, scenario.ctx());
+    let auth = multisig::authenticate(&account, scenario.ctx());
     treasury::close(auth, &mut account, b"Degen".to_string());
     assert!(!treasury::has_treasury(&account, b"Degen".to_string()));
 
@@ -217,11 +214,11 @@ fun test_close_treasury() {
 #[test]
 fun test_spend_flow() {
     let (mut scenario, extensions, mut account, clock) = start();
-    let auth = multisig::authenticate(&extensions, &account, scenario.ctx());
+    let auth = multisig::authenticate(&account, scenario.ctx());
     treasury::open(auth, &mut account, b"Degen".to_string(), scenario.ctx());
     let key = b"dummy".to_string();
 
-    let auth = multisig::authenticate(&extensions, &account, scenario.ctx());
+    let auth = multisig::authenticate(&account, scenario.ctx());
     treasury::deposit<Multisig, Approvals, SUI>(
         auth, 
         &mut account, 
@@ -229,10 +226,12 @@ fun test_spend_flow() {
         coin::mint_for_testing<SUI>(5, scenario.ctx())
     );
 
-    let mut intent = create_dummy_intent(&mut scenario, &mut account, &extensions);
-    treasury::new_spend<Approvals, SUI, DummyIntent>(
+    let mut intent = create_dummy_intent(&mut scenario, &mut account);
+    treasury::new_spend<Multisig, Approvals, SUI, DummyIntent>(
         &mut intent, 
+        &account,
         2,
+        version::current(),
         DummyIntent(),
     );
     account.add_intent(intent, version::current(), DummyIntent());
@@ -262,10 +261,12 @@ fun test_disable_expired() {
     clock.increment_for_testing(1);
     let key = b"dummy".to_string();
 
-    let mut intent = create_dummy_intent(&mut scenario, &mut account, &extensions);
-    treasury::new_spend<Approvals, SUI, DummyIntent>(
+    let mut intent = create_dummy_intent(&mut scenario, &mut account);
+    treasury::new_spend<Multisig, Approvals, SUI, DummyIntent>(
         &mut intent, 
+        &account,
         2,
+        version::current(),
         DummyIntent(),
     );
     account.add_intent(intent, version::current(), DummyIntent());
@@ -281,9 +282,9 @@ fun test_disable_expired() {
 fun test_error_open_treasury_already_exists() {
     let (mut scenario, extensions, mut account, clock) = start();
 
-    let auth = multisig::authenticate(&extensions, &account, scenario.ctx());
+    let auth = multisig::authenticate(&account, scenario.ctx());
     treasury::open(auth, &mut account, b"Degen".to_string(), scenario.ctx());
-    let auth = multisig::authenticate(&extensions, &account, scenario.ctx());
+    let auth = multisig::authenticate(&account, scenario.ctx());
     treasury::open(auth, &mut account, b"Degen".to_string(), scenario.ctx());
 
     end(scenario, extensions, account, clock);
@@ -293,7 +294,7 @@ fun test_error_open_treasury_already_exists() {
 fun test_error_deposit_treasury_doesnt_exist() {
     let (mut scenario, extensions, mut account, clock) = start();
 
-    let auth = multisig::authenticate(&extensions, &account, scenario.ctx());
+    let auth = multisig::authenticate(&account, scenario.ctx());
     treasury::deposit<Multisig, Approvals, SUI>(
         auth, 
         &mut account, 
@@ -308,10 +309,10 @@ fun test_error_deposit_treasury_doesnt_exist() {
 fun test_error_close_not_empty() {
     let (mut scenario, extensions, mut account, clock) = start();
 
-    let auth = multisig::authenticate(&extensions, &account, scenario.ctx());
+    let auth = multisig::authenticate(&account, scenario.ctx());
     treasury::open(auth, &mut account, b"Degen".to_string(), scenario.ctx());
 
-    let auth = multisig::authenticate(&extensions, &account, scenario.ctx());
+    let auth = multisig::authenticate(&account, scenario.ctx());
     treasury::deposit<Multisig, Approvals, SUI>(
         auth, 
         &mut account, 
@@ -319,7 +320,7 @@ fun test_error_close_not_empty() {
         coin::mint_for_testing<SUI>(5, scenario.ctx())
     );
 
-    let auth = multisig::authenticate(&extensions, &account, scenario.ctx());
+    let auth = multisig::authenticate(&account, scenario.ctx());
     treasury::close(auth, &mut account, b"Degen".to_string());
 
     end(scenario, extensions, account, clock);
@@ -330,16 +331,19 @@ fun test_error_close_not_empty() {
 #[test, expected_failure(abort_code = issuer::EWrongAccount)]
 fun test_error_do_update_from_wrong_account() {
     let (mut scenario, extensions, mut account, clock) = start();
-    let auth = multisig::authenticate(&extensions, &account, scenario.ctx());
+    let auth = multisig::authenticate(&account, scenario.ctx());
     treasury::open(auth, &mut account, b"Degen".to_string(), scenario.ctx());
     let key = b"dummy".to_string();
 
     let mut account2 = multisig::new_account(&extensions, scenario.ctx());
+    account2.deps_mut_for_testing().add(&extensions, b"AccountActions".to_string(), @account_actions, 1);
     // intent is submitted to other account
-    let mut intent = create_dummy_intent(&mut scenario, &mut account2, &extensions);
-    treasury::new_spend<Approvals, SUI, DummyIntent>(
+    let mut intent = create_dummy_intent(&mut scenario, &mut account2);
+    treasury::new_spend<Multisig, Approvals, SUI, DummyIntent>(
         &mut intent, 
+        &account2,
         2,
+        version::current(),
         DummyIntent(),
     );
     account2.add_intent(intent, version::current(), DummyIntent());
@@ -364,14 +368,16 @@ fun test_error_do_update_from_wrong_account() {
 #[test, expected_failure(abort_code = issuer::EWrongWitness)]
 fun test_error_do_update_from_wrong_constructor_witness() {
     let (mut scenario, extensions, mut account, clock) = start();
-    let auth = multisig::authenticate(&extensions, &account, scenario.ctx());
+    let auth = multisig::authenticate(&account, scenario.ctx());
     treasury::open(auth, &mut account, b"Degen".to_string(), scenario.ctx());
     let key = b"dummy".to_string();
 
-    let mut intent = create_dummy_intent(&mut scenario, &mut account, &extensions);
-    treasury::new_spend<Approvals, SUI, DummyIntent>(
+    let mut intent = create_dummy_intent(&mut scenario, &mut account);
+    treasury::new_spend<Multisig, Approvals, SUI, DummyIntent>(
         &mut intent, 
+        &account,
         2,
+        version::current(),
         DummyIntent(),
     );
     account.add_intent(intent, version::current(), DummyIntent());
@@ -379,11 +385,11 @@ fun test_error_do_update_from_wrong_constructor_witness() {
     multisig::approve_intent(&mut account, key, scenario.ctx());
     let mut executable = multisig::execute_intent(&mut account, key, &clock);
     // try to mint with the wrong witness that didn't approve the intent
-    let coin = treasury::do_spend<Multisig, Approvals, SUI, issuer::WrongWitness>(
+    let coin = treasury::do_spend<Multisig, Approvals, SUI, WrongWitness>(
         &mut executable, 
         &mut account, 
         version::current(), 
-        issuer::wrong_witness(),
+        WrongWitness(),
         scenario.ctx()
     );
 
@@ -395,14 +401,16 @@ fun test_error_do_update_from_wrong_constructor_witness() {
 #[test, expected_failure(abort_code = deps::ENotDep)]
 fun test_error_do_update_from_not_dep() {
     let (mut scenario, extensions, mut account, clock) = start();
-    let auth = multisig::authenticate(&extensions, &account, scenario.ctx());
+    let auth = multisig::authenticate(&account, scenario.ctx());
     treasury::open(auth, &mut account, b"Degen".to_string(), scenario.ctx());
     let key = b"dummy".to_string();
 
-    let mut intent = create_dummy_intent(&mut scenario, &mut account, &extensions);
-    treasury::new_spend<Approvals, SUI, DummyIntent>(
+    let mut intent = create_dummy_intent(&mut scenario, &mut account);
+    treasury::new_spend<Multisig, Approvals, SUI, DummyIntent>(
         &mut intent, 
+        &account,
         2,
+        version::current(),
         DummyIntent(),
     );
     account.add_intent(intent, version::current(), DummyIntent());
@@ -413,7 +421,7 @@ fun test_error_do_update_from_not_dep() {
     let coin = treasury::do_spend<Multisig, Approvals, SUI, DummyIntent>(
         &mut executable, 
         &mut account, 
-        wrong_version(), 
+        version_witness::new_for_testing(@0xFA153), 
         DummyIntent(),
         scenario.ctx()
     );

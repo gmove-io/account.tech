@@ -9,16 +9,9 @@ module account_protocol::deps;
 
 // === Imports ===
 
-use std::{
-    type_name::TypeName,
-    string::String
-};
-use sui::{
-    address,
-    package::UpgradeCap,
-    hex,
-};
+use std::string::String;
 use account_extensions::extensions::Extensions;
+use account_protocol::version_witness::VersionWitness;
 
 // === Errors ===
 
@@ -29,15 +22,14 @@ const EDepAlreadyExists: vector<u8> = b"Dependency already exists in the account
 #[error]
 const ENotDep: vector<u8> = b"Version package is not a dependency";
 #[error]
-const ENotCoreDep: vector<u8> = b"Version package is not a core dependency";
-#[error]
-const EWrongUpgradeCap: vector<u8> = b"Upgrade cap is not the same as the package";
-
+const ENotExtension: vector<u8> = b"Package is not an extension";
 // === Structs ===
 
 /// Parent struct protecting the deps
 public struct Deps has copy, drop, store {
     inner: vector<Dep>,
+    // can community extensions be added
+    unverified_allowed: bool,
 }
 
 /// Child struct storing the name, package and version of a dependency
@@ -53,7 +45,10 @@ public struct Dep has copy, drop, store {
 // === Public functions ===
 
 /// Creates a new Deps struct with the core dependencies
-public fun new(extensions: &Extensions): Deps {
+public fun new(
+    extensions: &Extensions,
+    unverified_allowed: bool
+): Deps {
     let (addresses, versions) = extensions.get_latest_core_deps();
     let mut inner = vector[];
 
@@ -67,13 +62,8 @@ public fun new(extensions: &Extensions): Deps {
         addr: addresses[1], 
         version: versions[1] 
     });
-    inner.push_back(Dep { 
-        name: b"AccountActions".to_string(), 
-        addr: addresses[2], 
-        version: versions[2] 
-    });
 
-    Deps { inner }
+    Deps { inner, unverified_allowed }
 }
 
 /// Protected because &mut Deps is only accessible from AccountProtocol and AccountActions
@@ -86,39 +76,24 @@ public fun add(
 ) {
     assert!(!contains_name(deps, name), EDepAlreadyExists);
     assert!(!contains_addr(deps, addr), EDepAlreadyExists);
-    extensions.assert_is_extension(name, addr, version);
+    if (!deps.unverified_allowed) 
+        assert!(extensions.is_extension(name, addr, version), ENotExtension);
 
     deps.inner.push_back(Dep { name, addr, version });
 }
 
-/// Adds a dependency which is a package owned by a member
-public fun add_with_upgrade_cap(
-    deps: &mut Deps,
-    upgrade_cap: &UpgradeCap,
-    name: String,
-    addr: address, 
-    version: u64
-) {
-    assert!(!contains_name(deps, name), EDepAlreadyExists);
-    assert!(!contains_addr(deps, addr), EDepAlreadyExists);
-    assert!(upgrade_cap.package() == addr.to_id(), EWrongUpgradeCap);
-
-    deps.inner.push_back(Dep { name, addr, version });
+public fun toggle_unverified_allowed(deps: &mut Deps) {
+    deps.unverified_allowed = !deps.unverified_allowed;
 }
 
 // === View functions ===
 
-/// Asserts that the Version witness type has been issued from one of the Account dependencies
-public fun assert_is_dep(deps: &Deps, version_type: TypeName) {
-    let package = address::from_bytes(hex::decode(version_type.get_address().into_bytes()));
-    assert!(deps.contains_addr(package), ENotDep);
+public fun check(deps: &Deps, version_witness: VersionWitness) {
+    assert!(deps.contains_addr(version_witness.package_addr()), ENotDep);
 }
 
-/// Asserts that the Version witness type is instantiated from AccountProtocol AccountConfig or AccountActions
-public fun assert_is_core_dep(deps: &Deps, version_type: TypeName) {
-    let package = address::from_bytes(hex::decode(version_type.get_address().into_bytes()));
-    let idx = deps.get_idx_for_addr(package);
-    assert!(idx == 0 || idx == 1 || idx == 2, ENotCoreDep);
+public fun unverified_allowed(deps: &Deps): bool {
+    deps.unverified_allowed
 }
 
 public fun get_from_name(deps: &Deps, name: String): &Dep {
@@ -166,3 +141,4 @@ public fun contains_name(deps: &Deps, name: String): bool {
 public fun contains_addr(deps: &Deps, addr: address): bool {
     deps.inner.any!(|dep| dep.addr == addr)
 }
+

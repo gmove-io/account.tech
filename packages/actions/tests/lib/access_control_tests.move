@@ -3,7 +3,6 @@ module account_actions::access_control_tests;
 
 // === Imports ===
 
-use std::type_name::{Self, TypeName};
 use sui::{
     test_utils::destroy,
     test_scenario::{Self as ts, Scenario},
@@ -15,6 +14,7 @@ use account_protocol::{
     intents::Intent,
     issuer,
     deps,
+    version_witness,
 };
 use account_config::multisig::{Self, Multisig, Approvals};
 use account_actions::{
@@ -29,6 +29,7 @@ const OWNER: address = @0xCAFE;
 // === Structs ===
 
 public struct DummyIntent() has copy, drop;
+public struct WrongWitness() has copy, drop;
 
 public struct Cap has key, store { id: UID }
 public struct WrongCap has store {}
@@ -47,8 +48,9 @@ fun start(): (Scenario, Extensions, Account<Multisig, Approvals>, Clock) {
     extensions.add(&cap, b"AccountProtocol".to_string(), @account_protocol, 1);
     extensions.add(&cap, b"AccountConfig".to_string(), @account_config, 1);
     extensions.add(&cap, b"AccountActions".to_string(), @account_actions, 1);
-    // Account generic types are dummy types (bool, bool)
-    let account = multisig::new_account(&extensions, scenario.ctx());
+
+    let mut account = multisig::new_account(&extensions, scenario.ctx());
+    account.deps_mut_for_testing().add(&extensions, b"AccountActions".to_string(), @account_actions, 1);
     let clock = clock::create_for_testing(scenario.ctx());
     // create world
     destroy(cap);
@@ -62,10 +64,6 @@ fun end(scenario: Scenario, extensions: Extensions, account: Account<Multisig, A
     ts::end(scenario);
 }
 
-fun wrong_version(): TypeName {
-    type_name::get<Extensions>()
-}
-
 fun cap(scenario: &mut Scenario): Cap {
     Cap { id: object::new(scenario.ctx()) }
 }
@@ -73,20 +71,17 @@ fun cap(scenario: &mut Scenario): Cap {
 fun create_dummy_intent(
     scenario: &mut Scenario,
     account: &mut Account<Multisig, Approvals>, 
-    extensions: &Extensions, 
 ): Intent<Approvals> {
-    let auth = multisig::authenticate(extensions, account, scenario.ctx());
-    let outcome = multisig::empty_outcome(account, scenario.ctx());
+    let outcome = multisig::empty_outcome();
     account.create_intent(
-        auth, 
         b"dummy".to_string(), 
         b"".to_string(), 
         vector[0],
         1, 
+        b"".to_string(), 
         outcome, 
         version::current(), 
         DummyIntent(), 
-        b"".to_string(), 
         scenario.ctx()
     )
 }
@@ -98,7 +93,7 @@ fun test_lock_cap() {
     let (mut scenario, extensions, mut account, clock) = start();
 
     assert!(!access_control::has_lock<Multisig, Approvals, Cap>(&account));
-    let auth = multisig::authenticate(&extensions, &account, scenario.ctx());
+    let auth = multisig::authenticate(&account, scenario.ctx());
     access_control::lock_cap(auth, &mut account, cap(&mut scenario));
     assert!(access_control::has_lock<Multisig, Approvals, Cap>(&account));
 
@@ -110,11 +105,11 @@ fun test_access_flow() {
     let (mut scenario, extensions, mut account, clock) = start();
     let key = b"dummy".to_string();
 
-    let auth = multisig::authenticate(&extensions, &account, scenario.ctx());
+    let auth = multisig::authenticate(&account, scenario.ctx());
     access_control::lock_cap(auth, &mut account, cap(&mut scenario));
 
-    let mut intent = create_dummy_intent(&mut scenario, &mut account, &extensions);
-    access_control::new_access<Approvals, Cap, DummyIntent>(&mut intent, DummyIntent());
+    let mut intent = create_dummy_intent(&mut scenario, &mut account);
+    access_control::new_access<_, _, Cap, _>(&mut intent, &account, version::current(), DummyIntent());
     account.add_intent(intent, version::current(), DummyIntent());
 
     multisig::approve_intent(&mut account, key, scenario.ctx());
@@ -138,8 +133,8 @@ fun test_access_expired() {
     clock.increment_for_testing(1);
     let key = b"dummy".to_string();
 
-    let mut intent = create_dummy_intent(&mut scenario, &mut account, &extensions);
-    access_control::new_access<Approvals, Cap, DummyIntent>(&mut intent, DummyIntent());
+    let mut intent = create_dummy_intent(&mut scenario, &mut account);
+    access_control::new_access<_, _, Cap, _>(&mut intent, &account, version::current(), DummyIntent());
     account.add_intent(intent, version::current(), DummyIntent());
     
     let mut expired = account.delete_expired_intent(key, &clock);
@@ -155,9 +150,9 @@ fun test_access_expired() {
 fun test_error_lock_cap_already_locked() {
     let (mut scenario, extensions, mut account, clock) = start();
 
-    let auth = multisig::authenticate(&extensions, &account, scenario.ctx());
+    let auth = multisig::authenticate(&account, scenario.ctx());
     access_control::lock_cap(auth, &mut account, cap(&mut scenario));
-    let auth = multisig::authenticate(&extensions, &account, scenario.ctx());
+    let auth = multisig::authenticate(&account, scenario.ctx());
     access_control::lock_cap(auth, &mut account, cap(&mut scenario));
 
     end(scenario, extensions, account, clock);
@@ -168,8 +163,8 @@ fun test_error_access_no_lock() {
     let (mut scenario, extensions, mut account, clock) = start();
     let key = b"dummy".to_string();
 
-    let mut intent = create_dummy_intent(&mut scenario, &mut account, &extensions);
-    access_control::new_access<Approvals, Cap, DummyIntent>(&mut intent, DummyIntent());
+    let mut intent = create_dummy_intent(&mut scenario, &mut account);
+    access_control::new_access<_, _, Cap, _>(&mut intent, &account, version::current(), DummyIntent());
     account.add_intent(intent, version::current(), DummyIntent());
 
     multisig::approve_intent(&mut account, key, scenario.ctx());
@@ -188,11 +183,11 @@ fun test_error_return_to_wrong_account() {
     let (mut scenario, extensions, mut account, clock) = start();
     let key = b"dummy".to_string();
 
-    let auth = multisig::authenticate(&extensions, &account, scenario.ctx());
+    let auth = multisig::authenticate(&account, scenario.ctx());
     access_control::lock_cap(auth, &mut account, cap(&mut scenario));
 
-    let mut intent = create_dummy_intent(&mut scenario, &mut account, &extensions);
-    access_control::new_access<Approvals, Cap, DummyIntent>(&mut intent, DummyIntent());
+    let mut intent = create_dummy_intent(&mut scenario, &mut account);
+    access_control::new_access<_, _, Cap, _>(&mut intent, &account, version::current(), DummyIntent());
     account.add_intent(intent, version::current(), DummyIntent());
 
     multisig::approve_intent(&mut account, key, scenario.ctx());
@@ -201,6 +196,7 @@ fun test_error_return_to_wrong_account() {
     let (borrow, cap) = access_control::do_access<Multisig, Approvals, Cap, DummyIntent>(&mut executable, &mut account, version::current(), DummyIntent());
     // create other account
     let mut account2 = multisig::new_account(&extensions, scenario.ctx());
+    account2.deps_mut_for_testing().add(&extensions, b"AccountActions".to_string(), @account_actions, 1);
     access_control::return_cap(&mut account2, borrow, cap, version::current());
     account.confirm_execution(executable, version::current(), DummyIntent());
 
@@ -215,18 +211,19 @@ fun test_error_do_access_from_wrong_account() {
     let (mut scenario, extensions, mut account, clock) = start();
     let key = b"dummy".to_string();
 
-    let auth = multisig::authenticate(&extensions, &account, scenario.ctx());
+    let auth = multisig::authenticate(&account, scenario.ctx());
     access_control::lock_cap(auth, &mut account, cap(&mut scenario));
 
-    let mut intent = create_dummy_intent(&mut scenario, &mut account, &extensions);
-    access_control::new_access<Approvals, Cap, DummyIntent>(&mut intent, DummyIntent());
+    let mut intent = create_dummy_intent(&mut scenario, &mut account);
+    access_control::new_access<_, _, Cap, _>(&mut intent, &account, version::current(), DummyIntent());
     account.add_intent(intent, version::current(), DummyIntent());
 
     multisig::approve_intent(&mut account, key, scenario.ctx());
     let mut executable = multisig::execute_intent(&mut account, key, &clock);
     // create other account and lock same type of cap
     let mut account2 = multisig::new_account(&extensions, scenario.ctx());
-    let auth = multisig::authenticate(&extensions, &account2, scenario.ctx());
+    account2.deps_mut_for_testing().add(&extensions, b"AccountActions".to_string(), @account_actions, 1);
+    let auth = multisig::authenticate(&account2, scenario.ctx());
     access_control::lock_cap(auth, &mut account2, cap(&mut scenario));
     
     let (borrow, cap) = access_control::do_access<Multisig, Approvals, Cap, DummyIntent>(&mut executable, &mut account2, version::current(), DummyIntent());
@@ -243,17 +240,17 @@ fun test_error_do_access_from_wrong_constructor_witness() {
     let (mut scenario, extensions, mut account, clock) = start();
     let key = b"dummy".to_string();
 
-    let auth = multisig::authenticate(&extensions, &account, scenario.ctx());
+    let auth = multisig::authenticate(&account, scenario.ctx());
     access_control::lock_cap(auth, &mut account, cap(&mut scenario));
 
-    let mut intent = create_dummy_intent(&mut scenario, &mut account, &extensions);
-    access_control::new_access<Approvals, Cap, DummyIntent>(&mut intent, DummyIntent());
+    let mut intent = create_dummy_intent(&mut scenario, &mut account);
+    access_control::new_access<_, _, Cap, _>(&mut intent, &account, version::current(), DummyIntent());
     account.add_intent(intent, version::current(), DummyIntent());
 
     multisig::approve_intent(&mut account, key, scenario.ctx());
     let mut executable = multisig::execute_intent(&mut account, key, &clock);
     
-    let (borrow, cap) = access_control::do_access<Multisig, Approvals, Cap, issuer::WrongWitness>(&mut executable, &mut account, version::current(), issuer::wrong_witness());
+    let (borrow, cap) = access_control::do_access<_, _, Cap, _>(&mut executable, &mut account, version::current(), WrongWitness());
 
     destroy(executable);
     destroy(borrow);
@@ -266,17 +263,17 @@ fun test_error_do_access_from_not_dep() {
     let (mut scenario, extensions, mut account, clock) = start();
     let key = b"dummy".to_string();
 
-    let auth = multisig::authenticate(&extensions, &account, scenario.ctx());
+    let auth = multisig::authenticate(&account, scenario.ctx());
     access_control::lock_cap(auth, &mut account, cap(&mut scenario));
 
-    let mut intent = create_dummy_intent(&mut scenario, &mut account, &extensions);
-    access_control::new_access<Approvals, Cap, DummyIntent>(&mut intent, DummyIntent());
+    let mut intent = create_dummy_intent(&mut scenario, &mut account);
+    access_control::new_access<_, _, Cap, _>(&mut intent, &account, version::current(), DummyIntent());
     account.add_intent(intent, version::current(), DummyIntent());
 
     multisig::approve_intent(&mut account, key, scenario.ctx());
     let mut executable = multisig::execute_intent(&mut account, key, &clock);
     
-    let (borrow, cap) = access_control::do_access<Multisig, Approvals, Cap, DummyIntent>(&mut executable, &mut account, wrong_version(), DummyIntent());
+    let (borrow, cap) = access_control::do_access<_, _, Cap, _>(&mut executable, &mut account, version_witness::new_for_testing(@0xFA153), DummyIntent());
 
     destroy(executable);
     destroy(borrow);

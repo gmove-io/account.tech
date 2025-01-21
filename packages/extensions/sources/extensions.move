@@ -7,8 +7,6 @@ use std::string::String;
 #[error]
 const EExtensionNotFound: vector<u8> = b"Extension not found";
 #[error]
-const ENotCoreDep: vector<u8> = b"Package is not a core dependency";
-#[error]
 const EExtensionAlreadyExists: vector<u8> = b"Extension already exists";
 #[error]
 const ECannotRemoveCoreDep: vector<u8> = b"Cannot remove core dependency";
@@ -64,14 +62,8 @@ public fun get_latest_core_deps(
     addresses.push_back(config_history[config_last_idx].addr);
     versions.push_back(config_history[config_last_idx].version);
 
-    let actions_history = extensions.inner[2].history;
-    let actions_last_idx = actions_history.length() - 1;
-    addresses.push_back(actions_history[actions_last_idx].addr);
-    versions.push_back(actions_history[actions_last_idx].version);
-
     // packages[0] & versions[0] are AccountProtocol
     // packages[1] & versions[1] are AccountConfig
-    // packages[2] & versions[2] are AccountActions
     (addresses, versions)
 }
 
@@ -81,12 +73,10 @@ public fun get_core_deps_addresses(
 ): (vector<address>) {
     let account_packages = extensions.inner[0].history.map!(|entry| entry.addr);
     let config_packages = extensions.inner[1].history.map!(|entry| entry.addr);
-    let actions_packages = extensions.inner[2].history.map!(|entry| entry.addr);
 
     let mut addresses = vector[];
     addresses.append(account_packages);
     addresses.append(config_packages);
-    addresses.append(actions_packages);
     
     addresses
 }
@@ -103,25 +93,6 @@ public fun is_extension(
     let idx = opt_idx.destroy_some();
     extensions.inner[idx].history.any!(|extension| extension.addr == addr) &&
     extensions.inner[idx].history.any!(|extension| extension.version == version)
-}
-
-public fun assert_is_extension(
-    extensions: &Extensions, 
-    name: String,
-    addr: address,
-    version: u64,
-) {
-    let idx = extensions.get_idx_for_name(name); // throws if not found
-    assert!(
-        extensions.inner[idx].history.any!(|extension| extension.addr == addr) &&
-        extensions.inner[idx].history.any!(|extension| extension.version == version),
-        EExtensionNotFound
-    );
-}
-
-public fun assert_is_core_extension(extensions: &Extensions, addr: address) {
-    let addresses = get_core_deps_addresses(extensions);
-    assert!(addresses.contains(&addr), ENotCoreDep);
 }
 
 public fun get_idx_for_name(extensions: &Extensions, name: String): u64 {
@@ -141,7 +112,7 @@ public fun add(extensions: &mut Extensions, _: &AdminCap, name: String, addr: ad
 
 public fun remove(extensions: &mut Extensions, _: &AdminCap, name: String) {
     let idx = extensions.get_idx_for_name(name);
-    assert!(idx > 2, ECannotRemoveCoreDep);
+    assert!(idx > 1, ECannotRemoveCoreDep);
     extensions.inner.remove(idx);
 }
 

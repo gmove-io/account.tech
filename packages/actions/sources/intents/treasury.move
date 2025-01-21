@@ -47,30 +47,30 @@ public fun request_transfer<Config, Outcome, CoinType: drop>(
     recipients: vector<address>,
     ctx: &mut TxContext
 ) {
+    account.verify(auth);
     assert!(amounts.length() == recipients.length(), ENotSameLength);
+    
     let treasury = treasury::borrow_treasury(account, treasury_name);
     assert!(treasury.coin_type_exists<CoinType>(), ECoinTypeDoesntExist);
     let sum = amounts.fold!(0, |sum, amount| sum + amount);
     if (treasury.coin_type_value<CoinType>() < sum) assert!(sum <= treasury.coin_type_value<CoinType>(), EInsufficientFunds);
 
     let mut intent = account.create_intent(
-        auth,
         key,
         description,
         execution_times,
         expiration_time,
+        treasury_name,
         outcome,
         version::current(),
         TransferIntent(),
-        treasury_name,
         ctx
     );
 
     recipients.zip_do!(amounts, |recipient, amount| {
-        treasury::new_spend<Outcome, CoinType, TransferIntent>(&mut intent, amount, TransferIntent());
-        acc_transfer::new_transfer(&mut intent, recipient, TransferIntent());
+        treasury::new_spend<_, _, CoinType, _>(&mut intent, account, amount, version::current(), TransferIntent());
+        acc_transfer::new_transfer(&mut intent, account, recipient, version::current(), TransferIntent());
     });
-
     account.add_intent(intent, version::current(), TransferIntent());
 }
 
@@ -111,25 +111,29 @@ public fun request_vesting<Config, Outcome, CoinType: drop>(
     recipient: address,
     ctx: &mut TxContext
 ) {
+    account.verify(auth);
     let treasury = treasury::borrow_treasury(account, treasury_name);
     assert!(treasury.coin_type_exists<CoinType>(), ECoinTypeDoesntExist);
     assert!(treasury.coin_type_value<CoinType>() >= coin_amount, EInsufficientFunds);
 
     let mut intent = account.create_intent(
-        auth,
         key,
         description,
         vector[execution_time],
         expiration_time,
+        treasury_name,
         outcome,
         version::current(),
         VestingIntent(),
-        treasury_name,
         ctx
     );
 
-    treasury::new_spend<Outcome, CoinType, VestingIntent>(&mut intent, coin_amount, VestingIntent());
-    vesting::new_vesting(&mut intent, start_timestamp, end_timestamp, recipient, VestingIntent());
+    treasury::new_spend<_, _, CoinType, _>(
+        &mut intent, account, coin_amount, version::current(), VestingIntent()
+    );
+    vesting::new_vesting(
+        &mut intent, account, start_timestamp, end_timestamp, recipient, version::current(), VestingIntent()
+    );
     account.add_intent(intent, version::current(), VestingIntent());
 }
 

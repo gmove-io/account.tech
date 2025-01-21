@@ -10,17 +10,15 @@ module account_actions::currency;
 // === Imports ===
 
 use std::{
-    type_name::TypeName,
     string::String,
     ascii,
 };
-use sui::{
-    coin::{Coin, TreasuryCap, CoinMetadata},
-};
+use sui::coin::{Coin, TreasuryCap, CoinMetadata};
 use account_protocol::{
     account::{Account, Auth},
     intents::{Intent, Expired},
     executable::Executable,
+    version_witness::VersionWitness,
 };
 use account_actions::version;
 
@@ -104,7 +102,7 @@ public fun lock_cap<Config, Outcome, CoinType>(
     treasury_cap: TreasuryCap<CoinType>,
     max_supply: Option<u64>,
 ) {
-    auth.verify(account.addr());
+    account.verify(auth);
 
     let rules = CurrencyRules<CoinType> { 
         max_supply,
@@ -192,30 +190,37 @@ public fun public_burn<Config, Outcome, CoinType>(
 
 // === [ACTION] Public functions ===
 
-public fun new_disable<Outcome, CoinType, W: drop>(
+public fun new_disable<Config, Outcome, CoinType, IW: drop>(
     intent: &mut Intent<Outcome>,
+    account: &Account<Config, Outcome>,
     mint: bool,
     burn: bool,
     update_symbol: bool,
     update_name: bool,
     update_description: bool,
     update_icon: bool,
-    witness: W,
+    version_witness: VersionWitness,
+    intent_witness: IW,
 ) {
     assert!(mint || burn || update_symbol || update_name || update_description || update_icon, ENoChange);
-    intent.add_action(DisableAction<CoinType> { mint, burn, update_name, update_symbol, update_description, update_icon }, witness);
+    account.add_action(
+        intent,
+        DisableAction<CoinType> { mint, burn, update_name, update_symbol, update_description, update_icon }, 
+        version_witness, 
+        intent_witness
+    );
 }
 
-public fun do_disable<Config, Outcome, CoinType, W: copy + drop>(
+public fun do_disable<Config, Outcome, CoinType, IW: copy + drop>(
     executable: &mut Executable,
     account: &mut Account<Config, Outcome>,
-    version: TypeName,
-    witness: W,
+    version_witness: VersionWitness,
+    intent_witness: IW,
 ) {
-    let action: &DisableAction<CoinType> = account.process_action(executable, version, witness);
+    let action: &DisableAction<CoinType> = account.process_action(executable, version_witness, intent_witness);
     let (mint, burn, update_symbol, update_name, update_description, update_icon) = 
         (action.mint, action.burn, action.update_symbol, action.update_name, action.update_description, action.update_icon);
-    let rules_mut: &mut CurrencyRules<CoinType> = account.borrow_managed_struct_mut(CurrencyRulesKey<CoinType> {}, version);
+    let rules_mut: &mut CurrencyRules<CoinType> = account.borrow_managed_struct_mut(CurrencyRulesKey<CoinType> {}, version_witness);
     // if disabled, can be true or false, it has no effect
     if (mint) rules_mut.can_mint = false;
     if (burn) rules_mut.can_burn = false;
@@ -229,31 +234,33 @@ public fun delete_disable<CoinType>(expired: &mut Expired) {
     let DisableAction<CoinType> { .. } = expired.remove_action();
 }
 
-public fun new_mint<Outcome, CoinType, W: drop>(
+public fun new_mint<Config, Outcome, CoinType, IW: drop>(
     intent: &mut Intent<Outcome>, 
+    account: &Account<Config, Outcome>, 
     amount: u64,
-    witness: W,    
+    version_witness: VersionWitness,
+    intent_witness: IW,    
 ) {
-    intent.add_action(MintAction<CoinType> { amount }, witness);
+    account.add_action(intent, MintAction<CoinType> { amount }, version_witness, intent_witness);
 }
 
-public fun do_mint<Config, Outcome, CoinType, W: copy + drop>(
+public fun do_mint<Config, Outcome, CoinType, IW: copy + drop>(
     executable: &mut Executable, 
     account: &mut Account<Config, Outcome>,
-    version: TypeName,
-    witness: W, 
+    version_witness: VersionWitness,
+    intent_witness: IW, 
     ctx: &mut TxContext
 ): Coin<CoinType> {
-    let action: &MintAction<CoinType> = account.process_action(executable, version, witness);
+    let action: &MintAction<CoinType> = account.process_action(executable, version_witness, intent_witness);
     let amount = action.amount;
     let total_supply = coin_type_supply<Config, Outcome, CoinType>(account);
-    let rules_mut: &mut CurrencyRules<CoinType> = account.borrow_managed_struct_mut(CurrencyRulesKey<CoinType> {}, version);
+    let rules_mut: &mut CurrencyRules<CoinType> = account.borrow_managed_struct_mut(CurrencyRulesKey<CoinType> {}, version_witness);
     
     assert!(rules_mut.can_mint, EMintDisabled);
     if (rules_mut.max_supply.is_some()) assert!(amount + total_supply <= *rules_mut.max_supply.borrow(), EMaxSupply);
     rules_mut.total_minted = rules_mut.total_minted + amount;
     
-    let cap_mut: &mut TreasuryCap<CoinType> = account.borrow_managed_object_mut(TreasuryCapKey<CoinType> {}, version);
+    let cap_mut: &mut TreasuryCap<CoinType> = account.borrow_managed_object_mut(TreasuryCapKey<CoinType> {}, version_witness);
     cap_mut.mint(amount, ctx)
 }
 
@@ -261,30 +268,32 @@ public fun delete_mint<CoinType>(expired: &mut Expired) {
     let MintAction<CoinType> { .. } = expired.remove_action();
 }
 
-public fun new_burn<Outcome, CoinType, W: drop>(
+public fun new_burn<Config, Outcome, CoinType, IW: drop>(
     intent: &mut Intent<Outcome>, 
+    account: &Account<Config, Outcome>, 
     amount: u64, 
-    witness: W
+    version_witness: VersionWitness,
+    intent_witness: IW
 ) {
-    intent.add_action(BurnAction<CoinType> { amount }, witness);
+    account.add_action(intent, BurnAction<CoinType> { amount }, version_witness, intent_witness);
 }
 
-public fun do_burn<Config, Outcome, CoinType, W: copy + drop>(
+public fun do_burn<Config, Outcome, CoinType, IW: copy + drop>(
     executable: &mut Executable, 
     account: &mut Account<Config, Outcome>,
     coin: Coin<CoinType>,
-    version: TypeName,
-    witness: W, 
+    version_witness: VersionWitness,
+    intent_witness: IW, 
 ) {
-    let action: &BurnAction<CoinType> = account.process_action(executable, version, witness);
+    let action: &BurnAction<CoinType> = account.process_action(executable, version_witness, intent_witness);
     let amount = action.amount;
     assert!(amount == coin.value(), EWrongValue);
     
-    let rules_mut: &mut CurrencyRules<CoinType> = account.borrow_managed_struct_mut(CurrencyRulesKey<CoinType> {}, version);
+    let rules_mut: &mut CurrencyRules<CoinType> = account.borrow_managed_struct_mut(CurrencyRulesKey<CoinType> {}, version_witness);
     assert!(rules_mut.can_burn, EBurnDisabled);
     rules_mut.total_burned = rules_mut.total_burned + amount;
 
-    let cap_mut: &mut TreasuryCap<CoinType> = account.borrow_managed_object_mut(TreasuryCapKey<CoinType> {}, version);
+    let cap_mut: &mut TreasuryCap<CoinType> = account.borrow_managed_object_mut(TreasuryCapKey<CoinType> {}, version_witness);
     cap_mut.burn(coin);
 }
 
@@ -292,28 +301,30 @@ public fun delete_burn<CoinType>(expired: &mut Expired) {
     let BurnAction<CoinType> { .. } = expired.remove_action();
 }
 
-public fun new_update<Outcome, CoinType, W: drop>(
+public fun new_update<Config, Outcome, CoinType, IW: drop>(
     intent: &mut Intent<Outcome>,
+    account: &Account<Config, Outcome>, 
     symbol: Option<ascii::String>,
     name: Option<String>,
     description: Option<String>,
     icon_url: Option<ascii::String>,
-    witness: W,
+    version_witness: VersionWitness,
+    intent_witness: IW,
 ) {
     assert!(symbol.is_some() || name.is_some() || description.is_some() || icon_url.is_some(), ENoChange);
-    intent.add_action(UpdateAction<CoinType> { symbol, name, description, icon_url }, witness);
+    account.add_action(intent, UpdateAction<CoinType> { symbol, name, description, icon_url }, version_witness, intent_witness);
 }
 
-public fun do_update<Config, Outcome, CoinType, W: copy + drop>(
+public fun do_update<Config, Outcome, CoinType, IW: copy + drop>(
     executable: &mut Executable,
     account: &mut Account<Config, Outcome>,
     metadata: &mut CoinMetadata<CoinType>,
-    version: TypeName,
-    witness: W,
+    version_witness: VersionWitness,
+    intent_witness: IW,
 ) {
-    let action: &UpdateAction<CoinType> = account.process_action(executable, version, witness);
+    let action: &UpdateAction<CoinType> = account.process_action(executable, version_witness, intent_witness);
     let (symbol, name, description, icon_url) = (action.symbol, action.name, action.description, action.icon_url);
-    let rules_mut: &mut CurrencyRules<CoinType> = account.borrow_managed_struct_mut(CurrencyRulesKey<CoinType> {}, version);
+    let rules_mut: &mut CurrencyRules<CoinType> = account.borrow_managed_struct_mut(CurrencyRulesKey<CoinType> {}, version_witness);
 
     if (!rules_mut.can_update_symbol) assert!(symbol.is_none(), ECannotUpdateSymbol);
     if (!rules_mut.can_update_name) assert!(name.is_none(), ECannotUpdateName);
@@ -321,7 +332,7 @@ public fun do_update<Config, Outcome, CoinType, W: copy + drop>(
     if (!rules_mut.can_update_icon) assert!(icon_url.is_none(), ECannotUpdateIcon);
     
     let (default_symbol, default_name, default_description, default_icon_url) = (metadata.get_symbol(), metadata.get_name(), metadata.get_description(), metadata.get_icon_url().extract().inner_url());
-    let cap: &TreasuryCap<CoinType> = account.borrow_managed_object(TreasuryCapKey<CoinType> {}, version);
+    let cap: &TreasuryCap<CoinType> = account.borrow_managed_object(TreasuryCapKey<CoinType> {}, version_witness);
 
     cap.update_symbol(metadata, symbol.get_with_default(default_symbol));
     cap.update_name(metadata, name.get_with_default(default_name));

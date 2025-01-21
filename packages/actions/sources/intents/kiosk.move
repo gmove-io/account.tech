@@ -48,22 +48,24 @@ public fun request_take<Config, Outcome>(
     recipient: address,
     ctx: &mut TxContext
 ) {
+    account.verify(auth);
     assert!(acc_kiosk::has_lock(account, kiosk_name), ENoLock);
 
     let mut intent = account.create_intent(
-        auth, 
         key,
         description,
         vector[execution_time],
         expiration_time,
+        kiosk_name,
         outcome,
         version::current(),
         TakeIntent(),
-        kiosk_name,
         ctx
     );
 
-    nft_ids.do!(|nft_id| acc_kiosk::new_take(&mut intent, nft_id, recipient, TakeIntent()));
+    nft_ids.do!(|nft_id| 
+        acc_kiosk::new_take(&mut intent, account, nft_id, recipient, version::current(), TakeIntent())
+    );
     account.add_intent(intent, version::current(), TakeIntent());
 }
 
@@ -105,23 +107,25 @@ public fun request_list<Config, Outcome>(
     prices: vector<u64>,
     ctx: &mut TxContext
 ) {
+    account.verify(auth);
     assert!(acc_kiosk::has_lock(account, kiosk_name), ENoLock);
     assert!(nft_ids.length() == prices.length(), ENftsPricesNotSameLength);
 
     let mut intent = account.create_intent(
-        auth,
         key,
         description,
         vector[execution_time],
         expiration_time,
+        kiosk_name,
         outcome,
         version::current(),
         ListIntent(),
-        kiosk_name,
         ctx
     );
 
-    nft_ids.zip_do!(prices, |nft_id, price| acc_kiosk::new_list(&mut intent, nft_id, price, ListIntent()));
+    nft_ids.zip_do!(prices, |nft_id, price| 
+        acc_kiosk::new_list(&mut intent, account, nft_id, price, version::current(), ListIntent())
+    );
     account.add_intent(intent, version::current(), ListIntent());
 }
 
@@ -134,7 +138,7 @@ public fun execute_list<Config, Outcome, Nft: key + store>(
     account: &mut Account<Config, Outcome>,
     kiosk: &mut Kiosk,
 ) {
-    acc_kiosk::do_list<Config, Outcome, Nft, ListIntent>(executable, account, kiosk, version::current(), ListIntent());
+    acc_kiosk::do_list<_, _, Nft, _>(executable, account, kiosk, version::current(), ListIntent());
 }
 
 // step 5: destroy the executable

@@ -17,11 +17,9 @@ module account_protocol::account;
 
 use std::{
     string::String,
-    type_name::{Self, TypeName},
+    type_name,
 };
 use sui::{
-    hex,
-    address,
     transfer::Receiving,
     clock::Clock, 
     dynamic_field as df,
@@ -32,6 +30,7 @@ use account_protocol::{
     issuer,
     metadata::{Self, Metadata},
     deps::{Self, Deps},
+    version_witness::VersionWitness,
     intents::{Self, Intents, Intent, Expired},
     executable::{Self, Executable},
 };
@@ -39,11 +38,12 @@ use account_extensions::extensions::Extensions;
 
 // === Errors ===
 
-const EInvalidAction: u64 = 0;
 const ECantBeRemovedYet: u64 = 1;
 const EHasntExpired: u64 = 2;
 const ECantBeExecutedYet: u64 = 3;
 const EWrongAccount: u64 = 4;
+const ENotCalledFromConfigModule: u64 = 5;
+const EActionsRemaining: u64 = 6;
 
 // === Structs ===
 
@@ -76,72 +76,59 @@ fun init(otw: ACCOUNT, ctx: &mut TxContext) {
     package::claim_and_keep(otw, ctx);
 }
 
-/// Creates a new Account object, called from AccountConfig
+/// Creates a new Account object, called from a config module
 public fun new<Config, Outcome>(
     extensions: &Extensions,
     config: Config, 
+    unverified_deps_allowed: bool,
     ctx: &mut TxContext
 ): Account<Config, Outcome> {
     Account<Config, Outcome> { 
         id: object::new(ctx),
         metadata: metadata::new(),
-        deps: deps::new(extensions),
+        deps: deps::new(extensions, unverified_deps_allowed),
         intents: intents::empty(),
         config,
     }
 }
 
+/// Helper function to transfer an object to the account
 public fun keep<Config, Outcome, T: key + store>(account: &Account<Config, Outcome>, obj: T) {
     transfer::public_transfer(obj, account.addr());
 }
 
-public fun new_auth(
-    extensions: &Extensions,
-    account_addr: address,
-    version: TypeName,
-): Auth {
-    let addr = address::from_bytes(hex::decode(version.get_address().into_bytes()));
-    extensions.assert_is_core_extension(addr);
-
-    Auth { account_addr }
-}
-
-public fun verify(
+/// Verifies the Auth matches the account 
+public fun verify<Config, Outcome>(
+    account: &Account<Config, Outcome>,
     auth: Auth,
-    addr: address,
 ) {
     let Auth { account_addr } = auth;
 
-    assert!(addr == account_addr, EWrongAccount);
+    assert!(account.addr() == account_addr, EWrongAccount);
 }
 
-// === Proposal functions ===
+// === Deps-only functions ===
 
-/// Creates a new proposal that must be constructed in another module
-/// Only packages (instantiating the witness) allowed in extensions can create an issuer
-public fun create_intent<Config, Outcome, W: drop>(
+/// Creates a new intent that must be constructed in another module
+/// Only an authorized address can create an intent from a package which is a dependency
+public fun create_intent<Config, Outcome, IW: copy + drop>(
     account: &mut Account<Config, Outcome>, 
-    auth: Auth, // proves that the caller is a member
     key: String, // proposal key
-    description: String,
-    execution_times: vector<u64>, // timestamps in ms
-    expiration_time: u64, // epoch when we can delete the proposal
-    outcome: Outcome, // vote settings
-    version: TypeName,
-    witness: W, // module's issuer witness (proposal/role witness)
-    opt_name: String, // module's issuer name (role name)
+    description: String, // optional description
+    execution_times: vector<u64>, // multiple timestamps in ms for recurrent intents (ascending order)
+    expiration_time: u64, // timestamp when the proposal can be deleted
+    managed_name: String, // managed struct/object name
+    outcome: Outcome, // resolution settings
+    version_witness: VersionWitness, // proof of the package address that creates the intent
+    intent_witness: IW, // intent witness
     ctx: &mut TxContext
 ): Intent<Outcome> {
-    // ensures the caller is authorized for this account
-    auth.verify(account.addr());
-    // only an account dependency can create a proposal
-    account.deps().assert_is_dep(version);
-
-    let issuer = issuer::construct(
-        account.addr(), 
-        witness, 
-        opt_name
-    );
+    // ensures the package address is a dependency for this account
+    account.deps().check(version_witness);
+    // set account_addr and intent_type to enforce correct execution
+    let issuer = issuer::new(account.addr(), intent_witness);
+    // creates a role from the intent package id and module name with an optional name
+    let role = intents::new_role<IW>(managed_name, intent_witness);
 
     intents::new_intent(
         issuer,
@@ -149,108 +136,89 @@ public fun create_intent<Config, Outcome, W: drop>(
         description,
         execution_times,
         expiration_time,
+        role,
         outcome,
         ctx
     )
 }
 
-public fun lock_object<Config, Outcome, Action, W: drop>(
-    account: &mut Account<Config, Outcome>,
-    intent: &Intent<Outcome>, 
-    action: &Action,
-    id: ID,
-    version: TypeName,
-    _: W, // this one is to check that unlock is called from the module that defined the action
+/// Adds an action to the intent
+/// must be called from the same intent interface that created it
+/// and from a package that is a dependency
+public fun add_action<Config, Outcome, Action: store, IW: drop>(
+    account: &Account<Config, Outcome>, 
+    intent: &mut Intent<Outcome>,
+    action: Action,
+    version_witness: VersionWitness,
+    intent_witness: IW,
 ) {
-    account.deps().assert_is_core_dep(version);  
+    // ensures the package address is a dependency of this account
+    account.deps().check(version_witness);
+    // ensures the right account is passed
     intent.issuer().assert_is_account(account.addr());
-    assert!(
-        type_name::get<Action>().get_address() == type_name::get<W>().get_address() && 
-        type_name::get<Action>().get_module() == type_name::get<W>().get_module(),
-        EInvalidAction
-    );
+    // ensures the intent is created by the same package that creates the action
+    intent.issuer().assert_is_intent(intent_witness);
 
-    account.intents_mut(version).lock(id);
+    intent.add_action(action);
 }
 
-public fun unlock_object<Config, Outcome, Action, W: drop>(
-    account: &mut Account<Config, Outcome>,
-    expired: &Expired, 
-    _action: &Action,
-    id: ID,
-    version: TypeName,
-    _: W, // this one is to check that unlock is called from the module that defined the action
-) {
-    account.deps().assert_is_core_dep(version);  
-    expired.issuer().assert_is_account(account.addr());
-    assert!(
-        type_name::get<Action>().get_address() == type_name::get<W>().get_address() && 
-        type_name::get<Action>().get_module() == type_name::get<W>().get_module(),
-        EInvalidAction
-    );
-
-    account.intents_mut(version).unlock(id);
-}
-
-/// Adds a proposal to the account
-/// must be called by the same proposal interface that created it
-public fun add_intent<Config, Outcome, W: drop>(
+/// Adds an intent to the account
+/// must be called by the same intent interface that created it
+/// and from a package that is a dependency
+public fun add_intent<Config, Outcome, IW: drop>(
     account: &mut Account<Config, Outcome>, 
     intent: Intent<Outcome>, 
-    version: TypeName,
-    witness: W,
+    version_witness: VersionWitness,
+    intent_witness: IW,
 ) {
-    account.deps().assert_is_dep(version);  
+    // ensures the package address is a dependency for this account
+    account.deps().check(version_witness);
+    // ensures the right account is passed
     intent.issuer().assert_is_account(account.addr());
-    intent.issuer().assert_is_constructor(witness);
+    // ensures the intent is created by the same package that creates the action
+    intent.issuer().assert_is_intent(intent_witness);
 
-    account.intents.add(intent);
-}
-
-/// Called by CoreDep only, AccountConfig
-/// Returns an Executable with the Proposal Outcome that must be validated in AccountCOnfig
-public fun execute_intent<Config, Outcome: copy>(
-    account: &mut Account<Config, Outcome>,
-    key: String, 
-    clock: &Clock,
-    version: TypeName,
-): (Executable, Outcome) {
-    account.deps().assert_is_core_dep(version);
-    let intent = account.intents.get_mut(key);
-
-    let time = intent.pop_front_execution_time();
-    assert!(clock.timestamp_ms() >= time, ECantBeExecutedYet);
-
-    (executable::new(key, *intent.issuer()), *intent.outcome())
+    account.intents.add_intent(intent);
 }
 
 /// Called in action modules
-public fun process_action<Config, Outcome, Action: store, W: drop>(
+public fun process_action<Config, Outcome, Action: store, IW: drop>(
     account: &Account<Config, Outcome>, 
     executable: &mut Executable,
-    version: TypeName,
-    witness: W,
+    version_witness: VersionWitness,
+    intent_witness: IW,
 ): &Action {
-    account.deps().assert_is_dep(version);
-
-    let (key, idx) = executable.next_action(account.addr(), witness);
+    // ensures the package address is a dependency for this account
+    account.deps().check(version_witness);
+    // ensures the right account is passed
+    executable.issuer().assert_is_account(account.addr());
+    // ensures the intent is created by the same package that creates the action
+    executable.issuer().assert_is_intent(intent_witness);
+    
+    let (key, idx) = executable.next_action();
     account.intents.get(key).actions().borrow(idx)
 }
 
 /// Called in action modules
-public fun confirm_execution<Config, Outcome, W: drop>(
+public fun confirm_execution<Config, Outcome, IW: drop>(
     account: &Account<Config, Outcome>, 
     executable: Executable,
-    version: TypeName,
-    witness: W,
+    version_witness: VersionWitness,
+    intent_witness: IW,
 ) {
-    account.deps().assert_is_dep(version);    
+    // ensures the package address is a dependency for this account
+    account.deps().check(version_witness);
+    // ensures the right account is passed
+    executable.issuer().assert_is_account(account.addr());
+    // ensures the intent is created by the same package that creates the action
+    executable.issuer().assert_is_intent(intent_witness);
 
     let intent = account.intents.get(executable.key());
-    executable.destroy(intent.actions().length(), witness);
+    assert!(executable.action_idx() == intent.actions().length(), EActionsRemaining);
+    executable.destroy();
 }
 
-/// Called in config modules
+/// Called in config modules or directly
 public fun destroy_empty_intent<Config, Outcome: drop>(
     account: &mut Account<Config, Outcome>, 
     key: String, 
@@ -259,7 +227,7 @@ public fun destroy_empty_intent<Config, Outcome: drop>(
     account.intents.destroy(key)
 }
 
-/// Called in config modules
+/// Called in config modules or directly
 /// Removes a proposal if it has expired
 /// Needs to delete each action in the bag within their own module
 public fun delete_expired_intent<Config, Outcome: drop>(
@@ -269,6 +237,160 @@ public fun delete_expired_intent<Config, Outcome: drop>(
 ): Expired {
     assert!(clock.timestamp_ms() >= account.intents.get(key).expiration_time(), EHasntExpired);
     account.intents.destroy(key)
+}
+
+/// Managed structs and objects:
+/// Structs and objects attached as dynamic fields to the account object.
+/// They are separated to improve objects discoverability on frontends and indexers.
+/// Keys must be custom types defined in the same module where the function is called
+/// The version typename should be issued from the same package and is checked against dependencies
+
+public fun add_managed_struct<Config, Outcome, K: copy + drop + store, Struct: store>(
+    account: &mut Account<Config, Outcome>, 
+    key: K, 
+    `struct`: Struct,
+    version_witness: VersionWitness,
+) {
+    // ensures the package address is a dependency for this account
+    account.deps().check(version_witness);
+    df::add(&mut account.id, key, `struct`);
+}
+
+public fun has_managed_struct<Config, Outcome, K: copy + drop + store>(
+    account: &Account<Config, Outcome>, 
+    key: K, 
+): bool {
+    df::exists_(&account.id, key)
+}
+
+public fun borrow_managed_struct<Config, Outcome, K: copy + drop + store, Struct: store>(
+    account: &Account<Config, Outcome>,
+    key: K, 
+    version_witness: VersionWitness,
+): &Struct {
+    // ensures the package address is a dependency for this account
+    account.deps().check(version_witness);
+    df::borrow(&account.id, key)
+}
+
+public fun borrow_managed_struct_mut<Config, Outcome, K: copy + drop + store, Struct: store>(
+    account: &mut Account<Config, Outcome>, 
+    key: K, 
+    version_witness: VersionWitness,
+): &mut Struct {
+    // ensures the package address is a dependency for this account
+    account.deps().check(version_witness);
+    df::borrow_mut(&mut account.id, key)
+}
+
+public fun remove_managed_struct<Config, Outcome, K: copy + drop + store, A: store>(
+    account: &mut Account<Config, Outcome>, 
+    key: K, 
+    version_witness: VersionWitness,
+): A {
+    // ensures the package address is a dependency for this account
+    account.deps().check(version_witness);
+    df::remove(&mut account.id, key)
+}
+
+public fun add_managed_object<Config, Outcome, K: copy + drop + store, Obj: key + store>(
+    account: &mut Account<Config, Outcome>, 
+    key: K, 
+    obj: Obj,
+    version_witness: VersionWitness,
+) {
+    // ensures the package address is a dependency for this account
+    account.deps().check(version_witness);
+    dof::add(&mut account.id, key, obj);
+}
+
+public fun has_managed_object<Config, Outcome, K: copy + drop + store>(
+    account: &Account<Config, Outcome>, 
+    key: K, 
+): bool {
+    dof::exists_(&account.id, key)
+}
+
+public fun borrow_managed_object<Config, Outcome, K: copy + drop + store, Obj: key + store>(
+    account: &Account<Config, Outcome>,
+    key: K, 
+    version_witness: VersionWitness,
+): &Obj {
+    // ensures the package address is a dependency for this account
+    account.deps().check(version_witness);
+    dof::borrow(&account.id, key)
+}
+
+public fun borrow_managed_object_mut<Config, Outcome, K: copy + drop + store, Obj: key + store>(
+    account: &mut Account<Config, Outcome>, 
+    key: K, 
+    version_witness: VersionWitness,
+): &mut Obj {
+    // ensures the package address is a dependency for this account
+    account.deps().check(version_witness);
+    dof::borrow_mut(&mut account.id, key)
+}
+
+public fun remove_managed_object<Config, Outcome, K: copy + drop + store, Obj: key + store>(
+    account: &mut Account<Config, Outcome>, 
+    key: K, 
+    version_witness: VersionWitness,
+): Obj {
+    // ensures the package address is a dependency for this account
+    account.deps().check(version_witness);
+    dof::remove(&mut account.id, key)
+}
+
+// === Config-only functions ===
+
+/// Can only be called from the module that defines the config of the account
+public fun new_auth<Config, Outcome, CW: drop>(
+    account: &Account<Config, Outcome>,
+    _config_witness: CW,
+): Auth {
+    assert_is_config_module<Config, CW>();
+    Auth { account_addr: account.addr() }
+}
+
+/// Can only be called from the module that defines the config of the account
+/// Returns an Executable with the Proposal Outcome that must be validated in AccountCOnfig
+public fun execute_intent<Config, Outcome: copy, CW: drop>(
+    account: &mut Account<Config, Outcome>,
+    key: String, 
+    clock: &Clock,
+    version_witness: VersionWitness,
+    _config_witness: CW,
+): (Executable, Outcome) {
+    account.deps().check(version_witness);
+    assert_is_config_module<Config, CW>();
+
+    let intent = account.intents.get_mut(key);
+    let time = intent.pop_front_execution_time();
+    assert!(clock.timestamp_ms() >= time, ECantBeExecutedYet);
+
+    (executable::new(*intent.issuer(), key, intent.role_managed_name()), *intent.outcome())
+}
+
+public fun intents_mut<Config, Outcome, CW: drop>(
+    account: &mut Account<Config, Outcome>, 
+    version_witness: VersionWitness,
+    _config_witness: CW,
+): &mut Intents<Outcome> {
+    account.deps().check(version_witness);
+    assert_is_config_module<Config, CW>();
+
+    &mut account.intents
+}
+
+public fun config_mut<Config, Outcome, CW: drop>(
+    account: &mut Account<Config, Outcome>, 
+    version_witness: VersionWitness,
+    _config_witness: CW,
+): &mut Config {
+    account.deps().check(version_witness);
+    assert_is_config_module<Config, CW>();
+
+    &mut account.config
 }
 
 // === View functions ===
@@ -293,149 +415,61 @@ public fun config<Config, Outcome>(account: &Account<Config, Outcome>): &Config 
     &account.config
 }
 
-// === Deps-only functions ===
+// === Package functions ===
 
-/// Managed structs and objects:
-/// Structs and objects attached as dynamic fields to the account object.
-/// They are separated to improve objects discoverability on frontends and indexers.
-/// Keys must be custom types defined in the same module where the function is called
-/// The version typename should be issued from the same package and is checked against dependencies
-
-public fun add_managed_struct<Config, Outcome, K: copy + drop + store, Struct: store>(
-    account: &mut Account<Config, Outcome>, 
-    key: K, 
-    `struct`: Struct,
-    version: TypeName,
-) {
-    account.deps.assert_is_dep(version);
-    df::add(&mut account.id, key, `struct`);
-}
-
-public fun has_managed_struct<Config, Outcome, K: copy + drop + store>(
-    account: &Account<Config, Outcome>, 
-    key: K, 
-): bool {
-    df::exists_(&account.id, key)
-}
-
-public fun borrow_managed_struct<Config, Outcome, K: copy + drop + store, Struct: store>(
-    account: &Account<Config, Outcome>,
-    key: K, 
-    version: TypeName,
-): &Struct {
-    account.deps.assert_is_dep(version);
-    df::borrow(&account.id, key)
-}
-
-public fun borrow_managed_struct_mut<Config, Outcome, K: copy + drop + store, Struct: store>(
-    account: &mut Account<Config, Outcome>, 
-    key: K, 
-    version: TypeName,
-): &mut Struct {
-    account.deps.assert_is_dep(version);
-    df::borrow_mut(&mut account.id, key)
-}
-
-public fun remove_managed_struct<Config, Outcome, K: copy + drop + store, A: store>(
-    account: &mut Account<Config, Outcome>, 
-    key: K, 
-    version: TypeName,
-): A {
-    account.deps.assert_is_dep(version);
-    df::remove(&mut account.id, key)
-}
-
-public fun add_managed_object<Config, Outcome, K: copy + drop + store, Obj: key + store>(
-    account: &mut Account<Config, Outcome>, 
-    key: K, 
-    obj: Obj,
-    version: TypeName,
-) {
-    account.deps.assert_is_dep(version);
-    dof::add(&mut account.id, key, obj);
-}
-
-public fun has_managed_object<Config, Outcome, K: copy + drop + store>(
-    account: &Account<Config, Outcome>, 
-    key: K, 
-): bool {
-    dof::exists_(&account.id, key)
-}
-
-public fun borrow_managed_object<Config, Outcome, K: copy + drop + store, Obj: key + store>(
-    account: &Account<Config, Outcome>,
-    key: K, 
-    version: TypeName,
-): &Obj {
-    account.deps.assert_is_dep(version);
-    dof::borrow(&account.id, key)
-}
-
-public fun borrow_managed_object_mut<Config, Outcome, K: copy + drop + store, Obj: key + store>(
-    account: &mut Account<Config, Outcome>, 
-    key: K, 
-    version: TypeName,
-): &mut Obj {
-    account.deps.assert_is_dep(version);
-    dof::borrow_mut(&mut account.id, key)
-}
-
-public fun remove_managed_object<Config, Outcome, K: copy + drop + store, Obj: key + store>(
-    account: &mut Account<Config, Outcome>, 
-    key: K, 
-    version: TypeName,
-): Obj {
-    account.deps.assert_is_dep(version);
-    dof::remove(&mut account.id, key)
-}
-
-// === Core Deps only functions ===
-
-/// Owned objects:
-/// Objects owned by the account
-
-public fun receive<Config, Outcome, T: key + store>(
-    account: &mut Account<Config, Outcome>, 
-    receiving: Receiving<T>,
-    version: TypeName,
-): T {
-    account.deps.assert_is_core_dep(version);
-    transfer::public_receive(&mut account.id, receiving)
-}
-
-/// Fields:
 /// Fields of the account object
 
-public fun metadata_mut<Config, Outcome>(
+public(package) fun metadata_mut<Config, Outcome>(
     account: &mut Account<Config, Outcome>, 
-    version: TypeName,
+    version_witness: VersionWitness,
 ): &mut Metadata {
-    account.deps.assert_is_core_dep(version);
+    // ensures the package address is a dependency for this account
+    account.deps().check(version_witness);
     &mut account.metadata
 }
 
-public fun deps_mut<Config, Outcome>(
+public(package) fun deps_mut<Config, Outcome>(
     account: &mut Account<Config, Outcome>, 
-    version: TypeName,
+    version_witness: VersionWitness,
 ): &mut Deps {
-    account.deps.assert_is_core_dep(version);
+    // ensures the package address is a dependency for this account
+    account.deps().check(version_witness);
     &mut account.deps
 }
 
-public fun intents_mut<Config, Outcome>(
+/// Objects owned by the account
+
+public(package) fun receive<Config, Outcome, T: key + store>(
     account: &mut Account<Config, Outcome>, 
-    version: TypeName,
-): &mut Intents<Outcome> {
-    account.deps.assert_is_core_dep(version);
-    &mut account.intents
+    receiving: Receiving<T>,
+): T {
+    transfer::public_receive(&mut account.id, receiving)
 }
 
-public fun config_mut<Config, Outcome>(
+public(package) fun lock_object<Config, Outcome>(
     account: &mut Account<Config, Outcome>, 
-    version: TypeName,
-): &mut Config {
-    account.deps.assert_is_core_dep(version);
-    &mut account.config
+    id: ID,
+) {
+    account.intents.lock(id);
+}
+
+public(package) fun unlock_object<Config, Outcome>(
+    account: &mut Account<Config, Outcome>, 
+    id: ID,
+) {
+    account.intents.unlock(id);
+}
+
+// === Private functions ===
+
+fun assert_is_config_module<Config, W>() {
+    let account_type = type_name::get<Config>();
+    let witness_type = type_name::get<W>();
+    assert!(
+        account_type.get_address() == witness_type.get_address() &&
+        account_type.get_module() == witness_type.get_module(),
+        ENotCalledFromConfigModule
+    );
 }
 
 // === Test functions ===
@@ -443,4 +477,20 @@ public fun config_mut<Config, Outcome>(
 #[test_only]
 public fun init_for_testing(ctx: &mut TxContext) {
     init(ACCOUNT {}, ctx);
+}
+
+#[test_only]
+public struct Witness() has drop;
+
+#[test_only]
+public fun not_config_witness(): Witness {
+    Witness()
+}
+
+#[test_only]
+public fun deps_mut_for_testing<Config, Outcome>(
+    account: &mut Account<Config, Outcome>, 
+): &mut Deps {
+    // ensures the package address is a dependency for this account
+    &mut account.deps
 }

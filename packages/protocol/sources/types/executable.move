@@ -13,33 +13,32 @@ module account_protocol::executable;
 use std::string::String;
 use account_protocol::issuer::Issuer;
 
-// === Errors ===
-
-#[error]
-const EActionNotFound: vector<u8> = b"Action not found for type";
-#[error]
-const EActionsRemaining: vector<u8> = b"Actions have not been processed";
-
 // === Structs ===
 
 /// Hot potato ensuring the action in the proposal is executed as it can't be stored
 public struct Executable {
-    // key of the intent that created the executable
-    key: String,
     // module that issued the proposal and must destroy it
     issuer: Issuer,
+    // key of the intent that created the executable
+    key: String,
+    // name of the container and optional name of the role
+    managed_name: String,
     // current action index, to reduce gas costs for large bags
     action_idx: u64,
 }
 
 // === View functions ===
 
+public fun issuer(executable: &Executable): &Issuer {
+    &executable.issuer
+}
+
 public fun key(executable: &Executable): String {
     executable.key
 }
 
-public fun issuer(executable: &Executable): &Issuer {
-    &executable.issuer
+public fun managed_name(executable: &Executable): String {
+    executable.managed_name
 }
 
 public fun action_idx(executable: &Executable): u64 {
@@ -49,24 +48,11 @@ public fun action_idx(executable: &Executable): u64 {
 // === Package functions ===
 
 /// Is only called from the account module
-public(package) fun new(
-    key: String,
-    issuer: Issuer, 
-): Executable {
-    Executable { 
-        key,
-        issuer,
-        action_idx: 0,
-    }
+public(package) fun new(issuer: Issuer, key: String, managed_name: String): Executable {
+    Executable { issuer, key, managed_name, action_idx: 0 }
 }
-public(package) fun next_action<W: drop>(
-    executable: &mut Executable, 
-    account_addr: address, // pass account address to ensure that the correct account will be modified
-    witness: W,
-): (String, u64) {
-    executable.issuer.assert_is_constructor(witness);
-    executable.issuer.assert_is_account(account_addr);
 
+public(package) fun next_action(executable: &mut Executable): (String, u64) {
     let (key, action_idx) = (executable.key, executable.action_idx);
     executable.action_idx = executable.action_idx + 1;
 
@@ -74,18 +60,6 @@ public(package) fun next_action<W: drop>(
 }
 
 /// The executable is destroyed
-public(package) fun destroy<W: drop>(
-    executable: Executable, 
-    actions_length: u64,
-    witness: W
-) {
-    let Executable { 
-        issuer, 
-        action_idx,
-        ..
-    } = executable;
-
-    assert!(action_idx == actions_length, EActionsRemaining);
-    
-    issuer.assert_is_constructor(witness);
+public(package) fun destroy(executable: Executable) {
+    let Executable { .. } = executable;
 }

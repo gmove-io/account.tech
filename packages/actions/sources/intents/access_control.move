@@ -36,22 +36,22 @@ public fun request_access<Config, Outcome, Cap>(
     expiration_time: u64,
     ctx: &mut TxContext
 ) {
-    assert!(access_control::has_lock<Config, Outcome, Cap>(account), ENoLock);
+    account.verify(auth);
+    assert!(access_control::has_lock<_, _, Cap>(account), ENoLock);
 
     let mut intent = account.create_intent(
-        auth,
         key, 
         description, 
         execution_times, 
         expiration_time, 
+        type_name::get<Cap>().into_string().to_string(),
         outcome,
         version::current(),
         AccessIntent(), 
-        type_name::get<Cap>().into_string().to_string(), // the cap type is the witness role name 
         ctx
     );
 
-    access_control::new_access<Outcome, Cap, AccessIntent>(&mut intent, AccessIntent());
+    access_control::new_access<_, _, Cap, _>(&mut intent, account, version::current(), AccessIntent());
     account.add_intent(intent, version::current(), AccessIntent());
 }
 

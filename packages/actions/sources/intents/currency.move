@@ -14,9 +14,9 @@ use sui::{
 use account_protocol::{
     account::{Account, Auth},
     executable::Executable,
+    owned,
 };
 use account_actions::{
-    owned,
     transfer as acc_transfer,
     vesting,
     version,
@@ -78,29 +78,31 @@ public fun request_disable<Config, Outcome, CoinType>(
     disable_update_icon: bool,
     ctx: &mut TxContext
 ) {
-    assert!(currency::has_cap<Config, Outcome, CoinType>(account), ENoLock);
+    account.verify(auth);
+    assert!(currency::has_cap<_, _, CoinType>(account), ENoLock);
 
     let mut intent = account.create_intent(
-        auth,
         key, 
         description, 
         vector[execution_time], 
         expiration_time, 
+        type_to_name<CoinType>(), 
         outcome,
         version::current(),
         DisableIntent(), 
-        type_to_name<CoinType>(), // the coin type is the auth name 
         ctx
     );
 
-    currency::new_disable<Outcome, CoinType, DisableIntent>(
+    currency::new_disable<_, _, CoinType, _>(
         &mut intent, 
+        account,
         disable_mint,
         disable_burn,
         disable_update_symbol,
         disable_update_name,
         disable_update_description,
         disable_update_icon,
+        version::current(),
         DisableIntent()
     );
     account.add_intent(intent, version::current(), DisableIntent());
@@ -114,7 +116,7 @@ public fun execute_disable<Config, Outcome, CoinType>(
     mut executable: Executable,
     account: &mut Account<Config, Outcome>,
 ) {
-    currency::do_disable<Config, Outcome, CoinType, DisableIntent>(&mut executable, account, version::current(), DisableIntent());   
+    currency::do_disable<_, _, CoinType, _>(&mut executable, account, version::current(), DisableIntent());   
     account.confirm_execution(executable, version::current(), DisableIntent());
 }
 
@@ -130,29 +132,28 @@ public fun request_mint<Config, Outcome, CoinType>(
     amount: u64,
     ctx: &mut TxContext
 ) {
-    assert!(currency::has_cap<Config, Outcome, CoinType>(account), ENoLock);
+    account.verify(auth);
+    assert!(currency::has_cap<_, _, CoinType>(account), ENoLock);
+
     let rules: &CurrencyRules<CoinType> = currency::borrow_rules(account);
     assert!(rules.can_mint(), EMintDisabled);
-    let supply = currency::coin_type_supply<Config, Outcome, CoinType>(account);
+    let supply = currency::coin_type_supply<_, _, CoinType>(account);
     if (rules.max_supply().is_some()) assert!(amount + supply <= *rules.max_supply().borrow(), EMaxSupply);
 
     let mut intent = account.create_intent(
-        auth,
         key, 
         description, 
         execution_times, 
         expiration_time, 
+        type_to_name<CoinType>(), 
         outcome,
         version::current(),
         MintIntent(), 
-        type_to_name<CoinType>(), // the coin type is the auth name 
         ctx
     );
 
-    currency::new_mint<Outcome, CoinType, MintIntent>(
-        &mut intent, 
-        amount, 
-        MintIntent()
+    currency::new_mint<_, _, CoinType, _>(
+        &mut intent, account,amount, version::current(),MintIntent(),
     );
     account.add_intent(intent, version::current(), MintIntent());
 }
@@ -166,7 +167,7 @@ public fun execute_mint<Config, Outcome, CoinType>(
     account: &mut Account<Config, Outcome>,
     ctx: &mut TxContext
 ) {
-    let coin = currency::do_mint<Config, Outcome, CoinType, MintIntent>(&mut executable, account, version::current(), MintIntent(), ctx);
+    let coin = currency::do_mint<_, _, CoinType, _>(&mut executable, account, version::current(), MintIntent(), ctx);
     account.keep(coin);
     account.confirm_execution(executable, version::current(), MintIntent());
 }
@@ -184,28 +185,27 @@ public fun request_burn<Config, Outcome, CoinType>(
     amount: u64,
     ctx: &mut TxContext
 ) {
-    assert!(currency::has_cap<Config, Outcome, CoinType>(account), ENoLock);
+    account.verify(auth);
+    assert!(currency::has_cap<_, _, CoinType>(account), ENoLock);
+
     let rules: &CurrencyRules<CoinType> = currency::borrow_rules(account);
     assert!(rules.can_burn(), EBurnDisabled);
 
     let mut intent = account.create_intent(
-        auth,
         key, 
         description, 
         vector[execution_time], 
         expiration_time, 
+        type_to_name<CoinType>(), 
         outcome,
         version::current(),
         BurnIntent(), 
-        type_to_name<CoinType>(), // the coin type is the auth name 
         ctx
     );
 
-    owned::new_withdraw(&mut intent, account, coin_id, BurnIntent());
-    currency::new_burn<Outcome, CoinType, BurnIntent>(
-        &mut intent, 
-        amount, 
-        BurnIntent()
+    owned::new_withdraw(&mut intent, account, coin_id, version::current(), BurnIntent());
+    currency::new_burn<_, _, CoinType, _>(
+        &mut intent, account,amount, version::current(),BurnIntent(),
     );
 
     account.add_intent(intent, version::current(), BurnIntent());
@@ -221,7 +221,7 @@ public fun execute_burn<Config, Outcome, CoinType>(
     receiving: Receiving<Coin<CoinType>>,
 ) {
     let coin = owned::do_withdraw(&mut executable, account, receiving, version::current(), BurnIntent());
-    currency::do_burn<Config, Outcome, CoinType, BurnIntent>(&mut executable, account, coin, version::current(), BurnIntent());
+    currency::do_burn<_, _, CoinType, _>(&mut executable, account, coin, version::current(), BurnIntent());
     account.confirm_execution(executable, version::current(), BurnIntent());
 }
 
@@ -240,7 +240,9 @@ public fun request_update<Config, Outcome, CoinType>(
     md_icon: Option<ascii::String>,
     ctx: &mut TxContext
 ) {
-    assert!(currency::has_cap<Config, Outcome, CoinType>(account), ENoLock);
+    account.verify(auth);
+    assert!(currency::has_cap<_, _, CoinType>(account), ENoLock);
+
     let rules: &CurrencyRules<CoinType> = currency::borrow_rules(account);
     if (!rules.can_update_symbol()) assert!(md_symbol.is_none(), ECannotUpdateSymbol);
     if (!rules.can_update_name()) assert!(md_name.is_none(), ECannotUpdateName);
@@ -249,25 +251,19 @@ public fun request_update<Config, Outcome, CoinType>(
 
 
     let mut intent = account.create_intent(
-        auth,
         key,
         description,
         vector[execution_time],
         expiration_time,
+        type_to_name<CoinType>(), 
         outcome,
         version::current(),
         UpdateIntent(),
-        type_to_name<CoinType>(), // the coin type is the auth name 
         ctx
     );
 
-    currency::new_update<Outcome, CoinType, UpdateIntent>(
-        &mut intent, 
-        md_symbol, 
-        md_name, 
-        md_description, 
-        md_icon, 
-        UpdateIntent()
+    currency::new_update<_, _, CoinType, _>(
+        &mut intent, account,md_symbol, md_name, md_description, md_icon, version::current(),UpdateIntent(),
     );
     account.add_intent(intent, version::current(), UpdateIntent());
 }
@@ -298,7 +294,8 @@ public fun request_transfer<Config, Outcome, CoinType>(
     recipients: vector<address>,
     ctx: &mut TxContext
 ) {
-    assert!(currency::has_cap<Config, Outcome, CoinType>(account), ENoLock);
+    account.verify(auth);
+    assert!(currency::has_cap<_, _, CoinType>(account), ENoLock);
     assert!(amounts.length() == recipients.length(), EAmountsRecipentsNotSameLength);
 
     let rules: &CurrencyRules<CoinType> = currency::borrow_rules(account);
@@ -307,25 +304,24 @@ public fun request_transfer<Config, Outcome, CoinType>(
     if (rules.max_supply().is_some()) assert!(sum <= *rules.max_supply().borrow(), EMaxSupply);
 
     let mut intent = account.create_intent(
-        auth,
         key,
         description,
         execution_times,
         expiration_time,
+        type_to_name<CoinType>(), 
         outcome,
         version::current(),
         TransferIntent(),
-        b"".to_string(),
         ctx
     );
 
     amounts.zip_do!(recipients, |amount, recipient| {
-        currency::new_mint<Outcome, CoinType, TransferIntent>(
-            &mut intent, 
-            amount, 
-            TransferIntent()
+        currency::new_mint<_, _, CoinType, _>(
+            &mut intent, account,amount, version::current(),TransferIntent(),
         );
-        acc_transfer::new_transfer(&mut intent, recipient, TransferIntent());
+        acc_transfer::new_transfer(
+            &mut intent, account, recipient, version::current(), TransferIntent()
+        );
     });
 
     account.add_intent(intent, version::current(), TransferIntent());
@@ -367,30 +363,31 @@ public fun request_vesting<Config, Outcome, CoinType>(
     recipient: address,
     ctx: &mut TxContext
 ) {
-    assert!(currency::has_cap<Config, Outcome, CoinType>(account), ENoLock);
+    account.verify(auth);
+    assert!(currency::has_cap<_, _, CoinType>(account), ENoLock);
+
     let rules: &CurrencyRules<CoinType> = currency::borrow_rules(account);
     assert!(rules.can_mint(), EMintDisabled);
     if (rules.max_supply().is_some()) assert!(total_amount <= *rules.max_supply().borrow(), EMaxSupply);
 
     let mut intent = account.create_intent(
-        auth,
         key,
         description,
         vector[execution_time],
         expiration_time,
+        type_to_name<CoinType>(), 
         outcome,
         version::current(),
         VestingIntent(),
-        b"".to_string(),
         ctx
     );
 
-    currency::new_mint<Outcome, CoinType, VestingIntent>(
-        &mut intent, 
-        total_amount, 
-        VestingIntent()
+    currency::new_mint<_, _, CoinType, _>(
+        &mut intent, account,total_amount, version::current(),VestingIntent(),
     );
-    vesting::new_vesting(&mut intent, start_timestamp, end_timestamp, recipient, VestingIntent());
+    vesting::new_vesting(
+        &mut intent, account,start_timestamp, end_timestamp, recipient, version::current(),VestingIntent(),
+    );
     account.add_intent(intent, version::current(), VestingIntent());
 }
 

@@ -5,14 +5,15 @@ module account_protocol::intents;
 
 // === Imports ===
 
-use std::string::String;
+use std::{
+    string::String,
+    type_name,
+};
 use sui::{
     bag::{Self, Bag},
     vec_set::{Self, VecSet},
 };
-use account_protocol::{
-    issuer::Issuer,
-};
+use account_protocol::issuer::Issuer;
 
 // === Errors ===
 
@@ -53,10 +54,21 @@ public struct Intent<Outcome> has store {
     execution_times: vector<u64>,
     // the proposal can be deleted from this timestamp
     expiration_time: u64,
+    // role for the intent 
+    role: Role,
     // heterogenous array of actions to be executed in order
     actions: Bag,
     // Generic struct storing vote related data, depends on the config
     outcome: Outcome
+}
+
+public struct Role has copy, drop, store {
+    // package id where the issuer has been created
+    package_id: String,
+    // module name where the issuer has been created
+    module_name: String,
+    // name of the managed struct/object (can be empty)
+    managed_name: String,
 }
 
 /// Hot potato wrapping actions from an intent that expired or has been executed
@@ -129,6 +141,33 @@ public fun outcome<Outcome>(intent: &Intent<Outcome>): &Outcome {
     &intent.outcome
 }
 
+/// Converts a role into its string representation
+/// role is package::module::name or package::module
+public fun full_role<Outcome>(intent: &Intent<Outcome>): String {
+    let mut full_role = intent.role.package_id;
+    full_role.append_utf8(b"::");
+    full_role.append(intent.role.module_name);
+
+    if (!intent.role.managed_name.is_empty()) {
+        full_role.append_utf8(b"::");  
+        full_role.append(intent.role.managed_name);
+    };
+
+    full_role
+}
+
+public fun role_package_id<Outcome>(intent: &Intent<Outcome>): String {
+    intent.role.package_id
+}
+
+public fun role_module_name<Outcome>(intent: &Intent<Outcome>): String {
+    intent.role.module_name
+}
+
+public fun role_managed_name<Outcome>(intent: &Intent<Outcome>): String {
+    intent.role.managed_name
+}
+
 /// safe because &mut Proposal is only accessible in core deps
 /// only used in AccountConfig 
 public fun outcome_mut<Outcome>(intent: &mut Intent<Outcome>): &mut Outcome {
@@ -157,19 +196,6 @@ public fun expired_actions(expired: &Expired): &Bag {
 
 // === Proposal functions ===
 
-/// Inserts an action to the proposal bag
-public fun add_action<Outcome, A: store, W: drop>(
-    intent: &mut Intent<Outcome>, 
-    action: A, 
-    witness: W
-) {
-    // ensures the function is called within the same proposal as the one that created Proposal
-    intent.issuer().assert_is_constructor(witness);
-
-    let idx = intent.actions.length();
-    intent.actions.add(idx, action);
-}
-
 public fun remove_action<Action: store>(
     expired: &mut Expired, 
 ): Action {
@@ -194,12 +220,21 @@ public(package) fun empty<Outcome>(): Intents<Outcome> {
     Intents<Outcome> { inner: vector[], locked: vec_set::empty() }
 }
 
+public(package) fun new_role<IW: drop>(managed_name: String, _intent_witness: IW): Role {
+    let intent_type = type_name::get<IW>();
+    let package_id = intent_type.get_address().to_string();
+    let module_name = intent_type.get_module().to_string();
+
+    Role { package_id, module_name, managed_name }
+}
+
 public(package) fun new_intent<Outcome>(
     issuer: Issuer,
     key: String,
     description: String,
     execution_times: vector<u64>, // timestamp in ms
     expiration_time: u64,
+    role: Role,
     outcome: Outcome,
     ctx: &mut TxContext
 ): Intent<Outcome> {
@@ -216,22 +251,32 @@ public(package) fun new_intent<Outcome>(
         description,
         execution_times,
         expiration_time,
+        role,
         actions: bag::new(ctx),
         outcome
     }
+}
+
+/// Inserts an action to the proposal bag
+public(package) fun add_action<Outcome, A: store>(
+    intent: &mut Intent<Outcome>, 
+    action: A, 
+) {
+    let idx = intent.actions.length();
+    intent.actions.add(idx, action);
+}
+
+public(package) fun add_intent<Outcome>(
+    intents: &mut Intents<Outcome>,
+    intent: Intent<Outcome>,
+) {
+    intents.inner.push_back(intent);
 }
 
 public(package) fun pop_front_execution_time<Outcome>(
     intent: &mut Intent<Outcome>,
 ): u64 {
     intent.execution_times.remove(0)
-}
-
-public(package) fun add<Outcome>(
-    intents: &mut Intents<Outcome>,
-    intent: Intent<Outcome>,
-) {
-    intents.inner.push_back(intent);
 }
 
 public(package) fun lock<Outcome>(intents: &mut Intents<Outcome>, id: ID) {

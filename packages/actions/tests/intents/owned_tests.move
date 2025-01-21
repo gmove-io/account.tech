@@ -11,10 +11,12 @@ use sui::{
     sui::SUI,
 };
 use account_extensions::extensions::{Self, Extensions, AdminCap};
-use account_protocol::account::Account;
+use account_protocol::{
+    account::Account,
+    owned,
+};
 use account_config::multisig::{Self, Multisig, Approvals};
 use account_actions::{
-    owned,
     owned_intents,
     vesting::{Self, Stream},
     transfer as acc_transfer,
@@ -38,8 +40,9 @@ fun start(): (Scenario, Extensions, Account<Multisig, Approvals>, Clock) {
     extensions.add(&cap, b"AccountProtocol".to_string(), @account_protocol, 1);
     extensions.add(&cap, b"AccountConfig".to_string(), @account_config, 1);
     extensions.add(&cap, b"AccountActions".to_string(), @account_actions, 1);
-    // Account generic types are dummy types (bool, bool)
-    let account = multisig::new_account(&extensions, scenario.ctx());
+
+    let mut account = multisig::new_account(&extensions, scenario.ctx());
+    account.deps_mut_for_testing().add(&extensions, b"AccountActions".to_string(), @account_actions, 1);
     let clock = clock::create_for_testing(scenario.ctx());
     // create world
     destroy(cap);
@@ -72,8 +75,8 @@ fun test_request_execute_transfer() {
     let id1 = send_coin(account.addr(), 1, &mut scenario);
     let id2 = send_coin(account.addr(), 2, &mut scenario);
 
-    let auth = multisig::authenticate(&extensions, &account, scenario.ctx());
-    let outcome = multisig::empty_outcome(&account, scenario.ctx());
+    let auth = multisig::authenticate(&account, scenario.ctx());
+    let outcome = multisig::empty_outcome();
     owned_intents::request_transfer(
         auth, 
         outcome, 
@@ -119,8 +122,8 @@ fun test_request_execute_vesting() {
 
     let id = send_coin(account.addr(), 5, &mut scenario);
 
-    let auth = multisig::authenticate(&extensions, &account, scenario.ctx());
-    let outcome = multisig::empty_outcome(&account, scenario.ctx());
+    let auth = multisig::authenticate(&account, scenario.ctx());
+    let outcome = multisig::empty_outcome();
     owned_intents::request_vesting(
         auth, 
         outcome, 
@@ -155,14 +158,14 @@ fun test_request_execute_vesting() {
 
     destroy(stream);
     end(scenario, extensions, account, clock);
-}
+} 
 
 #[test, expected_failure(abort_code = owned_intents::EObjectsRecipientsNotSameLength)]
 fun test_error_request_transfer_not_same_length() {
     let (mut scenario, extensions, mut account, clock) = start();
 
-    let auth = multisig::authenticate(&extensions, &account, scenario.ctx());
-    let outcome = multisig::empty_outcome(&account, scenario.ctx());
+    let auth = multisig::authenticate(&account, scenario.ctx());
+    let outcome = multisig::empty_outcome();
     owned_intents::request_transfer(
         auth, 
         outcome, 

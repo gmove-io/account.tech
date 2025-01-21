@@ -11,12 +11,14 @@ use sui::{
     url,
 };
 use account_extensions::extensions::{Self, Extensions, AdminCap};
-use account_protocol::account::Account;
+use account_protocol::{
+    account::Account,
+    owned,
+};
 use account_config::multisig::{Self, Multisig, Approvals};
 use account_actions::{
     currency,
     currency_intents,
-    owned,
     vesting::{Self, Stream},
     transfer as acc_transfer,
 };
@@ -43,8 +45,9 @@ fun start(): (Scenario, Extensions, Account<Multisig, Approvals>, Clock, Treasur
     extensions.add(&cap, b"AccountProtocol".to_string(), @account_protocol, 1);
     extensions.add(&cap, b"AccountConfig".to_string(), @account_config, 1);
     extensions.add(&cap, b"AccountActions".to_string(), @account_actions, 1);
-    // Account generic types are dummy types (bool, bool)
-    let account = multisig::new_account(&extensions, scenario.ctx());
+
+    let mut account = multisig::new_account(&extensions, scenario.ctx());
+    account.deps_mut_for_testing().add(&extensions, b"AccountActions".to_string(), @account_actions, 1);
     let clock = clock::create_for_testing(scenario.ctx());
     // create TreasuryCap and CoinMetadata
     let (treasury_cap, metadata) = coin::create_currency(
@@ -74,12 +77,12 @@ fun end(scenario: Scenario, extensions: Extensions, account: Account<Multisig, A
 #[test]
 fun test_request_execute_disable() {
     let (mut scenario, extensions, mut account, clock, cap, metadata) = start();
-    let auth = multisig::authenticate(&extensions, &account, scenario.ctx());
+    let auth = multisig::authenticate(&account, scenario.ctx());
     currency::lock_cap(auth, &mut account, cap, option::none());
     let key = b"dummy".to_string();
 
-    let auth = multisig::authenticate(&extensions, &account, scenario.ctx());
-    let outcome = multisig::empty_outcome(&account, scenario.ctx());
+    let auth = multisig::authenticate(&account, scenario.ctx());
+    let outcome = multisig::empty_outcome();
     currency_intents::request_disable<Multisig, Approvals, CURRENCY_INTENTS_TESTS>(
         auth, 
         outcome, 
@@ -119,12 +122,12 @@ fun test_request_execute_disable() {
 #[test]
 fun test_request_execute_mint() {
     let (mut scenario, extensions, mut account, clock, cap, metadata) = start();
-    let auth = multisig::authenticate(&extensions, &account, scenario.ctx());
+    let auth = multisig::authenticate(&account, scenario.ctx());
     currency::lock_cap(auth, &mut account, cap, option::none());
     let key = b"dummy".to_string();
 
-    let auth = multisig::authenticate(&extensions, &account, scenario.ctx());
-    let outcome = multisig::empty_outcome(&account, scenario.ctx());
+    let auth = multisig::authenticate(&account, scenario.ctx());
+    let outcome = multisig::empty_outcome();
     currency_intents::request_mint<Multisig, Approvals, CURRENCY_INTENTS_TESTS>(
         auth, 
         outcome, 
@@ -157,12 +160,12 @@ fun test_request_execute_mint() {
 #[test]
 fun test_request_execute_mint_with_max_supply() {
     let (mut scenario, extensions, mut account, clock, cap, metadata) = start();
-    let auth = multisig::authenticate(&extensions, &account, scenario.ctx());
+    let auth = multisig::authenticate(&account, scenario.ctx());
     currency::lock_cap(auth, &mut account, cap, option::some(5));
     let key = b"dummy".to_string();
 
-    let auth = multisig::authenticate(&extensions, &account, scenario.ctx());
-    let outcome = multisig::empty_outcome(&account, scenario.ctx());
+    let auth = multisig::authenticate(&account, scenario.ctx());
+    let outcome = multisig::empty_outcome();
     currency_intents::request_mint<Multisig, Approvals, CURRENCY_INTENTS_TESTS>(
         auth, 
         outcome, 
@@ -199,12 +202,12 @@ fun test_request_execute_burn() {
     scenario.next_tx(OWNER);
     let receiving = ts::most_recent_receiving_ticket<Coin<CURRENCY_INTENTS_TESTS>>(&object::id(&account));
 
-    let auth = multisig::authenticate(&extensions, &account, scenario.ctx());
+    let auth = multisig::authenticate(&account, scenario.ctx());
     currency::lock_cap(auth, &mut account, cap, option::none());
     let key = b"dummy".to_string();
 
-    let auth = multisig::authenticate(&extensions, &account, scenario.ctx());
-    let outcome = multisig::empty_outcome(&account, scenario.ctx());
+    let auth = multisig::authenticate(&account, scenario.ctx());
+    let outcome = multisig::empty_outcome();
     currency_intents::request_burn<Multisig, Approvals, CURRENCY_INTENTS_TESTS>(
         auth, 
         outcome, 
@@ -239,12 +242,12 @@ fun test_request_execute_burn() {
 #[test]
 fun test_request_execute_update() {
     let (mut scenario, extensions, mut account, clock, cap, mut metadata) = start();
-    let auth = multisig::authenticate(&extensions, &account, scenario.ctx());
+    let auth = multisig::authenticate(&account, scenario.ctx());
     currency::lock_cap(auth, &mut account, cap, option::none());
     let key = b"dummy".to_string();
 
-    let auth = multisig::authenticate(&extensions, &account, scenario.ctx());
-    let outcome = multisig::empty_outcome(&account, scenario.ctx());
+    let auth = multisig::authenticate(&account, scenario.ctx());
+    let outcome = multisig::empty_outcome();
     currency_intents::request_update<Multisig, Approvals, CURRENCY_INTENTS_TESTS>(
         auth, 
         outcome, 
@@ -279,12 +282,12 @@ fun test_request_execute_update() {
 #[test]
 fun test_request_execute_transfer() {
     let (mut scenario, extensions, mut account, clock, cap, metadata) = start();
-    let auth = multisig::authenticate(&extensions, &account, scenario.ctx());
+    let auth = multisig::authenticate(&account, scenario.ctx());
     currency::lock_cap(auth, &mut account, cap, option::none());
     let key = b"dummy".to_string();
 
-    let auth = multisig::authenticate(&extensions, &account, scenario.ctx());
-    let outcome = multisig::empty_outcome(&account, scenario.ctx());
+    let auth = multisig::authenticate(&account, scenario.ctx());
+    let outcome = multisig::empty_outcome();
     currency_intents::request_transfer<Multisig, Approvals, CURRENCY_INTENTS_TESTS>(
         auth, 
         outcome, 
@@ -332,12 +335,12 @@ fun test_request_execute_transfer() {
 #[test]
 fun test_request_execute_vesting() {
     let (mut scenario, extensions, mut account, clock, cap, metadata) = start();
-    let auth = multisig::authenticate(&extensions, &account, scenario.ctx());
+    let auth = multisig::authenticate(&account, scenario.ctx());
     currency::lock_cap(auth, &mut account, cap, option::none());
     let key = b"dummy".to_string();
 
-    let auth = multisig::authenticate(&extensions, &account, scenario.ctx());
-    let outcome = multisig::empty_outcome(&account, scenario.ctx());
+    let auth = multisig::authenticate(&account, scenario.ctx());
+    let outcome = multisig::empty_outcome();
     currency_intents::request_vesting<Multisig, Approvals, CURRENCY_INTENTS_TESTS>(
         auth, 
         outcome, 
@@ -378,8 +381,8 @@ fun test_request_execute_vesting() {
 fun test_error_request_disable_no_lock() {
     let (mut scenario, extensions, mut account, clock, cap, metadata) = start();
 
-    let auth = multisig::authenticate(&extensions, &account, scenario.ctx());
-    let outcome = multisig::empty_outcome(&account, scenario.ctx());
+    let auth = multisig::authenticate(&account, scenario.ctx());
+    let outcome = multisig::empty_outcome();
     currency_intents::request_disable<Multisig, Approvals, CURRENCY_INTENTS_TESTS>(
         auth, 
         outcome, 
@@ -405,8 +408,8 @@ fun test_error_request_disable_no_lock() {
 fun test_error_request_mint_no_lock() {
     let (mut scenario, extensions, mut account, clock, cap, metadata) = start();
 
-    let auth = multisig::authenticate(&extensions, &account, scenario.ctx());
-    let outcome = multisig::empty_outcome(&account, scenario.ctx());
+    let auth = multisig::authenticate(&account, scenario.ctx());
+    let outcome = multisig::empty_outcome();
     currency_intents::request_mint<Multisig, Approvals, CURRENCY_INTENTS_TESTS>(
         auth, 
         outcome, 
@@ -427,13 +430,13 @@ fun test_error_request_mint_no_lock() {
 fun test_error_request_mint_disabled() {
     let (mut scenario, extensions, mut account, clock, cap, metadata) = start();
 
-    let auth = multisig::authenticate(&extensions, &account, scenario.ctx());
+    let auth = multisig::authenticate(&account, scenario.ctx());
     currency::lock_cap(auth, &mut account, cap, option::none());
 
     currency::toggle_can_mint<Multisig, Approvals, CURRENCY_INTENTS_TESTS>(&mut account);
 
-    let auth = multisig::authenticate(&extensions, &account, scenario.ctx());
-    let outcome = multisig::empty_outcome(&account, scenario.ctx());
+    let auth = multisig::authenticate(&account, scenario.ctx());
+    let outcome = multisig::empty_outcome();
     currency_intents::request_mint<Multisig, Approvals, CURRENCY_INTENTS_TESTS>(
         auth, 
         outcome, 
@@ -453,11 +456,11 @@ fun test_error_request_mint_disabled() {
 fun test_error_request_mint_too_many() {
     let (mut scenario, extensions, mut account, clock, cap, metadata) = start();
 
-    let auth = multisig::authenticate(&extensions, &account, scenario.ctx());
+    let auth = multisig::authenticate(&account, scenario.ctx());
     currency::lock_cap(auth, &mut account, cap, option::some(4));
 
-    let auth = multisig::authenticate(&extensions, &account, scenario.ctx());
-    let outcome = multisig::empty_outcome(&account, scenario.ctx());
+    let auth = multisig::authenticate(&account, scenario.ctx());
+    let outcome = multisig::empty_outcome();
     currency_intents::request_mint<Multisig, Approvals, CURRENCY_INTENTS_TESTS>(
         auth, 
         outcome, 
@@ -477,8 +480,8 @@ fun test_error_request_mint_too_many() {
 fun test_error_request_burn_no_lock() {
     let (mut scenario, extensions, mut account, clock, cap, metadata) = start();
 
-    let auth = multisig::authenticate(&extensions, &account, scenario.ctx());
-    let outcome = multisig::empty_outcome(&account, scenario.ctx());
+    let auth = multisig::authenticate(&account, scenario.ctx());
+    let outcome = multisig::empty_outcome();
     currency_intents::request_burn<Multisig, Approvals, CURRENCY_INTENTS_TESTS>(
         auth, 
         outcome, 
@@ -500,13 +503,13 @@ fun test_error_request_burn_no_lock() {
 fun test_error_request_burn_disabled() {
     let (mut scenario, extensions, mut account, clock, cap, metadata) = start();
 
-    let auth = multisig::authenticate(&extensions, &account, scenario.ctx());
+    let auth = multisig::authenticate(&account, scenario.ctx());
     currency::lock_cap(auth, &mut account, cap, option::none());
 
     currency::toggle_can_burn<Multisig, Approvals, CURRENCY_INTENTS_TESTS>(&mut account);
 
-    let auth = multisig::authenticate(&extensions, &account, scenario.ctx());
-    let outcome = multisig::empty_outcome(&account, scenario.ctx());
+    let auth = multisig::authenticate(&account, scenario.ctx());
+    let outcome = multisig::empty_outcome();
     currency_intents::request_burn<Multisig, Approvals, CURRENCY_INTENTS_TESTS>(
         auth, 
         outcome, 
@@ -527,8 +530,8 @@ fun test_error_request_burn_disabled() {
 fun test_error_request_update_no_lock() {
     let (mut scenario, extensions, mut account, clock, cap, metadata) = start();
 
-    let auth = multisig::authenticate(&extensions, &account, scenario.ctx());
-    let outcome = multisig::empty_outcome(&account, scenario.ctx());
+    let auth = multisig::authenticate(&account, scenario.ctx());
+    let outcome = multisig::empty_outcome();
     currency_intents::request_update<Multisig, Approvals, CURRENCY_INTENTS_TESTS>(
         auth, 
         outcome, 
@@ -552,13 +555,13 @@ fun test_error_request_update_no_lock() {
 fun test_error_request_update_cannot_update_symbol() {
     let (mut scenario, extensions, mut account, clock, cap, metadata) = start();
 
-    let auth = multisig::authenticate(&extensions, &account, scenario.ctx());
+    let auth = multisig::authenticate(&account, scenario.ctx());
     currency::lock_cap(auth, &mut account, cap, option::none());
 
     currency::toggle_can_update_symbol<Multisig, Approvals, CURRENCY_INTENTS_TESTS>(&mut account);
 
-    let auth = multisig::authenticate(&extensions, &account, scenario.ctx());
-    let outcome = multisig::empty_outcome(&account, scenario.ctx());
+    let auth = multisig::authenticate(&account, scenario.ctx());
+    let outcome = multisig::empty_outcome();
     currency_intents::request_update<Multisig, Approvals, CURRENCY_INTENTS_TESTS>(
         auth, 
         outcome, 
@@ -581,13 +584,13 @@ fun test_error_request_update_cannot_update_symbol() {
 fun test_error_request_update_cannot_update_name() {
     let (mut scenario, extensions, mut account, clock, cap, metadata) = start();
 
-    let auth = multisig::authenticate(&extensions, &account, scenario.ctx());
+    let auth = multisig::authenticate(&account, scenario.ctx());
     currency::lock_cap(auth, &mut account, cap, option::none());
 
     currency::toggle_can_update_name<Multisig, Approvals, CURRENCY_INTENTS_TESTS>(&mut account);
 
-    let auth = multisig::authenticate(&extensions, &account, scenario.ctx());
-    let outcome = multisig::empty_outcome(&account, scenario.ctx());
+    let auth = multisig::authenticate(&account, scenario.ctx());
+    let outcome = multisig::empty_outcome();
     currency_intents::request_update<Multisig, Approvals, CURRENCY_INTENTS_TESTS>(
         auth, 
         outcome, 
@@ -610,13 +613,13 @@ fun test_error_request_update_cannot_update_name() {
 fun test_error_request_update_cannot_update_description() {
     let (mut scenario, extensions, mut account, clock, cap, metadata) = start();
 
-    let auth = multisig::authenticate(&extensions, &account, scenario.ctx());
+    let auth = multisig::authenticate(&account, scenario.ctx());
     currency::lock_cap(auth, &mut account, cap, option::none());
 
     currency::toggle_can_update_description<Multisig, Approvals, CURRENCY_INTENTS_TESTS>(&mut account);
 
-    let auth = multisig::authenticate(&extensions, &account, scenario.ctx());
-    let outcome = multisig::empty_outcome(&account, scenario.ctx());
+    let auth = multisig::authenticate(&account, scenario.ctx());
+    let outcome = multisig::empty_outcome();
     currency_intents::request_update<Multisig, Approvals, CURRENCY_INTENTS_TESTS>(
         auth, 
         outcome, 
@@ -639,13 +642,13 @@ fun test_error_request_update_cannot_update_description() {
 fun test_error_request_update_cannot_update_icon() {
     let (mut scenario, extensions, mut account, clock, cap, metadata) = start();
 
-    let auth = multisig::authenticate(&extensions, &account, scenario.ctx());
+    let auth = multisig::authenticate(&account, scenario.ctx());
     currency::lock_cap(auth, &mut account, cap, option::none());
 
     currency::toggle_can_update_icon<Multisig, Approvals, CURRENCY_INTENTS_TESTS>(&mut account);
 
-    let auth = multisig::authenticate(&extensions, &account, scenario.ctx());
-    let outcome = multisig::empty_outcome(&account, scenario.ctx());
+    let auth = multisig::authenticate(&account, scenario.ctx());
+    let outcome = multisig::empty_outcome();
     currency_intents::request_update<Multisig, Approvals, CURRENCY_INTENTS_TESTS>(
         auth, 
         outcome, 
@@ -668,8 +671,8 @@ fun test_error_request_update_cannot_update_icon() {
 fun test_error_request_transfer_no_lock() {
     let (mut scenario, extensions, mut account, clock, cap, metadata) = start();
 
-    let auth = multisig::authenticate(&extensions, &account, scenario.ctx());
-    let outcome = multisig::empty_outcome(&account, scenario.ctx());
+    let auth = multisig::authenticate(&account, scenario.ctx());
+    let outcome = multisig::empty_outcome();
     currency_intents::request_transfer<Multisig, Approvals, CURRENCY_INTENTS_TESTS>(
         auth, 
         outcome, 
@@ -690,11 +693,11 @@ fun test_error_request_transfer_no_lock() {
 #[test, expected_failure(abort_code = currency_intents::EAmountsRecipentsNotSameLength)]
 fun test_error_request_transfer_not_same_length() {
     let (mut scenario, extensions, mut account, clock, cap, metadata) = start();
-    let auth = multisig::authenticate(&extensions, &account, scenario.ctx());
+    let auth = multisig::authenticate(&account, scenario.ctx());
     currency::lock_cap(auth, &mut account, cap, option::none());
 
-    let auth = multisig::authenticate(&extensions, &account, scenario.ctx());
-    let outcome = multisig::empty_outcome(&account, scenario.ctx());
+    let auth = multisig::authenticate(&account, scenario.ctx());
+    let outcome = multisig::empty_outcome();
     currency_intents::request_transfer<Multisig, Approvals, CURRENCY_INTENTS_TESTS>(
         auth, 
         outcome, 
@@ -714,13 +717,13 @@ fun test_error_request_transfer_not_same_length() {
 #[test, expected_failure(abort_code = currency_intents::EMintDisabled)]
 fun test_error_request_transfer_mint_disabled() {
     let (mut scenario, extensions, mut account, clock, cap, metadata) = start();
-    let auth = multisig::authenticate(&extensions, &account, scenario.ctx());
+    let auth = multisig::authenticate(&account, scenario.ctx());
     currency::lock_cap(auth, &mut account, cap, option::none());
 
     currency::toggle_can_mint<Multisig, Approvals, CURRENCY_INTENTS_TESTS>(&mut account);
 
-    let auth = multisig::authenticate(&extensions, &account, scenario.ctx());
-    let outcome = multisig::empty_outcome(&account, scenario.ctx());
+    let auth = multisig::authenticate(&account, scenario.ctx());
+    let outcome = multisig::empty_outcome();
     currency_intents::request_transfer<Multisig, Approvals, CURRENCY_INTENTS_TESTS>(
         auth, 
         outcome, 
@@ -740,11 +743,11 @@ fun test_error_request_transfer_mint_disabled() {
 #[test, expected_failure(abort_code = currency_intents::EMaxSupply)]
 fun test_error_request_transfer_mint_too_many() {
     let (mut scenario, extensions, mut account, clock, cap, metadata) = start();
-    let auth = multisig::authenticate(&extensions, &account, scenario.ctx());
+    let auth = multisig::authenticate(&account, scenario.ctx());
     currency::lock_cap(auth, &mut account, cap, option::some(4));
 
-    let auth = multisig::authenticate(&extensions, &account, scenario.ctx());
-    let outcome = multisig::empty_outcome(&account, scenario.ctx());
+    let auth = multisig::authenticate(&account, scenario.ctx());
+    let outcome = multisig::empty_outcome();
     currency_intents::request_transfer<Multisig, Approvals, CURRENCY_INTENTS_TESTS>(
         auth, 
         outcome, 
@@ -765,8 +768,8 @@ fun test_error_request_transfer_mint_too_many() {
 fun test_error_request_vesting_no_lock() {
     let (mut scenario, extensions, mut account, clock, cap, metadata) = start();
 
-    let auth = multisig::authenticate(&extensions, &account, scenario.ctx());
-    let outcome = multisig::empty_outcome(&account, scenario.ctx());
+    let auth = multisig::authenticate(&account, scenario.ctx());
+    let outcome = multisig::empty_outcome();
     currency_intents::request_vesting<Multisig, Approvals, CURRENCY_INTENTS_TESTS>(
         auth, 
         outcome, 
@@ -789,13 +792,13 @@ fun test_error_request_vesting_no_lock() {
 #[test, expected_failure(abort_code = currency_intents::EMintDisabled)]
 fun test_error_request_vesting_mint_disabled() {
     let (mut scenario, extensions, mut account, clock, cap, metadata) = start();
-    let auth = multisig::authenticate(&extensions, &account, scenario.ctx());
+    let auth = multisig::authenticate(&account, scenario.ctx());
     currency::lock_cap(auth, &mut account, cap, option::none());
 
     currency::toggle_can_mint<Multisig, Approvals, CURRENCY_INTENTS_TESTS>(&mut account);
 
-    let auth = multisig::authenticate(&extensions, &account, scenario.ctx());
-    let outcome = multisig::empty_outcome(&account, scenario.ctx());
+    let auth = multisig::authenticate(&account, scenario.ctx());
+    let outcome = multisig::empty_outcome();
     currency_intents::request_vesting<Multisig, Approvals, CURRENCY_INTENTS_TESTS>(
         auth, 
         outcome, 
@@ -817,11 +820,11 @@ fun test_error_request_vesting_mint_disabled() {
 #[test, expected_failure(abort_code = currency_intents::EMaxSupply)]
 fun test_error_request_vesting_mint_too_many() {
     let (mut scenario, extensions, mut account, clock, cap, metadata) = start();
-    let auth = multisig::authenticate(&extensions, &account, scenario.ctx());
+    let auth = multisig::authenticate(&account, scenario.ctx());
     currency::lock_cap(auth, &mut account, cap, option::some(4));
 
-    let auth = multisig::authenticate(&extensions, &account, scenario.ctx());
-    let outcome = multisig::empty_outcome(&account, scenario.ctx());
+    let auth = multisig::authenticate(&account, scenario.ctx());
+    let outcome = multisig::empty_outcome();
     currency_intents::request_vesting<Multisig, Approvals, CURRENCY_INTENTS_TESTS>(
         auth, 
         outcome, 

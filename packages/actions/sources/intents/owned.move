@@ -10,11 +10,11 @@ use sui::{
 use account_protocol::{
     account::{Account, Auth},
     executable::Executable,
+    owned,
 };
 use account_actions::{
     transfer as acc_transfer,
     vesting,
-    owned,
     version,
 };
 
@@ -45,23 +45,23 @@ public fun request_transfer<Config, Outcome>(
     recipients: vector<address>,
     ctx: &mut TxContext
 ) {
+    account.verify(auth);
     assert!(recipients.length() == object_ids.length(), EObjectsRecipientsNotSameLength);
     let mut intent = account.create_intent(
-        auth,
         key,
         description,
         vector[execution_time],
         expiration_time,
+        b"".to_string(),
         outcome,
         version::current(),
         TransferIntent(),
-        b"".to_string(),
         ctx
     );
 
     object_ids.zip_do!(recipients, |object_id, recipient| {
-        owned::new_withdraw(&mut intent, account, object_id, TransferIntent());
-        acc_transfer::new_transfer(&mut intent, recipient, TransferIntent());
+        owned::new_withdraw(&mut intent, account, object_id, version::current(), TransferIntent());
+        acc_transfer::new_transfer(&mut intent, account, recipient, version::current(), TransferIntent());
     });
 
     account.add_intent(intent, version::current(), TransferIntent());
@@ -103,22 +103,25 @@ public fun request_vesting<Config, Outcome>(
     recipient: address,
     ctx: &mut TxContext
 ) {
+    account.verify(auth);
     let mut intent = account.create_intent(
-        auth,
         key,
         description,
         vector[execution_time],
         expiration_time,
+        b"".to_string(),
         outcome,
         version::current(),
         VestingIntent(),
-        b"".to_string(),
         ctx
     );
     
-    owned::new_withdraw(&mut intent, account, coin_id, VestingIntent());
-    vesting::new_vesting(&mut intent, start_timestamp, end_timestamp, recipient, VestingIntent());
-
+    owned::new_withdraw(
+        &mut intent, account, coin_id, version::current(), VestingIntent()
+    );
+    vesting::new_vesting(
+        &mut intent, account, start_timestamp, end_timestamp, recipient, version::current(), VestingIntent()
+    );
     account.add_intent(intent, version::current(), VestingIntent());
 }
 

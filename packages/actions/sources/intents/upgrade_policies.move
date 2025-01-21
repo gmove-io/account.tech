@@ -45,23 +45,25 @@ public fun request_upgrade<Config, Outcome>(
     clock: &Clock,
     ctx: &mut TxContext
 ) {
+    account.verify(auth);
     assert!(upgrade_policies::has_cap(account, package_name), ENoLock);
     let execution_time = clock.timestamp_ms() + upgrade_policies::get_time_delay(account, package_name);
 
     let mut intent = account.create_intent(
-        auth,
         key,
         description,
         vector[execution_time],
         expiration_time,
+        package_name,
         outcome,
         version::current(),
         UpgradeIntent(),
-        package_name,
         ctx
     );
 
-    upgrade_policies::new_upgrade(&mut intent, account, digest, clock, UpgradeIntent());
+    upgrade_policies::new_upgrade(
+        &mut intent, account, digest, clock, version::current(), UpgradeIntent()
+    );
     account.add_intent(intent, version::current(), UpgradeIntent());
 }
 
@@ -103,23 +105,25 @@ public fun request_restrict<Config, Outcome>(
     policy: u8,
     ctx: &mut TxContext
 ) {
+    account.verify(auth);
     assert!(upgrade_policies::has_cap(account, package_name), ENoLock);
     let current_policy = upgrade_policies::get_cap_policy(account, package_name);
 
     let mut intent = account.create_intent(
-        auth, 
         key,
         description,
         vector[execution_time],
         expiration_time,
+        package_name,
         outcome,
         version::current(),
         RestrictIntent(),
-        package_name,
         ctx
     );
 
-    upgrade_policies::new_restrict(&mut intent, current_policy, policy, RestrictIntent());
+    upgrade_policies::new_restrict(
+        &mut intent, account, current_policy, policy, version::current(), RestrictIntent()
+    );
     account.add_intent(intent, version::current(), RestrictIntent());
 }
 

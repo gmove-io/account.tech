@@ -5,11 +5,11 @@ module account_actions::transfer;
 
 // === Imports ===
 
-use std::type_name::TypeName;
 use account_protocol::{
     account::Account,
     intents::{Intent, Expired},
     executable::Executable,
+    version_witness::VersionWitness,
 };
 
 // === Structs ===
@@ -22,22 +22,24 @@ public struct TransferAction has store {
 
 // === Public functions ===
 
-public fun new_transfer<Outcome, W: drop>(
+public fun new_transfer<Config, Outcome, IW: drop>(
     intent: &mut Intent<Outcome>, 
+    account: &Account<Config, Outcome>, 
     recipient: address,
-    witness: W,
+    version_witness: VersionWitness,
+    intent_witness: IW,
 ) {
-    intent.add_action(TransferAction { recipient }, witness);
+    account.add_action(intent, TransferAction { recipient }, version_witness, intent_witness);
 }
 
-public fun do_transfer<Config, Outcome, T: key + store, W: drop>(
+public fun do_transfer<Config, Outcome, T: key + store, IW: drop>(
     executable: &mut Executable, 
     account: &mut Account<Config, Outcome>, 
     object: T,
-    version: TypeName,
-    witness: W,
+    version_witness: VersionWitness,
+    intent_witness: IW,
 ) {
-    let action: &TransferAction = account.process_action(executable, version, witness);
+    let action: &TransferAction = account.process_action(executable, version_witness, intent_witness);
     transfer::public_transfer(object, action.recipient);
 }
 

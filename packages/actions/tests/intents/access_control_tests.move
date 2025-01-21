@@ -38,8 +38,9 @@ fun start(): (Scenario, Extensions, Account<Multisig, Approvals>, Clock) {
     extensions.add(&cap, b"AccountProtocol".to_string(), @account_protocol, 1);
     extensions.add(&cap, b"AccountConfig".to_string(), @account_config, 1);
     extensions.add(&cap, b"AccountActions".to_string(), @account_actions, 1);
-    // Account generic types are dummy types (bool, bool)
-    let account = multisig::new_account(&extensions, scenario.ctx());
+
+    let mut account = multisig::new_account(&extensions, scenario.ctx());
+    account.deps_mut_for_testing().add(&extensions, b"AccountActions".to_string(), @account_actions, 1);
     let clock = clock::create_for_testing(scenario.ctx());
     // create world
     destroy(cap);
@@ -62,12 +63,12 @@ fun cap(scenario: &mut Scenario): Cap {
 #[test]
 fun test_request_execute_access() {
     let (mut scenario, extensions, mut account, clock) = start();
-    let auth = multisig::authenticate(&extensions, &account, scenario.ctx());
+    let auth = multisig::authenticate(&account, scenario.ctx());
     access_control::lock_cap(auth, &mut account, cap(&mut scenario));
     let key = b"dummy".to_string();
 
-    let auth = multisig::authenticate(&extensions, &account, scenario.ctx());
-    let outcome = multisig::empty_outcome(&account, scenario.ctx());
+    let auth = multisig::authenticate(&account, scenario.ctx());
+    let outcome = multisig::empty_outcome();
     access_control_intents::request_access<Multisig, Approvals, Cap>(
         auth, 
         outcome, 
@@ -101,8 +102,8 @@ fun test_error_request_access_no_lock() {
     let (mut scenario, extensions, mut account, clock) = start();
     let key = b"dummy".to_string();
 
-    let auth = multisig::authenticate(&extensions, &account, scenario.ctx());
-    let outcome = multisig::empty_outcome(&account, scenario.ctx());
+    let auth = multisig::authenticate(&account, scenario.ctx());
+    let outcome = multisig::empty_outcome();
     access_control_intents::request_access<Multisig, Approvals, Cap>(
         auth, 
         outcome, 

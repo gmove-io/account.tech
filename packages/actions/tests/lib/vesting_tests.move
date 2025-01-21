@@ -3,7 +3,6 @@ module account_actions::vesting_tests;
 
 // === Imports ===
 
-use std::type_name::{Self, TypeName};
 use sui::{
     test_utils::destroy,
     test_scenario::{Self as ts, Scenario},
@@ -17,6 +16,7 @@ use account_protocol::{
     intents::Intent,
     issuer,
     deps,
+    version_witness,
 };
 use account_config::multisig::{Self, Multisig, Approvals};
 use account_actions::{
@@ -31,6 +31,7 @@ const OWNER: address = @0xCAFE;
 // === Structs ===
 
 public struct DummyIntent() has copy, drop;
+public struct WrongWitness() has copy, drop;
 
 // === Helpers ===
 
@@ -46,8 +47,9 @@ fun start(): (Scenario, Extensions, Account<Multisig, Approvals>, Clock) {
     extensions.add(&cap, b"AccountProtocol".to_string(), @account_protocol, 1);
     extensions.add(&cap, b"AccountConfig".to_string(), @account_config, 1);
     extensions.add(&cap, b"AccountActions".to_string(), @account_actions, 1);
-    // Account generic types are dummy types (bool, bool)
-    let account = multisig::new_account(&extensions, scenario.ctx());
+
+    let mut account = multisig::new_account(&extensions, scenario.ctx());
+    account.deps_mut_for_testing().add(&extensions, b"AccountActions".to_string(), @account_actions, 1);
     let clock = clock::create_for_testing(scenario.ctx());
     // create world
     destroy(cap);
@@ -61,27 +63,20 @@ fun end(scenario: Scenario, extensions: Extensions, account: Account<Multisig, A
     ts::end(scenario);
 }
 
-fun wrong_version(): TypeName {
-    type_name::get<Extensions>()
-}
-
 fun create_dummy_intent(
     scenario: &mut Scenario,
     account: &mut Account<Multisig, Approvals>, 
-    extensions: &Extensions, 
 ): Intent<Approvals> {
-    let auth = multisig::authenticate(extensions, account, scenario.ctx());
-    let outcome = multisig::empty_outcome(account, scenario.ctx());
+    let outcome = multisig::empty_outcome();
     account.create_intent(
-        auth, 
         b"dummy".to_string(), 
         b"".to_string(), 
         vector[0],
         1, 
+        b"".to_string(), 
         outcome, 
         version::current(), 
         DummyIntent(), 
-        b"".to_string(), 
         scenario.ctx()
     )
 }
@@ -157,7 +152,7 @@ fun test_create_stream_disburse_and_cancel() {
     let coin3 = scenario.take_from_address<Coin<SUI>>(OWNER);
     assert!(coin3.value() == 3);
 
-    let auth = multisig::authenticate(&extensions, &account, scenario.ctx());
+    let auth = multisig::authenticate(&account, scenario.ctx());
     vesting::cancel_payment(auth, stream, &account, scenario.ctx());
 
     destroy(cap);
@@ -227,12 +222,14 @@ fun test_vesting_flow() {
     let (mut scenario, extensions, mut account, clock) = start();
     let key = b"dummy".to_string();
 
-    let mut intent = create_dummy_intent(&mut scenario, &mut account, &extensions);
+    let mut intent = create_dummy_intent(&mut scenario, &mut account);
     vesting::new_vesting(
         &mut intent, 
+        &account,
         0, 
         6,
         OWNER, 
+        version::current(),
         DummyIntent(), 
     );
     account.add_intent(intent, version::current(), DummyIntent());
@@ -258,12 +255,14 @@ fun test_vesting_expired() {
     clock.increment_for_testing(1);
     let key = b"dummy".to_string();
 
-    let mut intent = create_dummy_intent(&mut scenario, &mut account, &extensions);
+    let mut intent = create_dummy_intent(&mut scenario, &mut account);
     vesting::new_vesting(
         &mut intent, 
+        &account,
         0, 
         6,
         OWNER, 
+        version::current(),
         DummyIntent(), 
     );
     account.add_intent(intent, version::current(), DummyIntent());
@@ -397,14 +396,15 @@ fun test_error_destroy_non_empty_stream() {
 // sanity checks as these are tested in AccountProtocol tests
 
 #[test, expected_failure(abort_code = issuer::EWrongAccount)]
-fun test_error_do_withdraw_from_wrong_account() {
+fun test_error_do_vesting_from_wrong_account() {
     let (mut scenario, extensions, mut account, clock) = start();
     let mut account2 = multisig::new_account(&extensions, scenario.ctx());
+    account2.deps_mut_for_testing().add(&extensions, b"AccountActions".to_string(), @account_actions, 1);
     let key = b"dummy".to_string();
 
     // intent is submitted to other account
-    let mut intent = create_dummy_intent(&mut scenario, &mut account2, &extensions);
-    vesting::new_vesting(&mut intent, 0, 1, OWNER, DummyIntent());
+    let mut intent = create_dummy_intent(&mut scenario, &mut account2);
+    vesting::new_vesting(&mut intent, &account2, 0, 1, OWNER, version::current(), DummyIntent());
     account2.add_intent(intent, version::current(), DummyIntent());
 
     multisig::approve_intent(&mut account2, key, scenario.ctx());
@@ -425,12 +425,12 @@ fun test_error_do_withdraw_from_wrong_account() {
 }
 
 #[test, expected_failure(abort_code = issuer::EWrongWitness)]
-fun test_error_do_withdraw_from_wrong_constructor_witness() {
+fun test_error_do_vesting_from_wrong_constructor_witness() {
     let (mut scenario, extensions, mut account, clock) = start();
     let key = b"dummy".to_string();
 
-    let mut intent = create_dummy_intent(&mut scenario, &mut account, &extensions);
-    vesting::new_vesting(&mut intent, 0, 1, OWNER, DummyIntent());
+    let mut intent = create_dummy_intent(&mut scenario, &mut account);
+    vesting::new_vesting(&mut intent, &account, 0, 1, OWNER, version::current(), DummyIntent());
     account.add_intent(intent, version::current(), DummyIntent());
 
     multisig::approve_intent(&mut account, key, scenario.ctx());
@@ -441,7 +441,7 @@ fun test_error_do_withdraw_from_wrong_constructor_witness() {
         &mut account, 
         coin::mint_for_testing<SUI>(6, scenario.ctx()),
         version::current(), 
-        issuer::wrong_witness(),
+        WrongWitness(),
         scenario.ctx()
     );
 
@@ -450,12 +450,12 @@ fun test_error_do_withdraw_from_wrong_constructor_witness() {
 }
 
 #[test, expected_failure(abort_code = deps::ENotDep)]
-fun test_error_do_withdraw_from_not_dep() {
+fun test_error_do_vesting_from_not_dep() {
     let (mut scenario, extensions, mut account, clock) = start();
     let key = b"dummy".to_string();
 
-    let mut intent = create_dummy_intent(&mut scenario, &mut account, &extensions);
-    vesting::new_vesting(&mut intent, 0, 1, OWNER, DummyIntent());
+    let mut intent = create_dummy_intent(&mut scenario, &mut account);
+    vesting::new_vesting(&mut intent, &account, 0, 1, OWNER, version::current(), DummyIntent());
     account.add_intent(intent, version::current(), DummyIntent());
 
     multisig::approve_intent(&mut account, key, scenario.ctx());
@@ -465,7 +465,7 @@ fun test_error_do_withdraw_from_not_dep() {
         &mut executable, 
         &mut account, 
         coin::mint_for_testing<SUI>(6, scenario.ctx()),
-        wrong_version(), 
+        version_witness::new_for_testing(@0xFA153), 
         DummyIntent(),
         scenario.ctx()
     );

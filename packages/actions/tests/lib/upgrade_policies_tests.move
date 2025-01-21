@@ -3,7 +3,6 @@ module account_actions::upgrade_policies_tests;
 
 // === Imports ===
 
-use std::type_name::{Self, TypeName};
 use sui::{
     test_utils::destroy,
     test_scenario::{Self as ts, Scenario},
@@ -16,6 +15,7 @@ use account_protocol::{
     intents::Intent,
     issuer,
     deps,
+    version_witness,
 };
 use account_config::multisig::{Self, Multisig, Approvals};
 use account_actions::{
@@ -30,7 +30,7 @@ const OWNER: address = @0xCAFE;
 // === Structs ===
 
 public struct DummyIntent() has copy, drop;
-public struct Wrongintent() has copy, drop;
+public struct WrongWitness() has copy, drop;
 
 // === Helpers ===
 
@@ -46,8 +46,9 @@ fun start(): (Scenario, Extensions, Account<Multisig, Approvals>, Clock, Upgrade
     extensions.add(&cap, b"AccountProtocol".to_string(), @account_protocol, 1);
     extensions.add(&cap, b"AccountConfig".to_string(), @account_config, 1);
     extensions.add(&cap, b"AccountActions".to_string(), @account_actions, 1);
-    // Account generic types are dummy types (bool, bool)
-    let account = multisig::new_account(&extensions, scenario.ctx());
+
+    let mut account = multisig::new_account(&extensions, scenario.ctx());
+    account.deps_mut_for_testing().add(&extensions, b"AccountActions".to_string(), @account_actions, 1);
     let clock = clock::create_for_testing(scenario.ctx());
     let upgrade_cap = package::test_publish(@0x1.to_id(), scenario.ctx());
     // create world
@@ -62,27 +63,20 @@ fun end(scenario: Scenario, extensions: Extensions, account: Account<Multisig, A
     ts::end(scenario);
 }
 
-fun wrong_version(): TypeName {
-    type_name::get<Extensions>()
-}
-
 fun create_dummy_intent(
     scenario: &mut Scenario,
     account: &mut Account<Multisig, Approvals>, 
-    extensions: &Extensions, 
 ): Intent<Approvals> {
-    let auth = multisig::authenticate(extensions, account, scenario.ctx());
-    let outcome = multisig::empty_outcome(account, scenario.ctx());
+    let outcome = multisig::empty_outcome();
     account.create_intent(
-        auth, 
         b"dummy".to_string(), 
         b"".to_string(), 
         vector[0],
         1,
+        b"Degen".to_string(), 
         outcome, 
         version::current(), 
         DummyIntent(), 
-        b"Degen".to_string(), 
         scenario.ctx()
     )
 }
@@ -93,7 +87,7 @@ fun create_dummy_intent(
 fun test_lock() {
     let (mut scenario, extensions, mut account, clock, upgrade_cap) = start();
 
-    let auth = multisig::authenticate(&extensions, &account, scenario.ctx());
+    let auth = multisig::authenticate(&account, scenario.ctx());
     upgrade_policies::lock_cap(auth, &mut account, upgrade_cap, b"Degen".to_string(), 1000);
 
     assert!(upgrade_policies::has_cap(&account, b"Degen".to_string()));
@@ -111,11 +105,11 @@ fun test_upgrade_flow() {
     let (mut scenario, extensions, mut account, mut clock, upgrade_cap) = start();
     let key = b"dummy".to_string();
 
-    let auth = multisig::authenticate(&extensions, &account, scenario.ctx());
+    let auth = multisig::authenticate(&account, scenario.ctx());
     upgrade_policies::lock_cap(auth, &mut account, upgrade_cap, b"Degen".to_string(), 1000);
 
-    let mut intent = create_dummy_intent(&mut scenario, &mut account, &extensions);
-    upgrade_policies::new_upgrade(&mut intent, &account, b"", &clock, DummyIntent());
+    let mut intent = create_dummy_intent(&mut scenario, &mut account);
+    upgrade_policies::new_upgrade(&mut intent, &account, b"", &clock, version::current(), DummyIntent());
     account.add_intent(intent, version::current(), DummyIntent());
     clock.increment_for_testing(1000);
 
@@ -147,11 +141,11 @@ fun test_restrict_flow_additive() {
     let (mut scenario, extensions, mut account, clock, upgrade_cap) = start();
     let key = b"dummy".to_string();
 
-    let auth = multisig::authenticate(&extensions, &account, scenario.ctx());
+    let auth = multisig::authenticate(&account, scenario.ctx());
     upgrade_policies::lock_cap(auth, &mut account, upgrade_cap, b"Degen".to_string(), 1000);
 
-    let mut intent = create_dummy_intent(&mut scenario, &mut account, &extensions);
-    upgrade_policies::new_restrict(&mut intent, 0, 128, DummyIntent());
+    let mut intent = create_dummy_intent(&mut scenario, &mut account);
+    upgrade_policies::new_restrict(&mut intent, &account, 0, 128, version::current(), DummyIntent());
     account.add_intent(intent, version::current(), DummyIntent());
 
     multisig::approve_intent(&mut account, key, scenario.ctx());
@@ -175,11 +169,11 @@ fun test_restrict_flow_deps_only() {
     let (mut scenario, extensions, mut account, clock, upgrade_cap) = start();
     let key = b"dummy".to_string();
 
-    let auth = multisig::authenticate(&extensions, &account, scenario.ctx());
+    let auth = multisig::authenticate(&account, scenario.ctx());
     upgrade_policies::lock_cap(auth, &mut account, upgrade_cap, b"Degen".to_string(), 1000);
 
-    let mut intent = create_dummy_intent(&mut scenario, &mut account, &extensions);
-    upgrade_policies::new_restrict(&mut intent, 0, 192, DummyIntent());
+    let mut intent = create_dummy_intent(&mut scenario, &mut account);
+    upgrade_policies::new_restrict(&mut intent, &account, 0, 192, version::current(), DummyIntent());
     account.add_intent(intent, version::current(), DummyIntent());
 
     multisig::approve_intent(&mut account, key, scenario.ctx());
@@ -203,11 +197,11 @@ fun test_restrict_flow_immutable() {
     let (mut scenario, extensions, mut account, clock, upgrade_cap) = start();
     let key = b"dummy".to_string();
 
-    let auth = multisig::authenticate(&extensions, &account, scenario.ctx());
+    let auth = multisig::authenticate(&account, scenario.ctx());
     upgrade_policies::lock_cap(auth, &mut account, upgrade_cap, b"Degen".to_string(), 1000);
 
-    let mut intent = create_dummy_intent(&mut scenario, &mut account, &extensions);
-    upgrade_policies::new_restrict(&mut intent, 0, 255, DummyIntent());
+    let mut intent = create_dummy_intent(&mut scenario, &mut account);
+    upgrade_policies::new_restrict(&mut intent, &account, 0, 255, version::current(), DummyIntent());
     account.add_intent(intent, version::current(), DummyIntent());
 
     multisig::approve_intent(&mut account, key, scenario.ctx());
@@ -231,11 +225,11 @@ fun test_upgrade_expired() {
     clock.increment_for_testing(1);
     let key = b"dummy".to_string();
 
-    let auth = multisig::authenticate(&extensions, &account, scenario.ctx());
+    let auth = multisig::authenticate(&account, scenario.ctx());
     upgrade_policies::lock_cap(auth, &mut account, upgrade_cap, b"Degen".to_string(), 1000);
 
-    let mut intent = create_dummy_intent(&mut scenario, &mut account, &extensions);
-    upgrade_policies::new_upgrade(&mut intent, &account, b"", &clock, DummyIntent());
+    let mut intent = create_dummy_intent(&mut scenario, &mut account);
+    upgrade_policies::new_upgrade(&mut intent, &account, b"", &clock, version::current(), DummyIntent());
     account.add_intent(intent, version::current(), DummyIntent());
     
     let mut expired = account.delete_expired_intent(key, &clock);
@@ -251,11 +245,11 @@ fun test_restrict_expired() {
     clock.increment_for_testing(1);
     let key = b"dummy".to_string();
 
-    let auth = multisig::authenticate(&extensions, &account, scenario.ctx());
+    let auth = multisig::authenticate(&account, scenario.ctx());
     upgrade_policies::lock_cap(auth, &mut account, upgrade_cap, b"Degen".to_string(), 1000);
 
-    let mut intent = create_dummy_intent(&mut scenario, &mut account, &extensions);
-    upgrade_policies::new_restrict(&mut intent, 0, 128, DummyIntent());
+    let mut intent = create_dummy_intent(&mut scenario, &mut account);
+    upgrade_policies::new_restrict(&mut intent, &account, 0, 128, version::current(), DummyIntent());
     account.add_intent(intent, version::current(), DummyIntent());
     
     let mut expired = account.delete_expired_intent(key, &clock);
@@ -270,9 +264,9 @@ fun test_error_lock_name_already_exists() {
     let (mut scenario, extensions, mut account, clock, upgrade_cap) = start();
     let upgrade_cap1 = package::test_publish(@0x1.to_id(), scenario.ctx());
 
-    let auth = multisig::authenticate(&extensions, &account, scenario.ctx());
+    let auth = multisig::authenticate(&account, scenario.ctx());
     upgrade_policies::lock_cap(auth, &mut account, upgrade_cap, b"Degen".to_string(), 1000);
-    let auth = multisig::authenticate(&extensions, &account, scenario.ctx());
+    let auth = multisig::authenticate(&account, scenario.ctx());
     upgrade_policies::lock_cap(auth, &mut account, upgrade_cap1, b"Degen".to_string(), 1000);
 
     end(scenario, extensions, account, clock);
@@ -282,11 +276,11 @@ fun test_error_lock_name_already_exists() {
 fun test_error_new_restrict_not_restrictive() {
     let (mut scenario, extensions, mut account, clock, upgrade_cap) = start();
 
-    let auth = multisig::authenticate(&extensions, &account, scenario.ctx());
+    let auth = multisig::authenticate(&account, scenario.ctx());
     upgrade_policies::lock_cap(auth, &mut account, upgrade_cap, b"Degen".to_string(), 1000);
 
-    let mut intent = create_dummy_intent(&mut scenario, &mut account, &extensions);
-    upgrade_policies::new_restrict(&mut intent, 0, 0, DummyIntent());
+    let mut intent = create_dummy_intent(&mut scenario, &mut account);
+    upgrade_policies::new_restrict(&mut intent, &account, 0, 0, version::current(), DummyIntent());
     account.add_intent(intent, version::current(), DummyIntent());
     
     end(scenario, extensions, account, clock);
@@ -296,11 +290,11 @@ fun test_error_new_restrict_not_restrictive() {
 fun test_error_new_restrict_invalid_policy() {
     let (mut scenario, extensions, mut account, clock, upgrade_cap) = start();
 
-    let auth = multisig::authenticate(&extensions, &account, scenario.ctx());
+    let auth = multisig::authenticate(&account, scenario.ctx());
     upgrade_policies::lock_cap(auth, &mut account, upgrade_cap, b"Degen".to_string(), 1000);
 
-    let mut intent = create_dummy_intent(&mut scenario, &mut account, &extensions);
-    upgrade_policies::new_restrict(&mut intent, 0, 1, DummyIntent());
+    let mut intent = create_dummy_intent(&mut scenario, &mut account);
+    upgrade_policies::new_restrict(&mut intent, &account, 0, 1, version::current(), DummyIntent());
     account.add_intent(intent, version::current(), DummyIntent());
     
     end(scenario, extensions, account, clock);
@@ -312,13 +306,14 @@ fun test_error_new_restrict_invalid_policy() {
 fun test_error_do_upgrade_from_wrong_account() {
     let (mut scenario, extensions, mut account, clock, upgrade_cap) = start();
     let mut account2 = multisig::new_account(&extensions, scenario.ctx());
+    account2.deps_mut_for_testing().add(&extensions, b"AccountActions".to_string(), @account_actions, 1);
     let key = b"dummy".to_string();
 
-    let auth = multisig::authenticate(&extensions, &account, scenario.ctx());
+    let auth = multisig::authenticate(&account, scenario.ctx());
     upgrade_policies::lock_cap(auth, &mut account, upgrade_cap, b"Degen".to_string(), 1000);
     // intent is submitted to other account
-    let mut intent = create_dummy_intent(&mut scenario, &mut account2, &extensions);
-    upgrade_policies::new_upgrade(&mut intent, &account, b"", &clock, DummyIntent());
+    let mut intent = create_dummy_intent(&mut scenario, &mut account2);
+    upgrade_policies::new_upgrade(&mut intent, &account, b"", &clock, version::current(), DummyIntent());
     account2.add_intent(intent, version::current(), DummyIntent());
 
     multisig::approve_intent(&mut account2, key, scenario.ctx());
@@ -343,11 +338,11 @@ fun test_error_do_upgrade_from_wrong_constructor_witness() {
     let (mut scenario, extensions, mut account, clock, upgrade_cap) = start();
     let key = b"dummy".to_string();
 
-    let auth = multisig::authenticate(&extensions, &account, scenario.ctx());
+    let auth = multisig::authenticate(&account, scenario.ctx());
     upgrade_policies::lock_cap(auth, &mut account, upgrade_cap, b"Degen".to_string(), 1000);
 
-    let mut intent = create_dummy_intent(&mut scenario, &mut account, &extensions);
-    upgrade_policies::new_upgrade(&mut intent, &account, b"", &clock, DummyIntent());
+    let mut intent = create_dummy_intent(&mut scenario, &mut account);
+    upgrade_policies::new_upgrade(&mut intent, &account, b"", &clock, version::current(), DummyIntent());
     account.add_intent(intent, version::current(), DummyIntent());
 
     multisig::approve_intent(&mut account, key, scenario.ctx());
@@ -358,7 +353,7 @@ fun test_error_do_upgrade_from_wrong_constructor_witness() {
         &mut account, 
         &clock,
         version::current(), 
-        issuer::wrong_witness(),
+        WrongWitness(),
     );
 
     destroy(executable);
@@ -371,11 +366,11 @@ fun test_error_do_upgrade_from_not_dep() {
     let (mut scenario, extensions, mut account, clock, upgrade_cap) = start();
     let key = b"dummy".to_string();
 
-    let auth = multisig::authenticate(&extensions, &account, scenario.ctx());
+    let auth = multisig::authenticate(&account, scenario.ctx());
     upgrade_policies::lock_cap(auth, &mut account, upgrade_cap, b"Degen".to_string(), 1000);
 
-    let mut intent = create_dummy_intent(&mut scenario, &mut account, &extensions);
-    upgrade_policies::new_upgrade(&mut intent, &account, b"", &clock, DummyIntent());
+    let mut intent = create_dummy_intent(&mut scenario, &mut account);
+    upgrade_policies::new_upgrade(&mut intent, &account, b"", &clock, version::current(), DummyIntent());
     account.add_intent(intent, version::current(), DummyIntent());
 
     multisig::approve_intent(&mut account, key, scenario.ctx());
@@ -385,7 +380,7 @@ fun test_error_do_upgrade_from_not_dep() {
         &mut executable, 
         &mut account, 
         &clock,
-        wrong_version(), 
+        version_witness::new_for_testing(@0xFA153), 
         DummyIntent(),
     );
 
@@ -398,15 +393,16 @@ fun test_error_do_upgrade_from_not_dep() {
 fun test_error_confirm_upgrade_from_wrong_account() {
     let (mut scenario, extensions, mut account, clock, upgrade_cap) = start();
     let mut account2 = multisig::new_account(&extensions, scenario.ctx());
+    account2.deps_mut_for_testing().add(&extensions, b"AccountActions".to_string(), @account_actions, 1);
     let key = b"dummy".to_string();
 
-    let auth = multisig::authenticate(&extensions, &account, scenario.ctx());
+    let auth = multisig::authenticate(&account, scenario.ctx());
     upgrade_policies::lock_cap(auth, &mut account, upgrade_cap, b"Degen".to_string(), 0);
-    let auth = multisig::authenticate(&extensions, &account2, scenario.ctx());
+    let auth = multisig::authenticate(&account2, scenario.ctx());
     upgrade_policies::lock_cap(auth, &mut account2, package::test_publish(@0x1.to_id(), scenario.ctx()), b"Degen".to_string(), 1000);
     // intent is submitted to other account
-    let mut intent = create_dummy_intent(&mut scenario, &mut account2, &extensions);
-    upgrade_policies::new_upgrade(&mut intent, &account, b"", &clock, DummyIntent());
+    let mut intent = create_dummy_intent(&mut scenario, &mut account2);
+    upgrade_policies::new_upgrade(&mut intent, &account, b"", &clock, version::current(), DummyIntent());
     account2.add_intent(intent, version::current(), DummyIntent());
 
     multisig::approve_intent(&mut account2, key, scenario.ctx());
@@ -439,11 +435,11 @@ fun test_error_confirm_upgrade_from_wrong_constructor_witness() {
     let (mut scenario, extensions, mut account, clock, upgrade_cap) = start();
     let key = b"dummy".to_string();
 
-    let auth = multisig::authenticate(&extensions, &account, scenario.ctx());
+    let auth = multisig::authenticate(&account, scenario.ctx());
     upgrade_policies::lock_cap(auth, &mut account, upgrade_cap, b"Degen".to_string(), 0);
 
-    let mut intent = create_dummy_intent(&mut scenario, &mut account, &extensions);
-    upgrade_policies::new_upgrade(&mut intent, &account, b"", &clock, DummyIntent());
+    let mut intent = create_dummy_intent(&mut scenario, &mut account);
+    upgrade_policies::new_upgrade(&mut intent, &account, b"", &clock, version::current(), DummyIntent());
     account.add_intent(intent, version::current(), DummyIntent());
 
     multisig::approve_intent(&mut account, key, scenario.ctx());
@@ -463,7 +459,7 @@ fun test_error_confirm_upgrade_from_wrong_constructor_witness() {
         &mut account, 
         receipt, 
         version::current(), 
-        issuer::wrong_witness(),
+        WrongWitness(),
     );
 
     destroy(executable);
@@ -475,11 +471,11 @@ fun test_error_confirm_upgrade_from_not_dep() {
     let (mut scenario, extensions, mut account, clock, upgrade_cap) = start();
     let key = b"dummy".to_string();
 
-    let auth = multisig::authenticate(&extensions, &account, scenario.ctx());
+    let auth = multisig::authenticate(&account, scenario.ctx());
     upgrade_policies::lock_cap(auth, &mut account, upgrade_cap, b"Degen".to_string(), 0);
 
-    let mut intent = create_dummy_intent(&mut scenario, &mut account, &extensions);
-    upgrade_policies::new_upgrade(&mut intent, &account, b"", &clock, DummyIntent());
+    let mut intent = create_dummy_intent(&mut scenario, &mut account);
+    upgrade_policies::new_upgrade(&mut intent, &account, b"", &clock, version::current(), DummyIntent());
     account.add_intent(intent, version::current(), DummyIntent());
 
     multisig::approve_intent(&mut account, key, scenario.ctx());
@@ -498,7 +494,7 @@ fun test_error_confirm_upgrade_from_not_dep() {
         &executable, 
         &mut account, 
         receipt, 
-        wrong_version(), 
+        version_witness::new_for_testing(@0xFA153), 
         DummyIntent(),
     );
 
@@ -510,13 +506,14 @@ fun test_error_confirm_upgrade_from_not_dep() {
 fun test_error_do_restrict_from_wrong_account() {
     let (mut scenario, extensions, mut account, clock, upgrade_cap) = start();
     let mut account2 = multisig::new_account(&extensions, scenario.ctx());
+    account2.deps_mut_for_testing().add(&extensions, b"AccountActions".to_string(), @account_actions, 1);
     let key = b"dummy".to_string();
 
-    let auth = multisig::authenticate(&extensions, &account, scenario.ctx());
+    let auth = multisig::authenticate(&account, scenario.ctx());
     upgrade_policies::lock_cap(auth, &mut account, upgrade_cap, b"Degen".to_string(), 1000);
     // intent is submitted to other account
-    let mut intent = create_dummy_intent(&mut scenario, &mut account2, &extensions);
-    upgrade_policies::new_upgrade(&mut intent, &account, b"", &clock, DummyIntent());
+    let mut intent = create_dummy_intent(&mut scenario, &mut account2);
+    upgrade_policies::new_upgrade(&mut intent, &account, b"", &clock, version::current(), DummyIntent());
     account2.add_intent(intent, version::current(), DummyIntent());
 
     multisig::approve_intent(&mut account2, key, scenario.ctx());
@@ -539,11 +536,11 @@ fun test_error_do_restrict_from_wrong_constructor_witness() {
     let (mut scenario, extensions, mut account, clock, upgrade_cap) = start();
     let key = b"dummy".to_string();
 
-    let auth = multisig::authenticate(&extensions, &account, scenario.ctx());
+    let auth = multisig::authenticate(&account, scenario.ctx());
     upgrade_policies::lock_cap(auth, &mut account, upgrade_cap, b"Degen".to_string(), 1000);
 
-    let mut intent = create_dummy_intent(&mut scenario, &mut account, &extensions);
-    upgrade_policies::new_upgrade(&mut intent, &account, b"", &clock, DummyIntent());
+    let mut intent = create_dummy_intent(&mut scenario, &mut account);
+    upgrade_policies::new_upgrade(&mut intent, &account, b"", &clock, version::current(), DummyIntent());
     account.add_intent(intent, version::current(), DummyIntent());
 
     multisig::approve_intent(&mut account, key, scenario.ctx());
@@ -553,7 +550,7 @@ fun test_error_do_restrict_from_wrong_constructor_witness() {
         &mut executable, 
         &mut account, 
         version::current(), 
-        issuer::wrong_witness(),
+        WrongWitness(),
     );
 
     destroy(executable);
@@ -565,11 +562,11 @@ fun test_error_do_restrict_from_not_dep() {
     let (mut scenario, extensions, mut account, clock, upgrade_cap) = start();
     let key = b"dummy".to_string();
 
-    let auth = multisig::authenticate(&extensions, &account, scenario.ctx());
+    let auth = multisig::authenticate(&account, scenario.ctx());
     upgrade_policies::lock_cap(auth, &mut account, upgrade_cap, b"Degen".to_string(), 1000);
 
-    let mut intent = create_dummy_intent(&mut scenario, &mut account, &extensions);
-    upgrade_policies::new_upgrade(&mut intent, &account, b"", &clock, DummyIntent());
+    let mut intent = create_dummy_intent(&mut scenario, &mut account);
+    upgrade_policies::new_upgrade(&mut intent, &account, b"", &clock, version::current(), DummyIntent());
     account.add_intent(intent, version::current(), DummyIntent());
 
     multisig::approve_intent(&mut account, key, scenario.ctx());
@@ -578,7 +575,7 @@ fun test_error_do_restrict_from_not_dep() {
     upgrade_policies::do_restrict(
         &mut executable, 
         &mut account, 
-        wrong_version(), 
+        version_witness::new_for_testing(@0xFA153), 
         DummyIntent(),
     );
 

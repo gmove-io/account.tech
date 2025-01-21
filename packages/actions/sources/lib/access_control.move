@@ -18,11 +18,11 @@ module account_actions::access_control;
 
 // === Imports ===
 
-use std::type_name::TypeName;
 use account_protocol::{
     account::{Account, Auth},
     intents::{Intent, Expired},
     executable::Executable,
+    version_witness::VersionWitness,
 };
 use account_actions::version;
 
@@ -56,7 +56,7 @@ public fun lock_cap<Config, Outcome, Cap: key + store>(
     account: &mut Account<Config, Outcome>,
     cap: Cap,
 ) {
-    auth.verify(account.addr());
+    account.verify(auth);
     assert!(!has_lock<Config, Outcome, Cap>(account), EAlreadyLocked);
     account.add_managed_object(CapKey<Cap> {}, cap, version::current());
 }
@@ -69,23 +69,25 @@ public fun has_lock<Config, Outcome, Cap>(
 
 // must be called in intent modules
 
-public fun new_access<Outcome, Cap, W: drop>(
+public fun new_access<Config, Outcome, Cap, IW: drop>(
     intent: &mut Intent<Outcome>, 
-    witness: W,    
+    account: &Account<Config, Outcome>,
+    version_witness: VersionWitness,
+    intent_witness: IW,    
 ) {
-    intent.add_action(AccessAction<Cap> {}, witness);
+    account.add_action(intent, AccessAction<Cap> {}, version_witness, intent_witness);
 }
 
-public fun do_access<Config, Outcome, Cap: key + store, W: copy + drop>(
+public fun do_access<Config, Outcome, Cap: key + store, IW: copy + drop>(
     executable: &mut Executable, 
     account: &mut Account<Config, Outcome>,
-    version: TypeName,
-    witness: W, 
+    version_witness: VersionWitness,
+    intent_witness: IW, 
 ): (Borrow<Cap>, Cap) {
     assert!(has_lock<Config, Outcome, Cap>(account), ENoLock);
     // check to be sure this cap type has been approved
-    let AccessAction<Cap> {} = account.process_action(executable, version, witness);
-    let cap = account.remove_managed_object(CapKey<Cap> {}, version);
+    let AccessAction<Cap> {} = account.process_action(executable, version_witness, intent_witness);
+    let cap = account.remove_managed_object(CapKey<Cap> {}, version_witness);
     
     (Borrow<Cap> { account_addr: account.addr() }, cap)
 }
@@ -94,12 +96,12 @@ public fun return_cap<Config, Outcome, Cap: key + store>(
     account: &mut Account<Config, Outcome>,
     borrow: Borrow<Cap>,
     cap: Cap,
-    version: TypeName,
+    version_witness: VersionWitness,
 ) {
     let Borrow<Cap> { account_addr } = borrow;
     assert!(account_addr == account.addr(), EWrongAccount);
 
-    account.add_managed_object(CapKey<Cap> {}, cap, version);
+    account.add_managed_object(CapKey<Cap> {}, cap, version_witness);
 }
 
 public fun delete_access<Cap>(expired: &mut Expired) {

@@ -3,7 +3,7 @@ module account_protocol::issuer_tests;
 
 // === Imports ===
 
-use std::string::String;
+use std::type_name;
 use sui::test_scenario as ts;
 use account_protocol::issuer;
 
@@ -14,14 +14,7 @@ const OWNER: address = @0xCAFE;
 // === Structs ===
 
 public struct DummyIntent() has drop;
-
-// === Helpers ===
-
-fun full_role(): String {
-    let mut full_role = @account_protocol.to_string();
-    full_role.append_utf8(b"::issuer_tests::Degen");
-    full_role
-}
+public struct WrongWitness() has drop;
 
 // === Tests ===
 
@@ -29,16 +22,13 @@ fun full_role(): String {
 fun test_issuer() {
     let scenario = ts::begin(OWNER);
 
-    let issuer = issuer::construct(@0x0, DummyIntent(), b"Degen".to_string());
+    let issuer = issuer::new(@0x0, DummyIntent());
     // assertions
     issuer.assert_is_account(@0x0);
-    issuer.assert_is_constructor(DummyIntent());
+    issuer.assert_is_intent(DummyIntent());
     // getters 
-    assert!(issuer.full_role() == full_role());
     assert!(issuer.account_addr() == @0x0);
-    assert!(issuer.package_id() == @account_protocol.to_string());
-    assert!(issuer.module_name() == b"issuer_tests".to_string());
-    assert!(issuer.opt_name() == b"Degen".to_string());
+    assert!(issuer.intent_type() == type_name::get<DummyIntent>());
 
     ts::end(scenario);
 }
@@ -47,9 +37,9 @@ fun test_issuer() {
 fun test_error_wrong_witness() {
     let scenario = ts::begin(OWNER);
 
-    let issuer = issuer::construct(@0x0, DummyIntent(), b"Degen".to_string());
+    let issuer = issuer::new(@0x0, DummyIntent());
     // assertions
-    issuer.assert_is_constructor(issuer::wrong_witness());
+    issuer.assert_is_intent(WrongWitness());
 
     ts::end(scenario);
 }
@@ -58,7 +48,7 @@ fun test_error_wrong_witness() {
 fun test_error_wrong_account() {
     let scenario = ts::begin(OWNER);
 
-    let issuer = issuer::construct(@0x0, DummyIntent(), b"Degen".to_string());
+    let issuer = issuer::new(@0x0, DummyIntent());
     // assertions
     issuer.assert_is_account(@0x1);
 

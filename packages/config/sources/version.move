@@ -4,7 +4,7 @@ module account_config::version;
 
 // === Imports ===
 
-use std::type_name::{Self, TypeName};
+use account_protocol::version_witness::{Self, VersionWitness};
 
 // === Constants ===
 
@@ -20,6 +20,6 @@ public fun get(): u64 {
     VERSION
 }
 
-public(package) fun current(): TypeName {
-    type_name::get<V1>()
+public(package) fun current(): VersionWitness {
+    version_witness::new(V1())
 }

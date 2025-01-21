@@ -26,7 +26,6 @@ fun start(): (Scenario, Extensions, AdminCap) {
     // add core deps
     extensions.add(&cap, b"AccountProtocol".to_string(), @0x0, 1);
     extensions.add(&cap, b"AccountConfig".to_string(), @0x1, 1);
-    extensions.add(&cap, b"AccountActions".to_string(), @0x2, 1);
     // create world
     (scenario, extensions, cap)
 }
@@ -45,20 +44,13 @@ fun test_core_deps_v1() {
 
     // assertions
     assert!(extensions.is_extension(b"AccountProtocol".to_string(), @0x0, 1));
-    extensions.assert_is_extension(b"AccountProtocol".to_string(), @0x0, 1);
-    extensions.assert_is_core_extension(@0x0);
     assert!(extensions.is_extension(b"AccountConfig".to_string(), @0x1, 1));
-    extensions.assert_is_extension(b"AccountConfig".to_string(), @0x1, 1);
-    extensions.assert_is_core_extension(@0x1);
-    assert!(extensions.is_extension(b"AccountActions".to_string(), @0x2, 1));
-    extensions.assert_is_extension(b"AccountActions".to_string(), @0x2, 1);
-    extensions.assert_is_core_extension(@0x2);
     // core deps getters
     let addresses = extensions.get_core_deps_addresses();
-    assert!(addresses == vector[@0x0, @0x1, @0x2]);
+    assert!(addresses == vector[@0x0, @0x1]);
     let (addresses, versions) = extensions.get_latest_core_deps();
-    assert!(addresses == vector[@0x0, @0x1, @0x2]);
-    assert!(versions == vector[1, 1, 1]);
+    assert!(addresses == vector[@0x0, @0x1]);
+    assert!(versions == vector[1, 1]);
 
     end(scenario, extensions, cap);
 }
@@ -69,21 +61,12 @@ fun test_update_core_deps_to_v2() {
 
     // update core deps
     extensions.update(&cap, b"AccountConfig".to_string(), @0x11, 2);
-    extensions.update(&cap, b"AccountActions".to_string(), @0x12, 2);
-    extensions.update(&cap, b"AccountActions".to_string(), @0x22, 3);
-    // assertions
-    extensions.assert_is_extension(b"AccountProtocol".to_string(), @0x0, 1);
-    extensions.assert_is_extension(b"AccountConfig".to_string(), @0x1, 1);
-    extensions.assert_is_extension(b"AccountConfig".to_string(), @0x11, 2);
-    extensions.assert_is_extension(b"AccountActions".to_string(), @0x2, 1);
-    extensions.assert_is_extension(b"AccountActions".to_string(), @0x12, 2);
-    extensions.assert_is_extension(b"AccountActions".to_string(), @0x22, 3);
     // core deps getters
     let addresses = extensions.get_core_deps_addresses();
-    assert!(addresses == vector[@0x0, @0x1, @0x11, @0x2, @0x12, @0x22]);
+    assert!(addresses == vector[@0x0, @0x1, @0x11]);
     let (addresses, versions) = extensions.get_latest_core_deps();
-    assert!(addresses == vector[@0x0, @0x11, @0x22]);
-    assert!(versions == vector[1, 2, 3]);
+    assert!(addresses == vector[@0x0, @0x11]);
+    assert!(versions == vector[1, 2]);
 
     end(scenario, extensions, cap);
 }
@@ -98,11 +81,8 @@ fun test_add_deps() {
     extensions.add(&cap, b"C".to_string(), @0xC, 1);
     // assertions
     assert!(extensions.is_extension(b"A".to_string(), @0xA, 1));
-    extensions.assert_is_extension(b"A".to_string(), @0xA, 1);
     assert!(extensions.is_extension(b"B".to_string(), @0xB, 1));
-    extensions.assert_is_extension(b"B".to_string(), @0xB, 1);
     assert!(extensions.is_extension(b"C".to_string(), @0xC, 1));
-    extensions.assert_is_extension(b"C".to_string(), @0xC, 1);
 
     end(scenario, extensions, cap);
 }
@@ -120,18 +100,12 @@ fun test_update_deps() {
     extensions.update(&cap, b"C".to_string(), @0x1C, 2);
     extensions.update(&cap, b"C".to_string(), @0x2C, 3);
     // assertions
-    extensions.assert_is_extension(b"A".to_string(), @0xA, 1);
-    extensions.assert_is_extension(b"B".to_string(), @0xB, 1);
-    extensions.assert_is_extension(b"B".to_string(), @0x1B, 2);
-    extensions.assert_is_extension(b"C".to_string(), @0xC, 1);
-    extensions.assert_is_extension(b"C".to_string(), @0x1C, 2);
-    extensions.assert_is_extension(b"C".to_string(), @0x2C, 3);
     // verify core deps didn't change
     let addresses = extensions.get_core_deps_addresses();
-    assert!(addresses == vector[@0x0, @0x1, @0x2]);
+    assert!(addresses == vector[@0x0, @0x1]);
     let (addresses, versions) = extensions.get_latest_core_deps();
-    assert!(addresses == vector[@0x0, @0x1, @0x2]);
-    assert!(versions == vector[1, 1, 1]);
+    assert!(addresses == vector[@0x0, @0x1]);
+    assert!(versions == vector[1, 1]);
 
     end(scenario, extensions, cap);
 }
@@ -177,13 +151,6 @@ fun test_error_remove_account_config() {
     end(scenario, extensions, cap);
 }
 
-#[test, expected_failure(abort_code = extensions::ECannotRemoveCoreDep)]
-fun test_error_remove_account_actions() {
-    let (scenario, mut extensions, cap) = start();
-    extensions.remove(&cap, b"AccountActions".to_string());
-    end(scenario, extensions, cap);
-}
-
 #[test, expected_failure(abort_code = extensions::EExtensionAlreadyExists)]
 fun test_error_add_extension_name_already_exists() {
     let (scenario, mut extensions, cap) = start();
@@ -195,20 +162,6 @@ fun test_error_add_extension_name_already_exists() {
 fun test_error_add_extension_address_already_exists() {
     let (scenario, mut extensions, cap) = start();
     extensions.add(&cap, b"A".to_string(), @0x0, 1);
-    end(scenario, extensions, cap);
-}
-
-#[test, expected_failure(abort_code = extensions::ENotCoreDep)]
-fun test_error_address_not_core_dep() {
-    let (scenario, extensions, cap) = start();
-    extensions.assert_is_core_extension(@0xA);
-    end(scenario, extensions, cap);
-}
-
-#[test, expected_failure(abort_code = extensions::EExtensionNotFound)]
-fun test_error_not_extension() {
-    let (scenario, extensions, cap) = start();
-    extensions.assert_is_extension(b"A".to_string(), @0xA, 1);
     end(scenario, extensions, cap);
 }
 

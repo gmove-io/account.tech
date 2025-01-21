@@ -8,10 +8,7 @@ module account_actions::kiosk;
 
 // === Imports ===
 
-use std::{
-    string::String,
-    type_name::TypeName,
-};
+use std::string::String;
 use sui::{
     coin,
     sui::SUI,
@@ -23,6 +20,7 @@ use account_protocol::{
     account::{Account, Auth},
     intents::{Intent, Expired},
     executable::Executable,
+    version_witness::VersionWitness,
 };
 use account_actions::version;
 
@@ -66,7 +64,7 @@ public fun open<Config, Outcome>(
     name: String, 
     ctx: &mut TxContext
 ) {
-    auth.verify(account.addr());
+    account.verify(auth);
     assert!(!has_lock<Config, Outcome>(account, name), EAlreadyExists);
 
     let (mut kiosk, kiosk_owner_cap) = kiosk::new(ctx);
@@ -97,7 +95,7 @@ public fun place<Config, Outcome, Nft: key + store>(
     nft_id: ID,
     ctx: &mut TxContext
 ): TransferRequest<Nft> {
-    auth.verify(account.addr());
+    account.verify(auth);
     assert!(has_lock(account, name), ENoLock);
 
     let cap: &KioskOwnerCap = account.borrow_managed_object(KioskOwnerKey { name }, version::current());
@@ -133,7 +131,7 @@ public fun delist<Config, Outcome, Nft: key + store>(
     name: String,
     nft_id: ID,
 ) {
-    auth.verify(account.addr());
+    account.verify(auth);
     assert!(has_lock(account, name), ENoLock);
 
     let cap: &KioskOwnerCap = account.borrow_managed_object(KioskOwnerKey { name }, version::current());
@@ -148,7 +146,7 @@ public fun withdraw_profits<Config, Outcome>(
     name: String,
     ctx: &mut TxContext
 ) {
-    auth.verify(account.addr());
+    account.verify(auth);
     assert!(has_lock(account, name), ENoLock);
 
     let cap: &KioskOwnerCap = account.borrow_managed_object(KioskOwnerKey { name }, version::current());
@@ -168,7 +166,7 @@ public fun close<Config, Outcome>(
     kiosk: Kiosk,
     ctx: &mut TxContext
 ) {
-    auth.verify(account.addr());
+    account.verify(auth);
     assert!(has_lock(account, name), ENoLock);
 
     let cap: KioskOwnerCap = account.remove_managed_object(KioskOwnerKey { name }, version::current());
@@ -179,29 +177,31 @@ public fun close<Config, Outcome>(
 
 // === [ACTION] Public functions ===
 
-public fun new_take<Outcome, W: drop>(
+public fun new_take<Config, Outcome, IW: drop>(
     intent: &mut Intent<Outcome>, 
+    account: &Account<Config, Outcome>, 
     nft_id: ID, 
     recipient: address,
-    witness: W,
+    version_witness: VersionWitness,
+    intent_witness: IW,
 ) {
-    intent.add_action(TakeAction { nft_id, recipient }, witness);
+    account.add_action(intent, TakeAction { nft_id, recipient }, version_witness, intent_witness);
 }
 
-public fun do_take<Config, Outcome, Nft: key + store, W: copy + drop>(
+public fun do_take<Config, Outcome, Nft: key + store, IW: copy + drop>(
     executable: &mut Executable,
     account: &mut Account<Config, Outcome>,
     account_kiosk: &mut Kiosk, 
     recipient_kiosk: &mut Kiosk, 
     recipient_cap: &KioskOwnerCap, 
     policy: &mut TransferPolicy<Nft>,
-    version: TypeName,
-    witness: W,
+    version_witness: VersionWitness,
+    intent_witness: IW,
     ctx: &mut TxContext
 ): TransferRequest<Nft> {
-    let name = executable.issuer().opt_name();
-    let action: &TakeAction = account.process_action(executable, version, witness);
-    let cap: &KioskOwnerCap = account.borrow_managed_object(KioskOwnerKey { name }, version);
+    let name = executable.managed_name();
+    let action: &TakeAction = account.process_action(executable, version_witness, intent_witness);
+    let cap: &KioskOwnerCap = account.borrow_managed_object(KioskOwnerKey { name }, version_witness);
     assert!(action.recipient == ctx.sender(), EWrongReceiver);
 
     account_kiosk.list<Nft>(cap, action.nft_id, 0);
@@ -229,25 +229,27 @@ public fun delete_take(expired: &mut Expired) {
     let TakeAction { .. } = expired.remove_action();
 }
 
-public fun new_list<Outcome, W: drop>(
+public fun new_list<Config, Outcome, IW: drop>(
     intent: &mut Intent<Outcome>, 
+    account: &Account<Config, Outcome>, 
     nft_id: ID, 
     price: u64,
-    witness: W,
+    version_witness: VersionWitness,
+    intent_witness: IW,
 ) {
-    intent.add_action(ListAction { nft_id, price }, witness);
+    account.add_action(intent, ListAction { nft_id, price }, version_witness, intent_witness);
 }
 
-public fun do_list<Config, Outcome, Nft: key + store, W: copy + drop>(
+public fun do_list<Config, Outcome, Nft: key + store, IW: copy + drop>(
     executable: &mut Executable,
     account: &mut Account<Config, Outcome>,
     kiosk: &mut Kiosk,  
-    version: TypeName,
-    witness: W,
+    version_witness: VersionWitness,
+    intent_witness: IW,
 ) {
-    let name = executable.issuer().opt_name();
-    let action: &ListAction = account.process_action(executable, version, witness);
-    let cap: &KioskOwnerCap = account.borrow_managed_object(KioskOwnerKey { name }, version);
+    let name = executable.managed_name();
+    let action: &ListAction = account.process_action(executable, version_witness, intent_witness);
+    let cap: &KioskOwnerCap = account.borrow_managed_object(KioskOwnerKey { name }, version_witness);
 
     kiosk.list<Nft>(cap, action.nft_id, action.price);
 }

@@ -15,16 +15,15 @@ use sui::{
     bag::{Self, Bag},
     balance::Balance,
     coin::{Self, Coin},
-    transfer::Receiving,
+    // transfer::Receiving,
 };
 use account_protocol::{
     account::{Account, Auth},
     intents::{Intent, Expired},
     executable::Executable,
+    version_witness::VersionWitness,
 };
-use account_actions::{
-    version,
-};
+use account_actions::version;
 
 // === Errors ===
 
@@ -65,22 +64,22 @@ public fun open<Config, Outcome>(
     name: String,
     ctx: &mut TxContext
 ) {
-    auth.verify(account.addr());
+    account.verify(auth);
     assert!(!has_treasury(account, name), EAlreadyExists);
 
     account.add_managed_struct(TreasuryKey { name }, Treasury { bag: bag::new(ctx) }, version::current());
 }
 
-/// Deposits coins owned by the account into a treasury
-public fun deposit_owned<Config, Outcome, CoinType: drop>(
-    auth: Auth,
-    account: &mut Account<Config, Outcome>,
-    name: String, 
-    receiving: Receiving<Coin<CoinType>>, 
-) {
-    let coin = account.receive(receiving, version::current());
-    deposit<Config, Outcome, CoinType>(auth, account, name, coin);
-}
+// /// Deposits coins owned by the account into a treasury
+// public fun deposit_owned<Config, Outcome, CoinType: drop>(
+//     auth: Auth,
+//     account: &mut Account<Config, Outcome>,
+//     name: String, 
+//     receiving: Receiving<Coin<CoinType>>, 
+// ) {
+//     let coin = account.receive(receiving, version::current());
+//     deposit<Config, Outcome, CoinType>(auth, account, name, coin);
+// }
 
 /// Deposits coins owned by a member into a treasury
 public fun deposit<Config, Outcome, CoinType: drop>(
@@ -89,7 +88,7 @@ public fun deposit<Config, Outcome, CoinType: drop>(
     name: String, 
     coin: Coin<CoinType>, 
 ) {
-    auth.verify(account.addr());
+    account.verify(auth);
     assert!(has_treasury(account, name), ETreasuryDoesntExist);
 
     let treasury: &mut Treasury = 
@@ -109,7 +108,7 @@ public fun close<Config, Outcome>(
     account: &mut Account<Config, Outcome>,
     name: String,
 ) {
-    auth.verify(account.addr());
+    account.verify(auth);
 
     let Treasury { bag } = 
         account.remove_managed_struct(TreasuryKey { name }, version::current());
@@ -142,26 +141,28 @@ public fun coin_type_value<CoinType: drop>(treasury: &Treasury): u64 {
 
 // must be called from intent modules
 
-public fun new_spend<Outcome, CoinType: drop, W: drop>(
+public fun new_spend<Config, Outcome, CoinType: drop, IW: drop>(
     intent: &mut Intent<Outcome>,
+    account: &Account<Config, Outcome>,
     amount: u64,
-    witness: W,
+    version_witness: VersionWitness,
+    intent_witness: IW,
 ) {
-    intent.add_action(SpendAction<CoinType> { amount }, witness);
+    account.add_action(intent, SpendAction<CoinType> { amount }, version_witness, intent_witness);
 }
 
-public fun do_spend<Config, Outcome, CoinType: drop, W: copy + drop>(
+public fun do_spend<Config, Outcome, CoinType: drop, IW: copy + drop>(
     executable: &mut Executable,
     account: &mut Account<Config, Outcome>,
-    version: TypeName,
-    witness: W,
+    version_witness: VersionWitness,
+    intent_witness: IW,
     ctx: &mut TxContext
 ): Coin<CoinType> {
-    let name = executable.issuer().opt_name();
-    let action: &SpendAction<CoinType> = account.process_action(executable, version, witness);
+    let name = executable.managed_name();
+    let action: &SpendAction<CoinType> = account.process_action(executable, version_witness, intent_witness);
     let amount = action.amount;
     
-    let treasury: &mut Treasury = account.borrow_managed_struct_mut(TreasuryKey { name }, version);
+    let treasury: &mut Treasury = account.borrow_managed_struct_mut(TreasuryKey { name }, version_witness);
     let balance: &mut Balance<CoinType> = treasury.bag.borrow_mut(type_name::get<CoinType>());
     let coin = coin::take(balance, amount, ctx);
 

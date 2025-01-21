@@ -3,6 +3,7 @@ module account_protocol::intents_tests;
 
 // === Imports ===
 
+use std::string::String;
 use sui::{
     test_utils::destroy,
     test_scenario as ts,
@@ -23,6 +24,14 @@ public struct DummyIntent() has drop;
 
 public struct DummyAction has store {}
 
+// === Helpers ===
+
+fun full_role(): String {
+    let mut full_role = @account_protocol.to_string();
+    full_role.append_utf8(b"::intents_tests::Degen");
+    full_role
+}
+
 // === Tests ===
 
 #[test]
@@ -33,12 +42,14 @@ fun test_getters() {
 
     // create intents
     let mut intents = intents::empty<bool>();
-    let issuer = issuer::construct(@0x0, DummyIntent(), b"".to_string());
-    let intent1 = intents::new_intent(issuer, b"one".to_string(), b"".to_string(), vector[0], 1, true, scenario.ctx());
-    intents.add(intent1);
-    let issuer = issuer::construct(@0x0, DummyIntent(), b"".to_string());
-    let intent2 = intents::new_intent(issuer, b"two".to_string(), b"".to_string(), vector[0], 1, true, scenario.ctx());
-    intents.add(intent2);
+    let issuer = issuer::new(@0x0, DummyIntent());
+    let role = intents::new_role(b"Degen".to_string(), DummyIntent());
+    let intent1 = intents::new_intent(issuer, b"one".to_string(), b"".to_string(), vector[0], 1, role, true, scenario.ctx());
+    intents.add_intent(intent1);
+    let issuer = issuer::new(@0x0, DummyIntent());
+    let role = intents::new_role(b"".to_string(), DummyIntent());
+    let intent2 = intents::new_intent(issuer, b"two".to_string(), b"".to_string(), vector[0], 1, role, true, scenario.ctx());
+    intents.add_intent(intent2);
 
     // check intents getters
     assert!(intents.length() == 2);
@@ -55,6 +66,7 @@ fun test_getters() {
     assert!(intent1.execution_times() == vector[0]);
     assert!(intent1.expiration_time() == 1);
     assert!(intent1.actions().length() == 0);
+    assert!(intent1.full_role() == full_role());
     assert!(intent1.outcome() == true);
     let intent_mut1 = intents.get_mut(b"one".to_string());
     let outcome = intent_mut1.outcome_mut();
@@ -80,11 +92,12 @@ fun test_add_remove_action() {
     clock.increment_for_testing(1);
 
     let mut intents = intents::empty<bool>();
-    let issuer = issuer::construct(@0x0, DummyIntent(), b"".to_string());
-    let mut intent = intents::new_intent(issuer, b"one".to_string(), b"".to_string(), vector[0], 1, true, scenario.ctx());
-    intent.add_action(DummyAction {}, DummyIntent());
+    let issuer = issuer::new(@0x0, DummyIntent());
+    let role = intents::new_role(b"".to_string(), DummyIntent());
+    let mut intent = intents::new_intent(issuer, b"one".to_string(), b"".to_string(), vector[0], 1, role, true, scenario.ctx());
+    intent.add_action(DummyAction {});
     assert!(intent.actions().length() == 1);
-    intents.add(intent);
+    intents.add_intent(intent);
 
     let mut expired = intents.destroy(b"one".to_string());
     let DummyAction {} = expired.remove_action();
@@ -101,8 +114,10 @@ fun test_pop_front_execution_time() {
     let mut clock = clock::create_for_testing(scenario.ctx());
     clock.increment_for_testing(1);
 
-    let issuer = issuer::construct(@0x0, DummyIntent(), b"".to_string());
-    let mut intent = intents::new_intent(issuer, b"one".to_string(), b"".to_string(), vector[0], 1, true, scenario.ctx());
+    let issuer = issuer::new(@0x0, DummyIntent());
+    let role = intents::new_role(b"".to_string(), DummyIntent());
+    let mut intent = intents::new_intent(issuer, b"one".to_string(), b"".to_string(), vector[0], 1, role, true, scenario.ctx());
+    intent.add_action(DummyAction {});
     
     let _time = intent.pop_front_execution_time();
     assert!(intent.execution_times().is_empty());
@@ -132,9 +147,10 @@ fun test_add_destroy_intent() {
     let clock = clock::create_for_testing(scenario.ctx());
 
     let mut intents = intents::empty<bool>();
-    let issuer = issuer::construct(@0x0, DummyIntent(), b"".to_string());
-    let intent = intents::new_intent(issuer, b"one".to_string(), b"".to_string(), vector[0], 1, true, scenario.ctx());
-    intents.add(intent);
+    let issuer = issuer::new(@0x0, DummyIntent());
+    let role = intents::new_role(b"".to_string(), DummyIntent());
+    let intent = intents::new_intent(issuer, b"one".to_string(), b"".to_string(), vector[0], 1, role, true, scenario.ctx());
+    intents.add_intent(intent);
     // remove intent
     let _time = intents.get_mut(b"one".to_string()).pop_front_execution_time();
     let expired = intents.destroy(b"one".to_string());
@@ -178,10 +194,11 @@ fun test_error_delete_intent_actions_not_empty() {
     clock.increment_for_testing(1);
 
     let mut intents = intents::empty<bool>();
-    let issuer = issuer::construct(@0x0, DummyIntent(), b"".to_string());
-    let mut intent = intents::new_intent(issuer, b"one".to_string(), b"".to_string(), vector[0], 1, true, scenario.ctx());
-    intent.add_action(DummyAction {}, DummyIntent());
-    intents.add(intent);
+    let issuer = issuer::new(@0x0, DummyIntent());
+    let role = intents::new_role(b"".to_string(), DummyIntent());
+    let mut intent = intents::new_intent(issuer, b"one".to_string(), b"".to_string(), vector[0], 1, role, true, scenario.ctx());
+    intent.add_action(DummyAction {});
+    intents.add_intent(intent);
     // remove intent
     let expired = intents.destroy(b"one".to_string());
     expired.destroy_empty();
@@ -197,8 +214,9 @@ fun test_error_no_execution_time() {
     let clock = clock::create_for_testing(scenario.ctx());
 
     let intents = intents::empty<bool>();
-    let issuer = issuer::construct(@0x0, DummyIntent(), b"".to_string());
-    let intent = intents::new_intent(issuer, b"one".to_string(), b"".to_string(), vector[], 1, true, scenario.ctx());
+    let issuer = issuer::new(@0x0, DummyIntent());
+    let role = intents::new_role(b"".to_string(), DummyIntent());
+    let intent = intents::new_intent(issuer, b"one".to_string(), b"".to_string(), vector[], 1, role, true, scenario.ctx());
 
     destroy(intent);
     destroy(intents);
@@ -212,8 +230,9 @@ fun test_error_execution_times_not_ascending() {
     let clock = clock::create_for_testing(scenario.ctx());
 
     let intents = intents::empty<bool>();
-    let issuer = issuer::construct(@0x0, DummyIntent(), b"".to_string());
-    let intent = intents::new_intent(issuer, b"one".to_string(), b"".to_string(), vector[1, 0], 1, true, scenario.ctx());
+    let issuer = issuer::new(@0x0, DummyIntent());
+    let role = intents::new_role(b"".to_string(), DummyIntent());
+    let intent = intents::new_intent(issuer, b"one".to_string(), b"".to_string(), vector[1, 0], 1, role, true, scenario.ctx());
 
     destroy(intent);
     destroy(intents);
