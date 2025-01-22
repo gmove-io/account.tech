@@ -49,19 +49,13 @@ public fun new(
     extensions: &Extensions,
     unverified_allowed: bool
 ): Deps {
-    let (addresses, versions) = extensions.get_latest_core_deps();
-    let mut inner = vector[];
+    let (addr, version) = extensions.get_latest_for_name(b"AccountProtocol".to_string());
 
-    inner.push_back(Dep { 
+    let inner = vector[Dep { 
         name: b"AccountProtocol".to_string(), 
-        addr: addresses[0], 
-        version: versions[0] 
-    });
-    inner.push_back(Dep { 
-        name: b"AccountConfig".to_string(), 
-        addr: addresses[1], 
-        version: versions[1] 
-    });
+        addr, 
+        version 
+    }];
 
     Deps { inner, unverified_allowed }
 }
@@ -74,8 +68,8 @@ public fun add(
     addr: address, 
     version: u64
 ) {
-    assert!(!contains_name(deps, name), EDepAlreadyExists);
-    assert!(!contains_addr(deps, addr), EDepAlreadyExists);
+    assert!(!deps.contains_name(name), EDepAlreadyExists);
+    assert!(!deps.contains_addr(addr), EDepAlreadyExists);
     if (!deps.unverified_allowed) 
         assert!(extensions.is_extension(name, addr, version), ENotExtension);
 
@@ -96,7 +90,11 @@ public fun unverified_allowed(deps: &Deps): bool {
     deps.unverified_allowed
 }
 
-public fun get_from_name(deps: &Deps, name: String): &Dep {
+public fun get_by_idx(deps: &Deps, idx: u64): &Dep {
+    &deps.inner[idx]
+}
+
+public fun get_by_name(deps: &Deps, name: String): &Dep {
     let opt = deps.inner.find_index!(|dep| dep.name == name);
     assert!(opt.is_some(), EDepNotFound);
     let idx = opt.destroy_some();
@@ -104,7 +102,7 @@ public fun get_from_name(deps: &Deps, name: String): &Dep {
     &deps.inner[idx]
 }
 
-public fun get_from_addr(deps: &Deps, addr: address): &Dep {
+public fun get_by_addr(deps: &Deps, addr: address): &Dep {
     let opt = deps.inner.find_index!(|dep| dep.addr == addr);
     assert!(opt.is_some(), EDepNotFound);
     let idx = opt.destroy_some();
@@ -112,11 +110,11 @@ public fun get_from_addr(deps: &Deps, addr: address): &Dep {
     &deps.inner[idx]
 }
 
-public fun get_idx_for_addr(deps: &Deps, addr: address): u64 {
-    let opt = deps.inner.find_index!(|dep| dep.addr == addr);
-    assert!(opt.is_some(), EDepNotFound);
-    opt.destroy_some()
-}
+// public fun get_idx_for_addr(deps: &Deps, addr: address): u64 {
+//     let opt = deps.inner.find_index!(|dep| dep.addr == addr);
+//     assert!(opt.is_some(), EDepNotFound);
+//     opt.destroy_some()
+// }
 
 public fun length(deps: &Deps): u64 {
     deps.inner.length()

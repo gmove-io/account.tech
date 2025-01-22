@@ -106,7 +106,7 @@ fun test_request_execute_config_deps() {
     config::delete_config_deps(&mut expired);
     expired.destroy_empty();
     
-    let package = account.deps().get_from_name(b"External".to_string());
+    let package = account.deps().get_by_name(b"External".to_string());
     assert!(package.addr() == @0xABC);
     assert!(package.version() == 1);
 

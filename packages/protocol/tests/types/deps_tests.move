@@ -33,7 +33,6 @@ fun start(): (Scenario, Extensions) {
     extensions.add(&cap, b"AccountProtocol".to_string(), @account_protocol, 1);
     extensions.add(&cap, b"AccountConfig".to_string(), @0x1, 1);
     extensions.add(&cap, b"AccountActions".to_string(), @0x2, 1);
-    extensions.add(&cap, b"External".to_string(), @0xA, 1);
     // create world
     destroy(cap);
     (scenario, extensions)
@@ -54,21 +53,17 @@ fun test_deps_new_and_getters() {
     // assertions
     deps.check(version::current());
     // deps getters
-    assert!(deps.length() == 2);
+    assert!(deps.length() == 1);
     assert!(deps.contains_name(b"AccountProtocol".to_string()));
-    assert!(deps.contains_name(b"AccountConfig".to_string()));
     assert!(deps.contains_addr(@account_protocol));
-    assert!(deps.contains_addr(@0x1));
-    assert!(deps.get_idx_for_addr(@account_protocol) == 0);
-    assert!(deps.get_idx_for_addr(@0x1) == 1);
     // dep getters
-    let dep = deps.get_from_name(b"AccountProtocol".to_string());
+    let dep = deps.get_by_name(b"AccountProtocol".to_string());
     assert!(dep.name() == b"AccountProtocol".to_string());
     assert!(dep.addr() == @account_protocol);
     assert!(dep.version() == 1);
-    let dep = deps.get_from_addr(@0x1);
-    assert!(dep.name() == b"AccountConfig".to_string());
-    assert!(dep.addr() == @0x1);
+    let dep = deps.get_by_addr(@account_protocol);
+    assert!(dep.name() == b"AccountProtocol".to_string());
+    assert!(dep.addr() == @account_protocol);
     assert!(dep.version() == 1);
 
     end(scenario, extensions);
@@ -80,11 +75,19 @@ fun test_deps_add() {
     let cap = package::test_publish(@0xA.to_id(), scenario.ctx());
 
     let mut deps = deps::new(&extensions, false);
-    deps.add(&extensions, b"External".to_string(), @0xA, 1);
+    
+    deps.add(&extensions, b"AccountConfig".to_string(), @0x1, 1);
     // verify
-    let dep = deps.get_from_name(b"External".to_string());
-    assert!(dep.name() == b"External".to_string());
-    assert!(dep.addr() == @0xA);
+    let dep = deps.get_by_name(b"AccountConfig".to_string());
+    assert!(dep.name() == b"AccountConfig".to_string());
+    assert!(dep.addr() == @0x1);
+    assert!(dep.version() == 1);
+
+    deps.add(&extensions, b"AccountActions".to_string(), @0x2, 1);
+    // verify
+    let dep = deps.get_by_name(b"AccountActions".to_string());
+    assert!(dep.name() == b"AccountActions".to_string());
+    assert!(dep.addr() == @0x2);
     assert!(dep.version() == 1);
 
     destroy(cap);
@@ -99,7 +102,7 @@ fun test_deps_add_unverified_allowed() {
     let mut deps = deps::new(&extensions, true);
     deps.add(&extensions, b"Other".to_string(), @0xB, 1);
     // verify
-    let dep = deps.get_from_name(b"Other".to_string());
+    let dep = deps.get_by_name(b"Other".to_string());
     assert!(dep.name() == b"Other".to_string());
     assert!(dep.addr() == @0xB);
     assert!(dep.version() == 1);
@@ -157,7 +160,7 @@ fun test_error_name_not_found() {
     let (scenario, extensions) = start();
 
     let deps = deps::new(&extensions, false);
-    deps.get_from_name(b"Other".to_string());
+    deps.get_by_name(b"Other".to_string());
 
     end(scenario, extensions);
 }
@@ -167,17 +170,7 @@ fun test_error_addr_not_found() {
     let (scenario, extensions) = start();
 
     let deps = deps::new(&extensions, false);
-    deps.get_from_addr(@0xA);
-
-    end(scenario, extensions);
-}
-
-#[test, expected_failure(abort_code = deps::EDepNotFound)]
-fun test_error_idx_not_found() {
-    let (scenario, extensions) = start();
-
-    let deps = deps::new(&extensions, false);
-    deps.get_idx_for_addr(@0xA);
+    deps.get_by_addr(@0xA);
 
     end(scenario, extensions);
 }

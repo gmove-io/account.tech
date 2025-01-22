@@ -98,7 +98,6 @@ fun test_account_getters() {
     assert!(account.addr() == object::id(&account).to_address());
     assert!(account.metadata().size() == 0);
     assert!(account.deps().contains_name(b"AccountProtocol".to_string()));
-    assert!(account.deps().contains_name(b"AccountConfig".to_string()));
     assert!(account.intents().length() == 0);
     assert!(account.config() == Config {});
 
@@ -242,7 +241,6 @@ fun test_account_getters_mut() {
 
     assert!(account.metadata_mut(version::current(), ).size() == 0);
     assert!(account.deps_mut(version::current(), ).contains_name(b"AccountProtocol".to_string()));
-    assert!(account.deps_mut(version::current(), ).contains_name(b"AccountConfig".to_string()));
     assert!(account.intents_mut(version::current(), Witness()).length() == 0);
     assert!(account.config_mut(version::current(), Witness()) == &mut Config {});
 
@@ -573,7 +571,7 @@ fun test_error_cannot_confirm_execution_with_wrong_witness() {
         b"Degen".to_string(), 
         Outcome {}, 
         version::current(), 
-        DummyIntent(),
+        DummyIntent(), 
         scenario.ctx()
     );
     account.add_action(&mut intent, true, version::current(), DummyIntent());

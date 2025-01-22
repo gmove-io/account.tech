@@ -60,6 +60,7 @@ fun start(): (Scenario, Extensions, Account<Multisig, Approvals>, Clock, Transfe
     extensions.add(&cap, b"AccountActions".to_string(), @account_actions, 1);
 
     let mut account = multisig::new_account(&extensions, scenario.ctx());
+    account.deps_mut_for_testing().add(&extensions, b"AccountConfig".to_string(), @account_config, 1);
     account.deps_mut_for_testing().add(&extensions, b"AccountActions".to_string(), @account_actions, 1);
     let clock = clock::create_for_testing(scenario.ctx());
     // instantiate TransferPolicy 
@@ -549,6 +550,7 @@ fun test_error_do_take_wrong_receiver() {
 fun test_error_do_take_from_wrong_account() {
     let (mut scenario, extensions, mut account, clock, mut policy) = start();
     let mut account2 = multisig::new_account(&extensions, scenario.ctx());
+    account2.deps_mut_for_testing().add(&extensions, b"AccountConfig".to_string(), @account_config, 1);
     account2.deps_mut_for_testing().add(&extensions, b"AccountActions".to_string(), @account_actions, 1);
     
     let (mut acc_kiosk, mut ids) = init_account_kiosk_with_nfts(&mut account, &mut policy, 1, &mut scenario);
@@ -652,6 +654,7 @@ fun test_error_do_take_from_not_dep() {
 fun test_error_do_list_from_wrong_account() {
     let (mut scenario, extensions, mut account, clock, mut policy) = start();
     let mut account2 = multisig::new_account(&extensions, scenario.ctx());
+    account2.deps_mut_for_testing().add(&extensions, b"AccountConfig".to_string(), @account_config, 1);
     account2.deps_mut_for_testing().add(&extensions, b"AccountActions".to_string(), @account_actions, 1);
     
     let (mut acc_kiosk, mut ids) = init_account_kiosk_with_nfts(&mut account, &mut policy, 1, &mut scenario);

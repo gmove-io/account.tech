@@ -85,7 +85,7 @@ public fun new<Config, Outcome>(
 ): Account<Config, Outcome> {
     Account<Config, Outcome> { 
         id: object::new(ctx),
-        metadata: metadata::new(),
+        metadata: metadata::empty(),
         deps: deps::new(extensions, unverified_deps_allowed),
         intents: intents::empty(),
         config,
@@ -124,7 +124,7 @@ public fun create_intent<Config, Outcome, IW: copy + drop>(
     ctx: &mut TxContext
 ): Intent<Outcome> {
     // ensures the package address is a dependency for this account
-    account.deps().check(version_witness);
+    account.deps().check(version_witness); 
     // set account_addr and intent_type to enforce correct execution
     let issuer = issuer::new(account.addr(), intent_witness);
     // creates a role from the intent package id and module name with an optional name

@@ -9,7 +9,7 @@ const EExtensionNotFound: vector<u8> = b"Extension not found";
 #[error]
 const EExtensionAlreadyExists: vector<u8> = b"Extension already exists";
 #[error]
-const ECannotRemoveCoreDep: vector<u8> = b"Cannot remove core dependency";
+const ECannotRemoveAccountProtocol: vector<u8> = b"Cannot remove AccountProtocol";
 
 // === Structs ===
 
@@ -45,40 +45,39 @@ fun init(ctx: &mut TxContext) {
 
 // === View functions ===
 
-/// Returns the latest package addresses and versions for core dependencies
-public fun get_latest_core_deps(
-    extensions: &Extensions
-): (vector<address>, vector<u64>) {
-    let mut addresses = vector[];
-    let mut versions = vector[];
-
-    let account_history = extensions.inner[0].history;
-    let account_last_idx = account_history.length() - 1;
-    addresses.push_back(account_history[account_last_idx].addr);
-    versions.push_back(account_history[account_last_idx].version);
-
-    let config_history = extensions.inner[1].history;
-    let config_last_idx = config_history.length() - 1;
-    addresses.push_back(config_history[config_last_idx].addr);
-    versions.push_back(config_history[config_last_idx].version);
-
-    // packages[0] & versions[0] are AccountProtocol
-    // packages[1] & versions[1] are AccountConfig
-    (addresses, versions)
+public fun length(extensions: &Extensions): u64 {
+    extensions.inner.length()
 }
 
-/// Returns the package addresses for core dependencies
-public fun get_core_deps_addresses(
-    extensions: &Extensions
-): (vector<address>) {
-    let account_packages = extensions.inner[0].history.map!(|entry| entry.addr);
-    let config_packages = extensions.inner[1].history.map!(|entry| entry.addr);
+public fun get_by_idx(extensions: &Extensions, idx: u64): &Extension {
+    &extensions.inner[idx]
+}
 
-    let mut addresses = vector[];
-    addresses.append(account_packages);
-    addresses.append(config_packages);
-    
-    addresses
+public fun name(extension: &Extension): String {
+    extension.name
+}
+
+public fun history(extension: &Extension): vector<History> {
+    extension.history
+}
+
+public fun addr(history: &History): address {
+    history.addr
+}
+
+public fun version(history: &History): u64 {
+    history.version
+}
+
+public fun get_latest_for_name(
+    extensions: &Extensions, 
+    name: String, 
+): (address, u64) {
+    let idx = get_idx_for_name(extensions, name);
+    let history = extensions.inner[idx].history;
+    let last_idx = history.length() - 1;
+
+    (history[last_idx].addr, history[last_idx].version)
 }
 
 public fun is_extension(
@@ -95,12 +94,6 @@ public fun is_extension(
     extensions.inner[idx].history.any!(|extension| extension.version == version)
 }
 
-public fun get_idx_for_name(extensions: &Extensions, name: String): u64 {
-    let opt = extensions.inner.find_index!(|extension| extension.name == name);
-    assert!(opt.is_some(), EExtensionNotFound);
-    opt.destroy_some()
-}
-
 // === Admin functions ===
 
 public fun add(extensions: &mut Extensions, _: &AdminCap, name: String, addr: address, version: u64) {    
@@ -112,13 +105,21 @@ public fun add(extensions: &mut Extensions, _: &AdminCap, name: String, addr: ad
 
 public fun remove(extensions: &mut Extensions, _: &AdminCap, name: String) {
     let idx = extensions.get_idx_for_name(name);
-    assert!(idx > 1, ECannotRemoveCoreDep);
+    assert!(idx > 0, ECannotRemoveAccountProtocol);
     extensions.inner.remove(idx);
 }
 
 public fun update(extensions: &mut Extensions, _: &AdminCap, name: String, addr: address, version: u64) {
     let idx = extensions.get_idx_for_name(name);
     extensions.inner[idx].history.push_back(History { addr, version });
+}
+
+// === Private functions ===
+
+fun get_idx_for_name(extensions: &Extensions, name: String): u64 {
+    let opt = extensions.inner.find_index!(|extension| extension.name == name);
+    assert!(opt.is_some(), EExtensionNotFound);
+    opt.destroy_some()
 }
 
 // === Test functions ===

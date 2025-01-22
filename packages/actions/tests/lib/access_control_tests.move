@@ -50,6 +50,7 @@ fun start(): (Scenario, Extensions, Account<Multisig, Approvals>, Clock) {
     extensions.add(&cap, b"AccountActions".to_string(), @account_actions, 1);
 
     let mut account = multisig::new_account(&extensions, scenario.ctx());
+    account.deps_mut_for_testing().add(&extensions, b"AccountConfig".to_string(), @account_config, 1);
     account.deps_mut_for_testing().add(&extensions, b"AccountActions".to_string(), @account_actions, 1);
     let clock = clock::create_for_testing(scenario.ctx());
     // create world
@@ -196,6 +197,7 @@ fun test_error_return_to_wrong_account() {
     let (borrow, cap) = access_control::do_access<Multisig, Approvals, Cap, DummyIntent>(&mut executable, &mut account, version::current(), DummyIntent());
     // create other account
     let mut account2 = multisig::new_account(&extensions, scenario.ctx());
+    account2.deps_mut_for_testing().add(&extensions, b"AccountConfig".to_string(), @account_config, 1);
     account2.deps_mut_for_testing().add(&extensions, b"AccountActions".to_string(), @account_actions, 1);
     access_control::return_cap(&mut account2, borrow, cap, version::current());
     account.confirm_execution(executable, version::current(), DummyIntent());
@@ -222,6 +224,7 @@ fun test_error_do_access_from_wrong_account() {
     let mut executable = multisig::execute_intent(&mut account, key, &clock);
     // create other account and lock same type of cap
     let mut account2 = multisig::new_account(&extensions, scenario.ctx());
+    account2.deps_mut_for_testing().add(&extensions, b"AccountConfig".to_string(), @account_config, 1);
     account2.deps_mut_for_testing().add(&extensions, b"AccountActions".to_string(), @account_actions, 1);
     let auth = multisig::authenticate(&account2, scenario.ctx());
     access_control::lock_cap(auth, &mut account2, cap(&mut scenario));

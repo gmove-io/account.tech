@@ -20,7 +20,7 @@ const OWNER: address = @0xCAFE;
 fun test_metadata_new() {
     let scenario = ts::begin(OWNER);
 
-    let metadata = metadata::new();
+    let metadata = metadata::empty();
     assert!(metadata.size() == 0);
 
     scenario.end();
@@ -31,7 +31,7 @@ fun test_metadata_from_keys_values() {
     let scenario = ts::begin(OWNER);
 
     let keys = vector[
-        b"name".to_string(),
+        b"name".to_string(), 
         b"description".to_string(),
     ];
     let values = vector[

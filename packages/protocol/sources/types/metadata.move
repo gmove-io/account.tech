@@ -18,8 +18,8 @@ public struct Metadata has copy, drop, store {
 
 // === Public functions ===
 
-/// Creates a new Metadata struct with a name
-public fun new(): Metadata {
+/// Creates an empty Metadata struct
+public fun empty(): Metadata {
     Metadata { inner: vec_map::empty() }
 }
 

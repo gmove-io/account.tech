@@ -61,6 +61,29 @@ public fun edit_metadata<Config, Outcome>(
     *account.metadata_mut(version::current()) = metadata::from_keys_values(keys, values);
 }
 
+public fun update_extensions_to_latest<Config, Outcome>(
+    auth: Auth,
+    account: &mut Account<Config, Outcome>,
+    extensions: &Extensions,
+) {
+    account.verify(auth);
+
+    let mut i = 0;
+    let mut new_deps = deps::new(extensions, account.deps().unverified_allowed());
+
+    while (i < account.deps().length()) {
+        let dep = account.deps().get_by_idx(i);
+        if (extensions.is_extension(dep.name(), dep.addr(), dep.version())) {
+            let (addr, version) = extensions.get_latest_for_name(dep.name());
+            new_deps.add(extensions, dep.name(), addr, version);
+        };
+        // else cannot automatically update to latest version
+        i = i + 1;
+    };
+
+    *account.deps_mut(version::current()) = new_deps;
+}
+
 public fun request_config_deps<Config, Outcome>(
     auth: Auth,
     outcome: Outcome,

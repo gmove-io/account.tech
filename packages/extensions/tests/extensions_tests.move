@@ -23,7 +23,7 @@ fun start(): (Scenario, Extensions, AdminCap) {
     scenario.next_tx(OWNER);
     let mut extensions = scenario.take_shared<Extensions>();
     let cap = scenario.take_from_sender<AdminCap>();
-    // add core deps
+    // add account deps
     extensions.add(&cap, b"AccountProtocol".to_string(), @0x0, 1);
     extensions.add(&cap, b"AccountConfig".to_string(), @0x1, 1);
     // create world
@@ -39,34 +39,20 @@ fun end(scenario: Scenario, extensions: Extensions, cap: AdminCap) {
 // === Tests ===
 
 #[test]
-fun test_core_deps_v1() {
+fun test_getters() {
     let (scenario, extensions, cap) = start();
 
     // assertions
     assert!(extensions.is_extension(b"AccountProtocol".to_string(), @0x0, 1));
     assert!(extensions.is_extension(b"AccountConfig".to_string(), @0x1, 1));
-    // core deps getters
-    let addresses = extensions.get_core_deps_addresses();
-    assert!(addresses == vector[@0x0, @0x1]);
-    let (addresses, versions) = extensions.get_latest_core_deps();
-    assert!(addresses == vector[@0x0, @0x1]);
-    assert!(versions == vector[1, 1]);
 
-    end(scenario, extensions, cap);
-}
-
-#[test]
-fun test_update_core_deps_to_v2() {
-    let (scenario, mut extensions, cap) = start();
-
-    // update core deps
-    extensions.update(&cap, b"AccountConfig".to_string(), @0x11, 2);
-    // core deps getters
-    let addresses = extensions.get_core_deps_addresses();
-    assert!(addresses == vector[@0x0, @0x1, @0x11]);
-    let (addresses, versions) = extensions.get_latest_core_deps();
-    assert!(addresses == vector[@0x0, @0x11]);
-    assert!(versions == vector[1, 2]);
+    assert!(extensions.length() == 2);
+    assert!(extensions.get_by_idx(0).name() == b"AccountProtocol".to_string());
+    assert!(extensions.get_by_idx(0).history()[0].addr() == @0x0);
+    assert!(extensions.get_by_idx(0).history()[0].version() == 1);
+    assert!(extensions.get_by_idx(1).name() == b"AccountConfig".to_string());
+    assert!(extensions.get_by_idx(1).history()[0].addr() == @0x1);
+    assert!(extensions.get_by_idx(1).history()[0].version() == 1);
 
     end(scenario, extensions, cap);
 }
@@ -100,12 +86,23 @@ fun test_update_deps() {
     extensions.update(&cap, b"C".to_string(), @0x1C, 2);
     extensions.update(&cap, b"C".to_string(), @0x2C, 3);
     // assertions
-    // verify core deps didn't change
-    let addresses = extensions.get_core_deps_addresses();
-    assert!(addresses == vector[@0x0, @0x1]);
-    let (addresses, versions) = extensions.get_latest_core_deps();
-    assert!(addresses == vector[@0x0, @0x1]);
-    assert!(versions == vector[1, 1]);
+    assert!(extensions.get_by_idx(2).name() == b"A".to_string());
+    assert!(extensions.get_by_idx(2).history()[0].addr() == @0xA);
+    assert!(extensions.get_by_idx(2).history()[0].version() == 1);
+    assert!(extensions.get_by_idx(3).name() == b"B".to_string());
+    assert!(extensions.get_by_idx(3).history()[1].addr() == @0x1B);
+    assert!(extensions.get_by_idx(3).history()[1].version() == 2);
+    assert!(extensions.get_by_idx(4).name() == b"C".to_string());
+    assert!(extensions.get_by_idx(4).history()[2].addr() == @0x2C);
+    assert!(extensions.get_by_idx(4).history()[2].version() == 3);
+    // verify core deps didn't change    
+    assert!(extensions.length() == 5);
+    assert!(extensions.get_by_idx(0).name() == b"AccountProtocol".to_string());
+    assert!(extensions.get_by_idx(0).history()[0].addr() == @0x0);
+    assert!(extensions.get_by_idx(0).history()[0].version() == 1);
+    assert!(extensions.get_by_idx(1).name() == b"AccountConfig".to_string());
+    assert!(extensions.get_by_idx(1).history()[0].addr() == @0x1);
+    assert!(extensions.get_by_idx(1).history()[0].version() == 1);
 
     end(scenario, extensions, cap);
 }
@@ -137,17 +134,10 @@ fun test_remove_deps() {
     end(scenario, extensions, cap);
 }
 
-#[test, expected_failure(abort_code = extensions::ECannotRemoveCoreDep)]
+#[test, expected_failure(abort_code = extensions::ECannotRemoveAccountProtocol)]
 fun test_error_remove_account_protocol() {
     let (scenario, mut extensions, cap) = start();
     extensions.remove(&cap, b"AccountProtocol".to_string());
-    end(scenario, extensions, cap);
-}
-
-#[test, expected_failure(abort_code = extensions::ECannotRemoveCoreDep)]
-fun test_error_remove_account_config() {
-    let (scenario, mut extensions, cap) = start();
-    extensions.remove(&cap, b"AccountConfig".to_string());
     end(scenario, extensions, cap);
 }
 
