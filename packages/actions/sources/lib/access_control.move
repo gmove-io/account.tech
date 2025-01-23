@@ -57,7 +57,7 @@ public fun lock_cap<Config, Outcome, Cap: key + store>(
     cap: Cap,
 ) {
     account.verify(auth);
-    assert!(!has_lock<Config, Outcome, Cap>(account), EAlreadyLocked);
+    assert!(!has_lock<_, _, Cap>(account), EAlreadyLocked);
     account.add_managed_object(CapKey<Cap> {}, cap, version::current());
 }
 
@@ -84,7 +84,7 @@ public fun do_access<Config, Outcome, Cap: key + store, IW: copy + drop>(
     version_witness: VersionWitness,
     intent_witness: IW, 
 ): (Borrow<Cap>, Cap) {
-    assert!(has_lock<Config, Outcome, Cap>(account), ENoLock);
+    assert!(has_lock<_, _, Cap>(account), ENoLock);
     // check to be sure this cap type has been approved
     let AccessAction<Cap> {} = account.process_action(executable, version_witness, intent_witness);
     let cap = account.remove_managed_object(CapKey<Cap> {}, version_witness);

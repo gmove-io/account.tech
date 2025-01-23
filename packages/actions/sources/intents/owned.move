@@ -15,6 +15,7 @@ use account_protocol::{
 use account_actions::{
     transfer as acc_transfer,
     vesting,
+    vault,
     version,
 };
 
@@ -25,12 +26,67 @@ const EObjectsRecipientsNotSameLength: vector<u8> = b"Recipients and objects vec
 
 // === Structs ===
 
+/// [PROPOSAL] 
+public struct TransferToVaultIntent() has copy, drop;
 /// [PROPOSAL] acc_transfer multiple objects
 public struct TransferIntent() has copy, drop;
 /// [PROPOSAL] streams an amount of coin to be paid at specific intervals
 public struct VestingIntent() has copy, drop;
 
 // === [INTENT] Public functions ===
+
+// step 1: propose to send owned objects
+public fun request_transfer_to_vault<Config, Outcome, CoinType: drop>(
+    auth: Auth,
+    outcome: Outcome,
+    account: &mut Account<Config, Outcome>, 
+    key: String,
+    description: String,
+    execution_time: u64,
+    expiration_time: u64,
+    coin_id: ID,
+    coin_amount: u64,
+    vault_name: String,
+    ctx: &mut TxContext
+) {
+    account.verify(auth);
+
+    let mut intent = account.create_intent(
+        key,
+        description,
+        vector[execution_time],
+        expiration_time,
+        b"".to_string(),
+        outcome,
+        version::current(),
+        TransferToVaultIntent(),
+        ctx
+    );
+
+    owned::new_withdraw(
+        &mut intent, account, coin_id, version::current(), TransferToVaultIntent()
+    );
+    vault::new_deposit<_, _, CoinType, _>(
+        &mut intent, account, vault_name, coin_amount, version::current(), TransferToVaultIntent()
+    );
+
+    account.add_intent(intent, version::current(), TransferToVaultIntent());
+}
+
+// step 2: multiple members have to approve the proposal (account::approve_proposal)
+// step 3: execute the proposal and return the action (account::execute_proposal)
+
+// step 4: loop over transfer
+public fun execute_transfer_to_vault<Config, Outcome, CoinType: drop>(
+    mut executable: Executable, 
+    account: &mut Account<Config, Outcome>, 
+    receiving: Receiving<Coin<CoinType>>,
+) {
+    let object = owned::do_withdraw(&mut executable, account, receiving, version::current(), TransferToVaultIntent());
+    vault::do_deposit(&mut executable, account, object, version::current(), TransferToVaultIntent());
+    
+    account.confirm_execution(executable, version::current(), TransferToVaultIntent());
+}
 
 // step 1: propose to send owned objects
 public fun request_transfer<Config, Outcome>(
@@ -47,6 +103,7 @@ public fun request_transfer<Config, Outcome>(
 ) {
     account.verify(auth);
     assert!(recipients.length() == object_ids.length(), EObjectsRecipientsNotSameLength);
+
     let mut intent = account.create_intent(
         key,
         description,

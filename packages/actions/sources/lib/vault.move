@@ -36,11 +36,6 @@ const EVaultNotEmpty: vector<u8> = b"Vault must be emptied before closing";
 
 // === Structs ===
 
-/// [PROPOSAL] witness defining the vault transfer proposal, and associated role
-public struct TransferIntent() has copy, drop;
-/// [PROPOSAL] witness defining the vault pay proposal, and associated role
-public struct VestingIntent() has copy, drop;
-
 /// Dynamic Field key for the Vault
 public struct VaultKey has copy, drop, store { name: String }
 /// Dynamic field holding a budget with different coin types, key is name
@@ -49,6 +44,13 @@ public struct Vault has store {
     bag: Bag
 }
 
+/// [ACTION] allows anyone to deposit an amount of this coin to the targeted Vault
+public struct DepositAction<phantom CoinType> has store {
+    // vault name
+    name: String,
+    // exact amount to be deposited
+    amount: u64,
+}
 /// [ACTION] struct to be used with specific proposals making good use of the returned coins, similar to owned::withdraw
 public struct SpendAction<phantom CoinType> has store {
     // amount to withdraw
@@ -70,17 +72,6 @@ public fun open<Config, Outcome>(
     account.add_managed_struct(VaultKey { name }, Vault { bag: bag::new(ctx) }, version::current());
 }
 
-// /// Deposits coins owned by the account into a vault
-// public fun deposit_owned<Config, Outcome, CoinType: drop>(
-//     auth: Auth,
-//     account: &mut Account<Config, Outcome>,
-//     name: String, 
-//     receiving: Receiving<Coin<CoinType>>, 
-// ) {
-//     let coin = account.receive(receiving, version::current());
-//     deposit<Config, Outcome, CoinType>(auth, account, name, coin);
-// }
-
 /// Deposits coins owned by a member into a vault
 public fun deposit<Config, Outcome, CoinType: drop>(
     auth: Auth,
@@ -95,8 +86,8 @@ public fun deposit<Config, Outcome, CoinType: drop>(
         account.borrow_managed_struct_mut(VaultKey { name }, version::current());
 
     if (vault.coin_type_exists<CoinType>()) {
-        let balance: &mut Balance<CoinType> = vault.bag.borrow_mut(type_name::get<CoinType>());
-        balance.join(coin.into_balance());
+        let balance_mut = vault.bag.borrow_mut<_, Balance<_>>(type_name::get<CoinType>());
+        balance_mut.join(coin.into_balance());
     } else {
         vault.bag.add(type_name::get<CoinType>(), coin.into_balance());
     };
@@ -141,6 +132,41 @@ public fun coin_type_value<CoinType: drop>(vault: &Vault): u64 {
 
 // must be called from intent modules
 
+public fun new_deposit<Config, Outcome, CoinType: drop, IW: drop>(
+    intent: &mut Intent<Outcome>,
+    account: &Account<Config, Outcome>,
+    name: String,
+    amount: u64,
+    version_witness: VersionWitness,
+    intent_witness: IW,
+) {
+    account.add_action(intent, DepositAction<CoinType> { name, amount }, version_witness, intent_witness);
+}
+
+public fun do_deposit<Config, Outcome, CoinType: drop, IW: copy + drop>(
+    executable: &mut Executable,
+    account: &mut Account<Config, Outcome>,
+    coin: Coin<CoinType>,
+    version_witness: VersionWitness,
+    intent_witness: IW,
+) {
+    let action: &DepositAction<CoinType> = account.process_action(executable, version_witness, intent_witness);
+    let name = action.name;
+    assert!(action.amount == coin.value());
+    
+    let vault: &mut Vault = account.borrow_managed_struct_mut(VaultKey { name }, version_witness);
+    if (!vault.coin_type_exists<CoinType>()) {
+        vault.bag.add(type_name::get<CoinType>(), coin.into_balance());
+    } else {
+        let balance_mut = vault.bag.borrow_mut<_, Balance<_>>(type_name::get<CoinType>());
+        balance_mut.join(coin.into_balance());
+    };
+}
+
+public fun delete_deposit<CoinType>(expired: &mut Expired) {
+    let DepositAction<CoinType> { .. } = expired.remove_action();
+}
+
 public fun new_spend<Config, Outcome, CoinType: drop, IW: drop>(
     intent: &mut Intent<Outcome>,
     account: &Account<Config, Outcome>,
@@ -163,11 +189,11 @@ public fun do_spend<Config, Outcome, CoinType: drop, IW: copy + drop>(
     let amount = action.amount;
     
     let vault: &mut Vault = account.borrow_managed_struct_mut(VaultKey { name }, version_witness);
-    let balance: &mut Balance<CoinType> = vault.bag.borrow_mut(type_name::get<CoinType>());
-    let coin = coin::take(balance, amount, ctx);
+    let balance_mut = vault.bag.borrow_mut<_, Balance<_>>(type_name::get<CoinType>());
+    let coin = coin::take(balance_mut, amount, ctx);
 
-    if (balance.value() == 0) 
-        vault.bag.remove<TypeName, Balance<CoinType>>(type_name::get<CoinType>()).destroy_zero();
+    if (balance_mut.value() == 0) 
+        vault.bag.remove<_, Balance<CoinType>>(type_name::get<CoinType>()).destroy_zero();
     
     coin
 }

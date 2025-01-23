@@ -36,11 +36,6 @@ const ENoPackageDoesntExist: vector<u8> = b"No package with this name";
 
 // === Structs ===
 
-/// [PROPOSAL] witness defining the proposal to upgrade a package
-public struct UpgradeIntent() has copy, drop;
-/// [PROPOSAL] witness defining the proposal to restrict an UpgradeCap
-public struct RestrictIntent() has copy, drop;
-
 /// Dynamic Object Field key for the UpgradeLock
 public struct UpgradeCapKey has copy, drop, store {
     // name of the package
