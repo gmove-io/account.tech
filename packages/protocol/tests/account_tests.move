@@ -105,7 +105,7 @@ fun test_account_getters() {
 }
 
 #[test]
-fun test_intent_execute_flow() {
+fun test_intent_create_execute_flow() {
     let (mut scenario, extensions, mut account) = start();
     let clock = clock::create_for_testing(scenario.ctx());
 
@@ -235,12 +235,25 @@ fun test_receive_object() {
 }
 
 #[test]
+fun test_lock_object() {
+    let (scenario, extensions, mut account) = start();
+
+    assert!(!account.intents().locked().contains(&@0x1D.to_id()));
+    account.lock_object(@0x1D.to_id());
+    assert!(account.intents().locked().contains(&@0x1D.to_id()));
+    account.unlock_object(@0x1D.to_id());
+    assert!(!account.intents().locked().contains(&@0x1D.to_id()));
+
+    end(scenario, extensions, account);
+}
+
+#[test]
 #[allow(unused_mut_ref)]
 fun test_account_getters_mut() {
     let (scenario, extensions, mut account) = start();
 
-    assert!(account.metadata_mut(version::current(), ).size() == 0);
-    assert!(account.deps_mut(version::current(), ).contains_name(b"AccountProtocol".to_string()));
+    assert!(account.metadata_mut(version::current()).size() == 0);
+    assert!(account.deps_mut(version::current()).contains_name(b"AccountProtocol".to_string()));
     assert!(account.intents_mut(version::current(), Witness()).length() == 0);
     assert!(account.config_mut(version::current(), Witness()) == &mut Config {});
 

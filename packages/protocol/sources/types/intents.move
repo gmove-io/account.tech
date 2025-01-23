@@ -29,6 +29,8 @@ const ENoExecutionTime: vector<u8> = b"No execution time provided";
 const EExecutionTimesNotAscending: vector<u8> = b"Execution times must be in ascending order";
 #[error]
 const EActionsNotEmpty: vector<u8> = b"Actions are not empty";
+#[error]
+const EKeyAlreadyExists: vector<u8> = b"Key already exists";
 
 // === Structs ===
 
@@ -270,6 +272,7 @@ public(package) fun add_intent<Outcome>(
     intents: &mut Intents<Outcome>,
     intent: Intent<Outcome>,
 ) {
+    assert!(!intents.contains(intent.key), EKeyAlreadyExists);
     intents.inner.push_back(intent);
 }
 

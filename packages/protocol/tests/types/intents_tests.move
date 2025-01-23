@@ -208,6 +208,22 @@ fun test_error_delete_intent_actions_not_empty() {
     scenario.end();
 }
 
+#[test, expected_failure(abort_code = intents::EKeyAlreadyExists)]
+fun test_error_add_intent_key_already_exists() {
+    let mut scenario = ts::begin(OWNER);
+
+    let mut intents = intents::empty<bool>();
+    let issuer = issuer::new(@0x0, DummyIntent());
+    let role = intents::new_role(b"".to_string(), DummyIntent());
+    let intent = intents::new_intent(issuer, b"one".to_string(), b"".to_string(), vector[0], 1, role, true, scenario.ctx());
+    let intent2 = intents::new_intent(issuer, b"one".to_string(), b"".to_string(), vector[0], 1, role, true, scenario.ctx());
+    intents.add_intent(intent);
+    intents.add_intent(intent2);
+
+    destroy(intents);
+    scenario.end();
+}
+
 #[test, expected_failure(abort_code = intents::ENoExecutionTime)]
 fun test_error_no_execution_time() {
     let mut scenario = ts::begin(OWNER);
