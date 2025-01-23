@@ -53,6 +53,8 @@ public struct DepositAction<phantom CoinType> has store {
 }
 /// [ACTION] struct to be used with specific proposals making good use of the returned coins, similar to owned::withdraw
 public struct SpendAction<phantom CoinType> has store {
+    // vault name
+    name: String,
     // amount to withdraw
     amount: u64,
 }
@@ -174,11 +176,12 @@ public fun delete_deposit<CoinType>(expired: &mut Expired) {
 public fun new_spend<Config, Outcome, CoinType: drop, IW: drop>(
     intent: &mut Intent<Outcome>,
     account: &Account<Config, Outcome>,
+    name: String,
     amount: u64,
     version_witness: VersionWitness,
     intent_witness: IW,
 ) {
-    account.add_action(intent, SpendAction<CoinType> { amount }, version_witness, intent_witness);
+    account.add_action(intent, SpendAction<CoinType> { name, amount }, version_witness, intent_witness);
 }
 
 public fun do_spend<Config, Outcome, CoinType: drop, IW: copy + drop>(
@@ -188,9 +191,8 @@ public fun do_spend<Config, Outcome, CoinType: drop, IW: copy + drop>(
     intent_witness: IW,
     ctx: &mut TxContext
 ): Coin<CoinType> {
-    let name = executable.managed_name();
     let action: &SpendAction<CoinType> = account.process_action(executable, version_witness, intent_witness);
-    let amount = action.amount;
+    let (name, amount) = (action.name, action.amount);
     
     let vault: &mut Vault = account.borrow_managed_struct_mut(VaultKey { name }, version_witness);
     let balance_mut = vault.bag.borrow_mut<_, Balance<_>>(type_name::get<CoinType>());

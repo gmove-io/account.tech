@@ -68,7 +68,7 @@ public fun request_transfer<Config, Outcome, CoinType: drop>(
     );
 
     recipients.zip_do!(amounts, |recipient, amount| {
-        vault::new_spend<_, _, CoinType, _>(&mut intent, account, amount, version::current(), TransferIntent());
+        vault::new_spend<_, _, CoinType, _>(&mut intent, account, vault_name, amount, version::current(), TransferIntent());
         acc_transfer::new_transfer(&mut intent, account, recipient, version::current(), TransferIntent());
     });
     account.add_intent(intent, version::current(), TransferIntent());
@@ -129,7 +129,7 @@ public fun request_vesting<Config, Outcome, CoinType: drop>(
     );
 
     vault::new_spend<_, _, CoinType, _>(
-        &mut intent, account, coin_amount, version::current(), VestingIntent()
+        &mut intent, account, vault_name, coin_amount, version::current(), VestingIntent()
     );
     vesting::new_vesting(
         &mut intent, account, start_timestamp, end_timestamp, recipient, version::current(), VestingIntent()

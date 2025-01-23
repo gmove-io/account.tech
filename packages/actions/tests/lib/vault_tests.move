@@ -156,6 +156,7 @@ fun test_close_vault() {
     vault::new_spend<Multisig, Approvals, SUI, DummyIntent>(
         &mut intent, 
         &account,
+        b"Degen".to_string(),
         5,
         version::current(),
         DummyIntent(),
@@ -346,6 +347,7 @@ fun test_spend_flow() {
     vault::new_spend<Multisig, Approvals, SUI, DummyIntent>(
         &mut intent, 
         &account,
+        b"Degen".to_string(),
         2,
         version::current(),
         DummyIntent(),
@@ -381,6 +383,7 @@ fun test_spend_expired() {
     vault::new_spend<Multisig, Approvals, SUI, DummyIntent>(
         &mut intent, 
         &account,
+        b"Degen".to_string(),
         2,
         version::current(),
         DummyIntent(),
@@ -459,6 +462,7 @@ fun test_error_do_update_from_wrong_account() {
     vault::new_spend<Multisig, Approvals, SUI, DummyIntent>(
         &mut intent, 
         &account2,
+        b"Degen".to_string(),
         2,
         version::current(),
         DummyIntent(),
@@ -493,6 +497,7 @@ fun test_error_do_update_from_wrong_constructor_witness() {
     vault::new_spend<Multisig, Approvals, SUI, DummyIntent>(
         &mut intent, 
         &account,
+        b"Degen".to_string(),
         2,
         version::current(),
         DummyIntent(),
@@ -526,6 +531,7 @@ fun test_error_do_update_from_not_dep() {
     vault::new_spend<Multisig, Approvals, SUI, DummyIntent>(
         &mut intent, 
         &account,
+        b"Degen".to_string(),
         2,
         version::current(),
         DummyIntent(),
