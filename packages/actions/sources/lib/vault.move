@@ -122,6 +122,10 @@ public fun borrow_vault<Config, Outcome>(
     account.borrow_managed_struct(VaultKey { name }, version::current())
 }
 
+public fun size(vault: &Vault): u64 {
+    vault.bag.length()
+}
+
 public fun coin_type_exists<CoinType: drop>(vault: &Vault): bool {
     vault.bag.contains(type_name::get<CoinType>())
 }

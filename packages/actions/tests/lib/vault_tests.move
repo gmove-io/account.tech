@@ -66,15 +66,6 @@ fun end(scenario: Scenario, extensions: Extensions, account: Account<Multisig, A
     ts::end(scenario);
 }
 
-// fun keep_coin(addr: address, amount: u64, scenario: &mut Scenario): ID {
-//     let coin = coin::mint_for_testing<SUI>(amount, scenario.ctx());
-//     let id = object::id(&coin);
-//     transfer::public_transfer(coin, addr);
-    
-//     scenario.next_tx(OWNER);
-//     id
-// }
-
 fun create_dummy_intent(
     scenario: &mut Scenario,
     account: &mut Account<Multisig, Approvals>, 
@@ -106,29 +97,6 @@ fun test_open_vault() {
 
     end(scenario, extensions, account, clock);
 }
-
-// #[test]
-// fun test_deposit_owned() {
-//     let (mut scenario, extensions, mut account, clock) = start();
-
-//     let auth = multisig::authenticate(&account, scenario.ctx());
-//     vault::open(auth, &mut account, b"Degen".to_string(), scenario.ctx());
-
-//     let id = keep_coin(account.addr(), 5, &mut scenario);
-//     let auth = multisig::authenticate(&account, scenario.ctx());
-//     vault::deposit_owned<Multisig, Approvals, SUI>(
-//         auth, 
-//         &mut account, 
-//         b"Degen".to_string(), 
-//         ts::receiving_ticket_by_id(id)
-//     );
-
-//     let vault = vault::borrow_vault(&account, b"Degen".to_string());
-//     assert!(vault.coin_type_exists<SUI>());
-//     assert!(vault.coin_type_value<SUI>() == 5);
-
-//     end(scenario, extensions, account, clock);
-// }
 
 #[test]
 fun test_deposit() {
@@ -213,6 +181,153 @@ fun test_close_vault() {
 }
 
 #[test]
+fun test_deposit_flow() {
+    let (mut scenario, extensions, mut account, clock) = start();
+    let auth = multisig::authenticate(&account, scenario.ctx());
+    vault::open(auth, &mut account, b"Degen".to_string(), scenario.ctx());
+    let key = b"dummy".to_string();
+
+    let mut intent = create_dummy_intent(&mut scenario, &mut account);
+    vault::new_deposit<Multisig, Approvals, SUI, DummyIntent>(
+        &mut intent, 
+        &account,
+        b"Degen".to_string(),
+        5,
+        version::current(),
+        DummyIntent(),
+    );
+    account.add_intent(intent, version::current(), DummyIntent());
+
+    multisig::approve_intent(&mut account, key, scenario.ctx());
+    let mut executable = multisig::execute_intent(&mut account, key, &clock);
+    vault::do_deposit<Multisig, Approvals, SUI, DummyIntent>(
+        &mut executable, 
+        &mut account, 
+        coin::mint_for_testing<SUI>(5, scenario.ctx()),
+        version::current(), 
+        DummyIntent(),
+    );
+    account.confirm_execution(executable, version::current(), DummyIntent());
+
+    let vault = vault::borrow_vault(&account, b"Degen".to_string());
+    assert!(vault.coin_type_value<SUI>() == 5);
+
+    end(scenario, extensions, account, clock);
+}
+
+#[test]
+fun test_deposit_flow_joining_balances() {
+    let (mut scenario, extensions, mut account, clock) = start();
+    let auth = multisig::authenticate(&account, scenario.ctx());
+    vault::open(auth, &mut account, b"Degen".to_string(), scenario.ctx());
+    let key = b"dummy".to_string(); 
+
+    let auth = multisig::authenticate(&account, scenario.ctx());
+    vault::deposit<Multisig, Approvals, SUI>(
+        auth, 
+        &mut account, 
+        b"Degen".to_string(), 
+        coin::mint_for_testing<SUI>(5, scenario.ctx())
+    );
+
+    let mut intent = create_dummy_intent(&mut scenario, &mut account);
+    vault::new_deposit<Multisig, Approvals, SUI, DummyIntent>(
+        &mut intent, 
+        &account,
+        b"Degen".to_string(),
+        5,
+        version::current(),
+        DummyIntent(),
+    );
+    account.add_intent(intent, version::current(), DummyIntent());
+
+    multisig::approve_intent(&mut account, key, scenario.ctx());
+    let mut executable = multisig::execute_intent(&mut account, key, &clock);
+    vault::do_deposit<Multisig, Approvals, SUI, DummyIntent>(
+        &mut executable, 
+        &mut account, 
+        coin::mint_for_testing<SUI>(5, scenario.ctx()),
+        version::current(), 
+        DummyIntent(),
+    );
+    account.confirm_execution(executable, version::current(), DummyIntent());
+
+    let vault = vault::borrow_vault(&account, b"Degen".to_string());
+    assert!(vault.coin_type_value<SUI>() == 10);
+
+    end(scenario, extensions, account, clock);
+}
+
+#[test]
+fun test_deposit_flow_multiple_coins() {
+    let (mut scenario, extensions, mut account, clock) = start();
+    let auth = multisig::authenticate(&account, scenario.ctx());
+    vault::open(auth, &mut account, b"Degen".to_string(), scenario.ctx());
+    let key = b"dummy".to_string(); 
+
+    let auth = multisig::authenticate(&account, scenario.ctx());
+    vault::deposit<Multisig, Approvals, VAULT_TESTS>(
+        auth, 
+        &mut account, 
+        b"Degen".to_string(), 
+        coin::mint_for_testing<VAULT_TESTS>(5, scenario.ctx())
+    );
+
+    let mut intent = create_dummy_intent(&mut scenario, &mut account);
+    vault::new_deposit<Multisig, Approvals, SUI, DummyIntent>(
+        &mut intent, 
+        &account,
+        b"Degen".to_string(),
+        5,
+        version::current(),
+        DummyIntent(),
+    );
+    account.add_intent(intent, version::current(), DummyIntent());
+
+    multisig::approve_intent(&mut account, key, scenario.ctx());
+    let mut executable = multisig::execute_intent(&mut account, key, &clock);
+    vault::do_deposit<Multisig, Approvals, SUI, DummyIntent>(
+        &mut executable, 
+        &mut account, 
+        coin::mint_for_testing<SUI>(5, scenario.ctx()),
+        version::current(), 
+        DummyIntent(),
+    );
+    account.confirm_execution(executable, version::current(), DummyIntent());
+
+    let vault = vault::borrow_vault(&account, b"Degen".to_string());
+    assert!(vault.size() == 2);
+    assert!(vault.coin_type_value<SUI>() == 5);
+    assert!(vault.coin_type_value<VAULT_TESTS>() == 5);
+
+    end(scenario, extensions, account, clock);
+}
+
+#[test]
+fun test_deposit_expired() {
+    let (mut scenario, extensions, mut account, mut clock) = start();
+    clock.increment_for_testing(1);
+    let key = b"dummy".to_string();
+
+    let mut intent = create_dummy_intent(&mut scenario, &mut account);
+    vault::new_deposit<Multisig, Approvals, SUI, DummyIntent>(
+        &mut intent, 
+        &account,
+        b"Degen".to_string(),
+        2,
+        version::current(),
+        DummyIntent(),
+    );
+    account.add_intent(intent, version::current(), DummyIntent());
+    
+    let mut expired = account.delete_expired_intent(key, &clock);
+    vault::delete_deposit<SUI>(&mut expired);
+    expired.destroy_empty();
+
+    end(scenario, extensions, account, clock);
+}
+
+#[test]
 fun test_spend_flow() {
     let (mut scenario, extensions, mut account, clock) = start();
     let auth = multisig::authenticate(&account, scenario.ctx());
@@ -257,7 +372,7 @@ fun test_spend_flow() {
 }
 
 #[test]
-fun test_disable_expired() {
+fun test_spend_expired() {
     let (mut scenario, extensions, mut account, mut clock) = start();
     clock.increment_for_testing(1);
     let key = b"dummy".to_string();
