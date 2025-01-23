@@ -1,4 +1,4 @@
-module account_actions::treasury_intents;
+module account_actions::vault_intents;
 
 // === Imports ===
 
@@ -11,7 +11,7 @@ use account_protocol::{
 use account_actions::{
     transfer as acc_transfer,
     vesting,
-    treasury,
+    vault,
     version,
 };
 
@@ -20,15 +20,15 @@ use account_actions::{
 #[error]
 const ENotSameLength: vector<u8> = b"Recipients and amounts vectors not same length";
 #[error]
-const EInsufficientFunds: vector<u8> = b"Insufficient funds for this coin type in treasury";
+const EInsufficientFunds: vector<u8> = b"Insufficient funds for this coin type in vault";
 #[error]
-const ECoinTypeDoesntExist: vector<u8> = b"Coin type doesn't exist in treasury";
+const ECoinTypeDoesntExist: vector<u8> = b"Coin type doesn't exist in vault";
 
 // === Structs ===
 
-/// [PROPOSAL] witness defining the treasury transfer proposal, and associated role
+/// [PROPOSAL] witness defining the vault transfer proposal, and associated role
 public struct TransferIntent() has copy, drop;
-/// [PROPOSAL] witness defining the treasury pay proposal, and associated role
+/// [PROPOSAL] witness defining the vault pay proposal, and associated role
 public struct VestingIntent() has copy, drop;
 
 // === [PROPOSAL] Public Functions ===
@@ -42,7 +42,7 @@ public fun request_transfer<Config, Outcome, CoinType: drop>(
     description: String,
     execution_times: vector<u64>,
     expiration_time: u64,
-    treasury_name: String,
+    vault_name: String,
     amounts: vector<u64>,
     recipients: vector<address>,
     ctx: &mut TxContext
@@ -50,17 +50,17 @@ public fun request_transfer<Config, Outcome, CoinType: drop>(
     account.verify(auth);
     assert!(amounts.length() == recipients.length(), ENotSameLength);
     
-    let treasury = treasury::borrow_treasury(account, treasury_name);
-    assert!(treasury.coin_type_exists<CoinType>(), ECoinTypeDoesntExist);
+    let vault = vault::borrow_vault(account, vault_name);
+    assert!(vault.coin_type_exists<CoinType>(), ECoinTypeDoesntExist);
     let sum = amounts.fold!(0, |sum, amount| sum + amount);
-    if (treasury.coin_type_value<CoinType>() < sum) assert!(sum <= treasury.coin_type_value<CoinType>(), EInsufficientFunds);
+    if (vault.coin_type_value<CoinType>() < sum) assert!(sum <= vault.coin_type_value<CoinType>(), EInsufficientFunds);
 
     let mut intent = account.create_intent(
         key,
         description,
         execution_times,
         expiration_time,
-        treasury_name,
+        vault_name,
         outcome,
         version::current(),
         TransferIntent(),
@@ -68,7 +68,7 @@ public fun request_transfer<Config, Outcome, CoinType: drop>(
     );
 
     recipients.zip_do!(amounts, |recipient, amount| {
-        treasury::new_spend<_, _, CoinType, _>(&mut intent, account, amount, version::current(), TransferIntent());
+        vault::new_spend<_, _, CoinType, _>(&mut intent, account, amount, version::current(), TransferIntent());
         acc_transfer::new_transfer(&mut intent, account, recipient, version::current(), TransferIntent());
     });
     account.add_intent(intent, version::current(), TransferIntent());
@@ -83,7 +83,7 @@ public fun execute_transfer<Config, Outcome, CoinType: drop>(
     account: &mut Account<Config, Outcome>, 
     ctx: &mut TxContext
 ) {
-    let coin: Coin<CoinType> = treasury::do_spend(executable, account, version::current(), TransferIntent(), ctx);
+    let coin: Coin<CoinType> = vault::do_spend(executable, account, version::current(), TransferIntent(), ctx);
     acc_transfer::do_transfer(executable, account, coin, version::current(), TransferIntent());
 }
 
@@ -95,7 +95,7 @@ public fun complete_transfer<Config, Outcome>(
     account.confirm_execution(executable, version::current(), TransferIntent());
 }
 
-// step 1(bis): same but from a treasury
+// step 1(bis): same but from a vault
 public fun request_vesting<Config, Outcome, CoinType: drop>(
     auth: Auth,
     outcome: Outcome,
@@ -104,7 +104,7 @@ public fun request_vesting<Config, Outcome, CoinType: drop>(
     description: String,
     execution_time: u64,
     expiration_time: u64,
-    treasury_name: String, 
+    vault_name: String, 
     coin_amount: u64, 
     start_timestamp: u64, 
     end_timestamp: u64, 
@@ -112,23 +112,23 @@ public fun request_vesting<Config, Outcome, CoinType: drop>(
     ctx: &mut TxContext
 ) {
     account.verify(auth);
-    let treasury = treasury::borrow_treasury(account, treasury_name);
-    assert!(treasury.coin_type_exists<CoinType>(), ECoinTypeDoesntExist);
-    assert!(treasury.coin_type_value<CoinType>() >= coin_amount, EInsufficientFunds);
+    let vault = vault::borrow_vault(account, vault_name);
+    assert!(vault.coin_type_exists<CoinType>(), ECoinTypeDoesntExist);
+    assert!(vault.coin_type_value<CoinType>() >= coin_amount, EInsufficientFunds);
 
     let mut intent = account.create_intent(
         key,
         description,
         vector[execution_time],
         expiration_time,
-        treasury_name,
+        vault_name,
         outcome,
         version::current(),
         VestingIntent(),
         ctx
     );
 
-    treasury::new_spend<_, _, CoinType, _>(
+    vault::new_spend<_, _, CoinType, _>(
         &mut intent, account, coin_amount, version::current(), VestingIntent()
     );
     vesting::new_vesting(
@@ -146,7 +146,7 @@ public fun execute_vesting<Config, Outcome, CoinType: drop>(
     account: &mut Account<Config, Outcome>, 
     ctx: &mut TxContext
 ) {
-    let coin: Coin<CoinType> = treasury::do_spend(&mut executable, account, version::current(), VestingIntent(), ctx);
+    let coin: Coin<CoinType> = vault::do_spend(&mut executable, account, version::current(), VestingIntent(), ctx);
     vesting::do_vesting(&mut executable, account, coin, version::current(), VestingIntent(), ctx);
     account.confirm_execution(executable, version::current(), VestingIntent());
 }

@@ -3,7 +3,7 @@
 /// 
 /// Coins managed by treasuries can also be transferred or paid to any address.
 
-module account_actions::treasury;
+module account_actions::vault;
 
 // === Imports ===
 
@@ -28,23 +28,23 @@ use account_actions::version;
 // === Errors ===
 
 #[error]
-const ETreasuryDoesntExist: vector<u8> = b"No Treasury with this name";
+const EVaultDoesntExist: vector<u8> = b"No Vault with this name";
 #[error]
-const EAlreadyExists: vector<u8> = b"A treasury already exists with this name";
+const EVaultAlreadyExists: vector<u8> = b"A vault already exists with this name";
 #[error]
-const ENotEmpty: vector<u8> = b"Treasury must be emptied before closing";
+const EVaultNotEmpty: vector<u8> = b"Vault must be emptied before closing";
 
 // === Structs ===
 
-/// [PROPOSAL] witness defining the treasury transfer proposal, and associated role
+/// [PROPOSAL] witness defining the vault transfer proposal, and associated role
 public struct TransferIntent() has copy, drop;
-/// [PROPOSAL] witness defining the treasury pay proposal, and associated role
+/// [PROPOSAL] witness defining the vault pay proposal, and associated role
 public struct VestingIntent() has copy, drop;
 
-/// Dynamic Field key for the Treasury
-public struct TreasuryKey has copy, drop, store { name: String }
+/// Dynamic Field key for the Vault
+public struct VaultKey has copy, drop, store { name: String }
 /// Dynamic field holding a budget with different coin types, key is name
-public struct Treasury has store {
+public struct Vault has store {
     // heterogeneous array of Balances, TypeName -> Balance<CoinType>
     bag: Bag
 }
@@ -57,7 +57,7 @@ public struct SpendAction<phantom CoinType> has store {
 
 // === [COMMAND] Public Functions ===
 
-/// Members with role can open a treasury
+/// Members with role can open a vault
 public fun open<Config, Outcome>(
     auth: Auth,
     account: &mut Account<Config, Outcome>,
@@ -65,12 +65,12 @@ public fun open<Config, Outcome>(
     ctx: &mut TxContext
 ) {
     account.verify(auth);
-    assert!(!has_treasury(account, name), EAlreadyExists);
+    assert!(!has_vault(account, name), EVaultAlreadyExists);
 
-    account.add_managed_struct(TreasuryKey { name }, Treasury { bag: bag::new(ctx) }, version::current());
+    account.add_managed_struct(VaultKey { name }, Vault { bag: bag::new(ctx) }, version::current());
 }
 
-// /// Deposits coins owned by the account into a treasury
+// /// Deposits coins owned by the account into a vault
 // public fun deposit_owned<Config, Outcome, CoinType: drop>(
 //     auth: Auth,
 //     account: &mut Account<Config, Outcome>,
@@ -81,7 +81,7 @@ public fun open<Config, Outcome>(
 //     deposit<Config, Outcome, CoinType>(auth, account, name, coin);
 // }
 
-/// Deposits coins owned by a member into a treasury
+/// Deposits coins owned by a member into a vault
 public fun deposit<Config, Outcome, CoinType: drop>(
     auth: Auth,
     account: &mut Account<Config, Outcome>,
@@ -89,20 +89,20 @@ public fun deposit<Config, Outcome, CoinType: drop>(
     coin: Coin<CoinType>, 
 ) {
     account.verify(auth);
-    assert!(has_treasury(account, name), ETreasuryDoesntExist);
+    assert!(has_vault(account, name), EVaultDoesntExist);
 
-    let treasury: &mut Treasury = 
-        account.borrow_managed_struct_mut(TreasuryKey { name }, version::current());
+    let vault: &mut Vault = 
+        account.borrow_managed_struct_mut(VaultKey { name }, version::current());
 
-    if (treasury.coin_type_exists<CoinType>()) {
-        let balance: &mut Balance<CoinType> = treasury.bag.borrow_mut(type_name::get<CoinType>());
+    if (vault.coin_type_exists<CoinType>()) {
+        let balance: &mut Balance<CoinType> = vault.bag.borrow_mut(type_name::get<CoinType>());
         balance.join(coin.into_balance());
     } else {
-        treasury.bag.add(type_name::get<CoinType>(), coin.into_balance());
+        vault.bag.add(type_name::get<CoinType>(), coin.into_balance());
     };
 }
 
-/// Closes the treasury if empty
+/// Closes the vault if empty
 public fun close<Config, Outcome>(
     auth: Auth,
     account: &mut Account<Config, Outcome>,
@@ -110,33 +110,33 @@ public fun close<Config, Outcome>(
 ) {
     account.verify(auth);
 
-    let Treasury { bag } = 
-        account.remove_managed_struct(TreasuryKey { name }, version::current());
-    assert!(bag.is_empty(), ENotEmpty);
+    let Vault { bag } = 
+        account.remove_managed_struct(VaultKey { name }, version::current());
+    assert!(bag.is_empty(), EVaultNotEmpty);
     bag.destroy_empty();
 }
 
-public fun has_treasury<Config, Outcome>(
+public fun has_vault<Config, Outcome>(
     account: &Account<Config, Outcome>, 
     name: String
 ): bool {
-    account.has_managed_struct(TreasuryKey { name })
+    account.has_managed_struct(VaultKey { name })
 }
 
-public fun borrow_treasury<Config, Outcome>(
+public fun borrow_vault<Config, Outcome>(
     account: &Account<Config, Outcome>, 
     name: String
-): &Treasury {
-    assert!(has_treasury(account, name), ETreasuryDoesntExist);
-    account.borrow_managed_struct(TreasuryKey { name }, version::current())
+): &Vault {
+    assert!(has_vault(account, name), EVaultDoesntExist);
+    account.borrow_managed_struct(VaultKey { name }, version::current())
 }
 
-public fun coin_type_exists<CoinType: drop>(treasury: &Treasury): bool {
-    treasury.bag.contains(type_name::get<CoinType>())
+public fun coin_type_exists<CoinType: drop>(vault: &Vault): bool {
+    vault.bag.contains(type_name::get<CoinType>())
 }
 
-public fun coin_type_value<CoinType: drop>(treasury: &Treasury): u64 {
-    treasury.bag.borrow<TypeName, Balance<CoinType>>(type_name::get<CoinType>()).value()
+public fun coin_type_value<CoinType: drop>(vault: &Vault): u64 {
+    vault.bag.borrow<TypeName, Balance<CoinType>>(type_name::get<CoinType>()).value()
 }
 
 // must be called from intent modules
@@ -162,12 +162,12 @@ public fun do_spend<Config, Outcome, CoinType: drop, IW: copy + drop>(
     let action: &SpendAction<CoinType> = account.process_action(executable, version_witness, intent_witness);
     let amount = action.amount;
     
-    let treasury: &mut Treasury = account.borrow_managed_struct_mut(TreasuryKey { name }, version_witness);
-    let balance: &mut Balance<CoinType> = treasury.bag.borrow_mut(type_name::get<CoinType>());
+    let vault: &mut Vault = account.borrow_managed_struct_mut(VaultKey { name }, version_witness);
+    let balance: &mut Balance<CoinType> = vault.bag.borrow_mut(type_name::get<CoinType>());
     let coin = coin::take(balance, amount, ctx);
 
     if (balance.value() == 0) 
-        treasury.bag.remove<TypeName, Balance<CoinType>>(type_name::get<CoinType>()).destroy_zero();
+        vault.bag.remove<TypeName, Balance<CoinType>>(type_name::get<CoinType>()).destroy_zero();
     
     coin
 }
