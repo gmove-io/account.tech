@@ -94,6 +94,24 @@ fun create_dummy_intent(
     )
 }
 
+fun create_another_dummy_intent(
+    scenario: &mut Scenario,
+    account: &mut Account<Multisig, Approvals>, 
+): Intent<Approvals> {
+    let outcome = multisig::empty_outcome();
+    account.create_intent(
+        b"another".to_string(), 
+        b"".to_string(), 
+        vector[0],
+        1, 
+        b"".to_string(), 
+        outcome, 
+        version::current(), 
+        DummyIntent(), 
+        scenario.ctx()
+    )
+}
+
 // === Tests ===
 
 #[test]
@@ -285,6 +303,8 @@ fun test_update_flow() {
 #[test]
 fun test_disable_expired() {
     let (mut scenario, extensions, mut account, mut clock, cap, metadata) = start();
+    let auth = multisig::authenticate(&account, scenario.ctx());
+    currency::lock_cap(auth, &mut account, cap, option::none());
     clock.increment_for_testing(1);
     let key = b"dummy".to_string();
 
@@ -307,13 +327,14 @@ fun test_disable_expired() {
     currency::delete_disable<CURRENCY_TESTS>(&mut expired);
     expired.destroy_empty();
 
-    destroy(cap);
     end(scenario, extensions, account, clock, metadata);
 }
 
 #[test]
 fun test_mint_expired() {
     let (mut scenario, extensions, mut account, mut clock, cap, metadata) = start();
+    let auth = multisig::authenticate(&account, scenario.ctx());
+    currency::lock_cap(auth, &mut account, cap, option::none());
     clock.increment_for_testing(1);
     let key = b"dummy".to_string();
 
@@ -331,13 +352,14 @@ fun test_mint_expired() {
     currency::delete_mint<CURRENCY_TESTS>(&mut expired);
     expired.destroy_empty();
 
-    destroy(cap);
     end(scenario, extensions, account, clock, metadata);
 }
 
 #[test]
 fun test_burn_expired() {
     let (mut scenario, extensions, mut account, mut clock, cap, metadata) = start();
+    let auth = multisig::authenticate(&account, scenario.ctx());
+    currency::lock_cap(auth, &mut account, cap, option::none());
     clock.increment_for_testing(1);
     let key = b"dummy".to_string();
 
@@ -355,13 +377,14 @@ fun test_burn_expired() {
     currency::delete_burn<CURRENCY_TESTS>(&mut expired);
     expired.destroy_empty();
 
-    destroy(cap);
     end(scenario, extensions, account, clock, metadata);
 }
 
 #[test]
 fun test_update_expired() {
     let (mut scenario, extensions, mut account, mut clock, cap, metadata) = start();
+    let auth = multisig::authenticate(&account, scenario.ctx());
+    currency::lock_cap(auth, &mut account, cap, option::none());
     clock.increment_for_testing(1);
     let key = b"dummy".to_string();
 
@@ -382,7 +405,6 @@ fun test_update_expired() {
     currency::delete_update<CURRENCY_TESTS>(&mut expired);
     expired.destroy_empty();
 
-    destroy(cap);
     end(scenario, extensions, account, clock, metadata);
 }
 
@@ -410,6 +432,29 @@ fun test_error_public_burn_disabled() {
     end(scenario, extensions, account, clock, metadata);
 }
 
+#[test, expected_failure(abort_code = currency::ENoLock)]
+fun test_error_disable_no_lock() {
+    let (mut scenario, extensions, mut account, clock, cap, metadata) = start();
+
+    let mut intent = create_dummy_intent(&mut scenario, &mut account);
+    currency::new_disable<Multisig, Approvals, CURRENCY_TESTS, DummyIntent>(
+        &mut intent, 
+        &account,
+        true,
+        true,
+        true,
+        true,
+        true,
+        true,
+        version::current(),
+        DummyIntent(),
+    );
+    account.add_intent(intent, version::current(), DummyIntent());
+
+    destroy(cap);
+    end(scenario, extensions, account, clock, metadata);
+}
+
 #[test, expected_failure(abort_code = currency::ENoChange)]
 fun test_error_disable_nothing() {
     let (mut scenario, extensions, mut account, clock, cap, metadata) = start();
@@ -434,12 +479,29 @@ fun test_error_disable_nothing() {
     end(scenario, extensions, account, clock, metadata);
 }
 
+#[test, expected_failure(abort_code = currency::ENoLock)]
+fun test_error_mint_no_lock() {
+    let (mut scenario, extensions, mut account, clock, cap, metadata) = start();
+
+    let mut intent = create_dummy_intent(&mut scenario, &mut account);
+    currency::new_mint<Multisig, Approvals, CURRENCY_TESTS, DummyIntent>(
+        &mut intent, 
+        &account,
+        5,
+        version::current(),
+        DummyIntent(),
+    );
+    account.add_intent(intent, version::current(), DummyIntent());
+
+    destroy(cap);
+    end(scenario, extensions, account, clock, metadata);
+}
+
 #[test, expected_failure(abort_code = currency::EMintDisabled)]
-fun test_error_mint_disabled() {
+fun test_error_new_mint_disabled() {
     let (mut scenario, extensions, mut account, clock, cap, metadata) = start();
     let auth = multisig::authenticate(&account, scenario.ctx());
-    currency::lock_cap(auth, &mut account, cap, option::some(4));
-    let key = b"dummy".to_string();
+    currency::lock_cap(auth, &mut account, cap, option::none());
 
     currency::toggle_can_mint<Multisig, Approvals, CURRENCY_TESTS>(&mut account);
 
@@ -452,6 +514,47 @@ fun test_error_mint_disabled() {
         DummyIntent(),
     );
     account.add_intent(intent, version::current(), DummyIntent());
+
+    end(scenario, extensions, account, clock, metadata);
+}
+
+#[test, expected_failure(abort_code = currency::EMaxSupply)]
+fun test_error_new_mint_too_many() {
+    let (mut scenario, extensions, mut account, clock, cap, metadata) = start();
+    let auth = multisig::authenticate(&account, scenario.ctx());
+    currency::lock_cap(auth, &mut account, cap, option::some(4));
+
+    let mut intent = create_dummy_intent(&mut scenario, &mut account);
+    currency::new_mint<Multisig, Approvals, CURRENCY_TESTS, DummyIntent>(
+        &mut intent, 
+        &account,
+        5,
+        version::current(),
+        DummyIntent(),
+    );
+    account.add_intent(intent, version::current(), DummyIntent());
+
+    end(scenario, extensions, account, clock, metadata);
+}
+
+#[test, expected_failure(abort_code = currency::EMintDisabled)]
+fun test_error_do_mint_disabled() {
+    let (mut scenario, extensions, mut account, clock, cap, metadata) = start();
+    let auth = multisig::authenticate(&account, scenario.ctx());
+    currency::lock_cap(auth, &mut account, cap, option::none());
+    let key = b"dummy".to_string();
+
+    let mut intent = create_dummy_intent(&mut scenario, &mut account);
+    currency::new_mint<Multisig, Approvals, CURRENCY_TESTS, DummyIntent>(
+        &mut intent, 
+        &account,
+        5,
+        version::current(),
+        DummyIntent(),
+    );
+    account.add_intent(intent, version::current(), DummyIntent());
+
+    currency::toggle_can_mint<Multisig, Approvals, CURRENCY_TESTS>(&mut account);
 
     multisig::approve_intent(&mut account, key, scenario.ctx());
     let mut executable = multisig::execute_intent(&mut account, key, &clock);
@@ -469,14 +572,85 @@ fun test_error_mint_disabled() {
 }
 
 #[test, expected_failure(abort_code = currency::EMaxSupply)]
-fun test_error_mint_too_many() {
+fun test_error_do_mint_too_many() {
     let (mut scenario, extensions, mut account, clock, cap, metadata) = start();
     let auth = multisig::authenticate(&account, scenario.ctx());
     currency::lock_cap(auth, &mut account, cap, option::some(4));
-    let key = b"dummy".to_string();
 
     let mut intent = create_dummy_intent(&mut scenario, &mut account);
     currency::new_mint<Multisig, Approvals, CURRENCY_TESTS, DummyIntent>(
+        &mut intent, 
+        &account,
+        3,
+        version::current(),
+        DummyIntent(),
+    );
+    account.add_intent(intent, version::current(), DummyIntent());
+    let mut intent = create_another_dummy_intent(&mut scenario, &mut account);
+    currency::new_mint<Multisig, Approvals, CURRENCY_TESTS, DummyIntent>(
+        &mut intent, 
+        &account,
+        3,
+        version::current(),
+        DummyIntent(),
+    );
+    account.add_intent(intent, version::current(), DummyIntent());
+
+    multisig::approve_intent(&mut account, b"dummy".to_string(), scenario.ctx());
+    let mut executable1 = multisig::execute_intent(&mut account, b"dummy".to_string(), &clock);
+    let coin1 = currency::do_mint<Multisig, Approvals, CURRENCY_TESTS, DummyIntent>(
+        &mut executable1, 
+        &mut account, 
+        version::current(), 
+        DummyIntent(),
+        scenario.ctx(),
+    );
+
+    multisig::approve_intent(&mut account, b"another".to_string(), scenario.ctx());
+    let mut executable2 = multisig::execute_intent(&mut account, b"another".to_string(), &clock);
+    let coin2 = currency::do_mint<Multisig, Approvals, CURRENCY_TESTS, DummyIntent>(
+        &mut executable2, 
+        &mut account, 
+        version::current(), 
+        DummyIntent(),
+        scenario.ctx(),
+    );
+
+    destroy(executable1);
+    destroy(executable2);
+    destroy(coin1);
+    destroy(coin2);
+    end(scenario, extensions, account, clock, metadata);
+}
+
+#[test, expected_failure(abort_code = currency::ENoLock)]
+fun test_error_new_burn_no_lock() {
+    let (mut scenario, extensions, mut account, clock, cap, metadata) = start();
+
+    let mut intent = create_dummy_intent(&mut scenario, &mut account);
+    currency::new_burn<Multisig, Approvals, CURRENCY_TESTS, DummyIntent>(
+        &mut intent, 
+        &account,
+        4,
+        version::current(),
+        DummyIntent(),
+    );
+    account.add_intent(intent, version::current(), DummyIntent());
+
+    destroy(cap);
+    end(scenario, extensions, account, clock, metadata);
+}
+
+#[test, expected_failure(abort_code = currency::EBurnDisabled)]
+fun test_error_new_burn_disabled() {
+    let (mut scenario, extensions, mut account, clock, cap, metadata) = start();
+    let auth = multisig::authenticate(&account, scenario.ctx());
+    currency::lock_cap(auth, &mut account, cap, option::none());
+
+    currency::toggle_can_burn<Multisig, Approvals, CURRENCY_TESTS>(&mut account);
+
+    let mut intent = create_dummy_intent(&mut scenario, &mut account);
+    currency::new_burn<Multisig, Approvals, CURRENCY_TESTS, DummyIntent>(
         &mut intent, 
         &account,
         5,
@@ -484,24 +658,12 @@ fun test_error_mint_too_many() {
         DummyIntent(),
     );
     account.add_intent(intent, version::current(), DummyIntent());
-
-    multisig::approve_intent(&mut account, key, scenario.ctx());
-    let mut executable = multisig::execute_intent(&mut account, key, &clock);
-    let coin = currency::do_mint<Multisig, Approvals, CURRENCY_TESTS, DummyIntent>(
-        &mut executable, 
-        &mut account, 
-        version::current(), 
-        DummyIntent(),
-        scenario.ctx(),
-    );
-
-    destroy(executable);
-    destroy(coin);
+    
     end(scenario, extensions, account, clock, metadata);
 }
 
 #[test, expected_failure(abort_code = currency::EWrongValue)]
-fun test_error_burn_wrong_value() {
+fun test_error_do_burn_wrong_value() {
     let (mut scenario, extensions, mut account, clock, mut cap, metadata) = start();
     let coin = cap.mint(5, scenario.ctx());
     let auth = multisig::authenticate(&account, scenario.ctx());
@@ -533,14 +695,12 @@ fun test_error_burn_wrong_value() {
 }
 
 #[test, expected_failure(abort_code = currency::EBurnDisabled)]
-fun test_error_burn_disabled() {
+fun test_error_do_burn_disabled() {
     let (mut scenario, extensions, mut account, clock, mut cap, metadata) = start();
     let coin = cap.mint(5, scenario.ctx());
     let auth = multisig::authenticate(&account, scenario.ctx());
     currency::lock_cap(auth, &mut account, cap, option::none());
     let key = b"dummy".to_string();
-
-    currency::toggle_can_burn<Multisig, Approvals, CURRENCY_TESTS>(&mut account);
 
     let mut intent = create_dummy_intent(&mut scenario, &mut account);
     currency::new_burn<Multisig, Approvals, CURRENCY_TESTS, DummyIntent>(
@@ -551,6 +711,8 @@ fun test_error_burn_disabled() {
         DummyIntent(),
     );
     account.add_intent(intent, version::current(), DummyIntent());
+
+    currency::toggle_can_burn<Multisig, Approvals, CURRENCY_TESTS>(&mut account);
 
     multisig::approve_intent(&mut account, key, scenario.ctx());
     let mut executable = multisig::execute_intent(&mut account, key, &clock);
@@ -566,8 +728,29 @@ fun test_error_burn_disabled() {
     end(scenario, extensions, account, clock, metadata);
 }
 
+#[test, expected_failure(abort_code = currency::ENoLock)]
+fun test_error_new_update_no_lock() {
+    let (mut scenario, extensions, mut account, clock, cap, metadata) = start();
+
+    let mut intent = create_dummy_intent(&mut scenario, &mut account);
+    currency::new_update<Multisig, Approvals, CURRENCY_TESTS, DummyIntent>(
+        &mut intent, 
+        &account,
+        option::none(),
+        option::none(),
+        option::none(),
+        option::none(),
+        version::current(),
+        DummyIntent(),
+    );
+    account.add_intent(intent, version::current(), DummyIntent());
+
+    destroy(cap);
+    end(scenario, extensions, account, clock, metadata);
+}
+
 #[test, expected_failure(abort_code = currency::ENoChange)]
-fun test_error_update_nothing() {
+fun test_error_new_update_nothing() {
     let (mut scenario, extensions, mut account, clock, cap, metadata) = start();
     let auth = multisig::authenticate(&account, scenario.ctx());
     currency::lock_cap(auth, &mut account, cap, option::none());
@@ -589,11 +772,10 @@ fun test_error_update_nothing() {
 }
 
 #[test, expected_failure(abort_code = currency::ECannotUpdateSymbol)]
-fun test_error_update_symbol_disabled() {
-    let (mut scenario, extensions, mut account, clock, cap, mut metadata) = start();
+fun test_error_new_update_symbol_disabled() {
+    let (mut scenario, extensions, mut account, clock, cap, metadata) = start();
     let auth = multisig::authenticate(&account, scenario.ctx());
     currency::lock_cap(auth, &mut account, cap, option::none());
-    let key = b"dummy".to_string();
 
     currency::toggle_can_update_symbol<Multisig, Approvals, CURRENCY_TESTS>(&mut account);
 
@@ -609,6 +791,103 @@ fun test_error_update_symbol_disabled() {
         DummyIntent(),
     );
     account.add_intent(intent, version::current(), DummyIntent());
+    
+    end(scenario, extensions, account, clock, metadata);
+}
+
+#[test, expected_failure(abort_code = currency::ECannotUpdateName)]
+fun test_error_new_update_name_disabled() {
+    let (mut scenario, extensions, mut account, clock, cap, metadata) = start();
+    let auth = multisig::authenticate(&account, scenario.ctx());
+    currency::lock_cap(auth, &mut account, cap, option::none());
+
+    currency::toggle_can_update_name<Multisig, Approvals, CURRENCY_TESTS>(&mut account);
+
+    let mut intent = create_dummy_intent(&mut scenario, &mut account);
+    currency::new_update<Multisig, Approvals, CURRENCY_TESTS, DummyIntent>(
+        &mut intent, 
+        &account,
+        option::none(),
+        option::some(b"New".to_string()),
+        option::none(),
+        option::none(),
+        version::current(),
+        DummyIntent(),
+    );
+    account.add_intent(intent, version::current(), DummyIntent());
+    
+    end(scenario, extensions, account, clock, metadata);
+}
+
+#[test, expected_failure(abort_code = currency::ECannotUpdateDescription)]
+fun test_error_new_update_description_disabled() {
+    let (mut scenario, extensions, mut account, clock, cap, metadata) = start();
+    let auth = multisig::authenticate(&account, scenario.ctx());
+    currency::lock_cap(auth, &mut account, cap, option::none());
+
+    currency::toggle_can_update_description<Multisig, Approvals, CURRENCY_TESTS>(&mut account);
+
+    let mut intent = create_dummy_intent(&mut scenario, &mut account);
+    currency::new_update<Multisig, Approvals, CURRENCY_TESTS, DummyIntent>(
+        &mut intent, 
+        &account,
+        option::none(),
+        option::none(),
+        option::some(b"new".to_string()),
+        option::none(),
+        version::current(),
+        DummyIntent(),
+    );
+    account.add_intent(intent, version::current(), DummyIntent());
+    
+    end(scenario, extensions, account, clock, metadata);
+}
+
+#[test, expected_failure(abort_code = currency::ECannotUpdateIcon)]
+fun test_error_new_update_icon_disabled() {
+    let (mut scenario, extensions, mut account, clock, cap, metadata) = start();
+    let auth = multisig::authenticate(&account, scenario.ctx());
+    currency::lock_cap(auth, &mut account, cap, option::none());
+
+    currency::toggle_can_update_icon<Multisig, Approvals, CURRENCY_TESTS>(&mut account);
+
+    let mut intent = create_dummy_intent(&mut scenario, &mut account);
+    currency::new_update<Multisig, Approvals, CURRENCY_TESTS, DummyIntent>(
+        &mut intent, 
+        &account,
+        option::none(),
+        option::none(),
+        option::none(),
+        option::some(b"https://new.com".to_ascii_string()),
+        version::current(),
+        DummyIntent(),
+    );
+    account.add_intent(intent, version::current(), DummyIntent());
+    
+    end(scenario, extensions, account, clock, metadata);
+}
+
+#[test, expected_failure(abort_code = currency::ECannotUpdateSymbol)]
+fun test_error_do_update_symbol_disabled() {
+    let (mut scenario, extensions, mut account, clock, cap, mut metadata) = start();
+    let auth = multisig::authenticate(&account, scenario.ctx());
+    currency::lock_cap(auth, &mut account, cap, option::none());
+    let key = b"dummy".to_string();
+
+    let mut intent = create_dummy_intent(&mut scenario, &mut account);
+    currency::new_update<Multisig, Approvals, CURRENCY_TESTS, DummyIntent>(
+        &mut intent, 
+        &account,
+        option::some(b"NEW".to_ascii_string()),
+        option::none(),
+        option::none(),
+        option::none(),
+        version::current(),
+        DummyIntent(),
+    );
+    account.add_intent(intent, version::current(), DummyIntent());
+
+    currency::toggle_can_update_symbol<Multisig, Approvals, CURRENCY_TESTS>(&mut account);
 
     multisig::approve_intent(&mut account, key, scenario.ctx());
     let mut executable = multisig::execute_intent(&mut account, key, &clock);
@@ -625,13 +904,11 @@ fun test_error_update_symbol_disabled() {
 }
 
 #[test, expected_failure(abort_code = currency::ECannotUpdateName)]
-fun test_error_update_name_disabled() {
+fun test_error_do_update_name_disabled() {
     let (mut scenario, extensions, mut account, clock, cap, mut metadata) = start();
     let auth = multisig::authenticate(&account, scenario.ctx());
     currency::lock_cap(auth, &mut account, cap, option::none());
     let key = b"dummy".to_string();
-
-    currency::toggle_can_update_name<Multisig, Approvals, CURRENCY_TESTS>(&mut account);
 
     let mut intent = create_dummy_intent(&mut scenario, &mut account);
     currency::new_update<Multisig, Approvals, CURRENCY_TESTS, DummyIntent>(
@@ -645,6 +922,8 @@ fun test_error_update_name_disabled() {
         DummyIntent(),
     );
     account.add_intent(intent, version::current(), DummyIntent());
+
+    currency::toggle_can_update_name<Multisig, Approvals, CURRENCY_TESTS>(&mut account);
 
     multisig::approve_intent(&mut account, key, scenario.ctx());
     let mut executable = multisig::execute_intent(&mut account, key, &clock);
@@ -661,13 +940,11 @@ fun test_error_update_name_disabled() {
 }
 
 #[test, expected_failure(abort_code = currency::ECannotUpdateDescription)]
-fun test_error_update_description_disabled() {
+fun test_error_do_update_description_disabled() {
     let (mut scenario, extensions, mut account, clock, cap, mut metadata) = start();
     let auth = multisig::authenticate(&account, scenario.ctx());
     currency::lock_cap(auth, &mut account, cap, option::none());
     let key = b"dummy".to_string();
-
-    currency::toggle_can_update_description<Multisig, Approvals, CURRENCY_TESTS>(&mut account);
 
     let mut intent = create_dummy_intent(&mut scenario, &mut account);
     currency::new_update<Multisig, Approvals, CURRENCY_TESTS, DummyIntent>(
@@ -681,6 +958,8 @@ fun test_error_update_description_disabled() {
         DummyIntent(),
     );
     account.add_intent(intent, version::current(), DummyIntent());
+
+    currency::toggle_can_update_description<Multisig, Approvals, CURRENCY_TESTS>(&mut account);
 
     multisig::approve_intent(&mut account, key, scenario.ctx());
     let mut executable = multisig::execute_intent(&mut account, key, &clock);
@@ -697,13 +976,11 @@ fun test_error_update_description_disabled() {
 }
 
 #[test, expected_failure(abort_code = currency::ECannotUpdateIcon)]
-fun test_error_update_icon_disabled() {
+fun test_error_do_update_icon_disabled() {
     let (mut scenario, extensions, mut account, clock, cap, mut metadata) = start();
     let auth = multisig::authenticate(&account, scenario.ctx());
     currency::lock_cap(auth, &mut account, cap, option::none());
     let key = b"dummy".to_string();
-
-    currency::toggle_can_update_icon<Multisig, Approvals, CURRENCY_TESTS>(&mut account);
 
     let mut intent = create_dummy_intent(&mut scenario, &mut account);
     currency::new_update<Multisig, Approvals, CURRENCY_TESTS, DummyIntent>(
@@ -717,6 +994,8 @@ fun test_error_update_icon_disabled() {
         DummyIntent(),
     );
     account.add_intent(intent, version::current(), DummyIntent());
+
+    currency::toggle_can_update_icon<Multisig, Approvals, CURRENCY_TESTS>(&mut account);
 
     multisig::approve_intent(&mut account, key, scenario.ctx());
     let mut executable = multisig::execute_intent(&mut account, key, &clock);
@@ -858,7 +1137,7 @@ fun test_error_do_mint_from_wrong_account() {
     let key = b"dummy".to_string();
 
     let auth = multisig::authenticate(&account, scenario.ctx());
-    currency::lock_cap(auth, &mut account, cap, option::some(4));
+    currency::lock_cap(auth, &mut account, cap, option::none());
     // intent is submitted to other account
     let mut intent = create_dummy_intent(&mut scenario, &mut account2);
     currency::new_mint<Multisig, Approvals, CURRENCY_TESTS, DummyIntent>(
@@ -893,7 +1172,7 @@ fun test_error_do_mint_from_wrong_constructor_witness() {
     let key = b"dummy".to_string();
 
     let auth = multisig::authenticate(&account, scenario.ctx());
-    currency::lock_cap(auth, &mut account, cap, option::some(4));
+    currency::lock_cap(auth, &mut account, cap, option::none());
 
     let mut intent = create_dummy_intent(&mut scenario, &mut account);
     currency::new_mint<Multisig, Approvals, CURRENCY_TESTS, DummyIntent>(
@@ -927,7 +1206,7 @@ fun test_error_do_mint_from_not_dep() {
     let key = b"dummy".to_string();
 
     let auth = multisig::authenticate(&account, scenario.ctx());
-    currency::lock_cap(auth, &mut account, cap, option::some(4));
+    currency::lock_cap(auth, &mut account, cap, option::none());
 
     let mut intent = create_dummy_intent(&mut scenario, &mut account);
     currency::new_mint<Multisig, Approvals, CURRENCY_TESTS, DummyIntent>(
@@ -965,7 +1244,7 @@ fun test_error_do_burn_from_wrong_account() {
     let key = b"dummy".to_string();
 
     let auth = multisig::authenticate(&account, scenario.ctx());
-    currency::lock_cap(auth, &mut account, cap, option::some(4));
+    currency::lock_cap(auth, &mut account, cap, option::none());
     // intent is submitted to other account
     let mut intent = create_dummy_intent(&mut scenario, &mut account2);
     currency::new_burn<Multisig, Approvals, CURRENCY_TESTS, DummyIntent>(

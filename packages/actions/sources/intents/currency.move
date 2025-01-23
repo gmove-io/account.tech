@@ -26,21 +26,7 @@ use account_actions::{
 // === Errors ===
 
 #[error]
-const ENoLock: vector<u8> = b"No lock for this coin type";
-#[error]
 const EAmountsRecipentsNotSameLength: vector<u8> = b"Transfer amounts and recipients are not the same length";
-#[error]
-const EMintDisabled: vector<u8> = b"Mint disabled";
-#[error]
-const EBurnDisabled: vector<u8> = b"Burn disabled";
-#[error]
-const ECannotUpdateName: vector<u8> = b"Cannot update name";
-#[error]
-const ECannotUpdateSymbol: vector<u8> = b"Cannot update symbol";
-#[error]
-const ECannotUpdateDescription: vector<u8> = b"Cannot update description";
-#[error]
-const ECannotUpdateIcon: vector<u8> = b"Cannot update icon";
 #[error]
 const EMaxSupply: vector<u8> = b"Max supply exceeded";
 
@@ -79,7 +65,6 @@ public fun request_disable<Config, Outcome, CoinType>(
     ctx: &mut TxContext
 ) {
     account.verify(auth);
-    assert!(currency::has_cap<_, _, CoinType>(account), ENoLock);
 
     let mut intent = account.create_intent(
         key, 
@@ -133,12 +118,6 @@ public fun request_mint<Config, Outcome, CoinType>(
     ctx: &mut TxContext
 ) {
     account.verify(auth);
-    assert!(currency::has_cap<_, _, CoinType>(account), ENoLock);
-
-    let rules: &CurrencyRules<CoinType> = currency::borrow_rules(account);
-    assert!(rules.can_mint(), EMintDisabled);
-    let supply = currency::coin_type_supply<_, _, CoinType>(account);
-    if (rules.max_supply().is_some()) assert!(amount + supply <= *rules.max_supply().borrow(), EMaxSupply);
 
     let mut intent = account.create_intent(
         key, 
@@ -186,10 +165,6 @@ public fun request_burn<Config, Outcome, CoinType>(
     ctx: &mut TxContext
 ) {
     account.verify(auth);
-    assert!(currency::has_cap<_, _, CoinType>(account), ENoLock);
-
-    let rules: &CurrencyRules<CoinType> = currency::borrow_rules(account);
-    assert!(rules.can_burn(), EBurnDisabled);
 
     let mut intent = account.create_intent(
         key, 
@@ -241,15 +216,7 @@ public fun request_update<Config, Outcome, CoinType>(
     ctx: &mut TxContext
 ) {
     account.verify(auth);
-    assert!(currency::has_cap<_, _, CoinType>(account), ENoLock);
-
-    let rules: &CurrencyRules<CoinType> = currency::borrow_rules(account);
-    if (!rules.can_update_symbol()) assert!(md_symbol.is_none(), ECannotUpdateSymbol);
-    if (!rules.can_update_name()) assert!(md_name.is_none(), ECannotUpdateName);
-    if (!rules.can_update_description()) assert!(md_description.is_none(), ECannotUpdateDescription);
-    if (!rules.can_update_icon()) assert!(md_icon.is_none(), ECannotUpdateIcon);
-
-
+    
     let mut intent = account.create_intent(
         key,
         description,
@@ -295,11 +262,9 @@ public fun request_transfer<Config, Outcome, CoinType>(
     ctx: &mut TxContext
 ) {
     account.verify(auth);
-    assert!(currency::has_cap<_, _, CoinType>(account), ENoLock);
     assert!(amounts.length() == recipients.length(), EAmountsRecipentsNotSameLength);
 
     let rules: &CurrencyRules<CoinType> = currency::borrow_rules(account);
-    assert!(rules.can_mint(), EMintDisabled);
     let sum = amounts.fold!(0, |sum, amount| sum + amount);
     if (rules.max_supply().is_some()) assert!(sum <= *rules.max_supply().borrow(), EMaxSupply);
 
@@ -364,11 +329,6 @@ public fun request_vesting<Config, Outcome, CoinType>(
     ctx: &mut TxContext
 ) {
     account.verify(auth);
-    assert!(currency::has_cap<_, _, CoinType>(account), ENoLock);
-
-    let rules: &CurrencyRules<CoinType> = currency::borrow_rules(account);
-    assert!(rules.can_mint(), EMintDisabled);
-    if (rules.max_supply().is_some()) assert!(total_amount <= *rules.max_supply().borrow(), EMaxSupply);
 
     let mut intent = account.create_intent(
         key,

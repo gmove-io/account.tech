@@ -20,7 +20,10 @@ use account_protocol::{
     executable::Executable,
     version_witness::VersionWitness,
 };
-use account_actions::version;
+use account_actions::{
+    currency,
+    version
+};
 
 // === Errors ===
 
@@ -205,6 +208,7 @@ public fun new_disable<Config, Outcome, CoinType, IW: drop>(
     version_witness: VersionWitness,
     intent_witness: IW,
 ) {
+    assert!(currency::has_cap<_, _, CoinType>(account), ENoLock);
     assert!(mint || burn || update_symbol || update_name || update_description || update_icon, ENoChange);
     account.add_action(
         intent,
@@ -245,6 +249,13 @@ public fun new_mint<Config, Outcome, CoinType, IW: drop>(
     version_witness: VersionWitness,
     intent_witness: IW,    
 ) {
+    assert!(currency::has_cap<_, _, CoinType>(account), ENoLock);
+
+    let rules: &CurrencyRules<CoinType> = currency::borrow_rules(account);
+    assert!(rules.can_mint(), EMintDisabled);
+    let supply = currency::coin_type_supply<_, _, CoinType>(account);
+    if (rules.max_supply().is_some()) assert!(amount + supply <= *rules.max_supply().borrow(), EMaxSupply);
+
     account.add_action(intent, MintAction<CoinType> { amount }, version_witness, intent_witness);
 }
 
@@ -281,6 +292,10 @@ public fun new_burn<Config, Outcome, CoinType, IW: drop>(
     version_witness: VersionWitness,
     intent_witness: IW
 ) {
+    assert!(currency::has_cap<_, _, CoinType>(account), ENoLock);
+    let rules: &CurrencyRules<CoinType> = currency::borrow_rules(account);
+    assert!(rules.can_burn(), EBurnDisabled);
+
     account.add_action(intent, BurnAction<CoinType> { amount }, version_witness, intent_witness);
 }
 
@@ -319,7 +334,15 @@ public fun new_update<Config, Outcome, CoinType, IW: drop>(
     version_witness: VersionWitness,
     intent_witness: IW,
 ) {
+    assert!(currency::has_cap<_, _, CoinType>(account), ENoLock);
     assert!(symbol.is_some() || name.is_some() || description.is_some() || icon_url.is_some(), ENoChange);
+
+    let rules: &CurrencyRules<CoinType> = currency::borrow_rules(account);
+    if (!rules.can_update_symbol()) assert!(symbol.is_none(), ECannotUpdateSymbol);
+    if (!rules.can_update_name()) assert!(name.is_none(), ECannotUpdateName);
+    if (!rules.can_update_description()) assert!(description.is_none(), ECannotUpdateDescription);
+    if (!rules.can_update_icon()) assert!(icon_url.is_none(), ECannotUpdateIcon);
+
     account.add_action(intent, UpdateAction<CoinType> { symbol, name, description, icon_url }, version_witness, intent_witness);
 }
 
