@@ -19,7 +19,10 @@ use account_protocol::{
     executable::Executable,
     version_witness::VersionWitness,
 };
-use account_actions::version;
+use account_actions::{
+    package_upgrade,
+    version,
+};
 
 // === Error ===
 
@@ -33,6 +36,9 @@ const ELockAlreadyExists: vector<u8> = b"Lock with this name already exists";
 const EUpgradeTooEarly: vector<u8> = b"Upgrade too early";
 #[error]
 const ENoPackageDoesntExist: vector<u8> = b"No package with this name";
+#[error]
+const ENoLock: vector<u8> = b"No lock with this name";
+
 
 // === Structs ===
 
@@ -62,6 +68,8 @@ public struct UpgradeIndex has store {
 
 /// [ACTION] upgrades a package
 public struct UpgradeAction has store {
+    // name of the package
+    name: String,
     // digest of the package build we want to publish
     digest: vector<u8>,
     // intent creation time + timelock
@@ -69,6 +77,8 @@ public struct UpgradeAction has store {
 }
 /// [ACTION] restricts a locked UpgradeCap
 public struct RestrictAction has store {
+    // name of the package
+    name: String,
     // downgrades to this policy
     policy: u8,
 }
@@ -190,15 +200,18 @@ public fun get_package_name<Config, Outcome>(
 public fun new_upgrade<Config, Outcome, IW: drop>(
     intent: &mut Intent<Outcome>, 
     account: &Account<Config, Outcome>,
+    name: String,
     digest: vector<u8>, 
     clock: &Clock,
     version_witness: VersionWitness,
     intent_witness: IW
 ) {
+    assert!(package_upgrade::has_cap(account, name), ENoLock);
+
     let name = intent.role_managed_name();
     let upgrade_time = clock.timestamp_ms() + get_time_delay(account, name);
 
-    account.add_action(intent, UpgradeAction { digest, upgrade_time }, version_witness, intent_witness);
+    account.add_action(intent, UpgradeAction { name, digest, upgrade_time }, version_witness, intent_witness);
 }    
 
 public fun do_upgrade<Config, Outcome, IW: copy + drop>(
@@ -208,9 +221,8 @@ public fun do_upgrade<Config, Outcome, IW: copy + drop>(
     version_witness: VersionWitness,
     intent_witness: IW,
 ): UpgradeTicket {
-    let name = executable.managed_name();
     let action: &UpgradeAction = account.process_action(executable, version_witness, intent_witness);
-    let (digest, upgrade_time) = (action.digest, action.upgrade_time);
+    let (name, digest, upgrade_time) = (action.name, action.digest, action.upgrade_time);
     assert!(upgrade_time <= clock.timestamp_ms(), EUpgradeTooEarly);
 
     let cap: &mut UpgradeCap = account.borrow_managed_object_mut(UpgradeCapKey { name }, version_witness);
@@ -248,11 +260,13 @@ public fun delete_upgrade(expired: &mut Expired) {
 public fun new_restrict<Config, Outcome, IW: drop>(
     intent: &mut Intent<Outcome>, 
     account: &Account<Config, Outcome>,
-    current_policy: u8, 
+    name: String,
     policy: u8, 
     version_witness: VersionWitness,
     intent_witness: IW
 ) {    
+    assert!(package_upgrade::has_cap(account, name), ENoLock);
+    let current_policy = package_upgrade::get_cap_policy(account, name);
     assert!(policy > current_policy, EPolicyShouldRestrict);
     assert!(
         policy == package::additive_policy() ||
@@ -261,7 +275,7 @@ public fun new_restrict<Config, Outcome, IW: drop>(
         EInvalidPolicy
     );
 
-    account.add_action(intent, RestrictAction { policy }, version_witness, intent_witness);
+    account.add_action(intent, RestrictAction { name, policy }, version_witness, intent_witness);
 }    
 
 public fun do_restrict<Config, Outcome, IW: copy + drop>(
@@ -270,13 +284,13 @@ public fun do_restrict<Config, Outcome, IW: copy + drop>(
     version_witness: VersionWitness,
     intent_witness: IW,
 ) {
-    let name = executable.managed_name();
     let action: &RestrictAction = account.process_action(executable, version_witness, intent_witness);
+    let (name, policy) = (action.name, action.policy);
 
-    if (action.policy == package::additive_policy()) {
+    if (policy == package::additive_policy()) {
         let cap_mut: &mut UpgradeCap = account.borrow_managed_object_mut(UpgradeCapKey { name }, version_witness);
         cap_mut.only_additive_upgrades();
-    } else if (action.policy == package::dep_only_policy()) {
+    } else if (policy == package::dep_only_policy()) {
         let cap_mut: &mut UpgradeCap = account.borrow_managed_object_mut(UpgradeCapKey { name }, version_witness);
         cap_mut.only_dep_upgrades();
     } else {

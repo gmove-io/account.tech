@@ -16,11 +16,6 @@ use account_actions::{
     version,
 };
 
-// === Error ===
-
-#[error]
-const ENoLock: vector<u8> = b"No lock with this name";
-
 // === Structs ===
 
 /// [PROPOSAL] witness defining the proposal to upgrade a package
@@ -37,7 +32,7 @@ public fun request_upgrade<Config, Outcome>(
     auth: Auth,
     outcome: Outcome,
     account: &mut Account<Config, Outcome>, 
-    key: String,
+    key: String, 
     description: String,
     expiration_time: u64,
     package_name: String,
@@ -46,7 +41,6 @@ public fun request_upgrade<Config, Outcome>(
     ctx: &mut TxContext
 ) {
     account.verify(auth);
-    assert!(package_upgrade::has_cap(account, package_name), ENoLock);
     let execution_time = clock.timestamp_ms() + package_upgrade::get_time_delay(account, package_name);
 
     let mut intent = account.create_intent(
@@ -62,7 +56,7 @@ public fun request_upgrade<Config, Outcome>(
     );
 
     package_upgrade::new_upgrade(
-        &mut intent, account, digest, clock, version::current(), UpgradeIntent()
+        &mut intent, account, package_name, digest, clock, version::current(), UpgradeIntent()
     );
     account.add_intent(intent, version::current(), UpgradeIntent());
 }
@@ -106,9 +100,7 @@ public fun request_restrict<Config, Outcome>(
     ctx: &mut TxContext
 ) {
     account.verify(auth);
-    assert!(package_upgrade::has_cap(account, package_name), ENoLock);
-    let current_policy = package_upgrade::get_cap_policy(account, package_name);
-
+    
     let mut intent = account.create_intent(
         key,
         description,
@@ -122,7 +114,7 @@ public fun request_restrict<Config, Outcome>(
     );
 
     package_upgrade::new_restrict(
-        &mut intent, account, current_policy, policy, version::current(), RestrictIntent()
+        &mut intent, account, package_name, policy, version::current(), RestrictIntent()
     );
     account.add_intent(intent, version::current(), RestrictIntent());
 }

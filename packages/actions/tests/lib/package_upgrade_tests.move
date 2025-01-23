@@ -110,7 +110,7 @@ fun test_upgrade_flow() {
     package_upgrade::lock_cap(auth, &mut account, upgrade_cap, b"Degen".to_string(), 1000);
 
     let mut intent = create_dummy_intent(&mut scenario, &mut account);
-    package_upgrade::new_upgrade(&mut intent, &account, b"", &clock, version::current(), DummyIntent());
+    package_upgrade::new_upgrade(&mut intent, &account, b"Degen".to_string(), b"", &clock, version::current(), DummyIntent());
     account.add_intent(intent, version::current(), DummyIntent());
     clock.increment_for_testing(1000);
 
@@ -146,7 +146,7 @@ fun test_restrict_flow_additive() {
     package_upgrade::lock_cap(auth, &mut account, upgrade_cap, b"Degen".to_string(), 1000);
 
     let mut intent = create_dummy_intent(&mut scenario, &mut account);
-    package_upgrade::new_restrict(&mut intent, &account, 0, 128, version::current(), DummyIntent());
+    package_upgrade::new_restrict(&mut intent, &account, b"Degen".to_string(), 128, version::current(), DummyIntent());
     account.add_intent(intent, version::current(), DummyIntent());
 
     multisig::approve_intent(&mut account, key, scenario.ctx());
@@ -174,7 +174,7 @@ fun test_restrict_flow_deps_only() {
     package_upgrade::lock_cap(auth, &mut account, upgrade_cap, b"Degen".to_string(), 1000);
 
     let mut intent = create_dummy_intent(&mut scenario, &mut account);
-    package_upgrade::new_restrict(&mut intent, &account, 0, 192, version::current(), DummyIntent());
+    package_upgrade::new_restrict(&mut intent, &account, b"Degen".to_string(), 192, version::current(), DummyIntent());
     account.add_intent(intent, version::current(), DummyIntent());
 
     multisig::approve_intent(&mut account, key, scenario.ctx());
@@ -202,7 +202,7 @@ fun test_restrict_flow_immutable() {
     package_upgrade::lock_cap(auth, &mut account, upgrade_cap, b"Degen".to_string(), 1000);
 
     let mut intent = create_dummy_intent(&mut scenario, &mut account);
-    package_upgrade::new_restrict(&mut intent, &account, 0, 255, version::current(), DummyIntent());
+    package_upgrade::new_restrict(&mut intent, &account, b"Degen".to_string(), 255, version::current(), DummyIntent());
     account.add_intent(intent, version::current(), DummyIntent());
 
     multisig::approve_intent(&mut account, key, scenario.ctx());
@@ -230,7 +230,7 @@ fun test_upgrade_expired() {
     package_upgrade::lock_cap(auth, &mut account, upgrade_cap, b"Degen".to_string(), 1000);
 
     let mut intent = create_dummy_intent(&mut scenario, &mut account);
-    package_upgrade::new_upgrade(&mut intent, &account, b"", &clock, version::current(), DummyIntent());
+    package_upgrade::new_upgrade(&mut intent, &account, b"Degen".to_string(), b"", &clock, version::current(), DummyIntent());
     account.add_intent(intent, version::current(), DummyIntent());
     
     let mut expired = account.delete_expired_intent(key, &clock);
@@ -250,7 +250,7 @@ fun test_restrict_expired() {
     package_upgrade::lock_cap(auth, &mut account, upgrade_cap, b"Degen".to_string(), 1000);
 
     let mut intent = create_dummy_intent(&mut scenario, &mut account);
-    package_upgrade::new_restrict(&mut intent, &account, 0, 128, version::current(), DummyIntent());
+    package_upgrade::new_restrict(&mut intent, &account, b"Degen".to_string(), 128, version::current(), DummyIntent());
     account.add_intent(intent, version::current(), DummyIntent());
     
     let mut expired = account.delete_expired_intent(key, &clock);
@@ -273,6 +273,45 @@ fun test_error_lock_name_already_exists() {
     end(scenario, extensions, account, clock);
 }
 
+#[test, expected_failure(abort_code = package_upgrade::ENoLock)]
+fun test_error_new_upgrade_no_lock() {
+    let (mut scenario, extensions, mut account, clock, upgrade_cap) = start();
+
+    let mut intent = create_dummy_intent(&mut scenario, &mut account);
+    package_upgrade::new_upgrade(
+        &mut intent, 
+        &account, 
+        b"Degen".to_string(), 
+        b"", 
+        &clock, 
+        version::current(), 
+        DummyIntent()
+    );
+
+    destroy(intent);
+    destroy(upgrade_cap);
+    end(scenario, extensions, account, clock);
+}
+
+#[test, expected_failure(abort_code = package_upgrade::ENoLock)]
+fun test_error_new_restrict_no_lock() {
+    let (mut scenario, extensions, mut account, clock, upgrade_cap) = start();
+
+    let mut intent = create_dummy_intent(&mut scenario, &mut account);
+    package_upgrade::new_restrict(
+        &mut intent, 
+        &account, 
+        b"Degen".to_string(), 
+        128, 
+        version::current(), 
+        DummyIntent()
+    );
+
+    destroy(intent);
+    destroy(upgrade_cap);
+    end(scenario, extensions, account, clock);
+}
+
 #[test, expected_failure(abort_code = package_upgrade::EPolicyShouldRestrict)]
 fun test_error_new_restrict_not_restrictive() {
     let (mut scenario, extensions, mut account, clock, upgrade_cap) = start();
@@ -281,7 +320,7 @@ fun test_error_new_restrict_not_restrictive() {
     package_upgrade::lock_cap(auth, &mut account, upgrade_cap, b"Degen".to_string(), 1000);
 
     let mut intent = create_dummy_intent(&mut scenario, &mut account);
-    package_upgrade::new_restrict(&mut intent, &account, 0, 0, version::current(), DummyIntent());
+    package_upgrade::new_restrict(&mut intent, &account, b"Degen".to_string(), 0, version::current(), DummyIntent());
     account.add_intent(intent, version::current(), DummyIntent());
     
     end(scenario, extensions, account, clock);
@@ -295,7 +334,7 @@ fun test_error_new_restrict_invalid_policy() {
     package_upgrade::lock_cap(auth, &mut account, upgrade_cap, b"Degen".to_string(), 1000);
 
     let mut intent = create_dummy_intent(&mut scenario, &mut account);
-    package_upgrade::new_restrict(&mut intent, &account, 0, 1, version::current(), DummyIntent());
+    package_upgrade::new_restrict(&mut intent, &account, b"Degen".to_string(), 1, version::current(), DummyIntent());
     account.add_intent(intent, version::current(), DummyIntent());
     
     end(scenario, extensions, account, clock);
@@ -315,7 +354,7 @@ fun test_error_do_upgrade_from_wrong_account() {
     package_upgrade::lock_cap(auth, &mut account, upgrade_cap, b"Degen".to_string(), 1000);
     // intent is submitted to other account
     let mut intent = create_dummy_intent(&mut scenario, &mut account2);
-    package_upgrade::new_upgrade(&mut intent, &account, b"", &clock, version::current(), DummyIntent());
+    package_upgrade::new_upgrade(&mut intent, &account, b"Degen".to_string(), b"", &clock, version::current(), DummyIntent());
     account2.add_intent(intent, version::current(), DummyIntent());
 
     multisig::approve_intent(&mut account2, key, scenario.ctx());
@@ -344,7 +383,7 @@ fun test_error_do_upgrade_from_wrong_constructor_witness() {
     package_upgrade::lock_cap(auth, &mut account, upgrade_cap, b"Degen".to_string(), 1000);
 
     let mut intent = create_dummy_intent(&mut scenario, &mut account);
-    package_upgrade::new_upgrade(&mut intent, &account, b"", &clock, version::current(), DummyIntent());
+    package_upgrade::new_upgrade(&mut intent, &account, b"Degen".to_string(), b"", &clock, version::current(), DummyIntent());
     account.add_intent(intent, version::current(), DummyIntent());
 
     multisig::approve_intent(&mut account, key, scenario.ctx());
@@ -372,7 +411,7 @@ fun test_error_do_upgrade_from_not_dep() {
     package_upgrade::lock_cap(auth, &mut account, upgrade_cap, b"Degen".to_string(), 1000);
 
     let mut intent = create_dummy_intent(&mut scenario, &mut account);
-    package_upgrade::new_upgrade(&mut intent, &account, b"", &clock, version::current(), DummyIntent());
+    package_upgrade::new_upgrade(&mut intent, &account, b"Degen".to_string(), b"", &clock, version::current(), DummyIntent());
     account.add_intent(intent, version::current(), DummyIntent());
 
     multisig::approve_intent(&mut account, key, scenario.ctx());
@@ -405,7 +444,7 @@ fun test_error_confirm_upgrade_from_wrong_account() {
     package_upgrade::lock_cap(auth, &mut account2, package::test_publish(@0x1.to_id(), scenario.ctx()), b"Degen".to_string(), 1000);
     // intent is submitted to other account
     let mut intent = create_dummy_intent(&mut scenario, &mut account2);
-    package_upgrade::new_upgrade(&mut intent, &account, b"", &clock, version::current(), DummyIntent());
+    package_upgrade::new_upgrade(&mut intent, &account, b"Degen".to_string(), b"", &clock, version::current(), DummyIntent());
     account2.add_intent(intent, version::current(), DummyIntent());
 
     multisig::approve_intent(&mut account2, key, scenario.ctx());
@@ -442,7 +481,7 @@ fun test_error_confirm_upgrade_from_wrong_constructor_witness() {
     package_upgrade::lock_cap(auth, &mut account, upgrade_cap, b"Degen".to_string(), 0);
 
     let mut intent = create_dummy_intent(&mut scenario, &mut account);
-    package_upgrade::new_upgrade(&mut intent, &account, b"", &clock, version::current(), DummyIntent());
+    package_upgrade::new_upgrade(&mut intent, &account, b"Degen".to_string(), b"", &clock, version::current(), DummyIntent());
     account.add_intent(intent, version::current(), DummyIntent());
 
     multisig::approve_intent(&mut account, key, scenario.ctx());
@@ -478,7 +517,7 @@ fun test_error_confirm_upgrade_from_not_dep() {
     package_upgrade::lock_cap(auth, &mut account, upgrade_cap, b"Degen".to_string(), 0);
 
     let mut intent = create_dummy_intent(&mut scenario, &mut account);
-    package_upgrade::new_upgrade(&mut intent, &account, b"", &clock, version::current(), DummyIntent());
+    package_upgrade::new_upgrade(&mut intent, &account, b"Degen".to_string(), b"", &clock, version::current(), DummyIntent());
     account.add_intent(intent, version::current(), DummyIntent());
 
     multisig::approve_intent(&mut account, key, scenario.ctx());
@@ -517,7 +556,7 @@ fun test_error_do_restrict_from_wrong_account() {
     package_upgrade::lock_cap(auth, &mut account, upgrade_cap, b"Degen".to_string(), 1000);
     // intent is submitted to other account
     let mut intent = create_dummy_intent(&mut scenario, &mut account2);
-    package_upgrade::new_upgrade(&mut intent, &account, b"", &clock, version::current(), DummyIntent());
+    package_upgrade::new_upgrade(&mut intent, &account, b"Degen".to_string(), b"", &clock, version::current(), DummyIntent());
     account2.add_intent(intent, version::current(), DummyIntent());
 
     multisig::approve_intent(&mut account2, key, scenario.ctx());
@@ -544,7 +583,7 @@ fun test_error_do_restrict_from_wrong_constructor_witness() {
     package_upgrade::lock_cap(auth, &mut account, upgrade_cap, b"Degen".to_string(), 1000);
 
     let mut intent = create_dummy_intent(&mut scenario, &mut account);
-    package_upgrade::new_upgrade(&mut intent, &account, b"", &clock, version::current(), DummyIntent());
+    package_upgrade::new_upgrade(&mut intent, &account, b"Degen".to_string(), b"", &clock, version::current(), DummyIntent());
     account.add_intent(intent, version::current(), DummyIntent());
 
     multisig::approve_intent(&mut account, key, scenario.ctx());
@@ -570,7 +609,7 @@ fun test_error_do_restrict_from_not_dep() {
     package_upgrade::lock_cap(auth, &mut account, upgrade_cap, b"Degen".to_string(), 1000);
 
     let mut intent = create_dummy_intent(&mut scenario, &mut account);
-    package_upgrade::new_upgrade(&mut intent, &account, b"", &clock, version::current(), DummyIntent());
+    package_upgrade::new_upgrade(&mut intent, &account, b"Degen".to_string(), b"", &clock, version::current(), DummyIntent());
     account.add_intent(intent, version::current(), DummyIntent());
 
     multisig::approve_intent(&mut account, key, scenario.ctx());
