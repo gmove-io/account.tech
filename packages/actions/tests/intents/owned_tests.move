@@ -18,6 +18,7 @@ use account_protocol::{
 use account_config::multisig::{Self, Multisig, Approvals};
 use account_actions::{
     owned_intents,
+    vault,
     vesting::{Self, Stream},
     transfer as acc_transfer,
 };
@@ -67,6 +68,47 @@ fun send_coin(addr: address, amount: u64, scenario: &mut Scenario): ID {
 }
 
 // === Tests ===
+
+#[test]
+fun test_request_execute_transfer_to_vault() {
+    let (mut scenario, extensions, mut account, clock) = start();
+    let key = b"dummy".to_string();
+
+    let auth = multisig::authenticate(&account, scenario.ctx());
+    vault::open(auth, &mut account, b"Degen".to_string(), scenario.ctx());
+    let id = send_coin(account.addr(), 1, &mut scenario);
+
+    let auth = multisig::authenticate(&account, scenario.ctx());
+    let outcome = multisig::empty_outcome();
+    owned_intents::request_transfer_to_vault<Multisig, Approvals, SUI>(
+        auth, 
+        outcome, 
+        &mut account, 
+        key, 
+        b"".to_string(), 
+        0, 
+        1, 
+        id,
+        1,
+        b"Degen".to_string(),
+        scenario.ctx()
+    );
+
+    multisig::approve_intent(&mut account, key, scenario.ctx());
+    let executable = multisig::execute_intent(&mut account, key, &clock);
+    owned_intents::execute_transfer_to_vault<Multisig, Approvals, SUI>(executable, &mut account, ts::receiving_ticket_by_id<Coin<SUI>>(id));
+
+    let mut expired = account.destroy_empty_intent(key);
+    owned::delete_withdraw(&mut expired, &mut account);
+    vault::delete_deposit<SUI>(&mut expired);
+    expired.destroy_empty();
+
+    let vault = vault::borrow_vault(&account, b"Degen".to_string());
+    assert!(vault.coin_type_exists<SUI>());
+    assert!(vault.coin_type_value<SUI>() == 1);
+
+    end(scenario, extensions, account, clock);
+}
 
 #[test]
 fun test_request_execute_transfer() {
