@@ -347,7 +347,7 @@ fun test_take_flow() {
     let key = b"dummy".to_string();
 
     let mut intent = create_dummy_intent(&mut scenario, &mut account);
-    acc_kiosk::new_take(&mut intent, &account, ids.pop_back(), OWNER, version::current(), DummyIntent());
+    acc_kiosk::new_take(&mut intent, &account, b"Degen".to_string(), ids.pop_back(), OWNER, version::current(), DummyIntent());
     account.add_intent(intent, version::current(), DummyIntent());
 
     multisig::approve_intent(&mut account, key, scenario.ctx());
@@ -379,7 +379,7 @@ fun test_list_flow() {
     let key = b"dummy".to_string();
 
     let mut intent = create_dummy_intent(&mut scenario, &mut account);
-    acc_kiosk::new_list(&mut intent, &account, ids.pop_back(), 100, version::current(), DummyIntent());
+    acc_kiosk::new_list(&mut intent, &account, b"Degen".to_string(), ids.pop_back(), 100, version::current(), DummyIntent());
     account.add_intent(intent, version::current(), DummyIntent());
 
     multisig::approve_intent(&mut account, key, scenario.ctx());
@@ -405,7 +405,7 @@ fun test_take_expired() {
     let key = b"dummy".to_string();
 
     let mut intent = create_dummy_intent(&mut scenario, &mut account);
-    acc_kiosk::new_take(&mut intent, &account, ids.pop_back(), OWNER, version::current(), DummyIntent());
+    acc_kiosk::new_take(&mut intent, &account, b"Degen".to_string(), ids.pop_back(), OWNER, version::current(), DummyIntent());
     account.add_intent(intent, version::current(), DummyIntent());
 
     let mut expired = account.delete_expired_intent(key, &clock);
@@ -424,7 +424,7 @@ fun test_list_expired() {
     let key = b"dummy".to_string();
 
     let mut intent = create_dummy_intent(&mut scenario, &mut account);
-    acc_kiosk::new_list(&mut intent, &account, ids.pop_back(), 100, version::current(), DummyIntent());
+    acc_kiosk::new_list(&mut intent, &account, b"Degen".to_string(), ids.pop_back(), 100, version::current(), DummyIntent());
     account.add_intent(intent, version::current(), DummyIntent());
     
     let mut expired = account.delete_expired_intent(key, &clock);
@@ -519,7 +519,7 @@ fun test_error_do_take_wrong_receiver() {
     let key = b"dummy".to_string();
 
     let mut intent = create_dummy_intent(&mut scenario, &mut account);
-    acc_kiosk::new_take(&mut intent, &account, ids.pop_back(), ALICE, version::current(), DummyIntent());
+    acc_kiosk::new_take(&mut intent, &account, b"Degen".to_string(), ids.pop_back(), ALICE, version::current(), DummyIntent());
     account.add_intent(intent, version::current(), DummyIntent());
 
     multisig::approve_intent(&mut account, key, scenario.ctx());
@@ -558,7 +558,7 @@ fun test_error_do_take_from_wrong_account() {
     let key = b"dummy".to_string();
 
     let mut intent = create_dummy_intent(&mut scenario, &mut account2);
-    acc_kiosk::new_take(&mut intent, &account, ids.pop_back(), OWNER, version::current(), DummyIntent());
+    acc_kiosk::new_take(&mut intent, &account, b"Degen".to_string(), ids.pop_back(), OWNER, version::current(), DummyIntent());
     account2.add_intent(intent, version::current(), DummyIntent());
 
     multisig::approve_intent(&mut account2, key, scenario.ctx());
@@ -592,7 +592,7 @@ fun test_error_do_take_from_wrong_constructor_witness() {
     let key = b"dummy".to_string();
 
     let mut intent = create_dummy_intent(&mut scenario, &mut account);
-    acc_kiosk::new_take(&mut intent, &account, ids.pop_back(), OWNER, version::current(), DummyIntent());
+    acc_kiosk::new_take(&mut intent, &account, b"Degen".to_string(), ids.pop_back(), OWNER, version::current(), DummyIntent());
     account.add_intent(intent, version::current(), DummyIntent());
 
     multisig::approve_intent(&mut account, key, scenario.ctx());
@@ -625,7 +625,7 @@ fun test_error_do_take_from_not_dep() {
     let key = b"dummy".to_string();
 
     let mut intent = create_dummy_intent(&mut scenario, &mut account);
-    acc_kiosk::new_take(&mut intent, &account, ids.pop_back(), OWNER, version::current(), DummyIntent());
+    acc_kiosk::new_take(&mut intent, &account, b"Degen".to_string(), ids.pop_back(), OWNER, version::current(), DummyIntent());
     account.add_intent(intent, version::current(), DummyIntent());
 
     multisig::approve_intent(&mut account, key, scenario.ctx());
@@ -661,7 +661,7 @@ fun test_error_do_list_from_wrong_account() {
     let key = b"dummy".to_string();
 
     let mut intent = create_dummy_intent(&mut scenario, &mut account2);
-    acc_kiosk::new_take(&mut intent, &account, ids.pop_back(), OWNER, version::current(), DummyIntent());
+    acc_kiosk::new_take(&mut intent, &account, b"Degen".to_string(), ids.pop_back(), OWNER, version::current(), DummyIntent());
     account2.add_intent(intent, version::current(), DummyIntent());
 
     multisig::approve_intent(&mut account2, key, scenario.ctx());
@@ -687,7 +687,7 @@ fun test_error_do_list_from_wrong_constructor_witness() {
     let key = b"dummy".to_string();
 
     let mut intent = create_dummy_intent(&mut scenario, &mut account);
-    acc_kiosk::new_take(&mut intent, &account, ids.pop_back(), OWNER, version::current(), DummyIntent());
+    acc_kiosk::new_take(&mut intent, &account, b"Degen".to_string(), ids.pop_back(), OWNER, version::current(), DummyIntent());
     account.add_intent(intent, version::current(), DummyIntent());
 
     multisig::approve_intent(&mut account, key, scenario.ctx());
@@ -712,7 +712,7 @@ fun test_error_do_list_from_not_dep() {
     let key = b"dummy".to_string();
 
     let mut intent = create_dummy_intent(&mut scenario, &mut account);
-    acc_kiosk::new_take(&mut intent, &account, ids.pop_back(), OWNER, version::current(), DummyIntent());
+    acc_kiosk::new_take(&mut intent, &account, b"Degen".to_string(), ids.pop_back(), OWNER, version::current(), DummyIntent());
     account.add_intent(intent, version::current(), DummyIntent());
 
     multisig::approve_intent(&mut account, key, scenario.ctx());

@@ -179,7 +179,7 @@ public fun public_burn<Config, Outcome, CoinType>(
     account: &mut Account<Config, Outcome>, 
     coin: Coin<CoinType>
 ) {
-    assert!(has_cap<Config, Outcome, CoinType>(account), ENoLock);
+    assert!(has_cap<_, _, CoinType>(account), ENoLock);
 
     let rules_mut: &mut CurrencyRules<CoinType> = 
         account.borrow_managed_struct_mut(CurrencyRulesKey<CoinType> {}, version::current());

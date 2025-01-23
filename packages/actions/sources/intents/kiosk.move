@@ -64,7 +64,7 @@ public fun request_take<Config, Outcome>(
     );
 
     nft_ids.do!(|nft_id| 
-        acc_kiosk::new_take(&mut intent, account, nft_id, recipient, version::current(), TakeIntent())
+        acc_kiosk::new_take(&mut intent, account, kiosk_name, nft_id, recipient, version::current(), TakeIntent())
     );
     account.add_intent(intent, version::current(), TakeIntent());
 }
@@ -124,7 +124,7 @@ public fun request_list<Config, Outcome>(
     );
 
     nft_ids.zip_do!(prices, |nft_id, price| 
-        acc_kiosk::new_list(&mut intent, account, nft_id, price, version::current(), ListIntent())
+        acc_kiosk::new_list(&mut intent, account, kiosk_name, nft_id, price, version::current(), ListIntent())
     );
     account.add_intent(intent, version::current(), ListIntent());
 }
