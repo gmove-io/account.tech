@@ -1,5 +1,5 @@
 #[test_only]
-module account_actions::upgrade_policies_intents_tests;
+module account_actions::package_upgrade_intents_tests;
 
 // === Imports ===
 
@@ -13,8 +13,8 @@ use account_extensions::extensions::{Self, Extensions, AdminCap};
 use account_protocol::account::Account;
 use account_config::multisig::{Self, Multisig, Approvals};
 use account_actions::{
-    upgrade_policies,
-    upgrade_policies_intents,
+    package_upgrade,
+    package_upgrade_intents,
 };
 
 // === Constants ===
@@ -61,11 +61,11 @@ fun test_request_execute_upgrade() {
     let key = b"dummy".to_string();
 
     let auth = multisig::authenticate(&account, scenario.ctx());
-    upgrade_policies::lock_cap(auth, &mut account, upgrade_cap, b"Degen".to_string(), 1000);
+    package_upgrade::lock_cap(auth, &mut account, upgrade_cap, b"Degen".to_string(), 1000);
 
     let auth = multisig::authenticate(&account, scenario.ctx());
     let outcome = multisig::empty_outcome();
-    upgrade_policies_intents::request_upgrade(
+    package_upgrade_intents::request_upgrade(
         auth, 
         outcome, 
         &mut account, 
@@ -82,12 +82,12 @@ fun test_request_execute_upgrade() {
     multisig::approve_intent(&mut account, key, scenario.ctx());
     let mut executable = multisig::execute_intent(&mut account, key, &clock);
 
-    let ticket = upgrade_policies_intents::execute_upgrade(&mut executable, &mut account, &clock);
+    let ticket = package_upgrade_intents::execute_upgrade(&mut executable, &mut account, &clock);
     let receipt = ticket.test_upgrade();
-    upgrade_policies_intents::complete_upgrade(executable, &mut account, receipt);
+    package_upgrade_intents::complete_upgrade(executable, &mut account, receipt);
 
     let mut expired = account.destroy_empty_intent(key);
-    upgrade_policies::delete_upgrade(&mut expired);
+    package_upgrade::delete_upgrade(&mut expired);
     expired.destroy_empty();
 
     end(scenario, extensions, account, clock);
@@ -99,11 +99,11 @@ fun test_request_execute_restrict_all() {
     let key = b"dummy".to_string();
 
     let auth = multisig::authenticate(&account, scenario.ctx());
-    upgrade_policies::lock_cap(auth, &mut account, upgrade_cap, b"Degen".to_string(), 1000);
+    package_upgrade::lock_cap(auth, &mut account, upgrade_cap, b"Degen".to_string(), 1000);
 
     let auth = multisig::authenticate(&account, scenario.ctx());
     let outcome = multisig::empty_outcome();
-    upgrade_policies_intents::request_restrict(
+    package_upgrade_intents::request_restrict(
         auth, 
         outcome, 
         &mut account, 
@@ -119,15 +119,15 @@ fun test_request_execute_restrict_all() {
     clock.increment_for_testing(1000);
     multisig::approve_intent(&mut account, key, scenario.ctx());
     let executable = multisig::execute_intent(&mut account, key, &clock);
-    upgrade_policies_intents::execute_restrict(executable, &mut account);
+    package_upgrade_intents::execute_restrict(executable, &mut account);
 
     let mut expired = account.destroy_empty_intent(key);
-    upgrade_policies::delete_restrict(&mut expired);
+    package_upgrade::delete_restrict(&mut expired);
     expired.destroy_empty();
 
     let auth = multisig::authenticate(&account, scenario.ctx());
     let outcome = multisig::empty_outcome();
-    upgrade_policies_intents::request_restrict(
+    package_upgrade_intents::request_restrict(
         auth, 
         outcome, 
         &mut account, 
@@ -143,15 +143,15 @@ fun test_request_execute_restrict_all() {
     clock.increment_for_testing(1000);
     multisig::approve_intent(&mut account, key, scenario.ctx());
     let executable = multisig::execute_intent(&mut account, key, &clock);
-    upgrade_policies_intents::execute_restrict(executable, &mut account);
+    package_upgrade_intents::execute_restrict(executable, &mut account);
 
     let mut expired = account.destroy_empty_intent(key);
-    upgrade_policies::delete_restrict(&mut expired);
+    package_upgrade::delete_restrict(&mut expired);
     expired.destroy_empty();
 
     let auth = multisig::authenticate(&account, scenario.ctx());
     let outcome = multisig::empty_outcome();
-    upgrade_policies_intents::request_restrict(
+    package_upgrade_intents::request_restrict(
         auth, 
         outcome, 
         &mut account, 
@@ -167,25 +167,25 @@ fun test_request_execute_restrict_all() {
     clock.increment_for_testing(1000);
     multisig::approve_intent(&mut account, key, scenario.ctx());
     let executable = multisig::execute_intent(&mut account, key, &clock);
-    upgrade_policies_intents::execute_restrict(executable, &mut account);
+    package_upgrade_intents::execute_restrict(executable, &mut account);
 
     let mut expired = account.destroy_empty_intent(key);
-    upgrade_policies::delete_restrict(&mut expired);
+    package_upgrade::delete_restrict(&mut expired);
     expired.destroy_empty();
     // lock destroyed with upgrade cap
-    assert!(!upgrade_policies::has_cap(&account, b"Degen".to_string()));
+    assert!(!package_upgrade::has_cap(&account, b"Degen".to_string()));
 
     end(scenario, extensions, account, clock);
 }
 
-#[test, expected_failure(abort_code = upgrade_policies_intents::ENoLock)]
+#[test, expected_failure(abort_code = package_upgrade_intents::ENoLock)]
 fun test_error_request_upgrade_no_lock() {
     let (mut scenario, extensions, mut account, clock, upgrade_cap) = start();
     let key = b"dummy".to_string();
 
     let auth = multisig::authenticate(&account, scenario.ctx());
     let outcome = multisig::empty_outcome();
-    upgrade_policies_intents::request_upgrade(
+    package_upgrade_intents::request_upgrade(
         auth, 
         outcome, 
         &mut account, 
@@ -202,14 +202,14 @@ fun test_error_request_upgrade_no_lock() {
     end(scenario, extensions, account, clock);
 }
 
-#[test, expected_failure(abort_code = upgrade_policies_intents::ENoLock)]
+#[test, expected_failure(abort_code = package_upgrade_intents::ENoLock)]
 fun test_error_request_restrict_no_lock() {
     let (mut scenario, extensions, mut account, clock, upgrade_cap) = start();
     let key = b"dummy".to_string();
 
     let auth = multisig::authenticate(&account, scenario.ctx());
     let outcome = multisig::empty_outcome();
-    upgrade_policies_intents::request_restrict(
+    package_upgrade_intents::request_restrict(
         auth, 
         outcome, 
         &mut account, 
