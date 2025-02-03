@@ -16,7 +16,7 @@ const ALICE: address = @0xA11CE;
 
 // === Structs ===
 
-public struct DummyProposal() has drop;
+public struct DummyIntent() has drop;
 
 // === Helpers ===
 
