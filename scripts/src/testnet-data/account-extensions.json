@@ -1,18 +1,18 @@
 [
   {
-    "type": "extensions::AdminCap",
-    "id": "0x8655575a8538cbd6de00c9f06e20cdf1f2904a66e5154f92d3385a5b542d69a5"
-  },
-  {
-    "type": "package::UpgradeCap",
-    "id": "0x9b4f1ecde117ad6cc7c8d4fe1ec076501da243a4097fd860269bcd2c30f7f24d"
+    "type": "extensions::Extensions",
+    "id": "0x1ad1922793e6b3a19d83dc751d238fe1f52ae0652b434489f847e28c1bc3e6d8"
   },
   {
     "type": "AccountExtensions",
-    "id": "0xbe976e1f23930ad6150dad9b50eb9ccc01466da36b54ad88bd43a77c66ea70bb"
+    "id": "0x360819c66bcaf7f423b67d67a681da2b9ece6fda04e616d9dbe9bbd3462d8809"
   },
   {
-    "type": "extensions::Extensions",
-    "id": "0xf15ab5a51d8e449155aa338f0f4ab85e320db092a2bb7c8e0f732727705cad08"
+    "type": "package::UpgradeCap",
+    "id": "0x72d0e8e73d3472ba909a414b8cef07599eae0faeec703d2640762f7b3c46b184"
+  },
+  {
+    "type": "extensions::AdminCap",
+    "id": "0xd10aa9605c7a542c5ca01916f5525fa195207d5b24cd488755a6f6ea067eee51"
   }
 ]

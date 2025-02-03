@@ -16,6 +16,6 @@ local = "../protocol"
 local = "../extensions"
 
 [addresses]
-account_config = "0x24fc7f9bb5edbf709f56db3116ba9c5c8260a911090b141f52c0b02a70758b9b"
-account_protocol = "0x1696024b7ab7419127bbc671bcd216e9a740103bfcb7bf22d8684b36f824ab75"
-account_extensions = "0xbe976e1f23930ad6150dad9b50eb9ccc01466da36b54ad88bd43a77c66ea70bb"
+account_config = "0xecb9a401e2bb786aa2b90eed359a79e7ce96e8187c3424db78d3aad3e45ee921"
+account_protocol = "0x528dc5bceb99fbb31550c4ea4a68626b8aca1f4d6b3280abd573b3a3cd06b457"
+account_extensions = "0x360819c66bcaf7f423b67d67a681da2b9ece6fda04e616d9dbe9bbd3462d8809"

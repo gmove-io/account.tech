@@ -3,15 +3,15 @@
   "type": "module",
   "devDependencies": {
     "@types/bun": "latest",
-    "@typescript-eslint/parser": "^6.19.1",
-    "eslint": "^8.56.0",
-    "typescript": "^5.3.3"
+    "@typescript-eslint/parser": "^6.21.0",
+    "eslint": "^8.57.1",
+    "typescript": "^5.7.3"
   },
   "dependencies": {
     "@iarna/toml": "^2.2.5",
-    "@mysten/sui": "^1.9.0",
-    "bun-types": "^1.0.25",
+    "@mysten/sui": "^1.21.1",
+    "bun-types": "^1.2.2",
     "csv-writer": "^1.6.0",
-    "dotenv": "^16.4.1"
+    "dotenv": "^16.4.7"
   }
 }
