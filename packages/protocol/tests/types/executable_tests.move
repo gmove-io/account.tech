@@ -25,11 +25,10 @@ fun test_executable_flow() {
     let scenario = ts::begin(OWNER);
 
     let issuer = issuer::new(@0x0, DummyIntent());
-    let mut executable = executable::new(issuer, b"one".to_string(), b"managed_name".to_string());
+    let mut executable = executable::new(issuer, b"one".to_string());
     // verify initial state (pending action)
     assert!(executable.issuer().account_addr() == @0x0);
     assert!(executable.key() == b"one".to_string());
-    assert!(executable.managed_name() == b"managed_name".to_string());
     assert!(executable.action_idx() == 0);
     // first step: execute action
     let (key, action_idx) = executable.next_action();

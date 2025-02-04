@@ -57,20 +57,11 @@ public struct Intent<Outcome> has store {
     // the proposal can be deleted from this timestamp
     expiration_time: u64,
     // role for the intent 
-    role: Role,
+    role: String,
     // heterogenous array of actions to be executed in order
     actions: Bag,
     // Generic struct storing vote related data, depends on the config
     outcome: Outcome
-}
-
-public struct Role has copy, drop, store {
-    // package id where the issuer has been created
-    package_id: String,
-    // module name where the issuer has been created
-    module_name: String,
-    // name of the managed struct/object (can be empty)
-    managed_name: String,
 }
 
 /// Hot potato wrapping actions from an intent that expired or has been executed
@@ -135,39 +126,16 @@ public fun expiration_time<Outcome>(intent: &Intent<Outcome>): u64 {
     intent.expiration_time
 }
 
+public fun role<Outcome>(intent: &Intent<Outcome>): String {
+    intent.role
+}
+
 public fun actions<Outcome>(intent: &Intent<Outcome>): &Bag {
     &intent.actions
 }
 
 public fun outcome<Outcome>(intent: &Intent<Outcome>): &Outcome {
     &intent.outcome
-}
-
-/// Converts a role into its string representation
-/// role is package::module::name or package::module
-public fun full_role<Outcome>(intent: &Intent<Outcome>): String {
-    let mut full_role = intent.role.package_id;
-    full_role.append_utf8(b"::");
-    full_role.append(intent.role.module_name);
-
-    if (!intent.role.managed_name.is_empty()) {
-        full_role.append_utf8(b"::");  
-        full_role.append(intent.role.managed_name);
-    };
-
-    full_role
-}
-
-public fun role_package_id<Outcome>(intent: &Intent<Outcome>): String {
-    intent.role.package_id
-}
-
-public fun role_module_name<Outcome>(intent: &Intent<Outcome>): String {
-    intent.role.module_name
-}
-
-public fun role_managed_name<Outcome>(intent: &Intent<Outcome>): String {
-    intent.role.managed_name
 }
 
 /// safe because &mut Proposal is only accessible in core deps
@@ -222,12 +190,18 @@ public(package) fun empty<Outcome>(): Intents<Outcome> {
     Intents<Outcome> { inner: vector[], locked: vec_set::empty() }
 }
 
-public(package) fun new_role<IW: drop>(managed_name: String, _intent_witness: IW): Role {
+public(package) fun new_role<IW: drop>(managed_name: String, _intent_witness: IW): String {
     let intent_type = type_name::get<IW>();
-    let package_id = intent_type.get_address().to_string();
-    let module_name = intent_type.get_module().to_string();
+    let mut role = intent_type.get_address().to_string();
+    role.append_utf8(b"::");
+    role.append(intent_type.get_module().to_string());
 
-    Role { package_id, module_name, managed_name }
+    if (!managed_name.is_empty()) {
+        role.append_utf8(b"::");
+        role.append(managed_name);
+    };
+
+    role
 }
 
 public(package) fun new_intent<Outcome>(
@@ -236,7 +210,7 @@ public(package) fun new_intent<Outcome>(
     description: String,
     execution_times: vector<u64>, // timestamp in ms
     expiration_time: u64,
-    role: Role,
+    role: String,
     outcome: Outcome,
     ctx: &mut TxContext
 ): Intent<Outcome> {

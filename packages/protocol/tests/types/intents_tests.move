@@ -66,7 +66,7 @@ fun test_getters() {
     assert!(intent1.execution_times() == vector[0]);
     assert!(intent1.expiration_time() == 1);
     assert!(intent1.actions().length() == 0);
-    assert!(intent1.full_role() == full_role());
+    assert!(intent1.role() == full_role());
     assert!(intent1.outcome() == true);
     let intent_mut1 = intents.get_mut(b"one".to_string());
     let outcome = intent_mut1.outcome_mut();

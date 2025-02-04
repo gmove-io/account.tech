@@ -35,7 +35,7 @@ const ELockAlreadyExists: vector<u8> = b"Lock with this name already exists";
 #[error]
 const EUpgradeTooEarly: vector<u8> = b"Upgrade too early";
 #[error]
-const ENoPackageDoesntExist: vector<u8> = b"No package with this name";
+const EPackageDoesntExist: vector<u8> = b"No package with this name";
 #[error]
 const ENoLock: vector<u8> = b"No lock with this name";
 
@@ -189,7 +189,7 @@ public fun get_package_name<Config, Outcome>(
         if (addr == package_addr) break package_name;
         
         i = i + 1;
-        if (i == index.packages_info.size()) abort ENoPackageDoesntExist;
+        if (i == index.packages_info.size()) abort EPackageDoesntExist;
     };
     
     package_name
@@ -208,9 +208,7 @@ public fun new_upgrade<Config, Outcome, IW: drop>(
 ) {
     assert!(package_upgrade::has_cap(account, name), ENoLock);
 
-    let name = intent.role_managed_name();
     let upgrade_time = clock.timestamp_ms() + get_time_delay(account, name);
-
     account.add_action(intent, UpgradeAction { name, digest, upgrade_time }, version_witness, intent_witness);
 }    
 
@@ -231,6 +229,7 @@ public fun do_upgrade<Config, Outcome, IW: copy + drop>(
     cap.authorize_upgrade(policy, digest)
 }    
 
+// must be called after UpgradeAction is processed, there cannot be any other action processed before
 public fun confirm_upgrade<Config, Outcome, IW: copy + drop>(
     executable: &Executable,
     account: &mut Account<Config, Outcome>,
@@ -238,12 +237,12 @@ public fun confirm_upgrade<Config, Outcome, IW: copy + drop>(
     version_witness: VersionWitness,
     intent_witness: IW,
 ) {
-    // same checks as in `executable.action()`
+    // same checks as in `account.process_action()`
     account.deps().check(version_witness);
     executable.issuer().assert_is_intent(intent_witness);
     executable.issuer().assert_is_account(account.addr());
 
-    let name = executable.managed_name();
+    let name = account.intents().get(executable.key()).actions().borrow<_, UpgradeAction>(executable.action_idx() - 1).name;
     let cap_mut: &mut UpgradeCap = account.borrow_managed_object_mut(UpgradeCapKey { name }, version_witness);
     cap_mut.commit_upgrade(receipt);
     let new_package_addr = cap_mut.package().to_address();

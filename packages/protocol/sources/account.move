@@ -368,7 +368,7 @@ public fun execute_intent<Config, Outcome: copy, CW: drop>(
     let time = intent.pop_front_execution_time();
     assert!(clock.timestamp_ms() >= time, ECantBeExecutedYet);
 
-    (executable::new(*intent.issuer(), key, intent.role_managed_name()), *intent.outcome())
+    (executable::new(*intent.issuer(), key), *intent.outcome())
 }
 
 public fun intents_mut<Config, Outcome, CW: drop>(

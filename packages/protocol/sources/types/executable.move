@@ -21,8 +21,6 @@ public struct Executable {
     issuer: Issuer,
     // key of the intent that created the executable
     key: String,
-    // name of the container and optional name of the role
-    managed_name: String,
     // current action index, to reduce gas costs for large bags
     action_idx: u64,
 }
@@ -37,10 +35,6 @@ public fun key(executable: &Executable): String {
     executable.key
 }
 
-public fun managed_name(executable: &Executable): String {
-    executable.managed_name
-}
-
 public fun action_idx(executable: &Executable): u64 {
     executable.action_idx
 }
@@ -48,8 +42,8 @@ public fun action_idx(executable: &Executable): u64 {
 // === Package functions ===
 
 /// Is only called from the account module
-public(package) fun new(issuer: Issuer, key: String, managed_name: String): Executable {
-    Executable { issuer, key, managed_name, action_idx: 0 }
+public(package) fun new(issuer: Issuer, key: String): Executable {
+    Executable { issuer, key, action_idx: 0 }
 }
 
 public(package) fun next_action(executable: &mut Executable): (String, u64) {

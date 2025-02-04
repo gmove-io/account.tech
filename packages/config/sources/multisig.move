@@ -153,7 +153,7 @@ public fun approve_intent(
         EAlreadyApproved
     );
 
-    let role = account.intents().get(key).full_role();
+    let role = account.intents().get(key).role();
     let member = account.config().member(ctx.sender());
     let has_role = member.has_role(role);
 
@@ -176,7 +176,7 @@ public fun disapprove_intent(
         ENotApproved
     );
     
-    let role = account.intents().get(key).full_role();
+    let role = account.intents().get(key).role();
     let member = account.config().member(ctx.sender());
     let has_role = member.has_role(role);
 
@@ -195,7 +195,7 @@ public fun execute_intent(
     clock: &Clock,
 ): Executable {
     let (executable, outcome) = account.execute_intent(key, clock, version::current(), Witness());
-    outcome.validate(account.config(), account.intents().get(key).full_role());
+    outcome.validate(account.config(), account.intents().get(key).role());
 
     executable
 }
