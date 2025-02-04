@@ -27,14 +27,14 @@ const ECoinTypeDoesntExist: vector<u8> = b"Coin type doesn't exist in vault";
 // === Structs ===
 
 /// [PROPOSAL] witness defining the vault transfer proposal, and associated role
-public struct TransferIntent() has copy, drop;
+public struct SpendAndTransferIntent() has copy, drop;
 /// [PROPOSAL] witness defining the vault pay proposal, and associated role
-public struct VestingIntent() has copy, drop;
+public struct SpendAndVestIntent() has copy, drop;
 
 // === [PROPOSAL] Public Functions ===
 
 // step 1: propose to send managed coins
-public fun request_transfer<Config, Outcome, CoinType: drop>(
+public fun request_spend_and_transfer<Config, Outcome, CoinType: drop>(
     auth: Auth,
     outcome: Outcome,
     account: &mut Account<Config, Outcome>, 
@@ -63,40 +63,40 @@ public fun request_transfer<Config, Outcome, CoinType: drop>(
         vault_name,
         outcome,
         version::current(),
-        TransferIntent(),
+        SpendAndTransferIntent(),
         ctx
     );
 
     recipients.zip_do!(amounts, |recipient, amount| {
-        vault::new_spend<_, _, CoinType, _>(&mut intent, account, vault_name, amount, version::current(), TransferIntent());
-        acc_transfer::new_transfer(&mut intent, account, recipient, version::current(), TransferIntent());
+        vault::new_spend<_, _, CoinType, _>(&mut intent, account, vault_name, amount, version::current(), SpendAndTransferIntent());
+        acc_transfer::new_transfer(&mut intent, account, recipient, version::current(), SpendAndTransferIntent());
     });
-    account.add_intent(intent, version::current(), TransferIntent());
+    account.add_intent(intent, version::current(), SpendAndTransferIntent());
 }
 
 // step 2: multiple members have to approve the proposal (account::approve_proposal)
 // step 3: execute the proposal and return the action (account::execute_proposal)
 
 // step 4: loop over transfer
-public fun execute_transfer<Config, Outcome, CoinType: drop>(
+public fun execute_spend_and_transfer<Config, Outcome, CoinType: drop>(
     executable: &mut Executable, 
     account: &mut Account<Config, Outcome>, 
     ctx: &mut TxContext
 ) {
-    let coin: Coin<CoinType> = vault::do_spend(executable, account, version::current(), TransferIntent(), ctx);
-    acc_transfer::do_transfer(executable, account, coin, version::current(), TransferIntent());
+    let coin: Coin<CoinType> = vault::do_spend(executable, account, version::current(), SpendAndTransferIntent(), ctx);
+    acc_transfer::do_transfer(executable, account, coin, version::current(), SpendAndTransferIntent());
 }
 
 // step 5: complete acc_transfer and destroy the executable
-public fun complete_transfer<Config, Outcome>(
+public fun complete_spend_and_transfer<Config, Outcome>(
     executable: Executable,
     account: &Account<Config, Outcome>,
 ) {
-    account.confirm_execution(executable, version::current(), TransferIntent());
+    account.confirm_execution(executable, version::current(), SpendAndTransferIntent());
 }
 
 // step 1(bis): same but from a vault
-public fun request_vesting<Config, Outcome, CoinType: drop>(
+public fun request_spend_and_vest<Config, Outcome, CoinType: drop>(
     auth: Auth,
     outcome: Outcome,
     account: &mut Account<Config, Outcome>, 
@@ -124,29 +124,29 @@ public fun request_vesting<Config, Outcome, CoinType: drop>(
         vault_name,
         outcome,
         version::current(),
-        VestingIntent(),
+        SpendAndVestIntent(),
         ctx
     );
 
     vault::new_spend<_, _, CoinType, _>(
-        &mut intent, account, vault_name, coin_amount, version::current(), VestingIntent()
+        &mut intent, account, vault_name, coin_amount, version::current(), SpendAndVestIntent()
     );
     vesting::new_vesting(
-        &mut intent, account, start_timestamp, end_timestamp, recipient, version::current(), VestingIntent()
+        &mut intent, account, start_timestamp, end_timestamp, recipient, version::current(), SpendAndVestIntent()
     );
-    account.add_intent(intent, version::current(), VestingIntent());
+    account.add_intent(intent, version::current(), SpendAndVestIntent());
 }
 
 // step 2: multiple members have to approve the proposal (account::approve_proposal)
 // step 3: execute the proposal and return the action (account::execute_proposal)
 
 // step 4: loop over it in PTB, sends last object from the Send action
-public fun execute_vesting<Config, Outcome, CoinType: drop>(
+public fun execute_spend_and_vest<Config, Outcome, CoinType: drop>(
     mut executable: Executable, 
     account: &mut Account<Config, Outcome>, 
     ctx: &mut TxContext
 ) {
-    let coin: Coin<CoinType> = vault::do_spend(&mut executable, account, version::current(), VestingIntent(), ctx);
-    vesting::do_vesting(&mut executable, account, coin, version::current(), VestingIntent(), ctx);
-    account.confirm_execution(executable, version::current(), VestingIntent());
+    let coin: Coin<CoinType> = vault::do_spend(&mut executable, account, version::current(), SpendAndVestIntent(), ctx);
+    vesting::do_vesting(&mut executable, account, coin, version::current(), SpendAndVestIntent(), ctx);
+    account.confirm_execution(executable, version::current(), SpendAndVestIntent());
 }

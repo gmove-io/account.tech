@@ -62,7 +62,7 @@ fun cap(scenario: &mut Scenario): Cap {
 // === Tests ===
 
 #[test]
-fun test_request_execute_access() {
+fun test_request_execute_borrow_cap() {
     let (mut scenario, extensions, mut account, clock) = start();
     let auth = multisig::authenticate(&account, scenario.ctx());
     access_control::lock_cap(auth, &mut account, cap(&mut scenario));
@@ -70,7 +70,7 @@ fun test_request_execute_access() {
 
     let auth = multisig::authenticate(&account, scenario.ctx());
     let outcome = multisig::empty_outcome();
-    access_control_intents::request_access<Multisig, Approvals, Cap>(
+    access_control_intents::request_borrow_cap<Multisig, Approvals, Cap>(
         auth, 
         outcome, 
         &mut account, 
@@ -85,27 +85,27 @@ fun test_request_execute_access() {
     let mut executable = multisig::execute_intent(&mut account, key, &clock);
     
     assert!(access_control::has_lock<Multisig, Approvals, Cap>(&account));
-    let (borrow, cap) = access_control_intents::execute_access<Multisig, Approvals, Cap>(&mut executable, &mut account);
+    let (borrow, cap) = access_control_intents::execute_borrow_cap<Multisig, Approvals, Cap>(&mut executable, &mut account);
     assert!(!access_control::has_lock<Multisig, Approvals, Cap>(&account));
     // do something with the cap
-    access_control_intents::complete_access(executable, &mut account, borrow, cap);
+    access_control_intents::complete_borrow_cap(executable, &mut account, borrow, cap);
     assert!(access_control::has_lock<Multisig, Approvals, Cap>(&account)); 
 
     let mut expired = account.destroy_empty_intent(key);
-    access_control::delete_access<Cap>(&mut expired);
+    access_control::delete_borrow<Cap>(&mut expired);
     expired.destroy_empty();
 
     end(scenario, extensions, account, clock);
 }
 
 #[test, expected_failure(abort_code = access_control_intents::ENoLock)]
-fun test_error_request_access_no_lock() {
+fun test_error_request_borrow_cap_no_lock() {
     let (mut scenario, extensions, mut account, clock) = start();
     let key = b"dummy".to_string();
 
     let auth = multisig::authenticate(&account, scenario.ctx());
     let outcome = multisig::empty_outcome();
-    access_control_intents::request_access<Multisig, Approvals, Cap>(
+    access_control_intents::request_borrow_cap<Multisig, Approvals, Cap>(
         auth, 
         outcome, 
         &mut account, 

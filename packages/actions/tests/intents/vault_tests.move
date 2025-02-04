@@ -78,7 +78,7 @@ fun test_request_execute_transfer() {
 
     let auth = multisig::authenticate(&account, scenario.ctx());
     let outcome = multisig::empty_outcome();
-    vault_intents::request_transfer<Multisig, Approvals, SUI>(
+    vault_intents::request_spend_and_transfer<Multisig, Approvals, SUI>(
         auth, 
         outcome, 
         &mut account, 
@@ -94,10 +94,10 @@ fun test_request_execute_transfer() {
 
     multisig::approve_intent(&mut account, key, scenario.ctx());
     let mut executable = multisig::execute_intent(&mut account, key, &clock);
-    // loop over execute_transfer to execute each action
-    vault_intents::execute_transfer<Multisig, Approvals, SUI>(&mut executable, &mut account, scenario.ctx());
-    vault_intents::execute_transfer<Multisig, Approvals, SUI>(&mut executable, &mut account, scenario.ctx());
-    vault_intents::complete_transfer(executable, &account);
+    // loop over execute_spend_and_transfer to execute each action
+    vault_intents::execute_spend_and_transfer<Multisig, Approvals, SUI>(&mut executable, &mut account, scenario.ctx());
+    vault_intents::execute_spend_and_transfer<Multisig, Approvals, SUI>(&mut executable, &mut account, scenario.ctx());
+    vault_intents::complete_spend_and_transfer(executable, &account);
 
     let mut expired = account.destroy_empty_intent(key);
     vault::delete_spend<SUI>(&mut expired);
@@ -134,7 +134,7 @@ fun test_request_execute_vesting() {
 
     let auth = multisig::authenticate(&account, scenario.ctx());
     let outcome = multisig::empty_outcome();
-    vault_intents::request_vesting<Multisig, Approvals, SUI>(
+    vault_intents::request_spend_and_vest<Multisig, Approvals, SUI>(
         auth, 
         outcome, 
         &mut account, 
@@ -152,7 +152,7 @@ fun test_request_execute_vesting() {
 
     multisig::approve_intent(&mut account, key, scenario.ctx());
     let executable = multisig::execute_intent(&mut account, key, &clock);
-    vault_intents::execute_vesting<Multisig, Approvals, SUI>(executable, &mut account, scenario.ctx());
+    vault_intents::execute_spend_and_vest<Multisig, Approvals, SUI>(executable, &mut account, scenario.ctx());
 
     let mut expired = account.destroy_empty_intent(key);
     vault::delete_spend<SUI>(&mut expired);
@@ -188,7 +188,7 @@ fun test_error_request_transfer_not_same_length() {
 
     let auth = multisig::authenticate(&account, scenario.ctx());
     let outcome = multisig::empty_outcome();
-    vault_intents::request_transfer<Multisig, Approvals, SUI>(
+    vault_intents::request_spend_and_transfer<Multisig, Approvals, SUI>(
         auth, 
         outcome, 
         &mut account, 
@@ -222,7 +222,7 @@ fun test_error_request_transfer_coin_type_doesnt_exist() {
 
     let auth = multisig::authenticate(&account, scenario.ctx());
     let outcome = multisig::empty_outcome();
-    vault_intents::request_transfer<Multisig, Approvals, SUI>(
+    vault_intents::request_spend_and_transfer<Multisig, Approvals, SUI>(
         auth, 
         outcome, 
         &mut account, 
@@ -256,7 +256,7 @@ fun test_error_request_transfer_insufficient_funds() {
 
     let auth = multisig::authenticate(&account, scenario.ctx());
     let outcome = multisig::empty_outcome();
-    vault_intents::request_transfer<Multisig, Approvals, SUI>(
+    vault_intents::request_spend_and_transfer<Multisig, Approvals, SUI>(
         auth, 
         outcome, 
         &mut account, 
@@ -290,7 +290,7 @@ fun test_error_request_vesting_coin_type_doesnt_exist() {
 
     let auth = multisig::authenticate(&account, scenario.ctx());
     let outcome = multisig::empty_outcome();
-    vault_intents::request_vesting<Multisig, Approvals, SUI>(
+    vault_intents::request_spend_and_vest<Multisig, Approvals, SUI>(
         auth, 
         outcome, 
         &mut account, 
@@ -326,7 +326,7 @@ fun test_error_request_vesting_insufficient_funds() {
 
     let auth = multisig::authenticate(&account, scenario.ctx());
     let outcome = multisig::empty_outcome();
-    vault_intents::request_vesting<Multisig, Approvals, SUI>(
+    vault_intents::request_spend_and_vest<Multisig, Approvals, SUI>(
         auth, 
         outcome, 
         &mut account, 

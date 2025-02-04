@@ -80,7 +80,7 @@ fun test_request_execute_transfer_to_vault() {
 
     let auth = multisig::authenticate(&account, scenario.ctx());
     let outcome = multisig::empty_outcome();
-    owned_intents::request_transfer_to_vault<Multisig, Approvals, SUI>(
+    owned_intents::request_withdraw_and_transfer_to_vault<Multisig, Approvals, SUI>(
         auth, 
         outcome, 
         &mut account, 
@@ -96,7 +96,7 @@ fun test_request_execute_transfer_to_vault() {
 
     multisig::approve_intent(&mut account, key, scenario.ctx());
     let executable = multisig::execute_intent(&mut account, key, &clock);
-    owned_intents::execute_transfer_to_vault<Multisig, Approvals, SUI>(executable, &mut account, ts::receiving_ticket_by_id<Coin<SUI>>(id));
+    owned_intents::execute_withdraw_and_transfer_to_vault<Multisig, Approvals, SUI>(executable, &mut account, ts::receiving_ticket_by_id<Coin<SUI>>(id));
 
     let mut expired = account.destroy_empty_intent(key);
     owned::delete_withdraw(&mut expired, &mut account);
@@ -120,7 +120,7 @@ fun test_request_execute_transfer() {
 
     let auth = multisig::authenticate(&account, scenario.ctx());
     let outcome = multisig::empty_outcome();
-    owned_intents::request_transfer(
+    owned_intents::request_withdraw_and_transfer<Multisig, Approvals>(
         auth, 
         outcome, 
         &mut account, 
@@ -136,9 +136,9 @@ fun test_request_execute_transfer() {
     multisig::approve_intent(&mut account, key, scenario.ctx());
     let mut executable = multisig::execute_intent(&mut account, key, &clock);
     // loop over execute_transfer to execute each action
-    owned_intents::execute_transfer<Multisig, Approvals, Coin<SUI>>(&mut executable, &mut account, ts::receiving_ticket_by_id<Coin<SUI>>(id1));
-    owned_intents::execute_transfer<Multisig, Approvals, Coin<SUI>>(&mut executable, &mut account, ts::receiving_ticket_by_id<Coin<SUI>>(id2));
-    owned_intents::complete_transfer(executable, &account);
+    owned_intents::execute_withdraw_and_transfer<Multisig, Approvals, Coin<SUI>>(&mut executable, &mut account, ts::receiving_ticket_by_id<Coin<SUI>>(id1));
+    owned_intents::execute_withdraw_and_transfer<Multisig, Approvals, Coin<SUI>>(&mut executable, &mut account, ts::receiving_ticket_by_id<Coin<SUI>>(id2));
+    owned_intents::complete_withdraw_and_transfer(executable, &account);
 
     let mut expired = account.destroy_empty_intent(key);
     owned::delete_withdraw(&mut expired, &mut account);
@@ -167,7 +167,7 @@ fun test_request_execute_vesting() {
 
     let auth = multisig::authenticate(&account, scenario.ctx());
     let outcome = multisig::empty_outcome();
-    owned_intents::request_vesting(
+    owned_intents::request_withdraw_and_vest<Multisig, Approvals>(
         auth, 
         outcome, 
         &mut account, 
@@ -184,7 +184,7 @@ fun test_request_execute_vesting() {
 
     multisig::approve_intent(&mut account, key, scenario.ctx());
     let executable = multisig::execute_intent(&mut account, key, &clock);
-    owned_intents::execute_vesting<Multisig, Approvals, SUI>(executable, &mut account, ts::receiving_ticket_by_id<Coin<SUI>>(id), scenario.ctx());
+    owned_intents::execute_withdraw_and_vest<Multisig, Approvals, SUI>(executable, &mut account, ts::receiving_ticket_by_id<Coin<SUI>>(id), scenario.ctx());
 
     let mut expired = account.destroy_empty_intent(key);
     owned::delete_withdraw(&mut expired, &mut account);
@@ -209,7 +209,7 @@ fun test_error_request_transfer_not_same_length() {
 
     let auth = multisig::authenticate(&account, scenario.ctx());
     let outcome = multisig::empty_outcome();
-    owned_intents::request_transfer(
+    owned_intents::request_withdraw_and_transfer<Multisig, Approvals>(
         auth, 
         outcome, 
         &mut account, 

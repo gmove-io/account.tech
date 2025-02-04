@@ -11,7 +11,7 @@ use account_protocol::{
     executable::Executable,
 };
 use account_actions::{
-    access_control::{Self, Borrow},
+    access_control::{Self, Borrowed},
     version,
 };
 
@@ -23,10 +23,10 @@ const ENoLock: vector<u8> = b"No Lock for this Cap type";
 // === Structs ===    
 
 /// [PROPOSAL] witness defining the access cap proposal, and associated role
-public struct AccessIntent() has copy, drop;
+public struct BorrowCapIntent() has copy, drop;
 
 // step 1: propose to mint an amount of a coin that will be transferred to the Account
-public fun request_access<Config, Outcome, Cap>(
+public fun request_borrow_cap<Config, Outcome, Cap>(
     auth: Auth,
     outcome: Outcome,
     account: &mut Account<Config, Outcome>,
@@ -47,32 +47,32 @@ public fun request_access<Config, Outcome, Cap>(
         type_name::get<Cap>().into_string().to_string(),
         outcome,
         version::current(),
-        AccessIntent(), 
+        BorrowCapIntent(), 
         ctx
     );
 
-    access_control::new_access<_, _, Cap, _>(&mut intent, account, version::current(), AccessIntent());
-    account.add_intent(intent, version::current(), AccessIntent());
+    access_control::new_borrow<_, _, Cap, _>(&mut intent, account, version::current(), BorrowCapIntent());
+    account.add_intent(intent, version::current(), BorrowCapIntent());
 }
 
 // step 2: multiple members have to approve the proposal (account::approve_proposal)
 // step 3: execute the proposal and return the action (AccountConfig::module::execute_proposal)
 
 // step 4: mint the coins and send them to the account
-public fun execute_access<Config, Outcome, Cap: key + store>(
+public fun execute_borrow_cap<Config, Outcome, Cap: key + store>(
     executable: &mut Executable,
     account: &mut Account<Config, Outcome>,
-): (Borrow<Cap>, Cap) {
-    access_control::do_access(executable, account, version::current(), AccessIntent())
+): (Borrowed<Cap>, Cap) {
+    access_control::do_borrow(executable, account, version::current(), BorrowCapIntent())
 }
 
 // step 5: return the cap to destroy Borrow, the action and executable
-public fun complete_access<Config, Outcome, Cap: key + store>(
+public fun complete_borrow_cap<Config, Outcome, Cap: key + store>(
     executable: Executable, 
     account: &mut Account<Config, Outcome>,
-    borrow: Borrow<Cap>, 
+    borrow: Borrowed<Cap>, 
     cap: Cap
 ) {
-    access_control::return_cap(account, borrow, cap, version::current());
-    account.confirm_execution(executable, version::current(), AccessIntent());
+    access_control::return_borrowed(account, borrow, cap, version::current());
+    account.confirm_execution(executable, version::current(), BorrowCapIntent());
 }

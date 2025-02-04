@@ -232,7 +232,7 @@ fun test_delist_nfts() {
     // list nfts
     let auth = multisig::authenticate(&account, scenario.ctx());
     let outcome = multisig::empty_outcome();
-    acc_kiosk_intents::request_list(
+    acc_kiosk_intents::request_list_nft(
         auth, 
         outcome,
         &mut account, 
@@ -248,9 +248,9 @@ fun test_delist_nfts() {
     multisig::approve_intent(&mut account, b"dummy".to_string(), scenario.ctx());
 
     let mut executable = multisig::execute_intent(&mut account, b"dummy".to_string(), &clock);
-    acc_kiosk_intents::execute_list<Multisig, Approvals, Nft>(&mut executable, &mut account, &mut acc_kiosk);
-    acc_kiosk_intents::execute_list<Multisig, Approvals, Nft>(&mut executable, &mut account, &mut acc_kiosk);
-    acc_kiosk_intents::complete_list(executable, &account);
+    acc_kiosk_intents::execute_list_nft<Multisig, Approvals, Nft>(&mut executable, &mut account, &mut acc_kiosk);
+    acc_kiosk_intents::execute_list_nft<Multisig, Approvals, Nft>(&mut executable, &mut account, &mut acc_kiosk);
+    acc_kiosk_intents::complete_list_nft(executable, &account);
 
     // delist nfts
     let auth = multisig::authenticate(&account, scenario.ctx());
@@ -272,7 +272,7 @@ fun test_withdraw_profits() {
     // list nfts
     let auth = multisig::authenticate(&account, scenario.ctx());
     let outcome = multisig::empty_outcome();
-    acc_kiosk_intents::request_list(
+    acc_kiosk_intents::request_list_nft(
         auth, 
         outcome,
         &mut account, 
@@ -288,9 +288,9 @@ fun test_withdraw_profits() {
     multisig::approve_intent(&mut account, b"dummy".to_string(), scenario.ctx());
 
     let mut executable = multisig::execute_intent(&mut account, b"dummy".to_string(), &clock);
-    acc_kiosk_intents::execute_list<Multisig, Approvals, Nft>(&mut executable, &mut account, &mut acc_kiosk);
-    acc_kiosk_intents::execute_list<Multisig, Approvals, Nft>(&mut executable, &mut account, &mut acc_kiosk);
-    acc_kiosk_intents::complete_list(executable, &account);
+    acc_kiosk_intents::execute_list_nft<Multisig, Approvals, Nft>(&mut executable, &mut account, &mut acc_kiosk);
+    acc_kiosk_intents::execute_list_nft<Multisig, Approvals, Nft>(&mut executable, &mut account, &mut acc_kiosk);
+    acc_kiosk_intents::complete_list_nft(executable, &account);
 
     // purchase nfts
     let (nft1, mut request1) = acc_kiosk.purchase<Nft>(ids.pop_back(), coin::mint_for_testing<SUI>(200, scenario.ctx()));

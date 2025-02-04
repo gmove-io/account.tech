@@ -125,7 +125,7 @@ fun test_request_execute_take() {
 
     let auth = multisig::authenticate(&account, scenario.ctx());
     let outcome = multisig::empty_outcome();
-    acc_kiosk_intents::request_take(
+    acc_kiosk_intents::request_take_nft(
         auth, 
         outcome,
         &mut account, 
@@ -141,7 +141,7 @@ fun test_request_execute_take() {
     multisig::approve_intent(&mut account, b"dummy".to_string(), scenario.ctx());
 
     let mut executable = multisig::execute_intent(&mut account, b"dummy".to_string(), &clock);
-    let request = acc_kiosk_intents::execute_take<Multisig, Approvals, Nft>(
+    let request = acc_kiosk_intents::execute_take_nft<Multisig, Approvals, Nft>(
         &mut executable, 
         &mut account, 
         &mut acc_kiosk,
@@ -151,7 +151,7 @@ fun test_request_execute_take() {
         scenario.ctx()
     );
     policy.confirm_request(request);
-    let request = acc_kiosk_intents::execute_take<Multisig, Approvals, Nft>(
+    let request = acc_kiosk_intents::execute_take_nft<Multisig, Approvals, Nft>(
         &mut executable, 
         &mut account, 
         &mut acc_kiosk,
@@ -161,7 +161,7 @@ fun test_request_execute_take() {
         scenario.ctx()
     );
     policy.confirm_request(request);
-    acc_kiosk_intents::complete_take(executable, &account);
+    acc_kiosk_intents::complete_take_nft(executable, &account);
 
     let mut expired = account.destroy_empty_intent(b"dummy".to_string());
     acc_kiosk::delete_take(&mut expired);
@@ -186,7 +186,7 @@ fun test_request_execute_list() {
     // list nfts
     let auth = multisig::authenticate(&account, scenario.ctx());
     let outcome = multisig::empty_outcome();
-    acc_kiosk_intents::request_list(
+    acc_kiosk_intents::request_list_nft(
         auth, 
         outcome,
         &mut account, 
@@ -202,9 +202,9 @@ fun test_request_execute_list() {
     multisig::approve_intent(&mut account, b"dummy".to_string(), scenario.ctx());
 
     let mut executable = multisig::execute_intent(&mut account, b"dummy".to_string(), &clock);
-    acc_kiosk_intents::execute_list<Multisig, Approvals, Nft>(&mut executable, &mut account, &mut acc_kiosk);
-    acc_kiosk_intents::execute_list<Multisig, Approvals, Nft>(&mut executable, &mut account, &mut acc_kiosk);
-    acc_kiosk_intents::complete_list(executable, &account);
+    acc_kiosk_intents::execute_list_nft<Multisig, Approvals, Nft>(&mut executable, &mut account, &mut acc_kiosk);
+    acc_kiosk_intents::execute_list_nft<Multisig, Approvals, Nft>(&mut executable, &mut account, &mut acc_kiosk);
+    acc_kiosk_intents::complete_list_nft(executable, &account);
 
     let mut expired = account.destroy_empty_intent(b"dummy".to_string());
     acc_kiosk::delete_list(&mut expired);
@@ -224,7 +224,7 @@ fun test_error_request_take_from_kiosk_doesnt_exist() {
     
     let auth = multisig::authenticate(&account, scenario.ctx());
     let outcome = multisig::empty_outcome();
-    acc_kiosk_intents::request_take(
+    acc_kiosk_intents::request_take_nft(
         auth, 
         outcome,
         &mut account, 
@@ -247,7 +247,7 @@ fun test_error_request_list_from_kiosk_doesnt_exist() {
     
     let auth = multisig::authenticate(&account, scenario.ctx());
     let outcome = multisig::empty_outcome();
-    acc_kiosk_intents::request_list(
+    acc_kiosk_intents::request_list_nft(
         auth, 
         outcome,
         &mut account, 
@@ -271,7 +271,7 @@ fun test_error_request_list_nfts_prices_not_same_length() {
 
     let auth = multisig::authenticate(&account, scenario.ctx());
     let outcome = multisig::empty_outcome();
-    acc_kiosk_intents::request_list(
+    acc_kiosk_intents::request_list_nft(
         auth, 
         outcome,
         &mut account, 

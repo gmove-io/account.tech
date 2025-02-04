@@ -19,16 +19,16 @@ use account_actions::{
 // === Structs ===
 
 /// [PROPOSAL] witness defining the proposal to upgrade a package
-public struct UpgradeIntent() has copy, drop;
+public struct UpgradePackageIntent() has copy, drop;
 /// [PROPOSAL] witness defining the proposal to restrict an UpgradeCap
-public struct RestrictIntent() has copy, drop;
+public struct RestrictPolicyIntent() has copy, drop;
 
 // === [PROPOSAL] Public Functions ===
 
 // step 1: propose an UpgradeAction by passing the digest of the package build
 // execution_time is automatically set to now + timelock
 // if timelock = 0, it means that upgrade can be executed at any time
-public fun request_upgrade<Config, Outcome>(
+public fun request_upgrade_package<Config, Outcome>(
     auth: Auth,
     outcome: Outcome,
     account: &mut Account<Config, Outcome>, 
@@ -51,43 +51,43 @@ public fun request_upgrade<Config, Outcome>(
         package_name,
         outcome,
         version::current(),
-        UpgradeIntent(),
+        UpgradePackageIntent(),
         ctx
     );
 
     package_upgrade::new_upgrade(
-        &mut intent, account, package_name, digest, clock, version::current(), UpgradeIntent()
+        &mut intent, account, package_name, digest, clock, version::current(), UpgradePackageIntent()
     );
-    account.add_intent(intent, version::current(), UpgradeIntent());
+    account.add_intent(intent, version::current(), UpgradePackageIntent());
 }
 
 // step 2: multiple members have to approve the proposal (account::approve_proposal)
 // step 3: execute the proposal and return the action (account::execute_proposal)
 
 // step 4: destroy UpgradeAction and return the UpgradeTicket for upgrading
-public fun execute_upgrade<Config, Outcome>(
+public fun execute_upgrade_package<Config, Outcome>(
     executable: &mut Executable,
     account: &mut Account<Config, Outcome>,
     clock: &Clock,
 ): UpgradeTicket {
-    package_upgrade::do_upgrade(executable, account, clock, version::current(), UpgradeIntent())
+    package_upgrade::do_upgrade(executable, account, clock, version::current(), UpgradePackageIntent())
 }    
 
 // step 5: consume the ticket to upgrade  
 
 // step 6: consume the receipt to commit the upgrade
-public fun complete_upgrade<Config, Outcome>(
+public fun complete_upgrade_package<Config, Outcome>(
     executable: Executable,
     account: &mut Account<Config, Outcome>,
     receipt: UpgradeReceipt,
 ) {
-    package_upgrade::confirm_upgrade(&executable, account, receipt, version::current(), UpgradeIntent());
-    account.confirm_execution(executable, version::current(), UpgradeIntent());
+    package_upgrade::confirm_upgrade(&executable, account, receipt, version::current(), UpgradePackageIntent());
+    account.confirm_execution(executable, version::current(), UpgradePackageIntent());
 }
 
 // step 1: propose an UpgradeAction by passing the digest of the package build
 // execution_time is automatically set to now + timelock
-public fun request_restrict<Config, Outcome>(
+public fun request_restrict_policy<Config, Outcome>(
     auth: Auth,
     outcome: Outcome,
     account: &mut Account<Config, Outcome>, 
@@ -109,24 +109,24 @@ public fun request_restrict<Config, Outcome>(
         package_name,
         outcome,
         version::current(),
-        RestrictIntent(),
+        RestrictPolicyIntent(),
         ctx
     );
 
     package_upgrade::new_restrict(
-        &mut intent, account, package_name, policy, version::current(), RestrictIntent()
+        &mut intent, account, package_name, policy, version::current(), RestrictPolicyIntent()
     );
-    account.add_intent(intent, version::current(), RestrictIntent());
+    account.add_intent(intent, version::current(), RestrictPolicyIntent());
 }
 
 // step 2: multiple members have to approve the proposal (account::approve_proposal)
 // step 3: execute the proposal and return the action (account::execute_proposal)
 
 // step 4: restrict the upgrade policy
-public fun execute_restrict<Config, Outcome>(
+public fun execute_restrict_policy<Config, Outcome>(
     mut executable: Executable,
     account: &mut Account<Config, Outcome>,
 ) {
-    package_upgrade::do_restrict(&mut executable, account, version::current(), RestrictIntent());
-    account.confirm_execution(executable, version::current(), RestrictIntent());
+    package_upgrade::do_restrict(&mut executable, account, version::current(), RestrictPolicyIntent());
+    account.confirm_execution(executable, version::current(), RestrictPolicyIntent());
 }

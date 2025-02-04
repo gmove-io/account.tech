@@ -41,10 +41,10 @@ const EWrongAccount: vector<u8> = b"This Cap has not been borrowed from this acc
 public struct CapKey<phantom Cap> has copy, drop, store {}
 
 /// [ACTION] struct giving access to the Cap
-public struct AccessAction<phantom Cap> has store {}
+public struct BorrowAction<phantom Cap> has store {}
 
 /// This struct is created upon approval to ensure the cap is returned
-public struct Borrow<phantom Cap> {
+public struct Borrowed<phantom Cap> {
     account_addr: address
 }
 
@@ -69,41 +69,41 @@ public fun has_lock<Config, Outcome, Cap>(
 
 // must be called in intent modules
 
-public fun new_access<Config, Outcome, Cap, IW: drop>(
+public fun new_borrow<Config, Outcome, Cap, IW: drop>(
     intent: &mut Intent<Outcome>, 
     account: &Account<Config, Outcome>,
     version_witness: VersionWitness,
     intent_witness: IW,    
 ) {
-    account.add_action(intent, AccessAction<Cap> {}, version_witness, intent_witness);
+    account.add_action(intent, BorrowAction<Cap> {}, version_witness, intent_witness);
 }
 
-public fun do_access<Config, Outcome, Cap: key + store, IW: copy + drop>(
+public fun do_borrow<Config, Outcome, Cap: key + store, IW: copy + drop>(
     executable: &mut Executable, 
     account: &mut Account<Config, Outcome>,
     version_witness: VersionWitness,
     intent_witness: IW, 
-): (Borrow<Cap>, Cap) {
+): (Borrowed<Cap>, Cap) {
     assert!(has_lock<_, _, Cap>(account), ENoLock);
     // check to be sure this cap type has been approved
-    let AccessAction<Cap> {} = account.process_action(executable, version_witness, intent_witness);
+    let BorrowAction<Cap> {} = account.process_action(executable, version_witness, intent_witness);
     let cap = account.remove_managed_object(CapKey<Cap> {}, version_witness);
     
-    (Borrow<Cap> { account_addr: account.addr() }, cap)
+    (Borrowed<Cap> { account_addr: account.addr() }, cap)
 }
 
-public fun return_cap<Config, Outcome, Cap: key + store>(
+public fun return_borrowed<Config, Outcome, Cap: key + store>(
     account: &mut Account<Config, Outcome>,
-    borrow: Borrow<Cap>,
+    borrow: Borrowed<Cap>,
     cap: Cap,
     version_witness: VersionWitness,
 ) {
-    let Borrow<Cap> { account_addr } = borrow;
+    let Borrowed<Cap> { account_addr } = borrow;
     assert!(account_addr == account.addr(), EWrongAccount);
 
     account.add_managed_object(CapKey<Cap> {}, cap, version_witness);
 }
 
-public fun delete_access<Cap>(expired: &mut Expired) {
-    let AccessAction<Cap> { .. } = expired.remove_action();
+public fun delete_borrow<Cap>(expired: &mut Expired) {
+    let BorrowAction<Cap> { .. } = expired.remove_action();
 }
