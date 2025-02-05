@@ -56,7 +56,7 @@ public struct ClaimCap has key {
 
 /// [ACTION] creates a payment stream
 /// coin and amount are managed in other action modules 
-public struct VestingAction has store {
+public struct VestAction has store {
     // timestamp when coins can start to be claimed
     start_timestamp: u64,
     // timestamp when balance is totally unlocked
@@ -130,7 +130,7 @@ public fun destroy_cap(cap: ClaimCap) {
 
 // === [ACTION] Public Functions ===
 
-public fun new_vesting<Config, Outcome, IW: drop>(
+public fun new_vest<Config, Outcome, IW: drop>(
     intent: &mut Intent<Outcome>, 
     account: &Account<Config, Outcome>,
     start_timestamp: u64,
@@ -139,10 +139,10 @@ public fun new_vesting<Config, Outcome, IW: drop>(
     version_witness: VersionWitness,
     intent_witness: IW,
 ) {
-    account.add_action(intent, VestingAction { start_timestamp, end_timestamp, recipient }, version_witness, intent_witness);
+    account.add_action(intent, VestAction { start_timestamp, end_timestamp, recipient }, version_witness, intent_witness);
 }
 
-public fun do_vesting<Config, Outcome, CoinType, IW: copy + drop>(
+public fun do_vest<Config, Outcome, CoinType, IW: copy + drop>(
     executable: &mut Executable, 
     account: &mut Account<Config, Outcome>, 
     coin: Coin<CoinType>,
@@ -150,7 +150,7 @@ public fun do_vesting<Config, Outcome, CoinType, IW: copy + drop>(
     intent_witness: IW,
     ctx: &mut TxContext
 ) {    
-    let action: &VestingAction = account.process_action(executable, version_witness, intent_witness);
+    let action: &VestAction = account.process_action(executable, version_witness, intent_witness);
 
     transfer::share_object(Stream<CoinType> { 
         id: object::new(ctx), 
@@ -162,8 +162,8 @@ public fun do_vesting<Config, Outcome, CoinType, IW: copy + drop>(
     });
 }
 
-public fun delete_vesting(expired: &mut Expired) {
-    let VestingAction { .. } = expired.remove_action();
+public fun delete_vest(expired: &mut Expired) {
+    let VestAction { .. } = expired.remove_action();
 }
 
 // === View Functions ===

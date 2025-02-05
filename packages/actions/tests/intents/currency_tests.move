@@ -372,7 +372,7 @@ fun test_request_execute_mint_and_vest() {
 
     let mut expired = account.destroy_empty_intent(key);
     currency::delete_mint<CURRENCY_INTENTS_TESTS>(&mut expired);
-    vesting::delete_vesting(&mut expired);
+    vesting::delete_vest(&mut expired);
     expired.destroy_empty();
 
     scenario.next_tx(OWNER);

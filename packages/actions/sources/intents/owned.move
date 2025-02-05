@@ -176,7 +176,7 @@ public fun request_withdraw_and_vest<Config, Outcome>(
     owned::new_withdraw(
         &mut intent, account, coin_id, version::current(), WithdrawAndVestIntent()
     );
-    vesting::new_vesting(
+    vesting::new_vest(
         &mut intent, account, start_timestamp, end_timestamp, recipient, version::current(), WithdrawAndVestIntent()
     );
     account.add_intent(intent, version::current(), WithdrawAndVestIntent());
@@ -193,6 +193,6 @@ public fun execute_withdraw_and_vest<Config, Outcome, C: drop>(
     ctx: &mut TxContext
 ) {
     let coin: Coin<C> = owned::do_withdraw(&mut executable, account, receiving, version::current(), WithdrawAndVestIntent());
-    vesting::do_vesting(&mut executable, account, coin, version::current(), WithdrawAndVestIntent(), ctx);
+    vesting::do_vest(&mut executable, account, coin, version::current(), WithdrawAndVestIntent(), ctx);
     account.confirm_execution(executable, version::current(), WithdrawAndVestIntent());
 }

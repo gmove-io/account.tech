@@ -131,7 +131,7 @@ public fun request_spend_and_vest<Config, Outcome, CoinType: drop>(
     vault::new_spend<_, _, CoinType, _>(
         &mut intent, account, vault_name, coin_amount, version::current(), SpendAndVestIntent()
     );
-    vesting::new_vesting(
+    vesting::new_vest(
         &mut intent, account, start_timestamp, end_timestamp, recipient, version::current(), SpendAndVestIntent()
     );
     account.add_intent(intent, version::current(), SpendAndVestIntent());
@@ -147,6 +147,6 @@ public fun execute_spend_and_vest<Config, Outcome, CoinType: drop>(
     ctx: &mut TxContext
 ) {
     let coin: Coin<CoinType> = vault::do_spend(&mut executable, account, version::current(), SpendAndVestIntent(), ctx);
-    vesting::do_vesting(&mut executable, account, coin, version::current(), SpendAndVestIntent(), ctx);
+    vesting::do_vest(&mut executable, account, coin, version::current(), SpendAndVestIntent(), ctx);
     account.confirm_execution(executable, version::current(), SpendAndVestIntent());
 }

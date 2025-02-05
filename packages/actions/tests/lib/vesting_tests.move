@@ -224,7 +224,7 @@ fun test_vesting_flow() {
     let key = b"dummy".to_string();
 
     let mut intent = create_dummy_intent(&mut scenario, &mut account);
-    vesting::new_vesting(
+    vesting::new_vest(
         &mut intent, 
         &account,
         0, 
@@ -237,7 +237,7 @@ fun test_vesting_flow() {
 
     multisig::approve_intent(&mut account, key, scenario.ctx());
     let mut executable = multisig::execute_intent(&mut account, key, &clock);
-    vesting::do_vesting(
+    vesting::do_vest(
         &mut executable, 
         &mut account, 
         coin::mint_for_testing<SUI>(6, scenario.ctx()),
@@ -257,7 +257,7 @@ fun test_vesting_expired() {
     let key = b"dummy".to_string();
 
     let mut intent = create_dummy_intent(&mut scenario, &mut account);
-    vesting::new_vesting(
+    vesting::new_vest(
         &mut intent, 
         &account,
         0, 
@@ -269,7 +269,7 @@ fun test_vesting_expired() {
     account.add_intent(intent, version::current(), DummyIntent());
     
     let mut expired = account.delete_expired_intent(key, &clock);
-    vesting::delete_vesting(&mut expired);
+    vesting::delete_vest(&mut expired);
     expired.destroy_empty();
 
     end(scenario, extensions, account, clock);
@@ -406,13 +406,13 @@ fun test_error_do_vesting_from_wrong_account() {
 
     // intent is submitted to other account
     let mut intent = create_dummy_intent(&mut scenario, &mut account2);
-    vesting::new_vesting(&mut intent, &account2, 0, 1, OWNER, version::current(), DummyIntent());
+    vesting::new_vest(&mut intent, &account2, 0, 1, OWNER, version::current(), DummyIntent());
     account2.add_intent(intent, version::current(), DummyIntent());
 
     multisig::approve_intent(&mut account2, key, scenario.ctx());
     let mut executable = multisig::execute_intent(&mut account2, key, &clock);
     // try to disable from the account that didn't approve the intent
-    vesting::do_vesting(
+    vesting::do_vest(
         &mut executable, 
         &mut account, 
         coin::mint_for_testing<SUI>(6, scenario.ctx()),
@@ -432,13 +432,13 @@ fun test_error_do_vesting_from_wrong_constructor_witness() {
     let key = b"dummy".to_string();
 
     let mut intent = create_dummy_intent(&mut scenario, &mut account);
-    vesting::new_vesting(&mut intent, &account, 0, 1, OWNER, version::current(), DummyIntent());
+    vesting::new_vest(&mut intent, &account, 0, 1, OWNER, version::current(), DummyIntent());
     account.add_intent(intent, version::current(), DummyIntent());
 
     multisig::approve_intent(&mut account, key, scenario.ctx());
     let mut executable = multisig::execute_intent(&mut account, key, &clock);
     // try to disable with the wrong witness that didn't approve the intent
-    vesting::do_vesting(
+    vesting::do_vest(
         &mut executable, 
         &mut account, 
         coin::mint_for_testing<SUI>(6, scenario.ctx()),
@@ -457,13 +457,13 @@ fun test_error_do_vesting_from_not_dep() {
     let key = b"dummy".to_string();
 
     let mut intent = create_dummy_intent(&mut scenario, &mut account);
-    vesting::new_vesting(&mut intent, &account, 0, 1, OWNER, version::current(), DummyIntent());
+    vesting::new_vest(&mut intent, &account, 0, 1, OWNER, version::current(), DummyIntent());
     account.add_intent(intent, version::current(), DummyIntent());
 
     multisig::approve_intent(&mut account, key, scenario.ctx());
     let mut executable = multisig::execute_intent(&mut account, key, &clock);
     // try to disable with the wrong version TypeName that didn't approve the intent
-    vesting::do_vesting(
+    vesting::do_vest(
         &mut executable, 
         &mut account, 
         coin::mint_for_testing<SUI>(6, scenario.ctx()),

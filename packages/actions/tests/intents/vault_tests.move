@@ -156,7 +156,7 @@ fun test_request_execute_vesting() {
 
     let mut expired = account.destroy_empty_intent(key);
     vault::delete_spend<SUI>(&mut expired);
-    vesting::delete_vesting(&mut expired);
+    vesting::delete_vest(&mut expired);
     expired.destroy_empty();
 
     scenario.next_tx(OWNER);

@@ -248,7 +248,7 @@ public fun request_mint_and_vest<Config, Outcome, CoinType>(
     currency::new_mint<_, _, CoinType, _>(
         &mut intent, account,total_amount, version::current(),MintAndVestIntent(),
     );
-    vesting::new_vesting(
+    vesting::new_vest(
         &mut intent, account,start_timestamp, end_timestamp, recipient, version::current(),MintAndVestIntent(),
     );
     account.add_intent(intent, version::current(), MintAndVestIntent());
@@ -264,7 +264,7 @@ public fun execute_mint_and_vest<Config, Outcome, CoinType>(
     ctx: &mut TxContext
 ) {
     let coin: Coin<CoinType> = currency::do_mint(&mut executable, account, version::current(), MintAndVestIntent(), ctx);
-    vesting::do_vesting(&mut executable, account, coin, version::current(), MintAndVestIntent(), ctx);
+    vesting::do_vest(&mut executable, account, coin, version::current(), MintAndVestIntent(), ctx);
     account.confirm_execution(executable, version::current(), MintAndVestIntent());
 }
 
