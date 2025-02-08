@@ -1,5 +1,5 @@
 #[test_only]
-module account_config::user_tests;
+module account_protocol::user_tests;
 
 // === Imports ===
 
@@ -7,7 +7,7 @@ use sui::{
     test_utils::destroy,
     test_scenario::{Self as ts, Scenario},
 };
-use account_config::user::{Self, Registry, User};
+use account_protocol::user::{Self, Registry, User};
 
 // === Constants ===
 

@@ -14,10 +14,10 @@ use account_protocol::{
     account::{Self, Account, Auth},
     executable::Executable,
     intents::Expired,
+    user::User,
 };
 use account_config::{
     version,
-    user::User,
 };
 
 // === Errors ===

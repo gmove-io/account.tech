@@ -5,7 +5,7 @@
 /// Invited users can accept or refuse the invite, to add the Account id to their User account or not.
 /// This avoid the need for an indexer as all data can be easily found on-chain.
 
-module account_config::user;
+module account_protocol::user;
 
 // === Imports ===
 
@@ -63,9 +63,7 @@ public fun new(ctx: &mut TxContext): User {
     }
 }
 
-// === [MEMBER] Public functions ===
-
-public(package) fun add_account(user: &mut User, account_addr: address, account_type: String) {
+public fun add_account(user: &mut User, account_addr: address, account_type: String) {
     if (user.accounts.contains(&account_type)) {
         assert!(!user.accounts[&account_type].contains(&account_addr), EAccountAlreadyRegistered);
         user.accounts.get_mut(&account_type).push_back(account_addr);
@@ -74,7 +72,7 @@ public(package) fun add_account(user: &mut User, account_addr: address, account_
     }
 }
 
-public(package) fun remove_account(user: &mut User, account_addr: address, account_type: String) {
+public fun remove_account(user: &mut User, account_addr: address, account_type: String) {
     assert!(user.accounts.contains(&account_type), EAccountTypeDoesntExist);
     let (exists, idx) = user.accounts[&account_type].index_of(&account_addr);
     
@@ -98,7 +96,7 @@ public fun transfer(registry: &mut Registry, user: User, recipient: address, ctx
     transfer::transfer(user, recipient);
 }
 
-/// Must leave all Accounts before, for consistency
+/// Must remove all Accounts before, for consistency
 public fun destroy(registry: &mut Registry, user: User, ctx: &mut TxContext) {
     let User { id, accounts, .. } = user;
     assert!(accounts.is_empty(), ENotEmpty);
