@@ -120,7 +120,16 @@ public fun new_account(
         roles: vector[],
     };
 
-    account::new(extensions, config, false, ctx)
+    let (addr, version) = extensions.get_latest_for_name(b"AccountConfig".to_string());
+    // add AccountConfig as a dependency (only AccountProtocol is added by default)
+    account::new(
+        extensions, 
+        config, 
+        false, 
+        vector[b"AccountConfig".to_string()], 
+        vector[addr], 
+        vector[version], 
+        ctx)
 }
 
 /// Authenticates the caller as a member of the multisig 
@@ -129,7 +138,7 @@ public fun authenticate(
     ctx: &TxContext
 ): Auth {
     account.config().assert_is_member(ctx);
-    account.new_auth(Witness())
+    account.new_auth(version::current(), Witness())
 }
 
 /// Creates a new outcome to initiate a proposal
@@ -265,7 +274,7 @@ public fun request_config_multisig(
     account: &mut Account<Multisig, Approvals>, 
     key: String,
     description: String,
-    execution_times: vector<u64>,
+    execution_time: u64,
     expiration_time: u64,
     // members 
     addresses: vector<address>,
@@ -284,7 +293,7 @@ public fun request_config_multisig(
     let mut intent = account.create_intent(
         key,
         description,
-        execution_times,
+        vector[execution_time],
         expiration_time,
         b"".to_string(),
         outcome,

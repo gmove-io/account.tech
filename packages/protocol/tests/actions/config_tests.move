@@ -44,7 +44,7 @@ fun start(): (Scenario, Extensions, Account<Config, Outcome>, Clock) {
     // add external dep
     extensions.add(&cap, b"External".to_string(), @0xABC, 1);
     // Account generic types are dummy types (bool, bool)
-    let account = account::new(&extensions, Config {}, false, scenario.ctx());
+    let account = account::new(&extensions, Config {}, false, vector[], vector[], vector[], scenario.ctx());
     let clock = clock::create_for_testing(scenario.ctx());
     // create world
     destroy(cap);
@@ -65,10 +65,10 @@ fun test_edit_config_metadata() {
     let (scenario, extensions, mut account, clock) = start();    
     assert!(account.metadata().size() == 0);
 
-    let auth = account.new_auth(Witness());
+    let auth = account.new_auth(version::current(), Witness());
     config::edit_metadata(
         auth, 
-        &mut account, 
+        &mut account,
         vector[b"name".to_string()], 
         vector[b"New Name".to_string()], 
     );
@@ -82,7 +82,7 @@ fun test_request_execute_config_deps() {
     let (mut scenario, extensions, mut account, clock) = start();    
     let key = b"dummy".to_string();
 
-    let auth = account.new_auth(Witness());
+    let auth = account.new_auth(version::current(), Witness());
     config::request_config_deps(
         auth, 
         Outcome {}, 
@@ -119,7 +119,7 @@ fun test_config_deps_expired() {
     clock.increment_for_testing(1);
     let key = b"dummy".to_string();
 
-    let auth = account.new_auth(Witness());
+    let auth = account.new_auth(version::current(), Witness());
     config::request_config_deps(
         auth, 
         Outcome {}, 
@@ -147,7 +147,7 @@ fun test_request_execute_toggle_unverified_allowed() {
     let (mut scenario, extensions, mut account, clock) = start();    
     let key = b"dummy".to_string();
 
-    let auth = account.new_auth(Witness());
+    let auth = account.new_auth(version::current(), Witness());
     config::request_toggle_unverified_allowed(
         auth, 
         Outcome {}, 
@@ -177,7 +177,7 @@ fun test_toggle_unverified_allowed_expired() {
     clock.increment_for_testing(1);
     let key = b"dummy".to_string();
 
-    let auth = account.new_auth(Witness());
+    let auth = account.new_auth(version::current(), Witness());
     config::request_toggle_unverified_allowed(
         auth, 
         Outcome {}, 
@@ -200,7 +200,7 @@ fun test_toggle_unverified_allowed_expired() {
 fun test_error_new_config_metadata_not_same_length() {
     let (scenario, extensions, mut account, clock) = start();
 
-    let auth = account.new_auth(Witness());
+    let auth = account.new_auth(version::current(), Witness());
     config::edit_metadata(auth, &mut account, vector[b"name".to_string()], vector[]);
 
     end(scenario, extensions, account, clock);

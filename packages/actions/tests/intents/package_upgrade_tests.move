@@ -37,7 +37,6 @@ fun start(): (Scenario, Extensions, Account<Multisig, Approvals>, Clock, Upgrade
     extensions.add(&cap, b"AccountActions".to_string(), @account_actions, 1);
 
     let mut account = multisig::new_account(&extensions, scenario.ctx());
-    account.deps_mut_for_testing().add(&extensions, b"AccountConfig".to_string(), @account_config, 1);
     account.deps_mut_for_testing().add(&extensions, b"AccountActions".to_string(), @account_actions, 1);
     let clock = clock::create_for_testing(scenario.ctx());
     let upgrade_cap = package::test_publish(@0x1.to_id(), scenario.ctx());
@@ -71,6 +70,7 @@ fun test_request_execute_upgrade() {
         &mut account, 
         key, 
         b"".to_string(), 
+        1000,
         2000, 
         b"Degen".to_string(),
         b"", 

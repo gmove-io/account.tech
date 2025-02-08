@@ -55,7 +55,7 @@ fun start(): (Scenario, Extensions, Account<Config, Outcome>) {
     extensions.add(&cap, b"AccountConfig".to_string(), @0x1, 1);
     extensions.add(&cap, b"AccountActions".to_string(), @0x2, 1);
 
-    let account = account::new(&extensions, Config {}, false, scenario.ctx());
+    let account = account::new(&extensions, Config {}, false, vector[], vector[], vector[], scenario.ctx());
     // create world
     destroy(cap);
     (scenario, extensions, account)
@@ -264,8 +264,8 @@ fun test_account_getters_mut() {
 fun test_error_cannot_verify_wrong_account() {
     let (mut scenario, extensions, account) = start();
     
-    let auth = account.new_auth(Witness());
-    let account2 = account::new<Config, Outcome>(&extensions, Config {}, false, scenario.ctx());
+    let auth = account.new_auth(version::current(), Witness());
+    let account2 = account::new<Config, Outcome>(&extensions, Config {}, false, vector[], vector[], vector[], scenario.ctx());
     account2.verify(auth);
 
     destroy(account2);
@@ -316,7 +316,7 @@ fun test_error_cannot_add_action_from_not_dependent_package() {
 #[test, expected_failure(abort_code = issuer::EWrongAccount)]
 fun test_error_cannot_add_action_with_wrong_account() {
     let (mut scenario, extensions, mut account) = start();
-    let account2 = account::new<Config, Outcome>(&extensions, Config {}, false, scenario.ctx());
+    let account2 = account::new<Config, Outcome>(&extensions, Config {}, false, vector[], vector[], vector[], scenario.ctx());
 
     let mut intent = account.create_intent(
         b"one".to_string(), 
@@ -380,7 +380,7 @@ fun test_error_cannot_add_intent_from_not_dependent_package() {
 #[test, expected_failure(abort_code = issuer::EWrongAccount)]
 fun test_error_cannot_add_intent_with_wrong_account() {
     let (mut scenario, extensions, mut account) = start();
-    let mut account2 = account::new<Config, Outcome>(&extensions, Config {}, false, scenario.ctx());
+    let mut account2 = account::new<Config, Outcome>(&extensions, Config {}, false, vector[], vector[], vector[], scenario.ctx());
 
     let intent = account.create_intent(
         b"one".to_string(), 
@@ -450,7 +450,7 @@ fun test_error_cannot_process_action_from_not_dependent_package() {
 fun test_error_cannot_process_action_with_wrong_account() {
     let (mut scenario, extensions, mut account) = start();
     let clock = clock::create_for_testing(scenario.ctx());
-    let mut account2 = account::new<Config, Outcome>(&extensions, Config {}, false, scenario.ctx());
+    let mut account2 = account::new<Config, Outcome>(&extensions, Config {}, false, vector[], vector[], vector[], scenario.ctx());
 
     let mut intent = account.create_intent(
         b"one".to_string(), 
@@ -546,7 +546,7 @@ fun test_error_cannot_confirm_execution_from_not_dependent_package() {
 fun test_error_cannot_confirm_execution_with_wrong_account() {
     let (mut scenario, extensions, mut account) = start();
     let clock = clock::create_for_testing(scenario.ctx());
-    let account2 = account::new<Config, Outcome>(&extensions, Config {}, false, scenario.ctx());
+    let account2 = account::new<Config, Outcome>(&extensions, Config {}, false, vector[], vector[], vector[], scenario.ctx());
 
     let mut intent = account.create_intent(
         b"one".to_string(), 
@@ -755,11 +755,21 @@ fun test_error_cannot_remove_managed_object_from_not_dependent_package() {
     end(scenario, extensions, account);
 }
 
+#[test, expected_failure(abort_code = deps::ENotDep)]
+fun test_error_new_auth_not_called_from_not_dep() {
+    let (scenario, extensions, account) = start();
+
+    let auth = account.new_auth(version_witness::new_for_testing(@0xDE9), Witness());
+    account.verify(auth);
+
+    end(scenario, extensions, account);
+}
+
 #[test, expected_failure(abort_code = account::ENotCalledFromConfigModule)]
 fun test_error_new_auth_not_called_from_config_module() {
     let (scenario, extensions, account) = start();
 
-    let auth = account.new_auth(account::not_config_witness());
+    let auth = account.new_auth(version::current(), account::not_config_witness());
     account.verify(auth);
 
     end(scenario, extensions, account);

@@ -44,7 +44,6 @@ fun start(): (Scenario, Extensions, Account<Multisig, Approvals>, Clock) {
     extensions.add(&cap, b"AccountConfig".to_string(), @account_config, 1);
     // Account generic types are dummy types (bool, bool)
     let mut account = multisig::new_account(&extensions, scenario.ctx());
-    account.deps_mut_for_testing().add(&extensions, b"AccountConfig".to_string(), @account_config, 1);
     account.config_mut(version::current(), multisig::config_witness()).add_role_to_multisig(full_role(), 1);
     account.config_mut(version::current(), multisig::config_witness()).member_mut(OWNER).add_role_to_member(full_role());
     let clock = clock::create_for_testing(scenario.ctx());
@@ -87,7 +86,7 @@ fun create_and_add_dummy_intent(
 
 fun create_and_add_other_intent(
     scenario: &mut Scenario,
-    account: &mut Account<Multisig, Approvals>, 
+    account: &mut Account<Multisig, Approvals>,
 ) {
     let outcome = multisig::empty_outcome();
     let intent = account.create_intent(
@@ -328,7 +327,7 @@ fun test_config_multisig() {
         &mut account,
         b"config".to_string(), 
         b"description".to_string(), 
-        vector[0],
+        0,
         1, 
         vector[OWNER, @0xBABE], 
         vector[2, 1], 
@@ -370,7 +369,7 @@ fun test_config_multisig_deletion() {
         &mut account, 
         b"config".to_string(), 
         b"description".to_string(), 
-        vector[0],
+        0,
         1, 
         vector[OWNER, @0xBABE], 
         vector[2, 1],
@@ -491,7 +490,7 @@ fun test_error_verify_rules_addresses_weights_not_same_length() {
         &mut account, 
         b"config".to_string(), 
         b"".to_string(), 
-        vector[0],
+        0,
         1, 
         vector[OWNER, @0xBABE], 
         vector[2], 
@@ -517,7 +516,7 @@ fun test_error_verify_rules_addresses_roles_not_same_length() {
         &mut account, 
         b"config".to_string(), 
         b"".to_string(), 
-        vector[0],
+        0,
         1, 
         vector[OWNER, @0xBABE], 
         vector[2, 1], 
@@ -543,7 +542,7 @@ fun test_error_verify_rules_roles_not_same_length() {
         &mut account, 
         b"config".to_string(), 
         b"".to_string(), 
-        vector[0],
+        0,
         1, 
         vector[], 
         vector[], 
@@ -569,7 +568,7 @@ fun test_error_verify_rules_global_threshold_too_high() {
         &mut account, 
         b"config".to_string(), 
         b"".to_string(), 
-        vector[0],
+        0,
         1, 
         vector[], 
         vector[], 
@@ -595,7 +594,7 @@ fun test_error_verify_rules_global_threshold_null() {
         &mut account, 
         b"config".to_string(), 
         b"".to_string(), 
-        vector[0],
+        0,
         1, 
         vector[], 
         vector[], 
@@ -621,7 +620,7 @@ fun test_error_verify_rules_role_not_added_but_given() {
         &mut account, 
         b"config".to_string(), 
         b"".to_string(), 
-        vector[0],
+        0,
         1, 
         vector[OWNER], 
         vector[1], 
@@ -647,7 +646,7 @@ fun test_error_verify_rules_role_threshold_too_high() {
         &mut account, 
         b"config".to_string(), 
         b"".to_string(), 
-        vector[0],
+        0,
         1, 
         vector[OWNER], 
         vector[1], 

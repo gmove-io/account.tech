@@ -16,6 +16,10 @@ use account_actions::{
     version,
 };
 
+// === Errors ===
+
+const EInvalidExecutionTime: u64 = 0;
+
 // === Structs ===
 
 /// [PROPOSAL] witness defining the proposal to upgrade a package
@@ -34,6 +38,7 @@ public fun request_upgrade_package<Config, Outcome>(
     account: &mut Account<Config, Outcome>, 
     key: String, 
     description: String,
+    execution_time: u64,
     expiration_time: u64,
     package_name: String,
     digest: vector<u8>,
@@ -41,7 +46,7 @@ public fun request_upgrade_package<Config, Outcome>(
     ctx: &mut TxContext
 ) {
     account.verify(auth);
-    let execution_time = clock.timestamp_ms() + package_upgrade::get_time_delay(account, package_name);
+    assert!(execution_time >= clock.timestamp_ms() + package_upgrade::get_time_delay(account, package_name), EInvalidExecutionTime);
 
     let mut intent = account.create_intent(
         key,
