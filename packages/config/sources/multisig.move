@@ -14,7 +14,7 @@ use account_protocol::{
     account::{Self, Account, Auth},
     executable::Executable,
     intents::Expired,
-    user::User,
+    user::{Self, User},
 };
 use account_config::{
     version,
@@ -93,13 +93,6 @@ public struct Approvals has copy, drop, store {
     role_weight: u64, 
     // who has approved the proposal
     approved: VecSet<address>,
-}
-
-/// Invite object issued by an Account to a user
-public struct Invite has key { 
-    id: UID, 
-    // Account that issued the invite
-    account_addr: address,
 }
 
 // === Public functions ===
@@ -227,13 +220,14 @@ public fun delete_expired_intent(
 }
 
 /// Inserts account_id in User, aborts if already joined
-public fun join(user: &mut User, account: &mut Account<Multisig, Approvals>) {
-    user.add_account(account.addr(), b"multisig".to_string());
+public fun join(user: &mut User, account: &Account<Multisig, Approvals>, ctx: &mut TxContext) {
+    account.config().assert_is_member(ctx);
+    user.add_account(account, Witness());
 }
 
 /// Removes account_id from User, aborts if not joined
-public fun leave(user: &mut User, account: &mut Account<Multisig, Approvals>) {
-    user.remove_account(account.addr(), b"multisig".to_string());
+public fun leave(user: &mut User, account: &Account<Multisig, Approvals>) {
+    user.remove_account(account, Witness());
 }
 
 /// Invites can be sent by an Account member (upon Account creation for instance)
@@ -243,23 +237,7 @@ public fun send_invite(account: &Account<Multisig, Approvals>, recipient: addres
     // invited user must be member
     assert!(account.config().is_member(recipient), ENotMember);
 
-    transfer::transfer(Invite { 
-        id: object::new(ctx), 
-        account_addr: account.addr() 
-    }, recipient);
-}
-
-/// Invited user can register the Account in his User account
-public fun accept_invite(user: &mut User, invite: Invite) {
-    let Invite { id, account_addr } = invite;
-    id.delete();
-    user.add_account(account_addr, b"multisig".to_string());
-}
-
-/// Deletes the invite object
-public fun refuse_invite(invite: Invite) {
-    let Invite { id, .. } = invite;
-    id.delete();
+    user::send_invite(account, recipient, Witness(), ctx);
 }
 
 // === [PROPOSAL] Public functions ===

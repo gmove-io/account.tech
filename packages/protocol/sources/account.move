@@ -471,9 +471,7 @@ public(package) fun unlock_object<Config, Outcome>(
     account.intents.unlock(id);
 }
 
-// === Private functions ===
-
-fun assert_is_config_module<Config, W>() {
+public(package) fun assert_is_config_module<Config, W>() {
     let account_type = type_name::get<Config>();
     let witness_type = type_name::get<W>();
     assert!(

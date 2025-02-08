@@ -9,12 +9,15 @@ module account_protocol::user;
 
 // === Imports ===
 
-use std::string::String;
+use std::{
+    string::String,
+    type_name,
+};
 use sui::{
     vec_map::{Self, VecMap},
     table::{Self, Table},
 };
-
+use account_protocol::account::{Self, Account};
 // === Errors ===
 
 #[error]
@@ -46,6 +49,15 @@ public struct User has key {
     accounts: VecMap<String, vector<address>>,
 }
 
+/// Invite object issued by an Account to a user
+public struct Invite has key { 
+    id: UID, 
+    // Account that issued the invite
+    account_addr: address,
+    // Account type
+    account_type: String,
+}
+
 // === Public functions ===
 
 fun init(ctx: &mut TxContext) {
@@ -61,26 +73,6 @@ public fun new(ctx: &mut TxContext): User {
         id: object::new(ctx),
         accounts: vec_map::empty(),
     }
-}
-
-public fun add_account(user: &mut User, account_addr: address, account_type: String) {
-    if (user.accounts.contains(&account_type)) {
-        assert!(!user.accounts[&account_type].contains(&account_addr), EAccountAlreadyRegistered);
-        user.accounts.get_mut(&account_type).push_back(account_addr);
-    } else {
-        user.accounts.insert(account_type, vector<address>[account_addr]);
-    }
-}
-
-public fun remove_account(user: &mut User, account_addr: address, account_type: String) {
-    assert!(user.accounts.contains(&account_type), EAccountTypeDoesntExist);
-    let (exists, idx) = user.accounts[&account_type].index_of(&account_addr);
-    
-    assert!(exists, EAccountNotFound);
-    user.accounts.get_mut(&account_type).swap_remove(idx);
-
-    if (user.accounts[&account_type].is_empty())
-        (_, _) = user.accounts.remove(&account_type);
 }
 
 /// Can transfer the User object only if the other address has no User object yet
@@ -103,6 +95,78 @@ public fun destroy(registry: &mut Registry, user: User, ctx: &mut TxContext) {
 
     id.delete();
     registry.users.remove(ctx.sender());
+}
+
+/// Invited user can register the Account in his User account
+public fun accept_invite(user: &mut User, invite: Invite) {
+    let Invite { id, account_addr, account_type } = invite;
+    id.delete();
+    
+    if (user.accounts.contains(&account_type)) {
+        assert!(!user.accounts[&account_type].contains(&account_addr), EAccountAlreadyRegistered);
+        user.accounts.get_mut(&account_type).push_back(account_addr);
+    } else {
+        user.accounts.insert(account_type, vector<address>[account_addr]);
+    }
+}
+
+/// Deletes the invite object
+public fun refuse_invite(invite: Invite) {
+    let Invite { id, .. } = invite;
+    id.delete();
+}
+
+// === Config-only functions ===
+
+public fun add_account<Config, Outcome, CW: drop>(
+    user: &mut User, 
+    account: &Account<Config, Outcome>, 
+    _config_witness: CW,
+) {
+    account::assert_is_config_module<Config, CW>();
+    let account_type = type_name::get<Config>().into_string().to_string();
+
+    if (user.accounts.contains(&account_type)) {
+        assert!(!user.accounts[&account_type].contains(&account.addr()), EAccountAlreadyRegistered);
+        user.accounts.get_mut(&account_type).push_back(account.addr());
+    } else {
+        user.accounts.insert(account_type, vector<address>[account.addr()]);
+    }
+}
+
+public fun remove_account<Config, Outcome, CW: drop>(
+    user: &mut User, 
+    account: &Account<Config, Outcome>, 
+    _config_witness: CW,
+) {
+    account::assert_is_config_module<Config, CW>();
+    let account_type = type_name::get<Config>().into_string().to_string();
+
+    assert!(user.accounts.contains(&account_type), EAccountTypeDoesntExist);
+    let (exists, idx) = user.accounts[&account_type].index_of(&account.addr());
+    
+    assert!(exists, EAccountNotFound);
+    user.accounts.get_mut(&account_type).swap_remove(idx);
+
+    if (user.accounts[&account_type].is_empty())
+        (_, _) = user.accounts.remove(&account_type);
+}
+
+/// Invites can be sent by an Account member (upon Account creation for instance)
+public fun send_invite<Config, Outcome, CW: drop>(
+    account: &Account<Config, Outcome>, 
+    recipient: address, 
+    _config_witness: CW,
+    ctx: &mut TxContext,
+) {
+    account::assert_is_config_module<Config, CW>();
+    let account_type = type_name::get<Config>().into_string().to_string();
+
+    transfer::transfer(Invite { 
+        id: object::new(ctx), 
+        account_addr: account.addr(),
+        account_type,
+    }, recipient);
 }
 
 // === View functions ===    

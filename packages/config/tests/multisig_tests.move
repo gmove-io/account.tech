@@ -12,10 +12,10 @@ use sui::{
 use account_extensions::extensions::{Self, Extensions, AdminCap};
 use account_protocol::{
     account::Account,
-    user,
+    user::{Self, Invite},
 };
 use account_config::{
-    multisig::{Self, Multisig, Approvals, Invite},
+    multisig::{Self, Multisig, Approvals},
     version,
 };
 
@@ -110,7 +110,7 @@ fun test_join_and_leave() {
     let (mut scenario, extensions, mut account, clock) = start();
     let mut user = user::new(scenario.ctx());
 
-    multisig::join(&mut user, &mut account);
+    multisig::join(&mut user, &mut account, scenario.ctx());
     assert!(user.all_ids() == vector[account.addr()]);
     multisig::leave(&mut user, &mut account);
     assert!(user.all_ids() == vector[]);
@@ -129,7 +129,7 @@ fun test_invite_and_accept() {
 
     scenario.next_tx(ALICE);
     let invite = scenario.take_from_sender<Invite>();
-    multisig::refuse_invite(invite);
+    user::refuse_invite(invite);
     assert!(user.all_ids() == vector[]);
 
     destroy(user);
@@ -146,7 +146,7 @@ fun test_invite_and_refuse() {
 
     scenario.next_tx(ALICE);
     let invite = scenario.take_from_sender<Invite>();
-    multisig::accept_invite(&mut user, invite);
+    user.accept_invite(invite);
     assert!(user.all_ids() == vector[account.addr()]);
 
     destroy(user);
