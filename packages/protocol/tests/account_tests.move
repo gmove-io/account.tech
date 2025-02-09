@@ -55,7 +55,7 @@ fun start(): (Scenario, Extensions, Account<Config, Outcome>) {
     extensions.add(&cap, b"AccountConfig".to_string(), @0x1, 1);
     extensions.add(&cap, b"AccountActions".to_string(), @0x2, 1);
 
-    let account = account::new(&extensions, Config {}, false, vector[], vector[], vector[], scenario.ctx());
+    let account = account::new(&extensions, Config {}, false, vector[b"AccountProtocol".to_string()], vector[@account_protocol], vector[1], scenario.ctx());
     // create world
     destroy(cap);
     (scenario, extensions, account)
@@ -265,7 +265,7 @@ fun test_error_cannot_verify_wrong_account() {
     let (mut scenario, extensions, account) = start();
     
     let auth = account.new_auth(version::current(), Witness());
-    let account2 = account::new<Config, Outcome>(&extensions, Config {}, false, vector[], vector[], vector[], scenario.ctx());
+    let account2 = account::new<Config, Outcome>(&extensions, Config {}, false, vector[b"AccountProtocol".to_string()], vector[@account_protocol], vector[1], scenario.ctx());
     account2.verify(auth);
 
     destroy(account2);
@@ -316,7 +316,7 @@ fun test_error_cannot_add_action_from_not_dependent_package() {
 #[test, expected_failure(abort_code = issuer::EWrongAccount)]
 fun test_error_cannot_add_action_with_wrong_account() {
     let (mut scenario, extensions, mut account) = start();
-    let account2 = account::new<Config, Outcome>(&extensions, Config {}, false, vector[], vector[], vector[], scenario.ctx());
+    let account2 = account::new<Config, Outcome>(&extensions, Config {}, false, vector[b"AccountProtocol".to_string()], vector[@account_protocol], vector[1], scenario.ctx());
 
     let mut intent = account.create_intent(
         b"one".to_string(), 
@@ -380,7 +380,7 @@ fun test_error_cannot_add_intent_from_not_dependent_package() {
 #[test, expected_failure(abort_code = issuer::EWrongAccount)]
 fun test_error_cannot_add_intent_with_wrong_account() {
     let (mut scenario, extensions, mut account) = start();
-    let mut account2 = account::new<Config, Outcome>(&extensions, Config {}, false, vector[], vector[], vector[], scenario.ctx());
+    let mut account2 = account::new<Config, Outcome>(&extensions, Config {}, false, vector[b"AccountProtocol".to_string()], vector[@account_protocol], vector[1], scenario.ctx());
 
     let intent = account.create_intent(
         b"one".to_string(), 
@@ -450,7 +450,7 @@ fun test_error_cannot_process_action_from_not_dependent_package() {
 fun test_error_cannot_process_action_with_wrong_account() {
     let (mut scenario, extensions, mut account) = start();
     let clock = clock::create_for_testing(scenario.ctx());
-    let mut account2 = account::new<Config, Outcome>(&extensions, Config {}, false, vector[], vector[], vector[], scenario.ctx());
+    let mut account2 = account::new<Config, Outcome>(&extensions, Config {}, false, vector[b"AccountProtocol".to_string()], vector[@account_protocol], vector[1], scenario.ctx());
 
     let mut intent = account.create_intent(
         b"one".to_string(), 
@@ -546,7 +546,7 @@ fun test_error_cannot_confirm_execution_from_not_dependent_package() {
 fun test_error_cannot_confirm_execution_with_wrong_account() {
     let (mut scenario, extensions, mut account) = start();
     let clock = clock::create_for_testing(scenario.ctx());
-    let account2 = account::new<Config, Outcome>(&extensions, Config {}, false, vector[], vector[], vector[], scenario.ctx());
+    let account2 = account::new<Config, Outcome>(&extensions, Config {}, false, vector[b"AccountProtocol".to_string()], vector[@account_protocol], vector[1], scenario.ctx());
 
     let mut intent = account.create_intent(
         b"one".to_string(), 

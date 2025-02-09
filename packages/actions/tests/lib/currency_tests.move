@@ -50,7 +50,7 @@ fun start(): (Scenario, Extensions, Account<Multisig, Approvals>, Clock, Treasur
     extensions.add(&cap, b"AccountActions".to_string(), @account_actions, 1);
 
     let mut account = multisig::new_account(&extensions, scenario.ctx());
-    account.deps_mut_for_testing().add(&extensions, b"AccountActions".to_string(), @account_actions, 1);
+    account.deps_mut_for_testing().add_for_testing(&extensions, b"AccountActions".to_string(), @account_actions, 1);
     let clock = clock::create_for_testing(scenario.ctx());
     // create TreasuryCap and CoinMetadata
     let (treasury_cap, metadata) = coin::create_currency(
@@ -1016,7 +1016,7 @@ fun test_error_do_update_icon_disabled() {
 fun test_error_do_disable_from_wrong_account() {
     let (mut scenario, extensions, mut account, clock, cap, metadata) = start();
     let mut account2 = multisig::new_account(&extensions, scenario.ctx());
-    account2.deps_mut_for_testing().add(&extensions, b"AccountActions".to_string(), @account_actions, 1);
+    account2.deps_mut_for_testing().add_for_testing(&extensions, b"AccountActions".to_string(), @account_actions, 1);
     let key = b"dummy".to_string();
 
     let auth = multisig::authenticate(&account, scenario.ctx());
@@ -1130,7 +1130,7 @@ fun test_error_do_disable_from_not_dep() {
 fun test_error_do_mint_from_wrong_account() {
     let (mut scenario, extensions, mut account, clock, cap, metadata) = start();
     let mut account2 = multisig::new_account(&extensions, scenario.ctx());
-    account2.deps_mut_for_testing().add(&extensions, b"AccountActions".to_string(), @account_actions, 1);
+    account2.deps_mut_for_testing().add_for_testing(&extensions, b"AccountActions".to_string(), @account_actions, 1);
     let key = b"dummy".to_string();
 
     let auth = multisig::authenticate(&account, scenario.ctx());
@@ -1236,7 +1236,7 @@ fun test_error_do_burn_from_wrong_account() {
     let (mut scenario, extensions, mut account, clock, mut cap, metadata) = start();
     let coin = cap.mint(5, scenario.ctx());
     let mut account2 = multisig::new_account(&extensions, scenario.ctx());
-    account2.deps_mut_for_testing().add(&extensions, b"AccountActions".to_string(), @account_actions, 1);
+    account2.deps_mut_for_testing().add_for_testing(&extensions, b"AccountActions".to_string(), @account_actions, 1);
     let key = b"dummy".to_string();
 
     let auth = multisig::authenticate(&account, scenario.ctx());
@@ -1340,7 +1340,7 @@ fun test_error_do_burn_from_not_dep() {
 fun test_error_do_update_from_wrong_account() {
     let (mut scenario, extensions, mut account, clock, cap, mut metadata) = start();
     let mut account2 = multisig::new_account(&extensions, scenario.ctx());
-    account2.deps_mut_for_testing().add(&extensions, b"AccountActions".to_string(), @account_actions, 1);
+    account2.deps_mut_for_testing().add_for_testing(&extensions, b"AccountActions".to_string(), @account_actions, 1);
     let key = b"dummy".to_string();
 
     let auth = multisig::authenticate(&account, scenario.ctx());

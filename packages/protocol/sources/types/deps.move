@@ -23,6 +23,11 @@ const EDepAlreadyExists: vector<u8> = b"Dependency already exists in the account
 const ENotDep: vector<u8> = b"Version package is not a dependency";
 #[error]
 const ENotExtension: vector<u8> = b"Package is not an extension";
+#[error]
+const EAccountProtocolMissing: vector<u8> = b"AccountProtocol is missing";
+#[error]
+const EDepsNotSameLength: vector<u8> = b"Invalid dependencies";
+
 // === Structs ===
 
 /// Parent struct protecting the deps
@@ -47,33 +52,29 @@ public struct Dep has copy, drop, store {
 /// Creates a new Deps struct with the core dependencies
 public fun new(
     extensions: &Extensions,
-    unverified_allowed: bool
+    unverified_allowed: bool,
+    names: vector<String>,
+    addresses: vector<address>,
+    mut versions: vector<u64>,
 ): Deps {
     let (addr, version) = extensions.get_latest_for_name(b"AccountProtocol".to_string());
+    assert!(extensions.is_extension(b"AccountProtocol".to_string(), addr, version), EAccountProtocolMissing);
+    assert!(names.length() == addresses.length() && addresses.length() == versions.length(), EDepsNotSameLength);
 
-    let inner = vector[Dep { 
-        name: b"AccountProtocol".to_string(), 
-        addr, 
-        version 
-    }];
+    let mut inner = vector<Dep>[];
+
+    names.zip_do!(addresses, |name, addr| {
+        let version = versions.remove(0);
+        
+        assert!(!inner.any!(|dep| dep.name == name), EDepAlreadyExists);
+        assert!(!inner.any!(|dep| dep.addr == addr), EDepAlreadyExists);
+        if (!unverified_allowed) 
+            assert!(extensions.is_extension(name, addr, version), ENotExtension);
+
+        inner.push_back(Dep { name, addr, version });
+    });
 
     Deps { inner, unverified_allowed }
-}
-
-/// Protected because &mut Deps is only accessible from AccountProtocol and AccountActions
-public fun add(
-    deps: &mut Deps,
-    extensions: &Extensions,
-    name: String,
-    addr: address, 
-    version: u64
-) {
-    assert!(!deps.contains_name(name), EDepAlreadyExists);
-    assert!(!deps.contains_addr(addr), EDepAlreadyExists);
-    if (!deps.unverified_allowed) 
-        assert!(extensions.is_extension(name, addr, version), ENotExtension);
-
-    deps.inner.push_back(Dep { name, addr, version });
 }
 
 public fun toggle_unverified_allowed(deps: &mut Deps) {
@@ -140,3 +141,14 @@ public fun contains_addr(deps: &Deps, addr: address): bool {
     deps.inner.any!(|dep| dep.addr == addr)
 }
 
+// === Test functions ===
+
+#[test_only]
+public fun add_for_testing(deps: &mut Deps, extensions: &Extensions, name: String, addr: address, version: u64) {
+    assert!(!deps.inner.any!(|dep| dep.name == name), EDepAlreadyExists);
+    assert!(!deps.inner.any!(|dep| dep.addr == addr), EDepAlreadyExists);
+    if (!deps.unverified_allowed) 
+        assert!(extensions.is_extension(name, addr, version), ENotExtension);
+
+    deps.inner.push_back(Dep { name, addr, version });
+}

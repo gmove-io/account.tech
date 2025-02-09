@@ -83,18 +83,13 @@ public fun new<Config, Outcome>(
     unverified_deps_allowed: bool,
     names: vector<String>,
     addresses: vector<address>,
-    mut versions: vector<u64>,
+    versions: vector<u64>,
     ctx: &mut TxContext
 ): Account<Config, Outcome> {
-    let mut deps = deps::new(extensions, unverified_deps_allowed);
-    names.zip_do!(addresses, |name, addr| {
-        deps.add(extensions, name, addr, versions.remove(0));
-    });
-
     Account<Config, Outcome> { 
         id: object::new(ctx),
         metadata: metadata::empty(),
-        deps,
+        deps: deps::new(extensions, unverified_deps_allowed, names, addresses, versions),
         intents: intents::empty(),
         config,
     }

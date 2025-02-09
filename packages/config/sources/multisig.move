@@ -113,15 +113,16 @@ public fun new_account(
         roles: vector[],
     };
 
-    let (addr, version) = extensions.get_latest_for_name(b"AccountConfig".to_string());
+    let (ap_addr, ap_version) = extensions.get_latest_for_name(b"AccountProtocol".to_string());
+    let (ac_addr, ac_version) = extensions.get_latest_for_name(b"AccountConfig".to_string());
     // add AccountConfig as a dependency (only AccountProtocol is added by default)
     account::new(
         extensions, 
         config, 
         false, 
-        vector[b"AccountConfig".to_string()], 
-        vector[addr], 
-        vector[version], 
+        vector[b"AccountProtocol".to_string(), b"AccountConfig".to_string()], 
+        vector[ap_addr, ac_addr], 
+        vector[ap_version, ac_version], 
         ctx)
 }
 

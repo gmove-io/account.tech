@@ -69,19 +69,24 @@ public fun update_extensions_to_latest<Config, Outcome>(
     account.verify(auth);
 
     let mut i = 0;
-    let mut new_deps = deps::new(extensions, account.deps().unverified_allowed());
+    let mut new_names = vector<String>[];
+    let mut new_addrs = vector<address>[];
+    let mut new_versions = vector<u64>[];
 
     while (i < account.deps().length()) {
         let dep = account.deps().get_by_idx(i);
         if (extensions.is_extension(dep.name(), dep.addr(), dep.version())) {
             let (addr, version) = extensions.get_latest_for_name(dep.name());
-            new_deps.add(extensions, dep.name(), addr, version);
+            new_names.push_back(dep.name());
+            new_addrs.push_back(addr);
+            new_versions.push_back(version);
         };
         // else cannot automatically update to latest version
         i = i + 1;
     };
 
-    *account.deps_mut(version::current()) = new_deps;
+    *account.deps_mut(version::current()) = 
+        deps::new(extensions, account.deps().unverified_allowed(), new_names, new_addrs, new_versions);
 }
 
 public fun request_config_deps<Config, Outcome>(
@@ -95,7 +100,7 @@ public fun request_config_deps<Config, Outcome>(
     extensions: &Extensions,
     names: vector<String>,
     addresses: vector<address>,
-    mut versions: vector<u64>,
+    versions: vector<u64>,
     ctx: &mut TxContext
 ) {
     account.verify(auth);
@@ -112,10 +117,7 @@ public fun request_config_deps<Config, Outcome>(
         ctx
     );
 
-    let mut deps = deps::new(extensions, account.deps().unverified_allowed());
-    names.zip_do!(addresses, |name, addr| {
-        deps.add(extensions, name, addr, versions.remove(0));
-    });
+    let deps = deps::new(extensions, account.deps().unverified_allowed(), names, addresses, versions);
 
     account.add_action(&mut intent, ConfigDepsAction { deps }, version::current(), ConfigDepsIntent());
     account.add_intent(intent, version::current(), ConfigDepsIntent());

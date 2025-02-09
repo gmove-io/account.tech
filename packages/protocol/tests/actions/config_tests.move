@@ -44,7 +44,7 @@ fun start(): (Scenario, Extensions, Account<Config, Outcome>, Clock) {
     // add external dep
     extensions.add(&cap, b"External".to_string(), @0xABC, 1);
     // Account generic types are dummy types (bool, bool)
-    let account = account::new(&extensions, Config {}, false, vector[], vector[], vector[], scenario.ctx());
+    let account = account::new(&extensions, Config {}, false, vector[b"AccountProtocol".to_string()], vector[@account_protocol], vector[1], scenario.ctx());
     let clock = clock::create_for_testing(scenario.ctx());
     // create world
     destroy(cap);
@@ -92,9 +92,9 @@ fun test_request_execute_config_deps() {
         0, 
         1, 
         &extensions,
-        vector[b"External".to_string()], 
-        vector[@0xABC], 
-        vector[1], 
+        vector[b"AccountProtocol".to_string(), b"External".to_string()], 
+        vector[@account_protocol, @0xABC], 
+        vector[1, 1], 
         scenario.ctx()
     );
     assert!(!account.deps().contains_name(b"External".to_string()));

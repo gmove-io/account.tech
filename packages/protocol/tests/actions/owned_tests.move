@@ -50,7 +50,7 @@ fun start(): (Scenario, Extensions, Account<Config, Outcome>, Clock) {
     extensions.add(&cap, b"AccountConfig".to_string(), @0x1, 1);
     extensions.add(&cap, b"AccountActions".to_string(), @0x2, 1);
     // Account generic types are dummy types (bool, bool)
-    let account = account::new(&extensions, Config {}, false, vector[], vector[], vector[], scenario.ctx());
+    let account = account::new(&extensions, Config {}, false, vector[b"AccountProtocol".to_string()], vector[@account_protocol], vector[1], scenario.ctx());
     let clock = clock::create_for_testing(scenario.ctx());
     // create world
     destroy(cap);
@@ -216,7 +216,7 @@ fun test_merge_2_coins_and_split() {
 #[test, expected_failure(abort_code = issuer::EWrongAccount)]
 fun test_error_do_withdraw_from_wrong_account() {
     let (mut scenario, extensions, mut account, clock) = start();
-    let mut account2 = account::new(&extensions, Config {}, false, vector[], vector[], vector[], scenario.ctx());
+    let mut account2 = account::new(&extensions, Config {}, false, vector[b"AccountProtocol".to_string()], vector[@account_protocol], vector[1], scenario.ctx());
     let key = b"dummy".to_string();
 
     let id = send_coin(account.addr(), 5, &mut scenario);
