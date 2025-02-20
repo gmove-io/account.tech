@@ -92,7 +92,7 @@ public fun request_disable_rules<Config, Outcome, CoinType>(
 }
 
 // step 2: multiple members have to approve the proposal (account::approve_proposal)
-// step 3: execute the proposal and return the action (AccountConfig::module::execute_proposal)
+// step 3: execute the proposal and return the action (AccountMultisig::module::execute_proposal)
 
 // step 4: disable minting for the coin forever
 public fun execute_disable_rules<Config, Outcome, CoinType>(
@@ -139,7 +139,7 @@ public fun request_update_metadata<Config, Outcome, CoinType>(
 }
 
 // step 2: multiple members have to approve the proposal (account::approve_proposal)
-// step 3: execute the proposal and return the action (AccountConfig::module::execute_proposal)
+// step 3: execute the proposal and return the action (AccountMultisig::module::execute_proposal)
 
 // step 4: update the CoinMetadata
 public fun execute_update_metadata<Config, Outcome, CoinType>(
@@ -304,7 +304,7 @@ public fun request_withdraw_and_burn<Config, Outcome, CoinType>(
 }
 
 // step 2: multiple members have to approve the proposal (account::approve_proposal)
-// step 3: execute the proposal and return the action (AccountConfig::module::execute_proposal)
+// step 3: execute the proposal and return the action (AccountMultisig::module::execute_proposal)
 
 // step 4: burn the coin initially owned by the account
 public fun execute_withdraw_and_burn<Config, Outcome, CoinType>(

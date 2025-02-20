@@ -39,7 +39,7 @@ fun start(): (Scenario, Extensions, Account<Config, Outcome>, Clock) {
     let cap = scenario.take_from_sender<AdminCap>();
     // add core deps
     extensions.add(&cap, b"AccountProtocol".to_string(), @account_protocol, 1);
-    extensions.add(&cap, b"AccountConfig".to_string(), @0x1, 1);
+    extensions.add(&cap, b"AccountMultisig".to_string(), @0x1, 1);
     extensions.add(&cap, b"AccountActions".to_string(), @0x2, 1);
     // add external dep
     extensions.add(&cap, b"External".to_string(), @0xABC, 1);

@@ -18,15 +18,15 @@ rev = "testnet"
 [dependencies.AccountProtocol]
 local = "../protocol"
 
-[dependencies.AccountConfig]
-local = "../config"
+[dependencies.AccountMultisig]
+local = "../types/multisig"
 
 [dependencies.AccountExtensions]
 local = "../extensions"
 
 [addresses]
-account_config = "0xecb9a401e2bb786aa2b90eed359a79e7ce96e8187c3424db78d3aad3e45ee921"
-account_actions = "0x316cfca0908dd3ab6da95fc39a13bd8319380dcdbfc76e6bd1252edd2d584383"
-account_protocol = "0x528dc5bceb99fbb31550c4ea4a68626b8aca1f4d6b3280abd573b3a3cd06b457"
-account_extensions = "0x360819c66bcaf7f423b67d67a681da2b9ece6fda04e616d9dbe9bbd3462d8809"
+account_multisig = "0x4c3baa44a51df0b52e647321d77be622dd1d7e681089c77967925d06553d462b"
+account_actions = "0x5f9e3d054fe82b8cb3715754ada32135b8e7f2c1a063210878a2451c93fe9131"
+account_protocol = "0xe10f24a9d1f429ebfe37b4960912eaab95263dccd1db8dc71aeede8572525cf3"
+account_extensions = "0x97ea2592e9f0ab8a44110dc84c21649139629e31f9b4c8c570753e81fc290fae"
 kiosk = "0xbd8fc1947cf119350184107a3087e2dc27efefa0dd82e25a1f699069fe81a585"

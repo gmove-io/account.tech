@@ -52,7 +52,7 @@ The Move code has been designed to be highly modular. There are currently 4 pack
 
 The first one is `AccountProtocol` managing the multisig `Account` object and the proposal process. The `Account` object encapsulates 3 custom types managing its dependencies, metadata (incl. name) and proposals.
 
-These fields can be accessed mutably from the core packages only. Core Packages are `AccountProtocol` `AccountConfig` and `AccountActions`. The latter defines proposals to modify `Account` fields.
+These fields can be accessed mutably from the core packages only. Core Packages are `AccountProtocol` `AccountMultisig` and `AccountActions`. The latter defines proposals to modify `Account` fields.
 
 ### Extensions
 
@@ -60,7 +60,7 @@ Since anyone can create modules to extend the protocol, smart accounts have to e
 
 Account members must add the dependencies they want to use and when upgraded, they have to explicitly migrate to the version they wish to use. So unlike on Solana, developers won't be able to scam smart accounts by upgrading to malicious code. 
 
-In Extensions, three of our packages are defined as core dependencies. AccountProtocol handles the logic of the smart accounts and the proposals. AccountConfig defines multiple parameters (like Multisig or DAO) for accounts and how to resolve the proposal before execution, and AccountActions defines built-in features like dependencies management. Core dependencies are the only one that have privileged access to the Account objects. With this pattern, we replicate the behavior of `public(package)` but across multiple packages.
+In Extensions, three of our packages are defined as core dependencies. AccountProtocol handles the logic of the smart accounts and the proposals. AccountMultisig defines multiple parameters (like Multisig or DAO) for accounts and how to resolve the proposal before execution, and AccountActions defines built-in features like dependencies management. Core dependencies are the only one that have privileged access to the Account objects. With this pattern, we replicate the behavior of `public(package)` but across multiple packages.
 
 ### Module Structure
 
@@ -124,7 +124,7 @@ Create new actions by defining structs with store only ability carrying the data
 
 The project is splitted in multiple packages to improve the security. Indeed, the core packages have no external dependency so they are less vulnerable and don't necessitate regular upgrades because of third party packages. 
 
-Furthermore, the `AccountProtocol` shouldn't need to be upgraded since its functionalities will not change except with a major evolution of the protocol. `AccountConfig` will be upgraded to add new configuration options. `AccountActions` will be upgraded to add new features and `AccountExtensions` could be made immutable.
+Furthermore, the `AccountProtocol` shouldn't need to be upgraded since its functionalities will not change except with a major evolution of the protocol. `AccountMultisig` will be upgraded to add new configuration options. `AccountActions` will be upgraded to add new features and `AccountExtensions` could be made immutable.
 
 `AccountActions` consists of several modules, with built-in actions and proposals, each handling different aspects of the multisig functionality:
 

@@ -139,7 +139,7 @@ public fun outcome<Outcome>(intent: &Intent<Outcome>): &Outcome {
 }
 
 /// safe because &mut Proposal is only accessible in core deps
-/// only used in AccountConfig 
+/// only used in AccountMultisig 
 public fun outcome_mut<Outcome>(intent: &mut Intent<Outcome>): &mut Outcome {
     &mut intent.outcome
 }
@@ -267,7 +267,7 @@ public(package) fun unlock<Outcome>(intents: &mut Intents<Outcome>, id: ID) {
 }
 
 /// Removes an proposal being executed if the execution_time is reached
-/// Outcome must be validated in AccountConfig to be destroyed
+/// Outcome must be validated in AccountMultisig to be destroyed
 public(package) fun destroy<Outcome: drop>(
     intents: &mut Intents<Outcome>,
     key: String,

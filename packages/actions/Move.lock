@@ -2,10 +2,10 @@
 
 [move]
 version = 3
-manifest_digest = "1E1C40C72421D7E5FF9A9DE35AD2AE58B0395C2DB67593F4CBF0B96CFB8653D2"
+manifest_digest = "23439EC8656F11BCC0CAF6DDA787C497E45164F19BCC70F9546E9A844B9DAE00"
 deps_digest = "397E6A9F7A624706DBDFEE056CE88391A15876868FD18A88504DA74EB458D697"
 dependencies = [
-  { id = "AccountConfig", name = "AccountConfig" },
+  { id = "AccountMultisig", name = "AccountMultisig" },
   { id = "AccountExtensions", name = "AccountExtensions" },
   { id = "AccountProtocol", name = "AccountProtocol" },
   { id = "Kiosk", name = "Kiosk" },
@@ -13,8 +13,8 @@ dependencies = [
 ]
 
 [[move.package]]
-id = "AccountConfig"
-source = { local = "../config" }
+id = "AccountMultisig"
+source = { local = "../types/multisig" }
 
 dependencies = [
   { id = "AccountExtensions", name = "AccountExtensions" },
@@ -60,7 +60,7 @@ dependencies = [
 ]
 
 [move.toolchain-version]
-compiler-version = "1.37.3"
+compiler-version = "1.42.1"
 edition = "2024.beta"
 flavor = "sui"
 
@@ -68,6 +68,6 @@ flavor = "sui"
 
 [env.testnet]
 chain-id = "4c78adac"
-original-published-id = "0x316cfca0908dd3ab6da95fc39a13bd8319380dcdbfc76e6bd1252edd2d584383"
-latest-published-id = "0x316cfca0908dd3ab6da95fc39a13bd8319380dcdbfc76e6bd1252edd2d584383"
+original-published-id = "0x5f9e3d054fe82b8cb3715754ada32135b8e7f2c1a063210878a2451c93fe9131"
+latest-published-id = "0x5f9e3d054fe82b8cb3715754ada32135b8e7f2c1a063210878a2451c93fe9131"
 published-version = "1"

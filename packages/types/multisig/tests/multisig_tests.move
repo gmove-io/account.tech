@@ -1,5 +1,5 @@
 #[test_only]
-module account_config::multisig_tests;
+module account_multisig::multisig_tests;
 
 // === Imports ===
 
@@ -14,7 +14,7 @@ use account_protocol::{
     account::Account,
     user::{Self, Invite},
 };
-use account_config::{
+use account_multisig::{
     multisig::{Self, Multisig, Approvals},
     version,
 };
@@ -41,7 +41,7 @@ fun start(): (Scenario, Extensions, Account<Multisig, Approvals>, Clock) {
     let cap = scenario.take_from_sender<AdminCap>();
     // add core deps
     extensions.add(&cap, b"AccountProtocol".to_string(), @account_protocol, 1);
-    extensions.add(&cap, b"AccountConfig".to_string(), @account_config, 1);
+    extensions.add(&cap, b"AccountMultisig".to_string(), @account_multisig, 1);
     // Account generic types are dummy types (bool, bool)
     let mut account = multisig::new_account(&extensions, scenario.ctx());
     account.config_mut(version::current(), multisig::config_witness()).add_role_to_multisig(full_role(), 1);
@@ -60,7 +60,7 @@ fun end(scenario: Scenario, extensions: Extensions, account: Account<Multisig, A
 }
 
 fun full_role(): String {
-    let mut full_role = @account_config.to_string();
+    let mut full_role = @account_multisig.to_string();
     full_role.append_utf8(b"::multisig_tests::Degen");
     full_role
 }

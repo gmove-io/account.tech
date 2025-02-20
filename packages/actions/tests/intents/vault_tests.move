@@ -12,7 +12,7 @@ use sui::{
 };
 use account_extensions::extensions::{Self, Extensions, AdminCap};
 use account_protocol::account::Account;
-use account_config::multisig::{Self, Multisig, Approvals};
+use account_multisig::multisig::{Self, Multisig, Approvals};
 use account_actions::{
     vault,
     vault_intents,
@@ -40,7 +40,7 @@ fun start(): (Scenario, Extensions, Account<Multisig, Approvals>, Clock) {
     let cap = scenario.take_from_sender<AdminCap>();
     // add core deps
     extensions.add(&cap, b"AccountProtocol".to_string(), @account_protocol, 1);
-    extensions.add(&cap, b"AccountConfig".to_string(), @account_config, 1);
+    extensions.add(&cap, b"AccountMultisig".to_string(), @account_multisig, 1);
     extensions.add(&cap, b"AccountActions".to_string(), @account_actions, 1);
 
     let mut account = multisig::new_account(&extensions, scenario.ctx());

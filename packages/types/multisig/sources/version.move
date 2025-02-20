@@ -1,6 +1,6 @@
 /// This module tracks the version of the package
 
-module account_config::version;
+module account_multisig::version;
 
 // === Imports ===
 

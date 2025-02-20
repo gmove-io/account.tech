@@ -1,14 +1,10 @@
 [
   {
+    "type": "AccountMultisig",
+    "id": "0x4c3baa44a51df0b52e647321d77be622dd1d7e681089c77967925d06553d462b"
+  },
+  {
     "type": "package::UpgradeCap",
-    "id": "0x2948b7e8a216a9363ddff31de690daae8f3641133173363c0192c5dae5429032"
-  },
-  {
-    "type": "user::Registry",
-    "id": "0xb8c7841f0ac4630ed7d1d43aa37ad01635652cfa698d5bba1e9a87fefebda8bd"
-  },
-  {
-    "type": "AccountConfig",
-    "id": "0xecb9a401e2bb786aa2b90eed359a79e7ce96e8187c3424db78d3aad3e45ee921"
+    "id": "0xefe1faf890eb27c44c305de61aadeaaa7677434282dbb37613d4a4cd77cf96bc"
   }
 ]

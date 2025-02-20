@@ -22,7 +22,7 @@ use account_protocol::{
     deps,
     version_witness,
 };
-use account_config::multisig::{Self, Multisig, Approvals};
+use account_multisig::multisig::{Self, Multisig, Approvals};
 use account_actions::{
     version,
     kiosk as acc_kiosk,
@@ -56,7 +56,7 @@ fun start(): (Scenario, Extensions, Account<Multisig, Approvals>, Clock, Transfe
     let cap = scenario.take_from_sender<AdminCap>();
     // add core deps
     extensions.add(&cap, b"AccountProtocol".to_string(), @account_protocol, 1);
-    extensions.add(&cap, b"AccountConfig".to_string(), @account_config, 1);
+    extensions.add(&cap, b"AccountMultisig".to_string(), @account_multisig, 1);
     extensions.add(&cap, b"AccountActions".to_string(), @account_actions, 1);
 
     let mut account = multisig::new_account(&extensions, scenario.ctx());
@@ -86,7 +86,7 @@ fun init_caller_kiosk_with_nfts(policy: &TransferPolicy<Nft>, amount: u64, scena
     let (mut kiosk, kiosk_cap) = kiosk::new(scenario.ctx());
     let mut ids = vector[];
 
-    amount.do!(|_| {
+    amount.do!<u64>(|_| {
         let nft = Nft { id: object::new(scenario.ctx()) };
         ids.push_back(object::id(&nft));
         kiosk.lock(&kiosk_cap, policy, nft);
@@ -104,7 +104,7 @@ fun init_account_kiosk_with_nfts(account: &mut Account<Multisig, Approvals>, pol
     let (mut kiosk, kiosk_cap, ids) = init_caller_kiosk_with_nfts(policy, amount, scenario);
     let mut nft_ids = ids;
 
-    amount.do!(|_| {
+    amount.do!<u64>(|_| {
         let auth = multisig::authenticate(account, scenario.ctx());
         let request = acc_kiosk::place(
             auth, 

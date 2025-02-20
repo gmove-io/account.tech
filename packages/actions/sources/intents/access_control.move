@@ -56,7 +56,7 @@ public fun request_borrow_cap<Config, Outcome, Cap>(
 }
 
 // step 2: multiple members have to approve the proposal (account::approve_proposal)
-// step 3: execute the proposal and return the action (AccountConfig::module::execute_proposal)
+// step 3: execute the proposal and return the action (AccountMultisig::module::execute_proposal)
 
 // step 4: mint the coins and send them to the account
 public fun execute_borrow_cap<Config, Outcome, Cap: key + store>(

@@ -25,7 +25,7 @@ fun start(): (Scenario, Extensions, AdminCap) {
     let cap = scenario.take_from_sender<AdminCap>();
     // add account deps
     extensions.add(&cap, b"AccountProtocol".to_string(), @0x0, 1);
-    extensions.add(&cap, b"AccountConfig".to_string(), @0x1, 1);
+    extensions.add(&cap, b"AccountMultisig".to_string(), @0x1, 1);
     // create world
     (scenario, extensions, cap)
 }
@@ -44,13 +44,13 @@ fun test_getters() {
 
     // assertions
     assert!(extensions.is_extension(b"AccountProtocol".to_string(), @0x0, 1));
-    assert!(extensions.is_extension(b"AccountConfig".to_string(), @0x1, 1));
+    assert!(extensions.is_extension(b"AccountMultisig".to_string(), @0x1, 1));
 
     assert!(extensions.length() == 2);
     assert!(extensions.get_by_idx(0).name() == b"AccountProtocol".to_string());
     assert!(extensions.get_by_idx(0).history()[0].addr() == @0x0);
     assert!(extensions.get_by_idx(0).history()[0].version() == 1);
-    assert!(extensions.get_by_idx(1).name() == b"AccountConfig".to_string());
+    assert!(extensions.get_by_idx(1).name() == b"AccountMultisig".to_string());
     assert!(extensions.get_by_idx(1).history()[0].addr() == @0x1);
     assert!(extensions.get_by_idx(1).history()[0].version() == 1);
 
@@ -100,7 +100,7 @@ fun test_update_deps() {
     assert!(extensions.get_by_idx(0).name() == b"AccountProtocol".to_string());
     assert!(extensions.get_by_idx(0).history()[0].addr() == @0x0);
     assert!(extensions.get_by_idx(0).history()[0].version() == 1);
-    assert!(extensions.get_by_idx(1).name() == b"AccountConfig".to_string());
+    assert!(extensions.get_by_idx(1).name() == b"AccountMultisig".to_string());
     assert!(extensions.get_by_idx(1).history()[0].addr() == @0x1);
     assert!(extensions.get_by_idx(1).history()[0].version() == 1);
 

@@ -1,5 +1,5 @@
 
-module account_config::multisig;
+module account_multisig::multisig;
 
 // === Imports ===
 
@@ -16,7 +16,7 @@ use account_protocol::{
     intents::Expired,
     user::{Self, User},
 };
-use account_config::{
+use account_multisig::{
     version,
 };
 
@@ -114,13 +114,13 @@ public fun new_account(
     };
 
     let (ap_addr, ap_version) = extensions.get_latest_for_name(b"AccountProtocol".to_string());
-    let (ac_addr, ac_version) = extensions.get_latest_for_name(b"AccountConfig".to_string());
-    // add AccountConfig as a dependency (only AccountProtocol is added by default)
+    let (ac_addr, ac_version) = extensions.get_latest_for_name(b"AccountMultisig".to_string());
+    // add AccountProtocol and AccountMultisig, minimal dependencies for the Multisig Account to work
     account::new(
         extensions, 
         config, 
         false, 
-        vector[b"AccountProtocol".to_string(), b"AccountConfig".to_string()], 
+        vector[b"AccountProtocol".to_string(), b"AccountMultisig".to_string()], 
         vector[ap_addr, ac_addr], 
         vector[ap_version, ac_version], 
         ctx)

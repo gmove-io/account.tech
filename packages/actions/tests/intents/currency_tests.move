@@ -15,7 +15,7 @@ use account_protocol::{
     account::Account,
     owned,
 };
-use account_config::multisig::{Self, Multisig, Approvals};
+use account_multisig::multisig::{Self, Multisig, Approvals};
 use account_actions::{
     currency,
     currency_intents,
@@ -43,7 +43,7 @@ fun start(): (Scenario, Extensions, Account<Multisig, Approvals>, Clock, Treasur
     let cap = scenario.take_from_sender<AdminCap>();
     // add core deps
     extensions.add(&cap, b"AccountProtocol".to_string(), @account_protocol, 1);
-    extensions.add(&cap, b"AccountConfig".to_string(), @account_config, 1);
+    extensions.add(&cap, b"AccountMultisig".to_string(), @account_multisig, 1);
     extensions.add(&cap, b"AccountActions".to_string(), @account_actions, 1);
 
     let mut account = multisig::new_account(&extensions, scenario.ctx());
@@ -313,7 +313,7 @@ fun test_request_execute_mint_and_transfer() {
     multisig::approve_intent(&mut account, key, scenario.ctx());
     let mut executable = multisig::execute_intent(&mut account, key, &clock);
     // loop over execute_mint_and_transfer to execute each action
-    3u64.do!(|_| {
+    3u64.do!<u64>(|_| {
         currency_intents::execute_mint_and_transfer<Multisig, Approvals, CURRENCY_INTENTS_TESTS>(&mut executable, &mut account, scenario.ctx());
     });
     currency_intents::complete_mint_and_transfer(executable, &account);
