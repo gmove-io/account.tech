@@ -10,12 +10,12 @@ subdir = "crates/sui-framework/packages/sui-framework"
 rev = "framework/mainnet"
 
 [dependencies.AccountProtocol]
-local = "../protocol"
+local = "../../protocol"
 
 [dependencies.AccountExtensions]
-local = "../extensions"
+local = "../../extensions"
 
 [addresses]
-account_multisig = "0x4c3baa44a51df0b52e647321d77be622dd1d7e681089c77967925d06553d462b"
-account_protocol = "0xe10f24a9d1f429ebfe37b4960912eaab95263dccd1db8dc71aeede8572525cf3"
-account_extensions = "0x97ea2592e9f0ab8a44110dc84c21649139629e31f9b4c8c570753e81fc290fae"
+account_multisig = "0x0c64296e0e4836a4c8bc1639d1466d2b4cd94b2ffe732c79c545f85175065c12"
+account_protocol = "0xa0377c938511af5be74c80a0e19119c00713f6777f811245ce293b33699c3000"
+account_extensions = "0x4c5bafa9f8add5f5c90add3e1a7b847e6ad7c3213845d6b33484045982efc20b"
