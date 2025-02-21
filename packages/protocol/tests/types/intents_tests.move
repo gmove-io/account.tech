@@ -42,11 +42,11 @@ fun test_getters() {
 
     // create intents
     let mut intents = intents::empty<bool>();
-    let issuer = issuer::new(@0x0, DummyIntent());
+    let issuer = issuer::new(@0x0, b"one".to_string(), DummyIntent());
     let role = intents::new_role(b"Degen".to_string(), DummyIntent());
     let intent1 = intents::new_intent(issuer, b"one".to_string(), b"".to_string(), vector[0], 1, role, true, scenario.ctx());
     intents.add_intent(intent1);
-    let issuer = issuer::new(@0x0, DummyIntent());
+    let issuer = issuer::new(@0x0, b"two".to_string(), DummyIntent());
     let role = intents::new_role(b"".to_string(), DummyIntent());
     let intent2 = intents::new_intent(issuer, b"two".to_string(), b"".to_string(), vector[0], 1, role, true, scenario.ctx());
     intents.add_intent(intent2);
@@ -92,7 +92,7 @@ fun test_add_remove_action() {
     clock.increment_for_testing(1);
 
     let mut intents = intents::empty<bool>();
-    let issuer = issuer::new(@0x0, DummyIntent());
+    let issuer = issuer::new(@0x0, b"one".to_string(), DummyIntent());
     let role = intents::new_role(b"".to_string(), DummyIntent());
     let mut intent = intents::new_intent(issuer, b"one".to_string(), b"".to_string(), vector[0], 1, role, true, scenario.ctx());
     intent.add_action(DummyAction {});
@@ -114,7 +114,7 @@ fun test_pop_front_execution_time() {
     let mut clock = clock::create_for_testing(scenario.ctx());
     clock.increment_for_testing(1);
 
-    let issuer = issuer::new(@0x0, DummyIntent());
+    let issuer = issuer::new(@0x0, b"one".to_string(), DummyIntent());
     let role = intents::new_role(b"".to_string(), DummyIntent());
     let mut intent = intents::new_intent(issuer, b"one".to_string(), b"".to_string(), vector[0], 1, role, true, scenario.ctx());
     intent.add_action(DummyAction {});
@@ -147,7 +147,7 @@ fun test_add_destroy_intent() {
     let clock = clock::create_for_testing(scenario.ctx());
 
     let mut intents = intents::empty<bool>();
-    let issuer = issuer::new(@0x0, DummyIntent());
+    let issuer = issuer::new(@0x0, b"one".to_string(), DummyIntent());
     let role = intents::new_role(b"".to_string(), DummyIntent());
     let intent = intents::new_intent(issuer, b"one".to_string(), b"".to_string(), vector[0], 1, role, true, scenario.ctx());
     intents.add_intent(intent);
@@ -194,7 +194,7 @@ fun test_error_delete_intent_actions_not_empty() {
     clock.increment_for_testing(1);
 
     let mut intents = intents::empty<bool>();
-    let issuer = issuer::new(@0x0, DummyIntent());
+    let issuer = issuer::new(@0x0, b"one".to_string(), DummyIntent());
     let role = intents::new_role(b"".to_string(), DummyIntent());
     let mut intent = intents::new_intent(issuer, b"one".to_string(), b"".to_string(), vector[0], 1, role, true, scenario.ctx());
     intent.add_action(DummyAction {});
@@ -213,7 +213,7 @@ fun test_error_add_intent_key_already_exists() {
     let mut scenario = ts::begin(OWNER);
 
     let mut intents = intents::empty<bool>();
-    let issuer = issuer::new(@0x0, DummyIntent());
+    let issuer = issuer::new(@0x0, b"one".to_string(), DummyIntent());
     let role = intents::new_role(b"".to_string(), DummyIntent());
     let intent = intents::new_intent(issuer, b"one".to_string(), b"".to_string(), vector[0], 1, role, true, scenario.ctx());
     let intent2 = intents::new_intent(issuer, b"one".to_string(), b"".to_string(), vector[0], 1, role, true, scenario.ctx());
@@ -230,7 +230,7 @@ fun test_error_no_execution_time() {
     let clock = clock::create_for_testing(scenario.ctx());
 
     let intents = intents::empty<bool>();
-    let issuer = issuer::new(@0x0, DummyIntent());
+    let issuer = issuer::new(@0x0, b"one".to_string(), DummyIntent());
     let role = intents::new_role(b"".to_string(), DummyIntent());
     let intent = intents::new_intent(issuer, b"one".to_string(), b"".to_string(), vector[], 1, role, true, scenario.ctx());
 
@@ -246,7 +246,7 @@ fun test_error_execution_times_not_ascending() {
     let clock = clock::create_for_testing(scenario.ctx());
 
     let intents = intents::empty<bool>();
-    let issuer = issuer::new(@0x0, DummyIntent());
+    let issuer = issuer::new(@0x0, b"one".to_string(), DummyIntent());
     let role = intents::new_role(b"".to_string(), DummyIntent());
     let intent = intents::new_intent(issuer, b"one".to_string(), b"".to_string(), vector[1, 0], 1, role, true, scenario.ctx());
 

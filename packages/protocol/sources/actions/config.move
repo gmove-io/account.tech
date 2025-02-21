@@ -1,16 +1,14 @@
 /// This module allows to manage Account settings.
-/// The actions are related to the modifications of all the fields of the Account (except Proposals).
+/// The actions are related to the modifications of all the fields of the Account (except Intents and Config).
 /// All these fields are encapsulated in the `Account` struct and each managed in their own module.
-/// They are only accessible mutably via [core-deps-only] functions defined in account.move which are used here only.
+/// They are only accessible mutably via package functions defined in account.move which are used here only.
 /// 
-/// The members and thresholds modifications are grouped under a single proposal because they often go by pair.
-/// The threshold modification must be executed at the end to ensure they are reachable.
-/// The proposal also verifies the validity of the new values upon creation (e.g. threshold not higher than total weight).
+/// Dependencies are all the packages and their versions that the account can call (including this one).
+/// The allowed dependencies are defined in the `Extensions` struct and are maintained by account.tech team.
+/// Optionally, any package can be added to the account if unverified_allowed is true.
 /// 
-/// Dependencies are all the packages and their versions that the account depends on (including this one).
-/// The allowed dependencies are defined in the `Extensions` struct and are maintained by Kraken team.
-/// Account users can choose to use any version of any package and must explicitly migrate to the new version.
-/// This is closer to a trustless model where anyone with the UpgradeCap could update the dependencies maliciously.
+/// Accounts can choose to use any version of any package and must explicitly migrate to the new version.
+/// This is closer to a trustless model preventing anyone with the UpgradeCap from updating the dependencies maliciously.
 
 module account_protocol::config;
 
@@ -27,28 +25,25 @@ use account_protocol::{
 };
 use account_extensions::extensions::Extensions;
 
-// === Errors ===
-
-#[error]
-const EMetadataNotSameLength: vector<u8> = b"The keys and values are not the same length";
-
 // === Structs ===
 
+/// Intent Witness
 public struct ConfigDepsIntent() has copy, drop;
+/// Intent Witness
 public struct ToggleUnverifiedAllowedIntent() has copy, drop;
 
-/// [ACTION] struct wrapping the deps account field into an action
+/// Action struct wrapping the deps account field into an action
 public struct ConfigDepsAction has store {
     deps: Deps,
 }
-
-/// [ACTION] struct wrapping the unverified_allowed account field into an action
+/// Action struct wrapping the unverified_allowed account field into an action
 public struct ToggleUnverifiedAllowedAction has store {
     new_value: bool,
 }
 
 // === Public functions ===
 
+/// Authorized addresses can edit the metadata of the account
 public fun edit_metadata<Config, Outcome>(
     auth: Auth,
     account: &mut Account<Config, Outcome>,
@@ -56,11 +51,10 @@ public fun edit_metadata<Config, Outcome>(
     values: vector<String>,
 ) {
     account.verify(auth);
-    assert!(keys.length() == values.length(), EMetadataNotSameLength);
-
     *account.metadata_mut(version::current()) = metadata::from_keys_values(keys, values);
 }
 
+/// Authorized addresses can update the existing dependencies of the account to the latest versions
 public fun update_extensions_to_latest<Config, Outcome>(
     auth: Auth,
     account: &mut Account<Config, Outcome>,
@@ -89,6 +83,7 @@ public fun update_extensions_to_latest<Config, Outcome>(
         deps::new(extensions, account.deps().unverified_allowed(), new_names, new_addrs, new_versions);
 }
 
+/// Creates an intent to update the dependencies of the account
 public fun request_config_deps<Config, Outcome>(
     auth: Auth,
     outcome: Outcome,
@@ -123,6 +118,7 @@ public fun request_config_deps<Config, Outcome>(
     account.add_intent(intent, version::current(), ConfigDepsIntent());
 }
 
+/// Executes an intent updating the dependencies of the account
 public fun execute_config_deps<Config, Outcome>(
     mut executable: Executable,
     account: &mut Account<Config, Outcome>, 
@@ -132,11 +128,12 @@ public fun execute_config_deps<Config, Outcome>(
     account.confirm_execution(executable, version::current(), ConfigDepsIntent());
 } 
 
-
+/// Deletes the ConfigDepsAction from an expired intent
 public fun delete_config_deps(expired: &mut Expired) {
     let ConfigDepsAction { .. } = expired.remove_action();
 }
 
+/// Creates an intent to toggle the unverified_allowed flag of the account
 public fun request_toggle_unverified_allowed<Config, Outcome>(
     auth: Auth,
     outcome: Outcome,
@@ -167,6 +164,7 @@ public fun request_toggle_unverified_allowed<Config, Outcome>(
     account.add_intent(intent, version::current(), ToggleUnverifiedAllowedIntent());
 }
 
+/// Executes an intent toggling the unverified_allowed flag of the account
 public fun execute_toggle_unverified_allowed<Config, Outcome>(
     mut executable: Executable,
     account: &mut Account<Config, Outcome>, 
@@ -176,7 +174,7 @@ public fun execute_toggle_unverified_allowed<Config, Outcome>(
     account.confirm_execution(executable, version::current(), ToggleUnverifiedAllowedIntent());
 }
 
-
+/// Deletes the ToggleUnverifiedAllowedAction from an expired intent
 public fun delete_toggle_unverified_allowed(expired: &mut Expired) {
     let ToggleUnverifiedAllowedAction { .. } = expired.remove_action();
 }

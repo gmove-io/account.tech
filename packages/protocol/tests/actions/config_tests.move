@@ -195,13 +195,3 @@ fun test_toggle_unverified_allowed_expired() {
 
     end(scenario, extensions, account, clock);
 }
-
-#[test, expected_failure(abort_code = config::EMetadataNotSameLength)]
-fun test_error_new_config_metadata_not_same_length() {
-    let (scenario, extensions, mut account, clock) = start();
-
-    let auth = account.new_auth(version::current(), Witness());
-    config::edit_metadata(auth, &mut account, vector[b"name".to_string()], vector[]);
-
-    end(scenario, extensions, account, clock);
-}

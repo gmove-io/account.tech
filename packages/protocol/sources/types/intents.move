@@ -1,5 +1,7 @@
-/// This is the core module managing Proposals.
-/// It provides the interface to create, approve and execute proposals which is used in the `account` module.
+/// This is the core module managing Intents.
+/// It provides the interface to create and execute intents which is used in the `account` module.
+/// The `locked` field tracks the owned objects used in an intent, to prevent state changes.
+/// e.g. withdraw coinA (value=10sui), coinA must not be split before intent is executed.
 
 module account_protocol::intents;
 

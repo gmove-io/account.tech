@@ -1,12 +1,6 @@
-/// This module allows proposals to access objects owned by the account in a secure way with Transfer to Object (TTO).
-/// The objects can be taken only via an WithdrawAction action.
+/// This module allows objects owned by the account to be accessed through intents in a secure way.
+/// The objects can be taken only via an WithdrawAction action which uses Transfer to Object (TTO).
 /// This action can't be proposed directly since it wouldn't make sense to withdraw an object without using it.
-/// Objects can be borrowed by adding both a WithdrawAction and a ReturnAction action to the proposal.
-/// This is automatically handled by the borrow functions.
-/// Caution: borrowed Coins and similar assets can be emptied, only withdraw the amount you need (merge and split coins before if necessary)
-/// 
-/// Objects owned by the account can also be transferred to any address.
-/// Objects can be used to stream vesting at specific intervals.
 
 module account_protocol::owned;
 
@@ -26,12 +20,12 @@ use account_protocol::{
 
 // === Errors ===
 
-#[error]
-const EWrongObject: vector<u8> = b"Wrong object provided";
+const EWrongObject: u64 = 0;
+const EObjectLocked: u64 = 1;
 
 // === Structs ===
 
-/// [ACTION] guards access to account owned objects which can only be received via this action
+/// Action guarding access to account owned objects which can only be received via this action
 public struct WithdrawAction has store {
     // the owned objects we want to access
     object_id: ID,
@@ -39,6 +33,7 @@ public struct WithdrawAction has store {
 
 // === Public functions ===
 
+/// Creates a new WithdrawAction and add it to an intent
 public fun new_withdraw<Config, Outcome, IW: copy + drop>(
     intent: &mut Intent<Outcome>, 
     account: &mut Account<Config, Outcome>,
@@ -50,6 +45,7 @@ public fun new_withdraw<Config, Outcome, IW: copy + drop>(
     account.add_action(intent, WithdrawAction { object_id }, version_witness, intent_witness);
 }
 
+/// Executes a WithdrawAction and returns the object
 public fun do_withdraw<Config, Outcome, T: key + store, IW: copy + drop>(
     executable: &mut Executable,
     account: &mut Account<Config, Outcome>, 
@@ -63,6 +59,7 @@ public fun do_withdraw<Config, Outcome, T: key + store, IW: copy + drop>(
     account.receive(receiving)
 }
 
+/// Deletes a WithdrawAction from an expired intent
 public fun delete_withdraw<Config, Outcome>(
     expired: &mut Expired, 
     account: &mut Account<Config, Outcome>,
@@ -73,17 +70,15 @@ public fun delete_withdraw<Config, Outcome>(
 
 // Coin operations
 
-/// Members can merge and split coins, no need for approvals
-/// Returns the IDs to use in a following proposal, conserve the order
+/// Authorized addresses can merge and split coins.
+/// Returns the IDs to use in a following intent, conserves the order.
 public fun merge_and_split<Config, Outcome, CoinType>(
-    _auth: &Auth, // must be an authorized member, done before proposal
+    _auth: &Auth, 
     account: &mut Account<Config, Outcome>, 
     to_merge: vector<Receiving<Coin<CoinType>>>, // there can be only one coin if we just want to split
     to_split: vector<u64>, // there can be no amount if we just want to merge
     ctx: &mut TxContext
 ): vector<ID> { 
-    // account.assert_is_member(ctx);
-
     // receive all coins
     let mut coins = vector::empty();
     to_merge.do!(|item| {
@@ -91,18 +86,20 @@ public fun merge_and_split<Config, Outcome, CoinType>(
         coins.push_back(coin);
     });
 
-    let coin = merge(coins, ctx);
+    let coin = merge(account, coins, ctx);
     let ids = split(account, coin, to_split, ctx);
 
     ids
 }
 
-fun merge<CoinType>(
+fun merge<Config, Outcome, CoinType>(
+    account: &Account<Config, Outcome>,
     coins: vector<Coin<CoinType>>, 
     ctx: &mut TxContext
 ): Coin<CoinType> {
     let mut merged = coin::zero<CoinType>(ctx);
     coins.do!(|coin| {
+        assert!(!account.intents().locked().contains(&object::id(&coin)), EObjectLocked);
         merged.join(coin);
     });
 
@@ -115,6 +112,8 @@ fun split<Config, Outcome, CoinType>(
     amounts: vector<u64>, 
     ctx: &mut TxContext
 ): vector<ID> {
+    assert!(!account.intents().locked().contains(&object::id(&coin)), EObjectLocked);
+
     let ids = amounts.map!(|amount| {
         let split = coin.split(amount, ctx);
         let id = object::id(&split);

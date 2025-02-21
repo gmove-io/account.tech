@@ -1,8 +1,7 @@
 /// Users have a non-transferable User account object used to track Accounts in which they are a member.
-/// They can also set a username and profile picture to be displayed on the various frontends.
-/// Account members can send on-chain invites to new members. 
-/// Alternatively, multisig Account creators can share an invite link to new members that can join the Account without invite.
+/// Each account type can define a way to send on-chain invites to Users.
 /// Invited users can accept or refuse the invite, to add the Account id to their User account or not.
+/// Alternatively, Account interfaces can define rules allowing users to join an Account without invite.
 /// This avoid the need for an indexer as all data can be easily found on-chain.
 
 module account_protocol::user;
@@ -17,21 +16,16 @@ use sui::{
     vec_map::{Self, VecMap},
     table::{Self, Table},
 };
-use account_protocol::account::{Self, Account};
+use account_protocol::account::Account;
+
 // === Errors ===
 
-#[error]
-const ENotEmpty: vector<u8> = b"User must leave all accounts before destroying their User object";
-#[error]
-const EAlreadyHasUser: vector<u8> = b"User already has a User object";
-#[error]
-const EAccountNotFound: vector<u8> = b"Account not found in User";
-#[error]
-const EAccountTypeDoesntExist: vector<u8> = b"Account type doesn't exist in User";
-#[error]
-const EWrongUserId: vector<u8> = b"The User ID for caller in Registry does not match the User object";
-#[error]
-const EAccountAlreadyRegistered: vector<u8> = b"Account ID already registered for this type";
+const ENotEmpty: u64 = 0;
+const EAlreadyHasUser: u64 = 1;
+const EAccountNotFound: u64 = 2;
+const EAccountTypeDoesntExist: u64 = 3;
+const EWrongUserId: u64 = 4;
+const EAccountAlreadyRegistered: u64 = 5;
 
 // === Struct ===
 
@@ -121,9 +115,9 @@ public fun refuse_invite(invite: Invite) {
 public fun add_account<Config, Outcome, CW: drop>(
     user: &mut User, 
     account: &Account<Config, Outcome>, 
-    _config_witness: CW,
+    config_witness: CW,
 ) {
-    account::assert_is_config_module<Config, CW>();
+    account.assert_is_config_module(config_witness);
     let account_type = type_name::get<Config>().into_string().to_string();
 
     if (user.accounts.contains(&account_type)) {
@@ -137,9 +131,9 @@ public fun add_account<Config, Outcome, CW: drop>(
 public fun remove_account<Config, Outcome, CW: drop>(
     user: &mut User, 
     account: &Account<Config, Outcome>, 
-    _config_witness: CW,
+    config_witness: CW,
 ) {
-    account::assert_is_config_module<Config, CW>();
+    account.assert_is_config_module(config_witness);
     let account_type = type_name::get<Config>().into_string().to_string();
 
     assert!(user.accounts.contains(&account_type), EAccountTypeDoesntExist);
@@ -156,10 +150,10 @@ public fun remove_account<Config, Outcome, CW: drop>(
 public fun send_invite<Config, Outcome, CW: drop>(
     account: &Account<Config, Outcome>, 
     recipient: address, 
-    _config_witness: CW,
+    config_witness: CW,
     ctx: &mut TxContext,
 ) {
-    account::assert_is_config_module<Config, CW>();
+    account.assert_is_config_module(config_witness);
     let account_type = type_name::get<Config>().into_string().to_string();
 
     transfer::transfer(Invite { 

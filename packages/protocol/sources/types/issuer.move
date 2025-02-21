@@ -1,10 +1,6 @@
-/// This module handles the authentication:
-/// - for proposal and actions execution (proposals should be destroyed by the module that created them)
-/// - for roles and associated approval & threshold (roles are derived from the role_type and an optional name)
-/// - for objects managing assets (treasuries, kiosks, etc)
-/// 
-/// A role is defined as a TypeName + an optional name
-/// -> package_id::module_name::struct_name::name or package_id::module_name::struct_name
+/// This is a protected type ensuring provenance of the intent.
+/// The underlying data is used to identify the intent when executing it.
+/// The Issuer is instantiated when the intent is created and is copied to an Executable when executed.
 
 module account_protocol::issuer;
 
@@ -17,10 +13,8 @@ use std::{
 
 // === Errors ===
 
-#[error]
-const EWrongWitness: vector<u8> = b"Witness is not the one used for creating the proposal";
-#[error]
-const EWrongAccount: vector<u8> = b"Account address doesn't match the issuer";
+const EWrongAccount: u64 = 0;
+const EWrongWitness: u64 = 1;
 
 // === Structs ===
 
@@ -34,33 +28,36 @@ public struct Issuer has copy, drop, store {
     intent_type: TypeName,
 }
 
-/// Verifies that the action is executed for the account that approved it
+/// Verifies that the action is executed for the account that created and validated it
 public fun assert_is_account(issuer: &Issuer, account_addr: address) {
     assert!(issuer.account_addr == account_addr, EWrongAccount);
 }
 
-/// Used by modules to execute an action
+/// Checks the witness passed is the same as the one used for creating the intent
 public fun assert_is_intent<IW: drop>(issuer: &Issuer, _: IW) {
     assert!(issuer.intent_type == type_name::get<IW>(), EWrongWitness);
 }
 
 // === View Functions ===
 
+/// Returns the address of the account that created the intent
 public fun account_addr(issuer: &Issuer): address {
     issuer.account_addr
 }
 
+/// Returns the type of the intent
 public fun intent_type(issuer: &Issuer): TypeName {
     issuer.intent_type
 }
 
+/// Returns the key of the intent
 public fun intent_key(issuer: &Issuer): String {
     issuer.intent_key
 }
 
 // === Package functions ===
 
-/// Constructs an issuer from a Witness, an (optional) name and a account id
+/// Constructs an issuer from an account address, an intent key and a witness
 public(package) fun new<IW: drop>(
     account_addr: address,
     intent_key: String,

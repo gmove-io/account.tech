@@ -47,3 +47,20 @@ fun test_metadata_from_keys_values() {
     
     scenario.end();
 }
+
+#[test, expected_failure(abort_code = metadata::EMetadataNotSameLength)]
+fun test_error_new_metadata_not_same_length() {
+    let scenario = ts::begin(OWNER);
+
+    let keys = vector[
+        b"name".to_string(), 
+        b"description".to_string(),
+    ];
+    let values = vector[
+        b"Name".to_string(),
+    ];
+
+    metadata::from_keys_values(keys, values);
+
+    scenario.end();
+}
