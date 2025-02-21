@@ -10,7 +10,6 @@ module account_protocol::executable;
 
 // === Imports ===
 
-use std::string::String;
 use account_protocol::issuer::Issuer;
 
 // === Structs ===
@@ -19,8 +18,6 @@ use account_protocol::issuer::Issuer;
 public struct Executable {
     // module that issued the proposal and must destroy it
     issuer: Issuer,
-    // key of the intent that created the executable
-    key: String,
     // current action index, to reduce gas costs for large bags
     action_idx: u64,
 }
@@ -31,10 +28,6 @@ public fun issuer(executable: &Executable): &Issuer {
     &executable.issuer
 }
 
-public fun key(executable: &Executable): String {
-    executable.key
-}
-
 public fun action_idx(executable: &Executable): u64 {
     executable.action_idx
 }
@@ -42,15 +35,14 @@ public fun action_idx(executable: &Executable): u64 {
 // === Package functions ===
 
 /// Is only called from the account module
-public(package) fun new(issuer: Issuer, key: String): Executable {
-    Executable { issuer, key, action_idx: 0 }
+public(package) fun new(issuer: Issuer): Executable {
+    Executable { issuer, action_idx: 0 }
 }
 
-public(package) fun next_action(executable: &mut Executable): (String, u64) {
-    let (key, action_idx) = (executable.key, executable.action_idx);
+public(package) fun next_action(executable: &mut Executable): u64 {
+    let action_idx = executable.action_idx;
     executable.action_idx = executable.action_idx + 1;
-
-    (key, action_idx)
+    action_idx
 }
 
 /// The executable is destroyed

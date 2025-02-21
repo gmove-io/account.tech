@@ -10,7 +10,10 @@ module account_protocol::issuer;
 
 // === Imports ===
 
-use std::type_name::{Self, TypeName};
+use std::{
+    type_name::{Self, TypeName},
+    string::String,
+};
 
 // === Errors ===
 
@@ -25,6 +28,8 @@ const EWrongAccount: vector<u8> = b"Account address doesn't match the issuer";
 public struct Issuer has copy, drop, store {
     // address of the account that created the issuer
     account_addr: address,
+    // intent key 
+    intent_key: String,
     // intent witness used to create the intent 
     intent_type: TypeName,
 }
@@ -49,25 +54,18 @@ public fun intent_type(issuer: &Issuer): TypeName {
     issuer.intent_type
 }
 
-// public fun package_id(issuer: &Issuer): String {
-//     issuer.package_id
-// }
-
-// public fun module_name(issuer: &Issuer): String {
-//     issuer.module_name
-// }
-
-// public fun opt_name(issuer: &Issuer): String {
-//     issuer.opt_name
-// }
+public fun intent_key(issuer: &Issuer): String {
+    issuer.intent_key
+}
 
 // === Package functions ===
 
 /// Constructs an issuer from a Witness, an (optional) name and a account id
 public(package) fun new<IW: drop>(
     account_addr: address,
+    intent_key: String,
     _intent_witness: IW,
 ): Issuer {
     let intent_type = type_name::get<IW>();
-    Issuer { account_addr, intent_type }
+    Issuer { account_addr, intent_type, intent_key }
 }

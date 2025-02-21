@@ -22,12 +22,13 @@ public struct WrongWitness() has drop;
 fun test_issuer() {
     let scenario = ts::begin(OWNER);
 
-    let issuer = issuer::new(@0x0, DummyIntent());
+    let issuer = issuer::new(@0x0, b"dummy".to_string(), DummyIntent());
     // assertions
     issuer.assert_is_account(@0x0);
     issuer.assert_is_intent(DummyIntent());
     // getters 
     assert!(issuer.account_addr() == @0x0);
+    assert!(issuer.intent_key() == b"dummy".to_string());
     assert!(issuer.intent_type() == type_name::get<DummyIntent>());
 
     ts::end(scenario);
@@ -37,7 +38,7 @@ fun test_issuer() {
 fun test_error_wrong_witness() {
     let scenario = ts::begin(OWNER);
 
-    let issuer = issuer::new(@0x0, DummyIntent());
+    let issuer = issuer::new(@0x0, b"dummy".to_string(), DummyIntent());
     // assertions
     issuer.assert_is_intent(WrongWitness());
 
@@ -48,7 +49,7 @@ fun test_error_wrong_witness() {
 fun test_error_wrong_account() {
     let scenario = ts::begin(OWNER);
 
-    let issuer = issuer::new(@0x0, DummyIntent());
+    let issuer = issuer::new(@0x0, b"dummy".to_string(), DummyIntent());
     // assertions
     issuer.assert_is_account(@0x1);
 
