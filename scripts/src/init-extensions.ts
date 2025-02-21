@@ -1,14 +1,13 @@
 import { Transaction } from '@mysten/sui/transactions';
 import { client, keypair, getId } from './utils.js';
 
-(async () => {
+export async function initExtensions(): Promise<boolean> {
+    console.log("\n🔧 Initializing core dependencies...");
     try {
-        console.log("calling...")
-
         const tx = new Transaction();
         tx.setGasBudget(10000000);
 
-        const pkg = getId("AccountExtensions")
+        const pkg = getId("AccountExtensions");
 
         tx.moveCall({
             target: `${pkg}::extensions::add`,
@@ -26,8 +25,8 @@ import { client, keypair, getId } from './utils.js';
             arguments: [
                 tx.object(getId("extensions::Extensions")),
                 tx.object(getId("extensions::AdminCap")),
-                tx.pure.string("AccountMultisig"),
-                tx.pure.address(getId("AccountMultisig")),
+                tx.pure.string("AccountActions"),
+                tx.pure.address(getId("AccountActions")),
                 tx.pure.u64(1),
             ],
         });
@@ -37,8 +36,8 @@ import { client, keypair, getId } from './utils.js';
             arguments: [
                 tx.object(getId("extensions::Extensions")),
                 tx.object(getId("extensions::AdminCap")),
-                tx.pure.string("AccountActions"),
-                tx.pure.address(getId("AccountActions")),
+                tx.pure.string("AccountMultisig"),
+                tx.pure.address(getId("AccountMultisig")),
                 tx.pure.u64(1),
             ],
         });
@@ -53,10 +52,15 @@ import { client, keypair, getId } from './utils.js';
             requestType: "WaitForLocalExecution"
         });
 
-        console.log("result: ", JSON.stringify(result.objectChanges, null, 2));
-        console.log("status: ", JSON.stringify(result.effects?.status, null, 2));
-
-    } catch (e) {
-        console.log(e)
+        if (result.effects?.status?.status === "success") {
+            console.log("✅ Core dependencies initialized successfully");
+            return true;
+        } else {
+            console.error("❌ Failed to initialize core dependencies:", result.effects?.status?.error);
+            return false;
+        }
+    } catch (error) {
+        console.error("❌ Failed to initialize core dependencies:", error);
+        return false;
     }
-})()
+}

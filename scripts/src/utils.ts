@@ -4,8 +4,8 @@ import dotenv from "dotenv";
 import * as fs from "fs";
 
 export interface IObjectInfo {
-    type: string | undefined
-	id: string | undefined
+    type: string;
+    id: string;
 }
 
 dotenv.config();
@@ -14,8 +14,8 @@ export const keypair = Ed25519Keypair.fromSecretKey(Uint8Array.from(Buffer.from(
 
 export const client = new SuiClient({ url: getFullnodeUrl(process.env.NETWORK as "mainnet" | "testnet" | "devnet" | "localnet") });
 
-export const getId = (type: string, isMainnet: boolean = false): string => {
-    const dataDir = isMainnet ? "./src/mainnet-data/" : "./src/testnet-data/";
+export const getId = (type: string): string => {
+    const dataDir = "./src/data/";
     const allObjects: IObjectInfo[] = [];
 
     fs.readdirSync(dataDir)
@@ -28,10 +28,10 @@ export const getId = (type: string, isMainnet: boolean = false): string => {
             }
         });
 
-    const matchingObject = allObjects.find(item => item.type?.startsWith(type));
-    
-    if (!matchingObject || matchingObject.id === undefined) {
-        throw new Error(`Type ${type} not found or has undefined id in ${dataDir}`);
+    const matchingObject = allObjects.find(item => item.type.includes(type));
+
+    if (!matchingObject) {
+        throw new Error(`Type ${type} not found in ${dataDir}`);
     }
 
     return matchingObject.id;
