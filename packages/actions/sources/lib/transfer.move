@@ -1,5 +1,5 @@
 /// This module defines apis to transfer assets owned or managed by the account.
-/// The proposals can implement transfers for any action type (e.g. see owned or treasury).
+/// The intents can implement transfers for any action type (e.g. see owned or vault).
 
 module account_actions::transfer;
 
@@ -14,7 +14,7 @@ use account_protocol::{
 
 // === Structs ===
 
-/// [ACTION] used in combination with other actions (like WithdrawAction) to transfer the coins or objects to a recipient
+/// Action used in combination with other actions (like WithdrawAction) to transfer objects to a recipient.
 public struct TransferAction has store {
     // address to transfer to
     recipient: address,
@@ -22,6 +22,7 @@ public struct TransferAction has store {
 
 // === Public functions ===
 
+/// Creates a TransferAction and adds it to an intent.
 public fun new_transfer<Config, Outcome, IW: drop>(
     intent: &mut Intent<Outcome>, 
     account: &Account<Config, Outcome>, 
@@ -32,6 +33,7 @@ public fun new_transfer<Config, Outcome, IW: drop>(
     account.add_action(intent, TransferAction { recipient }, version_witness, intent_witness);
 }
 
+/// Processes a TransferAction and transfers an object to a recipient.
 public fun do_transfer<Config, Outcome, T: key + store, IW: drop>(
     executable: &mut Executable, 
     account: &mut Account<Config, Outcome>, 
@@ -43,6 +45,7 @@ public fun do_transfer<Config, Outcome, T: key + store, IW: drop>(
     transfer::public_transfer(object, action.recipient);
 }
 
+/// Deletes a TransferAction from an expired intent.
 public fun delete_transfer(expired: &mut Expired) {
     let TransferAction { .. } = expired.remove_action();
 }

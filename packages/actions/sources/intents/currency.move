@@ -25,27 +25,25 @@ use account_actions::{
 
 // === Errors ===
 
-#[error]
-const EAmountsRecipentsNotSameLength: vector<u8> = b"Transfer amounts and recipients are not the same length";
-#[error]
-const EMaxSupply: vector<u8> = b"Max supply exceeded";
+const EAmountsRecipentsNotSameLength: u64 = 0;
+const EMaxSupply: u64 = 1;
 
 // === Structs ===
 
-/// [PROPOSAL] witness defining the proposal to disable one or more permissions
+/// Intent Witness defining the intent to disable one or more permissions.
 public struct DisableRulesIntent() has copy, drop;
-/// [PROPOSAL] witness defining the proposal to update the CoinMetadata associated with a locked TreasuryCap
+/// Intent Witness defining the intent to update the CoinMetadata associated with a locked TreasuryCap.
 public struct UpdateMetadataIntent() has copy, drop;
-/// [PROPOSAL] witness defining the proposal to transfer a minted coin 
+/// Intent Witness defining the intent to transfer a minted coin.
 public struct MintAndTransferIntent() has copy, drop;
-/// [PROPOSAL] witness defining the proposal to pay from a minted coin
+/// Intent Witness defining the intent to pay from a minted coin.
 public struct MintAndVestIntent() has copy, drop;
-/// [PROPOSAL] witness defining the proposal to burn coins from the account using a locked TreasuryCap
+/// Intent Witness defining the intent to burn coins from the account using a locked TreasuryCap.
 public struct WithdrawAndBurnIntent() has copy, drop;
 
-// === [PROPOSAL] Public functions ===
+// === Public functions ===
 
-// step 1: propose to disable minting for the coin forever
+/// Creates a DisableRulesIntent and adds it to an Account.
 public fun request_disable_rules<Config, Outcome, CoinType>(
     auth: Auth,
     outcome: Outcome,
@@ -91,10 +89,7 @@ public fun request_disable_rules<Config, Outcome, CoinType>(
     account.add_intent(intent, version::current(), DisableRulesIntent());
 }
 
-// step 2: multiple members have to approve the proposal (account::approve_proposal)
-// step 3: execute the proposal and return the action (AccountMultisig::module::execute_proposal)
-
-// step 4: disable minting for the coin forever
+/// Executes a DisableRulesIntent, disables rules for the coin forever.
 public fun execute_disable_rules<Config, Outcome, CoinType>(
     mut executable: Executable,
     account: &mut Account<Config, Outcome>,
@@ -103,7 +98,7 @@ public fun execute_disable_rules<Config, Outcome, CoinType>(
     account.confirm_execution(executable, version::current(), DisableRulesIntent());
 }
 
-// step 1: propose to update the CoinMetadata
+/// Creates an UpdateMetadataIntent and adds it to an Account.
 public fun request_update_metadata<Config, Outcome, CoinType>(
     auth: Auth,
     outcome: Outcome,
@@ -138,10 +133,7 @@ public fun request_update_metadata<Config, Outcome, CoinType>(
     account.add_intent(intent, version::current(), UpdateMetadataIntent());
 }
 
-// step 2: multiple members have to approve the proposal (account::approve_proposal)
-// step 3: execute the proposal and return the action (AccountMultisig::module::execute_proposal)
-
-// step 4: update the CoinMetadata
+/// Executes an UpdateMetadataIntent, updates the CoinMetadata.
 public fun execute_update_metadata<Config, Outcome, CoinType>(
     mut executable: Executable,
     account: &mut Account<Config, Outcome>,
@@ -151,7 +143,7 @@ public fun execute_update_metadata<Config, Outcome, CoinType>(
     account.confirm_execution(executable, version::current(), UpdateMetadataIntent());
 }
 
-// step 1: propose to send managed coins
+/// Creates a MintAndTransferIntent and adds it to an Account.
 public fun request_mint_and_transfer<Config, Outcome, CoinType>(
     auth: Auth,
     outcome: Outcome,
@@ -195,10 +187,7 @@ public fun request_mint_and_transfer<Config, Outcome, CoinType>(
     account.add_intent(intent, version::current(), MintAndTransferIntent());
 }
 
-// step 2: multiple members have to approve the proposal (account::approve_proposal)
-// step 3: execute the proposal and return the action (account::execute_proposal)
-
-// step 4: loop over transfer
+/// Executes a MintAndTransferIntent, sends managed coins. Can be looped over.
 public fun execute_mint_and_transfer<Config, Outcome, CoinType>(
     executable: &mut Executable, 
     account: &mut Account<Config, Outcome>, 
@@ -208,7 +197,7 @@ public fun execute_mint_and_transfer<Config, Outcome, CoinType>(
     acc_transfer::do_transfer(executable, account, coin, version::current(), MintAndTransferIntent());
 }
 
-// step 5: complete acc_transfer and destroy the executable
+/// Completes a MintAndTransferIntent, destroys the executable after looping over the transfers.
 public fun complete_mint_and_transfer<Config, Outcome>(
     executable: Executable,
     account: &Account<Config, Outcome>,
@@ -216,7 +205,7 @@ public fun complete_mint_and_transfer<Config, Outcome>(
     account.confirm_execution(executable, version::current(), MintAndTransferIntent());
 }
 
-// step 1: propose to pay from a minted coin
+/// Creates a MintAndVestIntent and adds it to an Account.
 public fun request_mint_and_vest<Config, Outcome, CoinType>(
     auth: Auth,
     outcome: Outcome,
@@ -254,10 +243,7 @@ public fun request_mint_and_vest<Config, Outcome, CoinType>(
     account.add_intent(intent, version::current(), MintAndVestIntent());
 }
 
-// step 2: multiple members have to approve the proposal (account::approve_proposal)
-// step 3: execute the proposal and return the action (account::execute_proposal)
-
-// step 4: loop over it in PTB, sends last object from the Send action
+/// Executes a MintAndVestIntent, sends managed coins and creates a vesting.
 public fun execute_mint_and_vest<Config, Outcome, CoinType>(
     mut executable: Executable, 
     account: &mut Account<Config, Outcome>, 
@@ -268,7 +254,7 @@ public fun execute_mint_and_vest<Config, Outcome, CoinType>(
     account.confirm_execution(executable, version::current(), MintAndVestIntent());
 }
 
-// step 1: propose to burn an amount of a coin owned by the account
+/// Creates a WithdrawAndBurnIntent and adds it to an Account.
 public fun request_withdraw_and_burn<Config, Outcome, CoinType>(
     auth: Auth,
     outcome: Outcome,
@@ -303,10 +289,7 @@ public fun request_withdraw_and_burn<Config, Outcome, CoinType>(
     account.add_intent(intent, version::current(), WithdrawAndBurnIntent());
 }
 
-// step 2: multiple members have to approve the proposal (account::approve_proposal)
-// step 3: execute the proposal and return the action (AccountMultisig::module::execute_proposal)
-
-// step 4: burn the coin initially owned by the account
+/// Executes a WithdrawAndBurnIntent, burns a coin owned by the account.
 public fun execute_withdraw_and_burn<Config, Outcome, CoinType>(
     mut executable: Executable,
     account: &mut Account<Config, Outcome>,

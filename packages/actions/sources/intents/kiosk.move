@@ -2,9 +2,7 @@ module account_actions::kiosk_intents;
 
 // === Imports ===
 
-use std::{
-    string::String,
-};
+use std::string::String;
 use sui::{
     kiosk::{Kiosk, KioskOwnerCap},
     transfer_policy::{TransferPolicy, TransferRequest},
@@ -20,21 +18,19 @@ use account_actions::{
 
 // === Errors ===
 
-#[error]
-const ENoLock: vector<u8> = b"No Kiosk found with this name";
-#[error]
-const ENftsPricesNotSameLength: vector<u8> = b"Nfts prices vectors must have the same length";
+const ENoLock: u64 = 0;
+const ENftsPricesNotSameLength: u64 = 1;
 
 // === Structs ===
 
-/// [PROPOSAL] witness defining the proposal to take nfts from a kiosk managed by a account
+/// Intent Witness defining the intent to take nfts from a kiosk managed by a account to another kiosk.
 public struct TakeNftsIntent() has copy, drop;
-/// [PROPOSAL] witness defining the proposal to list nfts in a kiosk managed by a account
+/// Intent Witness defining the intent to list nfts in a kiosk managed by a account.
 public struct ListNftsIntent() has copy, drop;
 
-// === [PROPOSAL] Public functions ===
+// === Public functions ===
 
-// step 1: propose to transfer nfts to another kiosk
+/// Creates a TakeNftsIntent and adds it to an Account.
 public fun request_take_nfts<Config, Outcome>(
     auth: Auth,
     outcome: Outcome,
@@ -69,10 +65,7 @@ public fun request_take_nfts<Config, Outcome>(
     account.add_intent(intent, version::current(), TakeNftsIntent());
 }
 
-// step 2: multiple members have to approve the proposal (account::approve_proposal)
-// step 3: execute the proposal and return the action (account::execute_proposal)
-
-// step 4: the recipient (anyone) must loop over this function to take the nfts in any of his Kiosks
+/// Executes a TakeNftsIntent, takes nfts from a kiosk managed by a account to another kiosk. Can be looped over.
 public fun execute_take_nfts<Config, Outcome, Nft: key + store>(
     executable: &mut Executable,
     account: &mut Account<Config, Outcome>,
@@ -85,7 +78,7 @@ public fun execute_take_nfts<Config, Outcome, Nft: key + store>(
     acc_kiosk::do_take(executable, account, account_kiosk, recipient_kiosk, recipient_cap, policy, version::current(), TakeNftsIntent(), ctx)
 }
 
-// step 5: destroy the executable
+/// Completes a TakeNftsIntent, destroys the executable.
 public fun complete_take_nfts<Config, Outcome>(
     executable: Executable,
     account: &Account<Config, Outcome>,
@@ -93,7 +86,7 @@ public fun complete_take_nfts<Config, Outcome>(
     account.confirm_execution(executable, version::current(), TakeNftsIntent());
 }
 
-// step 1: propose to list nfts
+/// Creates a ListNftsIntent and adds it to an Account.
 public fun request_list_nfts<Config, Outcome>(
     auth: Auth,
     outcome: Outcome,
@@ -129,10 +122,7 @@ public fun request_list_nfts<Config, Outcome>(
     account.add_intent(intent, version::current(), ListNftsIntent());
 }
 
-// step 2: multiple members have to approve the proposal (account::approve_proposal)
-// step 3: execute the proposal and return the action (account::execute_proposal)
-
-// step 4: list last nft in action
+/// Executes a ListNftsIntent, lists nfts in a kiosk managed by a account. Can be looped over.
 public fun execute_list_nfts<Config, Outcome, Nft: key + store>(
     executable: &mut Executable,
     account: &mut Account<Config, Outcome>,
@@ -141,7 +131,7 @@ public fun execute_list_nfts<Config, Outcome, Nft: key + store>(
     acc_kiosk::do_list<_, _, Nft, _>(executable, account, kiosk, version::current(), ListNftsIntent());
 }
 
-// step 5: destroy the executable
+/// Completes a ListNftsIntent, destroys the executable after looping over the listings.
 public fun complete_list_nfts<Config, Outcome>(
     executable: Executable,
     account: &Account<Config, Outcome>,

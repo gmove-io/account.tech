@@ -17,23 +17,20 @@ use account_actions::{
 
 // === Errors ===
 
-#[error]
-const ENotSameLength: vector<u8> = b"Recipients and amounts vectors not same length";
-#[error]
-const EInsufficientFunds: vector<u8> = b"Insufficient funds for this coin type in vault";
-#[error]
-const ECoinTypeDoesntExist: vector<u8> = b"Coin type doesn't exist in vault";
+const ENotSameLength: u64 = 0;
+const EInsufficientFunds: u64 = 1;
+const ECoinTypeDoesntExist: u64 = 2;
 
 // === Structs ===
 
-/// [PROPOSAL] witness defining the vault transfer proposal, and associated role
+/// Intent Witness defining the vault spend and transfer intent, and associated role.
 public struct SpendAndTransferIntent() has copy, drop;
-/// [PROPOSAL] witness defining the vault pay proposal, and associated role
+/// Intent Witness defining the vault spend and vesting intent, and associated role.
 public struct SpendAndVestIntent() has copy, drop;
 
-// === [PROPOSAL] Public Functions ===
+// === Public Functions ===
 
-// step 1: propose to send managed coins
+/// Creates a SpendAndTransferIntent and adds it to an Account.
 public fun request_spend_and_transfer<Config, Outcome, CoinType: drop>(
     auth: Auth,
     outcome: Outcome,
@@ -74,10 +71,7 @@ public fun request_spend_and_transfer<Config, Outcome, CoinType: drop>(
     account.add_intent(intent, version::current(), SpendAndTransferIntent());
 }
 
-// step 2: multiple members have to approve the proposal (account::approve_proposal)
-// step 3: execute the proposal and return the action (account::execute_proposal)
-
-// step 4: loop over transfer
+/// Executes a SpendAndTransferIntent, transfers coins from the vault to the recipients. Can be looped over.
 public fun execute_spend_and_transfer<Config, Outcome, CoinType: drop>(
     executable: &mut Executable, 
     account: &mut Account<Config, Outcome>, 
@@ -87,7 +81,7 @@ public fun execute_spend_and_transfer<Config, Outcome, CoinType: drop>(
     acc_transfer::do_transfer(executable, account, coin, version::current(), SpendAndTransferIntent());
 }
 
-// step 5: complete acc_transfer and destroy the executable
+/// Completes a SpendAndTransferIntent, destroys the executable after looping over the transfers.
 public fun complete_spend_and_transfer<Config, Outcome>(
     executable: Executable,
     account: &Account<Config, Outcome>,
@@ -95,7 +89,7 @@ public fun complete_spend_and_transfer<Config, Outcome>(
     account.confirm_execution(executable, version::current(), SpendAndTransferIntent());
 }
 
-// step 1(bis): same but from a vault
+/// Creates a SpendAndVestIntent and adds it to an Account.
 public fun request_spend_and_vest<Config, Outcome, CoinType: drop>(
     auth: Auth,
     outcome: Outcome,
@@ -137,10 +131,7 @@ public fun request_spend_and_vest<Config, Outcome, CoinType: drop>(
     account.add_intent(intent, version::current(), SpendAndVestIntent());
 }
 
-// step 2: multiple members have to approve the proposal (account::approve_proposal)
-// step 3: execute the proposal and return the action (account::execute_proposal)
-
-// step 4: loop over it in PTB, sends last object from the Send action
+/// Executes a SpendAndVestIntent, create a vesting from a coin in the vault.
 public fun execute_spend_and_vest<Config, Outcome, CoinType: drop>(
     mut executable: Executable, 
     account: &mut Account<Config, Outcome>, 

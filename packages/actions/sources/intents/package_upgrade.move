@@ -22,16 +22,14 @@ const EInvalidExecutionTime: u64 = 0;
 
 // === Structs ===
 
-/// [PROPOSAL] witness defining the proposal to upgrade a package
+/// Intent Witness defining the intent to upgrade a package.
 public struct UpgradePackageIntent() has copy, drop;
-/// [PROPOSAL] witness defining the proposal to restrict an UpgradeCap
+/// Intent Witness defining the intent to restrict an UpgradeCap.
 public struct RestrictPolicyIntent() has copy, drop;
 
-// === [PROPOSAL] Public Functions ===
+// === Public Functions ===
 
-// step 1: propose an UpgradeAction by passing the digest of the package build
-// execution_time is automatically set to now + timelock
-// if timelock = 0, it means that upgrade can be executed at any time
+/// Creates an UpgradePackageIntent and adds it to an Account.
 public fun request_upgrade_package<Config, Outcome>(
     auth: Auth,
     outcome: Outcome,
@@ -66,10 +64,7 @@ public fun request_upgrade_package<Config, Outcome>(
     account.add_intent(intent, version::current(), UpgradePackageIntent());
 }
 
-// step 2: multiple members have to approve the proposal (account::approve_proposal)
-// step 3: execute the proposal and return the action (account::execute_proposal)
-
-// step 4: destroy UpgradeAction and return the UpgradeTicket for upgrading
+/// Executes an UpgradePackageIntent, returns the UpgradeTicket for upgrading.
 public fun execute_upgrade_package<Config, Outcome>(
     executable: &mut Executable,
     account: &mut Account<Config, Outcome>,
@@ -78,9 +73,9 @@ public fun execute_upgrade_package<Config, Outcome>(
     package_upgrade::do_upgrade(executable, account, clock, version::current(), UpgradePackageIntent())
 }    
 
-// step 5: consume the ticket to upgrade  
+/// Need to consume the ticket to upgrade the package before completing the intent.
 
-// step 6: consume the receipt to commit the upgrade
+/// Consumes the receipt to commit the upgrade.
 public fun complete_upgrade_package<Config, Outcome>(
     executable: Executable,
     account: &mut Account<Config, Outcome>,
@@ -90,8 +85,7 @@ public fun complete_upgrade_package<Config, Outcome>(
     account.confirm_execution(executable, version::current(), UpgradePackageIntent());
 }
 
-// step 1: propose an UpgradeAction by passing the digest of the package build
-// execution_time is automatically set to now + timelock
+/// Creates a RestrictPolicyIntent and adds it to an Account.
 public fun request_restrict_policy<Config, Outcome>(
     auth: Auth,
     outcome: Outcome,
@@ -124,10 +118,7 @@ public fun request_restrict_policy<Config, Outcome>(
     account.add_intent(intent, version::current(), RestrictPolicyIntent());
 }
 
-// step 2: multiple members have to approve the proposal (account::approve_proposal)
-// step 3: execute the proposal and return the action (account::execute_proposal)
-
-// step 4: restrict the upgrade policy
+/// Restricts the upgrade policy.
 public fun execute_restrict_policy<Config, Outcome>(
     mut executable: Executable,
     account: &mut Account<Config, Outcome>,

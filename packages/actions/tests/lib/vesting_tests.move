@@ -84,10 +84,10 @@ fun create_dummy_intent(
 // === Tests ===
 
 #[test]
-fun test_create_stream_claim_and_destroy() {
+fun test_create_vesting_claim_and_destroy() {
     let (mut scenario, extensions, account, mut clock) = start();
 
-    let (cap, mut stream) = vesting::create_stream_for_testing(
+    let (cap, mut vesting) = vesting::create_vesting_for_testing(
         coin::mint_for_testing<SUI>(6, scenario.ctx()), 
         0, 
         6, 
@@ -96,24 +96,24 @@ fun test_create_stream_claim_and_destroy() {
     );
 
     clock.increment_for_testing(1);
-    stream.claim(&cap, &clock, scenario.ctx());
+    vesting.claim(&cap, &clock, scenario.ctx());
     scenario.next_tx(OWNER);
     let coin1 = scenario.take_from_address<Coin<SUI>>(OWNER);
     assert!(coin1.value() == 1);
 
     clock.increment_for_testing(2);
-    stream.claim(&cap, &clock, scenario.ctx());
+    vesting.claim(&cap, &clock, scenario.ctx());
     scenario.next_tx(OWNER);
     let coin2 = scenario.take_from_address<Coin<SUI>>(OWNER);
     assert!(coin2.value() == 2);
     
     clock.increment_for_testing(3);
-    stream.claim(&cap, &clock, scenario.ctx());
+    vesting.claim(&cap, &clock, scenario.ctx());
     scenario.next_tx(OWNER);
     let coin3 = scenario.take_from_address<Coin<SUI>>(OWNER);
     assert!(coin3.value() == 3);
 
-    stream.destroy_empty();
+    vesting.destroy_empty();
     cap.destroy();
 
     destroy(coin1);
@@ -123,10 +123,10 @@ fun test_create_stream_claim_and_destroy() {
 }
 
 #[test]
-fun test_create_stream_disburse_and_cancel() {
+fun test_create_vesting_claim_and_cancel() {
     let (mut scenario, extensions, account, mut clock) = start();
 
-    let (cap, mut stream) = vesting::create_stream_for_testing(
+    let (cap, mut vesting) = vesting::create_vesting_for_testing(
         coin::mint_for_testing<SUI>(6, scenario.ctx()), 
         0, 
         6, 
@@ -135,25 +135,25 @@ fun test_create_stream_disburse_and_cancel() {
     );
 
     clock.increment_for_testing(1);
-    stream.disburse(&clock, scenario.ctx());
+    vesting.claim(&cap, &clock, scenario.ctx());
     scenario.next_tx(OWNER);
     let coin1 = scenario.take_from_address<Coin<SUI>>(OWNER);
     assert!(coin1.value() == 1);
 
     clock.increment_for_testing(2);
-    stream.disburse(&clock, scenario.ctx());
+    vesting.claim(&cap, &clock, scenario.ctx());
     scenario.next_tx(OWNER);
     let coin2 = scenario.take_from_address<Coin<SUI>>(OWNER);
     assert!(coin2.value() == 2);
     
     clock.increment_for_testing(3);
-    stream.disburse(&clock, scenario.ctx());
+    vesting.claim(&cap, &clock, scenario.ctx());
     scenario.next_tx(OWNER);
     let coin3 = scenario.take_from_address<Coin<SUI>>(OWNER);
     assert!(coin3.value() == 3);
 
     let auth = multisig::authenticate(&account, scenario.ctx());
-    vesting::cancel_payment(auth, stream, &account, scenario.ctx());
+    vesting::cancel_payment(auth, vesting, &account, scenario.ctx());
 
     destroy(cap);
     destroy(coin1);
@@ -163,10 +163,10 @@ fun test_create_stream_disburse_and_cancel() {
 }
 
 #[test]
-fun test_create_stream_disburse_after_end() {
+fun test_create_vesting_claim_after_end() {
     let (mut scenario, extensions, account, mut clock) = start();
 
-    let (cap, mut stream) = vesting::create_stream_for_testing(
+    let (cap, mut vesting) = vesting::create_vesting_for_testing(
         coin::mint_for_testing<SUI>(6, scenario.ctx()), 
         0, 
         6, 
@@ -175,8 +175,8 @@ fun test_create_stream_disburse_after_end() {
     );
 
     clock.increment_for_testing(10);
-    stream.disburse(&clock, scenario.ctx());
-    stream.destroy_empty();
+    vesting.claim(&cap, &clock, scenario.ctx());
+    vesting.destroy_empty();
     
     scenario.next_tx(OWNER);
     let coin = scenario.take_from_address<Coin<SUI>>(OWNER);
@@ -188,10 +188,10 @@ fun test_create_stream_disburse_after_end() {
 }
 
 #[test]
-fun test_create_stream_disburse_same_time() {
+fun test_create_vesting_claim_same_time() {
     let (mut scenario, extensions, account, mut clock) = start();
 
-    let (cap, mut stream) = vesting::create_stream_for_testing(
+    let (cap, mut vesting) = vesting::create_vesting_for_testing(
         coin::mint_for_testing<SUI>(6, scenario.ctx()), 
         0, 
         6, 
@@ -201,16 +201,16 @@ fun test_create_stream_disburse_same_time() {
 
     clock.increment_for_testing(3);
     
-    stream.disburse(&clock, scenario.ctx());
+    vesting.claim(&cap, &clock, scenario.ctx());
     scenario.next_tx(OWNER);
     let coin1 = scenario.take_from_address<Coin<SUI>>(OWNER);
     assert!(coin1.value() == 3);
-    stream.disburse(&clock, scenario.ctx());
+    vesting.claim(&cap, &clock, scenario.ctx());
     scenario.next_tx(OWNER);
     let coin2 = scenario.take_from_address<Coin<SUI>>(OWNER);
     assert!(coin2.value() == 0);
 
-    destroy(stream);
+    destroy(vesting);
     destroy(cap);
     destroy(coin1);
     destroy(coin2);
@@ -275,10 +275,10 @@ fun test_vesting_expired() {
 }
 
 #[test]
-fun test_stream_getters() {
+fun test_vesting_getters() {
     let (mut scenario, extensions, account, clock) = start();
 
-    let (cap, stream) = vesting::create_stream_for_testing(
+    let (cap, vesting) = vesting::create_vesting_for_testing(
         coin::mint_for_testing<SUI>(6, scenario.ctx()), 
         0, 
         6, 
@@ -286,29 +286,29 @@ fun test_stream_getters() {
         scenario.ctx()
     );
 
-    assert!(stream.balance_value() == 6);
-    assert!(stream.last_claimed() == 0);
-    assert!(stream.start_timestamp() == 0);
-    assert!(stream.end_timestamp() == 6);
-    assert!(stream.recipient() == OWNER);
+    assert!(vesting.balance_value() == 6);
+    assert!(vesting.last_claimed() == 0);
+    assert!(vesting.start_timestamp() == 0);
+    assert!(vesting.end_timestamp() == 6);
+    assert!(vesting.recipient() == OWNER);
 
     destroy(cap);
-    destroy(stream);
+    destroy(vesting);
     end(scenario, extensions, account, clock);
 }
 
 #[test, expected_failure(abort_code = vesting::EWrongStream)]
-fun test_error_claim_wrong_stream() {
+fun test_error_claim_wrong_vesting() {
     let (mut scenario, extensions, account, mut clock) = start();
 
-    let (cap1, mut stream1) = vesting::create_stream_for_testing(
+    let (cap1, mut vesting1) = vesting::create_vesting_for_testing(
         coin::mint_for_testing<SUI>(6, scenario.ctx()), 
         0, 
         6, 
         OWNER, 
         scenario.ctx()
     );
-    let (cap2, stream2) = vesting::create_stream_for_testing(
+    let (cap2, vesting2) = vesting::create_vesting_for_testing(
         coin::mint_for_testing<SUI>(6, scenario.ctx()), 
         0, 
         6, 
@@ -317,20 +317,20 @@ fun test_error_claim_wrong_stream() {
     );
 
     clock.increment_for_testing(1);
-    stream1.claim(&cap2, &clock, scenario.ctx());
+    vesting1.claim(&cap2, &clock, scenario.ctx());
 
     destroy(cap1);
     destroy(cap2);
-    destroy(stream1);
-    destroy(stream2);
+    destroy(vesting1);
+    destroy(vesting2);
     end(scenario, extensions, account, clock);
 }
 
 #[test, expected_failure(abort_code = vesting::ETooEarly)]
-fun test_error_disburse_too_early() {
+fun test_error_claim_too_early() {
     let (mut scenario, extensions, account, clock) = start();
 
-    let (cap, mut stream) = vesting::create_stream_for_testing(
+    let (cap, mut vesting) = vesting::create_vesting_for_testing(
         coin::mint_for_testing<SUI>(6, scenario.ctx()), 
         0, 
         6, 
@@ -338,10 +338,10 @@ fun test_error_disburse_too_early() {
         scenario.ctx()
     );
 
-    stream.disburse(&clock, scenario.ctx());
+    vesting.claim(&cap, &clock, scenario.ctx());
 
     destroy(cap);
-    destroy(stream);
+    destroy(vesting);
     end(scenario, extensions, account, clock);
 }
 
@@ -349,7 +349,7 @@ fun test_error_disburse_too_early() {
 fun test_error_vesting_over() {
     let (mut scenario, extensions, account, mut clock) = start();
 
-    let (cap, mut stream) = vesting::create_stream_for_testing(
+    let (cap, mut vesting) = vesting::create_vesting_for_testing(
         coin::mint_for_testing<SUI>(6, scenario.ctx()), 
         0, 
         6, 
@@ -359,16 +359,16 @@ fun test_error_vesting_over() {
 
     clock.increment_for_testing(6);
     
-    stream.disburse(&clock, scenario.ctx());
+    vesting.claim(&cap, &clock, scenario.ctx());
     scenario.next_tx(OWNER);
     let coin1 = scenario.take_from_address<Coin<SUI>>(OWNER);
     assert!(coin1.value() == 6);
-    stream.disburse(&clock, scenario.ctx());
+    vesting.claim(&cap, &clock, scenario.ctx());
     scenario.next_tx(OWNER);
     let coin2 = scenario.take_from_address<Coin<SUI>>(OWNER);
     assert!(coin2.value() == 0);
 
-    stream.destroy_empty();
+    vesting.destroy_empty();
     destroy(cap);
     destroy(coin1);
     destroy(coin2);
@@ -376,10 +376,10 @@ fun test_error_vesting_over() {
 }
 
 #[test, expected_failure(abort_code = vesting::EBalanceNotEmpty)]
-fun test_error_destroy_non_empty_stream() {
+fun test_error_destroy_non_empty_vesting() {
     let (mut scenario, extensions, account, clock) = start();
 
-    let (cap, stream) = vesting::create_stream_for_testing(
+    let (cap, vesting) = vesting::create_vesting_for_testing(
         coin::mint_for_testing<SUI>(6, scenario.ctx()), 
         0, 
         6, 
@@ -387,7 +387,7 @@ fun test_error_destroy_non_empty_stream() {
         scenario.ctx()
     );
 
-    stream.destroy_empty();
+    vesting.destroy_empty();
 
     destroy(cap);
     end(scenario, extensions, account, clock);

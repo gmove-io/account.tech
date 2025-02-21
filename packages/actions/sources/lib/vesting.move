@@ -1,5 +1,5 @@
-/// This module provides the apis to stream a coin for a payment.
-/// A payment has an amount to be paid at each interval, until the balance is empty.
+/// This module provides the apis to create a vesting.
+/// A vesting has an amount to be paid at each interval, until the balance is empty.
 /// It can be cancelled at any time by the account members.
 
 module account_actions::vesting;
@@ -20,19 +20,15 @@ use account_protocol::{
 
 // === Errors ===
 
-#[error]
-const EBalanceNotEmpty: vector<u8> = b"Stream must be emptied before destruction";
-#[error]
-const ETooEarly: vector<u8> = b"Cannot disburse payment yet";
-#[error]
-const EWrongStream: vector<u8> = b"Wrong stream for this Cap";
-#[error]
-const EVestingOver: vector<u8> = b"The balance has been fully emptied";
+const EBalanceNotEmpty: u64 = 0;
+const ETooEarly: u64 = 1;
+const EWrongStream: u64 = 2;
+const EVestingOver: u64 = 3;
 
 // === Structs ===
 
-/// Balance for a payment is locked and sent automatically from backend or claimed manually by the recipient
-public struct Stream<phantom CoinType> has key {
+/// Balance is locked and unlocked gradually to be claimed by the recipient.
+public struct Vesting<phantom CoinType> has key {
     id: UID,
     // remaining balance to be sent
     balance: Balance<CoinType>,
@@ -46,16 +42,16 @@ public struct Stream<phantom CoinType> has key {
     recipient: address,
 }
 
-/// Cap enabling bearer to claim the payment
-/// Helper object for discoverability
+/// Cap enabling bearer to claim the vesting.
+/// Helper object for discoverability.
 public struct ClaimCap has key {
     id: UID,
-    // id of the stream to claim
-    stream_id: ID,
+    // id of the vesting to claim
+    vesting_id: ID,
 }
 
-/// [ACTION] creates a payment stream
-/// coin and amount are managed in other action modules 
+/// Action creating a vesting.
+/// Associated balance is managed in other action modules.
 public struct VestAction has store {
     // timestamp when coins can start to be claimed
     start_timestamp: u64,
@@ -65,71 +61,63 @@ public struct VestAction has store {
     recipient: address,
 }
 
-// === [PROPOSAL] Public Functions ===
+// === Public Functions ===
 
-// step 1: propose the pay action from another module
-// step 2: multiple members have to approve the proposal (account::approve_proposal)
-// step 3: execute the proposal and return the action (account::execute_proposal)
-// step 4: loop over `execute_transfer` it in PTB from the module implementing it
+// Bearer of ClaimCap can claim the vesting.
+public fun claim<CoinType>(vesting: &mut Vesting<CoinType>, cap: &ClaimCap, clock: &Clock, ctx: &mut TxContext) {
+    assert!(cap.vesting_id == vesting.id.to_inner(), EWrongStream);
+    assert!(clock.timestamp_ms() > vesting.start_timestamp, ETooEarly);
+    assert!(vesting.balance.value() != 0, EVestingOver);
 
-// step 5: bearer of ClaimCap can claim the payment
-public fun claim<CoinType>(stream: &mut Stream<CoinType>, cap: &ClaimCap, clock: &Clock, ctx: &mut TxContext) {
-    assert!(cap.stream_id == stream.id.to_inner(), EWrongStream);
-    stream.disburse(clock, ctx);
-}
-
-// step 5(bis): backend send the coin to the recipient until balance is empty
-public fun disburse<CoinType>(stream: &mut Stream<CoinType>, clock: &Clock, ctx: &mut TxContext) {
-    assert!(clock.timestamp_ms() > stream.start_timestamp, ETooEarly);
-    assert!(stream.balance.value() != 0, EVestingOver);
-
-    let amount = if (clock.timestamp_ms() > stream.end_timestamp) {
-        stream.balance.value()
+    let amount = if (clock.timestamp_ms() > vesting.end_timestamp) {
+        vesting.balance.value()
     } else {
-        let duration_remaining = stream.end_timestamp - stream.last_claimed;
-        let duration_claimable = clock.timestamp_ms() - stream.last_claimed;
+        let duration_remaining = vesting.end_timestamp - vesting.last_claimed;
+        let duration_claimable = clock.timestamp_ms() - vesting.last_claimed;
         
-        if (duration_remaining != 0) stream.balance.value() * duration_claimable / duration_remaining else 0
+        if (duration_remaining != 0) vesting.balance.value() * duration_claimable / duration_remaining else 0
     };
 
-    let coin = coin::from_balance(stream.balance.split(amount), ctx);
-    transfer::public_transfer(coin, stream.recipient);
+    let coin = coin::from_balance(vesting.balance.split(amount), ctx);
+    transfer::public_transfer(coin, vesting.recipient);
 
-    stream.last_claimed = clock.timestamp_ms();
+    vesting.last_claimed = clock.timestamp_ms();
 }
 
-// step 6: account member can cancel the payment (member only)
+// Authorized address can cancel the vesting.
 public fun cancel_payment<Config, Outcome, CoinType>(
     auth: Auth,
-    stream: Stream<CoinType>, 
+    vesting: Vesting<CoinType>, 
     account: &Account<Config, Outcome>,
     ctx: &mut TxContext
 ) {
     account.verify(auth);
 
-    let Stream { id, balance, .. } = stream;
+    let Vesting { id, balance, .. } = vesting;
     id.delete();
 
     account.keep(coin::from_balance(balance, ctx));
 }
 
-// step 6 (bis): destroy the stream when balance is empty
-public fun destroy_empty<CoinType>(stream: Stream<CoinType>) {
-    let Stream { id, balance, .. } = stream;
+// Destroys the vesting when balance is empty.
+public fun destroy_empty<CoinType>(vesting: Vesting<CoinType>) {
+    let Vesting { id, balance, .. } = vesting;
     
     assert!(balance.value() == 0, EBalanceNotEmpty);
     balance.destroy_zero();
     id.delete();
 }
 
+// Destroys the claim cap.
 public use fun destroy_cap as ClaimCap.destroy;
 public fun destroy_cap(cap: ClaimCap) {
     let ClaimCap { id, .. } = cap;
     id.delete();
 }
 
-// === [ACTION] Public Functions ===
+// Intent functions
 
+/// Creates a VestAction and adds it to an intent.
 public fun new_vest<Config, Outcome, IW: drop>(
     intent: &mut Intent<Outcome>, 
     account: &Account<Config, Outcome>,
@@ -142,6 +130,7 @@ public fun new_vest<Config, Outcome, IW: drop>(
     account.add_action(intent, VestAction { start_timestamp, end_timestamp, recipient }, version_witness, intent_witness);
 }
 
+/// Processes a VestAction and creates a vesting.
 public fun do_vest<Config, Outcome, CoinType, IW: copy + drop>(
     executable: &mut Executable, 
     account: &mut Account<Config, Outcome>, 
@@ -152,7 +141,7 @@ public fun do_vest<Config, Outcome, CoinType, IW: copy + drop>(
 ) {    
     let action: &VestAction = account.process_action(executable, version_witness, intent_witness);
 
-    transfer::share_object(Stream<CoinType> { 
+    transfer::share_object(Vesting<CoinType> { 
         id: object::new(ctx), 
         balance: coin.into_balance(), 
         last_claimed: 0,
@@ -162,49 +151,55 @@ public fun do_vest<Config, Outcome, CoinType, IW: copy + drop>(
     });
 }
 
+/// Deletes a VestAction from an expired intent.
 public fun delete_vest(expired: &mut Expired) {
     let VestAction { .. } = expired.remove_action();
 }
 
 // === View Functions ===
 
-public fun balance_value<CoinType>(self: &Stream<CoinType>): u64 {
+/// Returns the balance value of a vesting.
+public fun balance_value<CoinType>(self: &Vesting<CoinType>): u64 {
     self.balance.value()
 }
 
-public fun last_claimed<CoinType>(self: &Stream<CoinType>): u64 {
+/// Returns the last claimed timestamp of a vesting.
+public fun last_claimed<CoinType>(self: &Vesting<CoinType>): u64 {
     self.last_claimed
 }
 
-public fun start_timestamp<CoinType>(self: &Stream<CoinType>): u64 {
+/// Returns the start timestamp of a vesting.
+public fun start_timestamp<CoinType>(self: &Vesting<CoinType>): u64 {
     self.start_timestamp
 }
 
-public fun end_timestamp<CoinType>(self: &Stream<CoinType>): u64 {
+/// Returns the end timestamp of a vesting.
+public fun end_timestamp<CoinType>(self: &Vesting<CoinType>): u64 {
     self.end_timestamp
 }
 
-public fun recipient<CoinType>(self: &Stream<CoinType>): address {
+/// Returns the recipient of a vesting.
+public fun recipient<CoinType>(self: &Vesting<CoinType>): address {
     self.recipient
 }
 
 // === Test functions ===
 
 #[test_only]
-public fun create_stream_for_testing<CoinType>(
+public fun create_vesting_for_testing<CoinType>(
     coin: Coin<CoinType>, 
     start_timestamp: u64,
     end_timestamp: u64,
     recipient: address,
     ctx: &mut TxContext
-): (ClaimCap, Stream<CoinType>) {
+): (ClaimCap, Vesting<CoinType>) {
     let id = object::new(ctx);
     (
         ClaimCap {
             id: object::new(ctx),
-            stream_id: id.to_inner()
+            vesting_id: id.to_inner()
         },
-        Stream {
+        Vesting {
             id,
             balance: coin.into_balance(),
             last_claimed: 0,

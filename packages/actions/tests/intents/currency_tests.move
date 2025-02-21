@@ -19,7 +19,7 @@ use account_multisig::multisig::{Self, Multisig, Approvals};
 use account_actions::{
     currency,
     currency_intents,
-    vesting::{Self, Stream},
+    vesting::{Self, Vesting},
     transfer as acc_transfer,
 };
 
@@ -375,7 +375,7 @@ fun test_request_execute_mint_and_vest() {
     expired.destroy_empty();
 
     scenario.next_tx(OWNER);
-    let stream = scenario.take_shared<Stream<CURRENCY_INTENTS_TESTS>>();
+    let stream = scenario.take_shared<Vesting<CURRENCY_INTENTS_TESTS>>();
     assert!(stream.balance_value() == 5);
     assert!(stream.last_claimed() == 0);
     assert!(stream.start_timestamp() == 1);

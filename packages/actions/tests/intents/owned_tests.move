@@ -19,7 +19,7 @@ use account_multisig::multisig::{Self, Multisig, Approvals};
 use account_actions::{
     owned_intents,
     vault,
-    vesting::{Self, Stream},
+    vesting::{Self, Vesting},
     transfer as acc_transfer,
 };
 
@@ -191,7 +191,7 @@ fun test_request_execute_vesting() {
     expired.destroy_empty();
 
     scenario.next_tx(OWNER);
-    let stream = scenario.take_shared<Stream<SUI>>();
+    let stream = scenario.take_shared<Vesting<SUI>>();
     assert!(stream.balance_value() == 5);
     assert!(stream.last_claimed() == 0);
     assert!(stream.start_timestamp() == 1);

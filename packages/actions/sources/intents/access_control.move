@@ -17,15 +17,16 @@ use account_actions::{
 
 // === Errors ===
 
-#[error]
-const ENoLock: vector<u8> = b"No Lock for this Cap type";
+const ENoLock: u64 = 0;
 
 // === Structs ===    
 
-/// [PROPOSAL] witness defining the access cap proposal, and associated role
+/// Intent Witness defining the intent to borrow an access cap.
 public struct BorrowCapIntent() has copy, drop;
 
-// step 1: propose to mint an amount of a coin that will be transferred to the Account
+// === Public functions ===
+
+/// Creates a BorrowCapIntent and adds it to an Account.
 public fun request_borrow_cap<Config, Outcome, Cap>(
     auth: Auth,
     outcome: Outcome,
@@ -55,10 +56,7 @@ public fun request_borrow_cap<Config, Outcome, Cap>(
     account.add_intent(intent, version::current(), BorrowCapIntent());
 }
 
-// step 2: multiple members have to approve the proposal (account::approve_proposal)
-// step 3: execute the proposal and return the action (AccountMultisig::module::execute_proposal)
-
-// step 4: mint the coins and send them to the account
+/// Executes a BorrowCapIntent, returns a cap and a hot potato.
 public fun execute_borrow_cap<Config, Outcome, Cap: key + store>(
     executable: &mut Executable,
     account: &mut Account<Config, Outcome>,
@@ -66,7 +64,7 @@ public fun execute_borrow_cap<Config, Outcome, Cap: key + store>(
     access_control::do_borrow(executable, account, version::current(), BorrowCapIntent())
 }
 
-// step 5: return the cap to destroy Borrow, the action and executable
+/// Completes a BorrowCapIntent, destroys the executable and returns the cap to the account if the matching hot potato is returned.
 public fun complete_borrow_cap<Config, Outcome, Cap: key + store>(
     executable: Executable, 
     account: &mut Account<Config, Outcome>,

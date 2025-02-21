@@ -1,7 +1,5 @@
-/// Members can create multiple treasuries with different budgets and managers (members with roles).
+/// Members can create multiple vaults with different balances and managers (using roles).
 /// This allows for a more flexible and granular way to manage funds.
-/// 
-/// Coins managed by treasuries can also be transferred or paid to any address.
 
 module account_actions::vault;
 
@@ -15,7 +13,6 @@ use sui::{
     bag::{Self, Bag},
     balance::Balance,
     coin::{Self, Coin},
-    // transfer::Receiving,
 };
 use account_protocol::{
     account::{Account, Auth},
@@ -27,16 +24,13 @@ use account_actions::version;
 
 // === Errors ===
 
-#[error]
-const EVaultDoesntExist: vector<u8> = b"No Vault with this name";
-#[error]
-const EVaultAlreadyExists: vector<u8> = b"A vault already exists with this name";
-#[error]
-const EVaultNotEmpty: vector<u8> = b"Vault must be emptied before closing";
+const EVaultDoesntExist: u64 = 0;
+const EVaultAlreadyExists: u64 = 1;
+const EVaultNotEmpty: u64 = 2;
 
 // === Structs ===
 
-/// Dynamic Field key for the Vault
+/// Dynamic Field key for the Vault.
 public struct VaultKey has copy, drop, store { name: String }
 /// Dynamic field holding a budget with different coin types, key is name
 public struct Vault has store {
@@ -44,14 +38,14 @@ public struct Vault has store {
     bag: Bag
 }
 
-/// [ACTION] allows anyone to deposit an amount of this coin to the targeted Vault
+/// Action to deposit an amount of this coin to the targeted Vault.
 public struct DepositAction<phantom CoinType> has store {
     // vault name
     name: String,
     // exact amount to be deposited
     amount: u64,
 }
-/// [ACTION] struct to be used with specific proposals making good use of the returned coins, similar to owned::withdraw
+/// Action to be used within intent making good use of the returned coin, similar to owned::withdraw.
 public struct SpendAction<phantom CoinType> has store {
     // vault name
     name: String,
@@ -59,9 +53,9 @@ public struct SpendAction<phantom CoinType> has store {
     amount: u64,
 }
 
-// === [COMMAND] Public Functions ===
+// === Public Functions ===
 
-/// Members with role can open a vault
+/// Authorized address can open a vault.
 public fun open<Config, Outcome>(
     auth: Auth,
     account: &mut Account<Config, Outcome>,
@@ -71,10 +65,10 @@ public fun open<Config, Outcome>(
     account.verify(auth);
     assert!(!has_vault(account, name), EVaultAlreadyExists);
 
-    account.add_managed_struct(VaultKey { name }, Vault { bag: bag::new(ctx) }, version::current());
+    account.add_managed_data(VaultKey { name }, Vault { bag: bag::new(ctx) }, version::current());
 }
 
-/// Deposits coins owned by a member into a vault
+/// Deposits coins owned by a an authorized address into a vault.
 public fun deposit<Config, Outcome, CoinType: drop>(
     auth: Auth,
     account: &mut Account<Config, Outcome>,
@@ -85,7 +79,7 @@ public fun deposit<Config, Outcome, CoinType: drop>(
     assert!(has_vault(account, name), EVaultDoesntExist);
 
     let vault: &mut Vault = 
-        account.borrow_managed_struct_mut(VaultKey { name }, version::current());
+        account.borrow_managed_data_mut(VaultKey { name }, version::current());
 
     if (vault.coin_type_exists<CoinType>()) {
         let balance_mut = vault.bag.borrow_mut<_, Balance<_>>(type_name::get<CoinType>());
@@ -95,7 +89,7 @@ public fun deposit<Config, Outcome, CoinType: drop>(
     };
 }
 
-/// Closes the vault if empty
+/// Closes the vault if empty.
 public fun close<Config, Outcome>(
     auth: Auth,
     account: &mut Account<Config, Outcome>,
@@ -104,40 +98,46 @@ public fun close<Config, Outcome>(
     account.verify(auth);
 
     let Vault { bag } = 
-        account.remove_managed_struct(VaultKey { name }, version::current());
+        account.remove_managed_data(VaultKey { name }, version::current());
     assert!(bag.is_empty(), EVaultNotEmpty);
     bag.destroy_empty();
 }
 
+/// Returns true if the vault exists.
 public fun has_vault<Config, Outcome>(
     account: &Account<Config, Outcome>, 
     name: String
 ): bool {
-    account.has_managed_struct(VaultKey { name })
+    account.has_managed_data(VaultKey { name })
 }
 
+/// Returns a reference to the vault.
 public fun borrow_vault<Config, Outcome>(
     account: &Account<Config, Outcome>, 
     name: String
 ): &Vault {
     assert!(has_vault(account, name), EVaultDoesntExist);
-    account.borrow_managed_struct(VaultKey { name }, version::current())
+    account.borrow_managed_data(VaultKey { name }, version::current())
 }
 
+/// Returns the number of coin types in the vault.
 public fun size(vault: &Vault): u64 {
     vault.bag.length()
 }
 
+/// Returns true if the coin type exists in the vault.
 public fun coin_type_exists<CoinType: drop>(vault: &Vault): bool {
     vault.bag.contains(type_name::get<CoinType>())
 }
 
+/// Returns the value of the coin type in the vault.
 public fun coin_type_value<CoinType: drop>(vault: &Vault): u64 {
     vault.bag.borrow<TypeName, Balance<CoinType>>(type_name::get<CoinType>()).value()
 }
 
-// must be called from intent modules
+// Intent functions
 
+/// Creates a DepositAction and adds it to an intent.
 public fun new_deposit<Config, Outcome, CoinType: drop, IW: drop>(
     intent: &mut Intent<Outcome>,
     account: &Account<Config, Outcome>,
@@ -149,6 +149,7 @@ public fun new_deposit<Config, Outcome, CoinType: drop, IW: drop>(
     account.add_action(intent, DepositAction<CoinType> { name, amount }, version_witness, intent_witness);
 }
 
+/// Processes a DepositAction and deposits a coin to the vault.
 public fun do_deposit<Config, Outcome, CoinType: drop, IW: copy + drop>(
     executable: &mut Executable,
     account: &mut Account<Config, Outcome>,
@@ -160,7 +161,7 @@ public fun do_deposit<Config, Outcome, CoinType: drop, IW: copy + drop>(
     let name = action.name;
     assert!(action.amount == coin.value());
     
-    let vault: &mut Vault = account.borrow_managed_struct_mut(VaultKey { name }, version_witness);
+    let vault: &mut Vault = account.borrow_managed_data_mut(VaultKey { name }, version_witness);
     if (!vault.coin_type_exists<CoinType>()) {
         vault.bag.add(type_name::get<CoinType>(), coin.into_balance());
     } else {
@@ -169,10 +170,12 @@ public fun do_deposit<Config, Outcome, CoinType: drop, IW: copy + drop>(
     };
 }
 
+/// Deletes a DepositAction from an expired intent.
 public fun delete_deposit<CoinType>(expired: &mut Expired) {
     let DepositAction<CoinType> { .. } = expired.remove_action();
 }
 
+/// Creates a SpendAction and adds it to an intent.
 public fun new_spend<Config, Outcome, CoinType: drop, IW: drop>(
     intent: &mut Intent<Outcome>,
     account: &Account<Config, Outcome>,
@@ -184,6 +187,7 @@ public fun new_spend<Config, Outcome, CoinType: drop, IW: drop>(
     account.add_action(intent, SpendAction<CoinType> { name, amount }, version_witness, intent_witness);
 }
 
+/// Processes a SpendAction and takes a coin from the vault.
 public fun do_spend<Config, Outcome, CoinType: drop, IW: copy + drop>(
     executable: &mut Executable,
     account: &mut Account<Config, Outcome>,
@@ -194,7 +198,7 @@ public fun do_spend<Config, Outcome, CoinType: drop, IW: copy + drop>(
     let action: &SpendAction<CoinType> = account.process_action(executable, version_witness, intent_witness);
     let (name, amount) = (action.name, action.amount);
     
-    let vault: &mut Vault = account.borrow_managed_struct_mut(VaultKey { name }, version_witness);
+    let vault: &mut Vault = account.borrow_managed_data_mut(VaultKey { name }, version_witness);
     let balance_mut = vault.bag.borrow_mut<_, Balance<_>>(type_name::get<CoinType>());
     let coin = coin::take(balance_mut, amount, ctx);
 
@@ -204,6 +208,7 @@ public fun do_spend<Config, Outcome, CoinType: drop, IW: copy + drop>(
     coin
 }
 
+/// Deletes a SpendAction from an expired intent.
 public fun delete_spend<CoinType>(expired: &mut Expired) {
     let SpendAction<CoinType> { .. } = expired.remove_action();
 }
