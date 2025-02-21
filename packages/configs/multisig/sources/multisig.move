@@ -1,3 +1,12 @@
+/// This module defines a Multisig configuration for an Account.
+/// It also defines a new Outcome type for the intents.
+/// 
+/// Config consists of members, roles and thresholds.
+/// Members have a weight and can have multiple roles.
+/// There is a global threshold and a threshold for each role.
+/// 
+/// Intent resolution is done by checking the global and role intent weight against the thresholds.
+/// If any of the role or global thresholds is reached, the intent can be executed.
 
 module account_multisig::multisig;
 
@@ -13,52 +22,31 @@ use account_extensions::extensions::Extensions;
 use account_protocol::{
     account::{Self, Account, Auth},
     executable::Executable,
-    intents::Expired,
     user::{Self, User},
 };
-use account_multisig::{
-    version,
-};
+use account_multisig::version;
 
 // === Errors ===
 
-#[error]
-const EMemberNotFound: vector<u8> = b"No member for this address";
-#[error]
-const ECallerIsNotMember: vector<u8> = b"Caller is not member";
-#[error]
-const ERoleNotFound: vector<u8> = b"Role not found";
-#[error]
-const EThresholdNotReached: vector<u8> = b"Threshold not reached";
-#[error]
-const ENotApproved: vector<u8> = b"Caller has not approved";
-#[error]
-const ERoleNotAdded: vector<u8> = b"Role not added so member cannot have it";
-#[error]
-const EThresholdTooHigh: vector<u8> = b"Threshold is too high";
-#[error]
-const EThresholdNull: vector<u8> = b"The global threshold cannot be null";
-#[error]
-const EMembersNotSameLength: vector<u8> = b"Members and roles vectors are not the same length";
-#[error]
-const ERolesNotSameLength: vector<u8> = b"The role vectors are not the same length";
-#[error]
-const EAlreadyApproved: vector<u8> = b"Proposal is already approved by the caller";
-#[error]
-const ENotMember: vector<u8> = b"User is not a member of the account";
+const EMemberNotFound: u64 = 0;
+const ECallerIsNotMember: u64 = 1;
+const ERoleNotFound: u64 = 2;
+const EThresholdNotReached: u64 = 3;
+const ENotApproved: u64 = 4;
+const EAlreadyApproved: u64 = 5;
+const ENotMember: u64 = 6;
+const EMembersNotSameLength: u64 = 7;
+const ERolesNotSameLength: u64 = 8;
+const EThresholdTooHigh: u64 = 9;
+const EThresholdNull: u64 = 10;
+const ERoleNotAdded: u64 = 11;
 
 // === Structs ===
 
+/// Config Witness.
 public struct Witness() has drop;
-/// [PROPOSAL] modifies the members and thresholds of the account
-public struct ConfigMultisigIntent() has copy, drop;
 
-/// [ACTION] wraps a Multisig struct into an action
-public struct ConfigMultisigAction has drop, store {
-    config: Multisig,
-}
-
-/// Parent struct protecting the config
+/// Parent struct protecting the config.
 public struct Multisig has copy, drop, store {
     // members and associated data
     members: vector<Member>,
@@ -68,7 +56,7 @@ public struct Multisig has copy, drop, store {
     roles: vector<Role>,
 }
 
-/// Child struct for managing and displaying members
+/// Child struct for managing and displaying members.
 public struct Member has copy, drop, store {
     addr: address,
     // voting power of the member
@@ -77,7 +65,7 @@ public struct Member has copy, drop, store {
     roles: VecSet<String>,
 }
 
-/// Child struct representing a role with a name and its threshold
+/// Child struct representing a role with a name and associated threshold.
 public struct Role has copy, drop, store {
     // role name: witness + optional name
     name: String,
@@ -85,20 +73,21 @@ public struct Role has copy, drop, store {
     threshold: u64,
 }
 
-/// Outcome field for the Proposals, must be validated before destruction
+/// Outcome field for the Intents, validated upon execution.
 public struct Approvals has copy, drop, store {
-    // total weight of all members that approved the proposal
+    // sum of the weights of members who approved the intent
     total_weight: u64,
     // sum of the weights of members who approved and have the role
     role_weight: u64, 
-    // who has approved the proposal
+    // who has approved the intent
     approved: VecSet<address>,
 }
 
 // === Public functions ===
 
-/// Init and returns a new Account object
-/// Creator is added by default with weight and global threshold of 1
+/// Init and returns a new Account object.
+/// Creator is added by default with weight and global threshold of 1.
+/// AccountProtocol and AccountMultisig are added as dependencies.
 public fun new_account(
     extensions: &Extensions,
     ctx: &mut TxContext,
@@ -119,14 +108,14 @@ public fun new_account(
     account::new(
         extensions, 
         config, 
-        false, 
+        false, // unverified deps not authorized by default
         vector[b"AccountProtocol".to_string(), b"AccountMultisig".to_string()], 
         vector[ap_addr, ac_addr], 
         vector[ap_version, ac_version], 
         ctx)
 }
 
-/// Authenticates the caller as a member of the multisig 
+/// Authenticates the caller as a member of the multisig.
 public fun authenticate(
     account: &Account<Multisig, Approvals>,
     ctx: &TxContext
@@ -135,7 +124,7 @@ public fun authenticate(
     account.new_auth(version::current(), Witness())
 }
 
-/// Creates a new outcome to initiate a proposal
+/// Creates a new outcome to initiate an intent.
 public fun empty_outcome(): Approvals {
     Approvals {
         total_weight: 0,
@@ -144,8 +133,7 @@ public fun empty_outcome(): Approvals {
     }
 }
 
-/// We assert that all Proposals with the same key have the same outcome state
-/// Approves all proposals with the same key
+/// Approves an intent increasing the outcome weight and optionally the role weight.
 public fun approve_intent(
     account: &mut Account<Multisig, Approvals>, 
     key: String,
@@ -167,8 +155,7 @@ public fun approve_intent(
         outcome_mut.role_weight = outcome_mut.role_weight + member.weight;
 }
 
-/// We assert that all Proposals with the same key have the same outcome state
-/// Approves all proposals with the same key
+/// Disapproves an intent decreasing the outcome weight and optionally the role weight.
 public fun disapprove_intent(
     account: &mut Account<Multisig, Approvals>, 
     key: String,
@@ -190,8 +177,8 @@ public fun disapprove_intent(
         outcome_mut.role_weight = if (outcome_mut.role_weight < member.weight) 0 else outcome_mut.role_weight - member.weight;
 }
 
-/// Returns an executable if the number of signers is >= (global || role) threshold
-/// Anyone can execute a proposal, this allows to automate the execution of proposals
+/// Returns an executable if the number of signers is >= (global || role) threshold.
+/// Anyone can execute an intent, this allows to automate the execution of intents.
 public fun execute_intent(
     account: &mut Account<Multisig, Approvals>, 
     key: String, 
@@ -203,35 +190,18 @@ public fun execute_intent(
     executable
 }
 
-public fun destroy_empty_intent(
-    account: &mut Account<Multisig, Approvals>, 
-    key: String, 
-): Expired {
-    account.destroy_empty_intent(key)
-}
-
-/// Removes a proposal if it has expired
-/// Needs to delete each action in the bag within their own module
-public fun delete_expired_intent(
-    account: &mut Account<Multisig, Approvals>, 
-    key: String, 
-    clock: &Clock,
-): Expired {
-    account.delete_expired_intent(key, clock)
-}
-
-/// Inserts account_id in User, aborts if already joined
+/// Inserts account_id in User, aborts if already joined.
 public fun join(user: &mut User, account: &Account<Multisig, Approvals>, ctx: &mut TxContext) {
     account.config().assert_is_member(ctx);
     user.add_account(account, Witness());
 }
 
-/// Removes account_id from User, aborts if not joined
+/// Removes account_id from User, aborts if not joined.
 public fun leave(user: &mut User, account: &Account<Multisig, Approvals>) {
     user.remove_account(account, Witness());
 }
 
-/// Invites can be sent by an Account member (upon Account creation for instance)
+/// Invites can be sent by a Multisig member when added to the Multisig.
 public fun send_invite(account: &Account<Multisig, Approvals>, recipient: address, ctx: &mut TxContext) {
     // user inviting must be member
     account.config().assert_is_member(ctx);
@@ -241,155 +211,130 @@ public fun send_invite(account: &Account<Multisig, Approvals>, recipient: addres
     user::send_invite(account, recipient, Witness(), ctx);
 }
 
-// === [PROPOSAL] Public functions ===
-
-/// No actions are defined as changing the config isn't supposed to be composable for security reasons
-
-// step 1: propose to modify account rules (everything touching weights)
-// threshold has to be valid (reachable and different from 0 for global)
-public fun request_config_multisig(
-    auth: Auth,
-    outcome: Approvals,
-    account: &mut Account<Multisig, Approvals>, 
-    key: String,
-    description: String,
-    execution_time: u64,
-    expiration_time: u64,
-    // members 
-    addresses: vector<address>,
-    weights: vector<u64>,
-    mut roles: vector<vector<String>>,
-    // thresholds 
-    global: u64,
-    role_names: vector<String>,
-    role_thresholds: vector<u64>,
-    ctx: &mut TxContext
-) {
-    account.verify(auth);
-    // verify new rules are valid
-    verify_new_rules(addresses, weights, roles, global, role_names, role_thresholds);
-
-    let mut intent = account.create_intent(
-        key,
-        description,
-        vector[execution_time],
-        expiration_time,
-        b"".to_string(),
-        outcome,
-        version::current(),
-        ConfigMultisigIntent(),
-        ctx
-    );
-    // must modify members before modifying thresholds to ensure they are reachable
-
-    let mut config = Multisig { members: vector[], global: 0, roles: vector[] };
-    addresses.zip_do!(weights, |addr, weight| {
-        config.members.push_back(Member {
-            addr,
-            weight,
-            roles: vec_set::from_keys(roles.remove(0)),
-        });
-    });
-
-    config.global = global;
-    role_names.zip_do!(role_thresholds, |role, threshold| {
-        config.roles.push_back(Role { name: role, threshold });
-    });
-
-    account.add_action(&mut intent, ConfigMultisigAction { config }, version::current(), ConfigMultisigIntent());
-    account.add_intent(intent, version::current(), ConfigMultisigIntent());
-}
-
-// step 2: multiple members have to approve the proposal (account::approve_proposal)
-
-// step 3: execute the action and modify Account Multisig
-public fun execute_config_multisig(
-    mut executable: Executable,
-    account: &mut Account<Multisig, Approvals>, 
-) {
-    let action: &ConfigMultisigAction = account.process_action(&mut executable, version::current(), ConfigMultisigIntent());
-    *account.config_mut(version::current(), Witness()) = action.config;
-    account.confirm_execution(executable, version::current(), ConfigMultisigIntent());
-}
-
-public fun delete_config_multisig(expired: &mut Expired) {
-    let ConfigMultisigAction { .. } = expired.remove_action();
-}
-
 // === Accessors ===
 
+/// Returns the addresses of the members.
 public fun addresses(multisig: &Multisig): vector<address> {
     multisig.members.map_ref!(|member| member.addr)
 }
 
+/// Returns the member associated with the address.
 public fun member(multisig: &Multisig, addr: address): Member {
     let idx = multisig.get_member_idx(addr);
     multisig.members[idx]
 }
 
+/// Returns a mutable reference to the member associated with the address.
+/// safe because mutable Multisig access is protected by the Account.
 public fun member_mut(multisig: &mut Multisig, addr: address): &mut Member {
     let idx = multisig.get_member_idx(addr);
     &mut multisig.members[idx]
 }
 
+/// Returns the index of the member associated with the address.
 public fun get_member_idx(multisig: &Multisig, addr: address): u64 {
     let opt = multisig.members.find_index!(|member| member.addr == addr);
     assert!(opt.is_some(), EMemberNotFound);
     opt.destroy_some()
 }
 
+/// Returns true if the address is a member.
 public fun is_member(multisig: &Multisig, addr: address): bool {
     multisig.members.any!(|member| member.addr == addr)
 }
 
+/// Asserts that the caller is a member.
 public fun assert_is_member(multisig: &Multisig, ctx: &TxContext) {
     assert!(multisig.is_member(ctx.sender()), ECallerIsNotMember);
 }
 
-// member functions
+/// Returns the weight of the member.
 public fun weight(member: &Member): u64 {
     member.weight
 }
 
+/// Returns the roles of the member.
 public fun roles(member: &Member): vector<String> {
     *member.roles.keys()
 }
 
+/// Returns true if the member has the role.
 public fun has_role(member: &Member, role: String): bool {
     member.roles.contains(&role)
 }
 
-// roles functions
+/// Returns the global threshold.
 public fun get_global_threshold(multisig: &Multisig): u64 {
     multisig.global
 }
 
+/// Returns the threshold of the role.
 public fun get_role_threshold(multisig: &Multisig, name: String): u64 {
     let idx = multisig.get_role_idx(name);
     multisig.roles[idx].threshold
 }
 
+/// Returns the index of the role.
 public fun get_role_idx(multisig: &Multisig, name: String): u64 {
     let opt = multisig.roles.find_index!(|role| role.name == name);
     assert!(opt.is_some(), ERoleNotFound);
     opt.destroy_some()
 }
 
+/// Returns true if the role exists in the multisig.
 public fun role_exists(multisig: &Multisig, name: String): bool {
     multisig.roles.any!(|role| role.name == name)
 }
 
-// outcome functions
+/// Returns the total weight of the outcome.
 public fun total_weight(outcome: &Approvals): u64 {
     outcome.total_weight
 }
 
+/// Returns the role weight of the outcome.
 public fun role_weight(outcome: &Approvals): u64 {
     outcome.role_weight
 }
 
+/// Returns the addresses of the members who approved the outcome.
 public fun approved(outcome: &Approvals): vector<address> {
     *outcome.approved.keys()
+}
+
+// === Package functions ===
+
+/// Creates a new Multisig configuration, verifying thresholds can be reached.
+public(package) fun new_config(
+    members_addrs: vector<address>,
+    members_weights: vector<u64>,
+    mut members_roles: vector<vector<String>>,
+    global_threshold: u64,
+    role_names: vector<String>,
+    role_thresholds: vector<u64>,
+): Multisig {
+    verify_new_rules(members_addrs, members_weights, members_roles, global_threshold, role_names, role_thresholds);
+
+    let mut members = vector[];
+    let mut roles = vector[];
+
+    members_addrs.zip_do!(members_weights, |addr, weight| {
+        members.push_back(Member {
+            addr,
+            weight,
+            roles: vec_set::from_keys(members_roles.remove(0)),
+        });
+    });
+
+    role_names.zip_do!(role_thresholds, |role, threshold| {
+        roles.push_back(Role { name: role, threshold });
+    });
+
+    Multisig { members, global: global_threshold, roles }
+}
+
+/// Returns a mutable reference to the Multisig configuration.
+public(package) fun config_mut(account: &mut Account<Multisig, Approvals>): &mut Multisig {
+    account.config_mut(version::current(), Witness())
 }
 
 // === Private functions ===
