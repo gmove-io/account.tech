@@ -2,7 +2,7 @@ import { Transaction } from '@mysten/sui/transactions';
 import { client, keypair, getId } from './utils.js';
 
 export async function initExtensions(): Promise<boolean> {
-    console.log("\n🔧 Initializing core dependencies...");
+    console.log("\n🔧 Initializing extensions...");
     try {
         const tx = new Transaction();
         tx.setGasBudget(10000000);

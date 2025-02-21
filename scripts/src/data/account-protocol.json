@@ -1,0 +1,22 @@
+[
+  {
+    "type": "0x2::coin::Coin<0x2::sui::SUI>",
+    "id": "0x0038c5a7dc8a89df8449775982973fbd31fa0e3892e60b740dd8bcb3dc51c613"
+  },
+  {
+    "type": "0x2::package::UpgradeCap",
+    "id": "0x2b7620eb5f98bc8b8bc5f533c2ce711e303eb1e3e4d154f622af9c05165d10d8"
+  },
+  {
+    "type": "AccountProtocol",
+    "id": "0x4803761efb11498331d8e70c741602dbbe2ddc97f667174931ccc669fd4fb958"
+  },
+  {
+    "type": "0x2::package::Publisher",
+    "id": "0x95c8acb1d23a544aa6f22db6d30b273bda8961882de95591c88b84b7325658ae"
+  },
+  {
+    "type": "0x4803761efb11498331d8e70c741602dbbe2ddc97f667174931ccc669fd4fb958::user::Registry",
+    "id": "0xf042aa72f40998b9aa70e888439616da2607186bdb35c969562e361d40c9839e"
+  }
+]

@@ -1,0 +1,14 @@
+[
+  {
+    "type": "0x2::coin::Coin<0x2::sui::SUI>",
+    "id": "0x0038c5a7dc8a89df8449775982973fbd31fa0e3892e60b740dd8bcb3dc51c613"
+  },
+  {
+    "type": "AccountActions",
+    "id": "0xb42f63f94fc96385b0674a068c7a0b5e7b8dd647d795cb0ea9c8bc6b647a2238"
+  },
+  {
+    "type": "0x2::package::UpgradeCap",
+    "id": "0xe02874ce5cea95e2c65a3cd487476799f36416b3572bf42e7000058cacd9e5f1"
+  }
+]

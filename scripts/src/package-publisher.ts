@@ -172,7 +172,7 @@ export class PackagePublisher {
 			id: item.type === 'published' ? item.packageId : item.objectId
 		}));
 
-		const dataDir = path.join(__dirname, "../data");
+		const dataDir = path.join(__dirname, "./data");
 		if (!fs.existsSync(dataDir)) {
 			fs.mkdirSync(dataDir, { recursive: true });
 		}

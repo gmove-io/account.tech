@@ -1,0 +1,14 @@
+[
+  {
+    "type": "0x2::coin::Coin<0x2::sui::SUI>",
+    "id": "0x0038c5a7dc8a89df8449775982973fbd31fa0e3892e60b740dd8bcb3dc51c613"
+  },
+  {
+    "type": "AccountMultisig",
+    "id": "0x05d1c7b7b4381fb78b70ccb7f7c0786a383b74a3149b53661d5c759f968edf54"
+  },
+  {
+    "type": "0x2::package::UpgradeCap",
+    "id": "0xaab26daee32ef92412141952804a624598188dbd6742be0fecf1ae8048ddd0f3"
+  }
+]
