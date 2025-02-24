@@ -9,10 +9,7 @@ use sui::{
     clock::{Self, Clock},
 };
 use account_extensions::extensions::{Self, Extensions, AdminCap};
-use account_protocol::{
-    account::{Self, Account},
-    version_witness,
-};
+use account_protocol::account::{Self, Account};
 use account_actions::{
     access_control_intents,
     access_control,
@@ -22,7 +19,6 @@ use account_actions::{
 // === Constants ===
 
 const OWNER: address = @0xCAFE;
-const ACCOUNT_PROTOCOL: address = @0x1;
 
 // === Structs ===
 

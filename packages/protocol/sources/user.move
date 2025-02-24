@@ -26,6 +26,8 @@ const EAccountNotFound: u64 = 2;
 const EAccountTypeDoesntExist: u64 = 3;
 const EWrongUserId: u64 = 4;
 const EAccountAlreadyRegistered: u64 = 5;
+const EWrongNumberOfAccounts: u64 = 6;
+const ENoAccountsToReorder: u64 = 7;
 
 // === Struct ===
 
@@ -110,6 +112,23 @@ public fun refuse_invite(invite: Invite) {
     id.delete();
 }
 
+public fun reorder_accounts<Config>(user: &mut User, addrs: vector<address>) {
+    let account_type = type_name::get<Config>().into_string().to_string();
+    let mut accounts = user.accounts.get_mut(&account_type);
+
+    assert!(accounts.length() == addrs.length(), EWrongNumberOfAccounts);
+    assert!(accounts.length() == 0, ENoAccountsToReorder);
+
+    let mut new_order = vector[];
+    addrs.do!(|addr| {
+        let (exists, idx) = accounts.index_of(&addr);
+        assert!(exists, EAccountNotFound);
+        accounts.swap_remove(idx);
+        new_order.push_back(addr);
+    });
+
+    *accounts = new_order;
+}
 // === Config-only functions ===
 
 public fun add_account<Config, Outcome, CW: drop>(
@@ -169,7 +188,8 @@ public fun users(registry: &Registry): &Table<address, ID> {
     &registry.users
 }
 
-public fun ids_for_type(user: &User, account_type: String): vector<address> {
+public fun ids_for_type<Config>(user: &User): vector<address> {
+    let account_type = type_name::get<Config>().into_string().to_string();
     user.accounts[&account_type]
 }
 
@@ -190,4 +210,18 @@ public fun all_ids(user: &User): vector<address> {
 #[test_only]
 public fun init_for_testing(ctx: &mut TxContext) {
     init(ctx);
+}
+
+#[test_only]
+public fun add_account_for_testing<Config>(
+    user: &mut User,
+    account_addr: address,
+) {
+    let account_type = type_name::get<Config>().into_string().to_string();
+    if (user.accounts.contains(&account_type)) {
+        assert!(!user.accounts[&account_type].contains(&account_addr), EAccountAlreadyRegistered);
+        user.accounts.get_mut(&account_type).push_back(account_addr);
+    } else {
+        user.accounts.insert(account_type, vector<address>[account_addr]);
+    }
 }

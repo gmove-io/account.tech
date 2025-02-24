@@ -3,7 +3,6 @@ module account_protocol::user_tests;
 
 // === Imports ===
 
-use std::type_name;
 use sui::{
     test_utils::destroy,
     test_scenario::{Self as ts, Scenario},
@@ -75,7 +74,7 @@ fun test_user_flow() {
     user.add_account(&account2, Witness());
     user.add_account(&account3, Witness());
     assert!(user.all_ids() == vector[account1.addr(), account2.addr(), account3.addr()]);
-    assert!(user.ids_for_type(type_name::get<DummyConfig>().into_string().to_string()) == vector[account1.addr(), account2.addr(), account3.addr()]);
+    assert!(user.ids_for_type<DummyConfig>() == vector[account1.addr(), account2.addr(), account3.addr()]);
 
     user.remove_account(&account1, Witness());
     user.remove_account(&account2, Witness());
@@ -95,6 +94,61 @@ fun test_user_flow() {
     destroy(account1);
     destroy(account2);
     destroy(account3);
+    end(scenario, registry, extensions);
+}
+
+#[test]
+fun test_reorder_accounts() {
+    let (mut scenario, registry, extensions) = start();
+    
+    let mut user = user::new(scenario.ctx());
+    user.add_account_for_testing<DummyConfig>(@0x1);
+    user.add_account_for_testing<DummyConfig>(@0x2);
+    user.add_account_for_testing<DummyConfig>(@0x3);
+
+    user.reorder_accounts<DummyConfig>(vector[@0x2, @0x3, @0x1]);
+
+    destroy(user);
+    end(scenario, registry, extensions);
+}
+
+#[test, expected_failure(abort_code = user::EWrongNumberOfAccounts)]
+fun test_reorder_accounts_different_length() {
+    let (mut scenario, registry, extensions) = start();
+    
+    let mut user = user::new(scenario.ctx());
+    user.add_account_for_testing<DummyConfig>(@0x1);
+    user.add_account_for_testing<DummyConfig>(@0x2);
+
+    user.reorder_accounts<DummyConfig>(vector[@0x1]);
+
+    destroy(user);
+    end(scenario, registry, extensions);
+}
+
+#[test, expected_failure(abort_code = user::EAccountNotFound)]
+fun test_reorder_accounts_wrong_account() {
+    let (mut scenario, registry, extensions) = start();
+    
+    let mut user = user::new(scenario.ctx());
+    user.add_account_for_testing<DummyConfig>(@0x1);
+    user.add_account_for_testing<DummyConfig>(@0x2);
+
+    user.reorder_accounts<DummyConfig>(vector[@0x1, @0x1]);
+
+    destroy(user);
+    end(scenario, registry, extensions);
+}
+
+#[test, expected_failure(abort_code = user::ENoAccountsToReorder)]
+fun test_reorder_accounts_empty() {
+    let (mut scenario, registry, extensions) = start();
+    
+    let mut user = user::new(scenario.ctx());
+
+    user.reorder_accounts<DummyConfig>(vector[]);
+
+    destroy(user);
     end(scenario, registry, extensions);
 }
 
