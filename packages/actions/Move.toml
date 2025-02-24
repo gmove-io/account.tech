@@ -18,9 +18,6 @@ rev = "testnet"
 [dependencies.AccountProtocol]
 local = "../protocol"
 
-[dependencies.AccountMultisig]
-local = "../configs/multisig"
-
 [dependencies.AccountExtensions]
 local = "../extensions"
 

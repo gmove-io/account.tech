@@ -12,13 +12,12 @@ use sui::{
 };
 use account_extensions::extensions::{Self, Extensions, AdminCap};
 use account_protocol::{
-    account::Account,
+    account::{Self, Account},
     intents::Intent,
     issuer,
     version_witness,
     deps,
 };
-use account_multisig::multisig::{Self, Multisig, Approvals};
 use account_actions::{
     version,
     transfer as acc_transfer,
@@ -37,9 +36,12 @@ public struct Obj has key, store {
 public struct DummyIntent() has copy, drop;
 public struct WrongWitness() has copy, drop;
 
+public struct Config has copy, drop, store {}
+public struct Outcome has copy, drop, store {}
+
 // === Helpers ===
 
-fun start(): (Scenario, Extensions, Account<Multisig, Approvals>, Clock) {
+fun start(): (Scenario, Extensions, Account<Config, Outcome>, Clock) {
     let mut scenario = ts::begin(OWNER);
     // publish package
     extensions::init_for_testing(scenario.ctx());
@@ -49,10 +51,9 @@ fun start(): (Scenario, Extensions, Account<Multisig, Approvals>, Clock) {
     let cap = scenario.take_from_sender<AdminCap>();
     // add core deps
     extensions.add(&cap, b"AccountProtocol".to_string(), @account_protocol, 1);
-    extensions.add(&cap, b"AccountMultisig".to_string(), @account_multisig, 1);
     extensions.add(&cap, b"AccountActions".to_string(), @account_actions, 1);
 
-    let mut account = multisig::new_account(&extensions, scenario.ctx());
+    let mut account = account::new(&extensions, Config {}, false, vector[b"AccountProtocol".to_string()], vector[@account_protocol], vector[1], scenario.ctx());
     account.deps_mut_for_testing().add_for_testing(&extensions, b"AccountActions".to_string(), @account_actions, 1);
     let clock = clock::create_for_testing(scenario.ctx());
     // create world
@@ -60,7 +61,7 @@ fun start(): (Scenario, Extensions, Account<Multisig, Approvals>, Clock) {
     (scenario, extensions, account, clock)
 }
 
-fun end(scenario: Scenario, extensions: Extensions, account: Account<Multisig, Approvals>, clock: Clock) {
+fun end(scenario: Scenario, extensions: Extensions, account: Account<Config, Outcome>, clock: Clock) {
     destroy(extensions);
     destroy(account);
     destroy(clock);
@@ -69,16 +70,15 @@ fun end(scenario: Scenario, extensions: Extensions, account: Account<Multisig, A
 
 fun create_dummy_intent(
     scenario: &mut Scenario,
-    account: &mut Account<Multisig, Approvals>, 
-): Intent<Approvals> {
-    let outcome = multisig::empty_outcome();
+    account: &mut Account<Config, Outcome>, 
+): Intent<Outcome> {
     account.create_intent(
         b"dummy".to_string(), 
         b"".to_string(), 
         vector[0],
         1, 
         b"".to_string(), 
-        outcome, 
+        Outcome {}, 
         version::current(), 
         DummyIntent(), 
         scenario.ctx()
@@ -98,8 +98,7 @@ fun test_transfer_flow() {
     acc_transfer::new_transfer(&mut intent, &account, OWNER, version::current(), DummyIntent());
     account.add_intent(intent, version::current(), DummyIntent());
 
-    multisig::approve_intent(&mut account, key, scenario.ctx());
-    let mut executable = multisig::execute_intent(&mut account, key, &clock);
+    let (mut executable, _) = account.execute_intent(key, &clock, version::current(), DummyIntent());
     acc_transfer::do_transfer(
         &mut executable, 
         &mut account, 
@@ -120,7 +119,7 @@ fun test_transfer_flow() {
 #[test, expected_failure(abort_code = issuer::EWrongAccount)]
 fun test_error_do_transfer_from_wrong_account() {
     let (mut scenario, extensions, mut account, clock) = start();
-    let mut account2 = multisig::new_account(&extensions, scenario.ctx());
+    let mut account2 = account::new(&extensions, Config {}, false, vector[b"AccountProtocol".to_string()], vector[@account_protocol], vector[1], scenario.ctx());
     account2.deps_mut_for_testing().add_for_testing(&extensions, b"AccountActions".to_string(), @account_actions, 1);
     let key = b"dummy".to_string();
 
@@ -129,8 +128,7 @@ fun test_error_do_transfer_from_wrong_account() {
     acc_transfer::new_transfer(&mut intent, &account2, OWNER, version::current(), DummyIntent());
     account2.add_intent(intent, version::current(), DummyIntent());
 
-    multisig::approve_intent(&mut account2, key, scenario.ctx());
-    let mut executable = multisig::execute_intent(&mut account2, key, &clock);
+    let (mut executable, _) = account2.execute_intent(key, &clock, version::current(), DummyIntent());
     // try to disable from the account that didn't approve the intent
     acc_transfer::do_transfer(
         &mut executable, 
@@ -154,8 +152,7 @@ fun test_error_do_transfer_from_wrong_constructor_witness() {
     acc_transfer::new_transfer(&mut intent, &account, OWNER, version::current(), DummyIntent());
     account.add_intent(intent, version::current(), DummyIntent());
 
-    multisig::approve_intent(&mut account, key, scenario.ctx());
-    let mut executable = multisig::execute_intent(&mut account, key, &clock);
+    let (mut executable, _) = account.execute_intent(key, &clock, version::current(), DummyIntent());
     // try to disable with the wrong witness that didn't approve the intent
     acc_transfer::do_transfer(
         &mut executable, 
@@ -178,8 +175,7 @@ fun test_error_do_transfer_from_not_dep() {
     acc_transfer::new_transfer(&mut intent, &account, OWNER, version::current(), DummyIntent());
     account.add_intent(intent, version::current(), DummyIntent());
 
-    multisig::approve_intent(&mut account, key, scenario.ctx());
-    let mut executable = multisig::execute_intent(&mut account, key, &clock);
+    let (mut executable, _) = account.execute_intent(key, &clock, version::current(), DummyIntent());
     // try to disable with the wrong version TypeName that didn't approve the intent
     acc_transfer::do_transfer(
         &mut executable, 

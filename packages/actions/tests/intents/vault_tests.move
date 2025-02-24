@@ -11,13 +11,13 @@ use sui::{
     sui::SUI,
 };
 use account_extensions::extensions::{Self, Extensions, AdminCap};
-use account_protocol::account::Account;
-use account_multisig::multisig::{Self, Multisig, Approvals};
+use account_protocol::account::{Self, Account};
 use account_actions::{
     vault,
     vault_intents,
     vesting::{Self, Vesting},
     transfer as acc_transfer,
+    version,
 };
 
 // === Constants ===
@@ -26,11 +26,16 @@ const OWNER: address = @0xCAFE;
 
 // === Structs ===
 
+public struct Config has copy, drop, store {}
+public struct Outcome has copy, drop, store {}
+
+public struct Witness() has drop;
+
 public struct VAULT_TESTS has drop {}
 
 // === Helpers ===
 
-fun start(): (Scenario, Extensions, Account<Multisig, Approvals>, Clock) {
+fun start(): (Scenario, Extensions, Account<Config, Outcome>, Clock) {
     let mut scenario = ts::begin(OWNER);
     // publish package
     extensions::init_for_testing(scenario.ctx());
@@ -40,18 +45,16 @@ fun start(): (Scenario, Extensions, Account<Multisig, Approvals>, Clock) {
     let cap = scenario.take_from_sender<AdminCap>();
     // add core deps
     extensions.add(&cap, b"AccountProtocol".to_string(), @account_protocol, 1);
-    extensions.add(&cap, b"AccountMultisig".to_string(), @account_multisig, 1);
     extensions.add(&cap, b"AccountActions".to_string(), @account_actions, 1);
 
-    let mut account = multisig::new_account(&extensions, scenario.ctx());
-    account.deps_mut_for_testing().add_for_testing(&extensions, b"AccountActions".to_string(), @account_actions, 1);
+    let account = account::new(&extensions, Config {}, false, vector[b"AccountProtocol".to_string(), b"AccountActions".to_string()], vector[@account_protocol, @account_actions], vector[1, 1], scenario.ctx());
     let clock = clock::create_for_testing(scenario.ctx());
     // create world
     destroy(cap);
     (scenario, extensions, account, clock)
 }
 
-fun end(scenario: Scenario, extensions: Extensions, account: Account<Multisig, Approvals>, clock: Clock) {
+fun end(scenario: Scenario, extensions: Extensions, account: Account<Config, Outcome>, clock: Clock) {
     destroy(extensions);
     destroy(account);
     destroy(clock);
@@ -63,21 +66,21 @@ fun end(scenario: Scenario, extensions: Extensions, account: Account<Multisig, A
 #[test]
 fun test_request_execute_transfer() {
     let (mut scenario, extensions, mut account, clock) = start();
-    let auth = multisig::authenticate(&account, scenario.ctx());
+    let auth = account.new_auth(version::current(), Witness());
     vault::open(auth, &mut account, b"Degen".to_string(), scenario.ctx());
     let key = b"dummy".to_string();
 
-    let auth = multisig::authenticate(&account, scenario.ctx());
-    vault::deposit<Multisig, Approvals, SUI>(
+    let auth = account.new_auth(version::current(), Witness());
+    vault::deposit<Config, Outcome, SUI>(
         auth, 
         &mut account,  
         b"Degen".to_string(), 
         coin::mint_for_testing<SUI>(5, scenario.ctx())
     );
 
-    let auth = multisig::authenticate(&account, scenario.ctx());
-    let outcome = multisig::empty_outcome();
-    vault_intents::request_spend_and_transfer<Multisig, Approvals, SUI>(
+    let auth = account.new_auth(version::current(), Witness());
+    let outcome = Outcome {};
+    vault_intents::request_spend_and_transfer<Config, Outcome, SUI>(
         auth, 
         outcome, 
         &mut account, 
@@ -91,11 +94,10 @@ fun test_request_execute_transfer() {
         scenario.ctx()
     );
 
-    multisig::approve_intent(&mut account, key, scenario.ctx());
-    let mut executable = multisig::execute_intent(&mut account, key, &clock);
+    let (mut executable, _) = account::execute_intent(&mut account, key, &clock, version::current(), Witness());
     // loop over execute_spend_and_transfer to execute each action
-    vault_intents::execute_spend_and_transfer<Multisig, Approvals, SUI>(&mut executable, &mut account, scenario.ctx());
-    vault_intents::execute_spend_and_transfer<Multisig, Approvals, SUI>(&mut executable, &mut account, scenario.ctx());
+    vault_intents::execute_spend_and_transfer<Config, Outcome, SUI>(&mut executable, &mut account, scenario.ctx());
+    vault_intents::execute_spend_and_transfer<Config, Outcome, SUI>(&mut executable, &mut account, scenario.ctx());
     vault_intents::complete_spend_and_transfer(executable, &account);
 
     let mut expired = account.destroy_empty_intent(key);
@@ -119,21 +121,21 @@ fun test_request_execute_transfer() {
 #[test]
 fun test_request_execute_vesting() {
     let (mut scenario, extensions, mut account, clock) = start();
-    let auth = multisig::authenticate(&account, scenario.ctx());
+    let auth = account.new_auth(version::current(), Witness());
     vault::open(auth, &mut account, b"Degen".to_string(), scenario.ctx());
     let key = b"dummy".to_string();
 
-    let auth = multisig::authenticate(&account, scenario.ctx());
-    vault::deposit<Multisig, Approvals, SUI>(
+    let auth = account.new_auth(version::current(), Witness());
+    vault::deposit<Config, Outcome, SUI>(
         auth, 
         &mut account, 
         b"Degen".to_string(), 
         coin::mint_for_testing<SUI>(5, scenario.ctx())
     );
 
-    let auth = multisig::authenticate(&account, scenario.ctx());
-    let outcome = multisig::empty_outcome();
-    vault_intents::request_spend_and_vest<Multisig, Approvals, SUI>(
+    let auth = account.new_auth(version::current(), Witness());
+    let outcome = Outcome {};
+    vault_intents::request_spend_and_vest<Config, Outcome, SUI>(
         auth, 
         outcome, 
         &mut account, 
@@ -149,9 +151,8 @@ fun test_request_execute_vesting() {
         scenario.ctx()
     );
 
-    multisig::approve_intent(&mut account, key, scenario.ctx());
-    let executable = multisig::execute_intent(&mut account, key, &clock);
-    vault_intents::execute_spend_and_vest<Multisig, Approvals, SUI>(executable, &mut account, scenario.ctx());
+    let (executable, _) = account::execute_intent(&mut account, key, &clock, version::current(), Witness());
+    vault_intents::execute_spend_and_vest<Config, Outcome, SUI>(executable, &mut account, scenario.ctx());
 
     let mut expired = account.destroy_empty_intent(key);
     vault::delete_spend<SUI>(&mut expired);
@@ -173,21 +174,21 @@ fun test_request_execute_vesting() {
 #[test, expected_failure(abort_code = vault_intents::ENotSameLength)]
 fun test_error_request_transfer_not_same_length() {
     let (mut scenario, extensions, mut account, clock) = start();
-    let auth = multisig::authenticate(&account, scenario.ctx());
+    let auth = account.new_auth(version::current(), Witness());
     vault::open(auth, &mut account, b"Degen".to_string(), scenario.ctx());
     let key = b"dummy".to_string();
 
-    let auth = multisig::authenticate(&account, scenario.ctx());
-    vault::deposit<Multisig, Approvals, SUI>(
+    let auth = account.new_auth(version::current(), Witness());
+    vault::deposit<Config, Outcome, SUI>(
         auth, 
         &mut account, 
         b"Degen".to_string(), 
         coin::mint_for_testing<SUI>(5, scenario.ctx())
     );
 
-    let auth = multisig::authenticate(&account, scenario.ctx());
-    let outcome = multisig::empty_outcome();
-    vault_intents::request_spend_and_transfer<Multisig, Approvals, SUI>(
+    let auth = account.new_auth(version::current(), Witness());
+    let outcome = Outcome {};
+    vault_intents::request_spend_and_transfer<Config, Outcome, SUI>(
         auth, 
         outcome, 
         &mut account, 
@@ -207,21 +208,21 @@ fun test_error_request_transfer_not_same_length() {
 #[test, expected_failure(abort_code = vault_intents::ECoinTypeDoesntExist)]
 fun test_error_request_transfer_coin_type_doesnt_exist() {
     let (mut scenario, extensions, mut account, clock) = start();
-    let auth = multisig::authenticate(&account, scenario.ctx());
+    let auth = account.new_auth(version::current(), Witness());
     vault::open(auth, &mut account, b"Degen".to_string(), scenario.ctx());
     let key = b"dummy".to_string();
 
-    let auth = multisig::authenticate(&account, scenario.ctx());
-    vault::deposit<Multisig, Approvals, VAULT_TESTS>(
+    let auth = account.new_auth(version::current(), Witness());
+    vault::deposit<Config, Outcome, VAULT_TESTS>(
         auth, 
         &mut account, 
         b"Degen".to_string(), 
         coin::mint_for_testing<VAULT_TESTS>(5, scenario.ctx())
     );
 
-    let auth = multisig::authenticate(&account, scenario.ctx());
-    let outcome = multisig::empty_outcome();
-    vault_intents::request_spend_and_transfer<Multisig, Approvals, SUI>(
+    let auth = account.new_auth(version::current(), Witness());
+    let outcome = Outcome {};
+    vault_intents::request_spend_and_transfer<Config, Outcome, SUI>(
         auth, 
         outcome, 
         &mut account, 
@@ -241,21 +242,21 @@ fun test_error_request_transfer_coin_type_doesnt_exist() {
 #[test, expected_failure(abort_code = vault_intents::EInsufficientFunds)]
 fun test_error_request_transfer_insufficient_funds() {
     let (mut scenario, extensions, mut account, clock) = start();
-    let auth = multisig::authenticate(&account, scenario.ctx());
+    let auth = account.new_auth(version::current(), Witness());
     vault::open(auth, &mut account, b"Degen".to_string(), scenario.ctx());
     let key = b"dummy".to_string();
 
-    let auth = multisig::authenticate(&account, scenario.ctx());
-    vault::deposit<Multisig, Approvals, SUI>(
+    let auth = account.new_auth(version::current(), Witness());
+    vault::deposit<Config, Outcome, SUI>(
         auth, 
         &mut account, 
         b"Degen".to_string(), 
         coin::mint_for_testing<SUI>(1, scenario.ctx())
     );
 
-    let auth = multisig::authenticate(&account, scenario.ctx());
-    let outcome = multisig::empty_outcome();
-    vault_intents::request_spend_and_transfer<Multisig, Approvals, SUI>(
+    let auth = account.new_auth(version::current(), Witness());
+    let outcome = Outcome {};
+    vault_intents::request_spend_and_transfer<Config, Outcome, SUI>(
         auth, 
         outcome, 
         &mut account, 
@@ -275,21 +276,21 @@ fun test_error_request_transfer_insufficient_funds() {
 #[test, expected_failure(abort_code = vault_intents::ECoinTypeDoesntExist)]
 fun test_error_request_vesting_coin_type_doesnt_exist() {
     let (mut scenario, extensions, mut account, clock) = start();
-    let auth = multisig::authenticate(&account, scenario.ctx());
+    let auth = account.new_auth(version::current(), Witness());
     vault::open(auth, &mut account, b"Degen".to_string(), scenario.ctx());
     let key = b"dummy".to_string();
 
-    let auth = multisig::authenticate(&account, scenario.ctx());
-    vault::deposit<Multisig, Approvals, VAULT_TESTS>(
+    let auth = account.new_auth(version::current(), Witness());
+    vault::deposit<Config, Outcome, VAULT_TESTS>(
         auth, 
         &mut account, 
         b"Degen".to_string(), 
         coin::mint_for_testing<VAULT_TESTS>(5, scenario.ctx())
     );
 
-    let auth = multisig::authenticate(&account, scenario.ctx());
-    let outcome = multisig::empty_outcome();
-    vault_intents::request_spend_and_vest<Multisig, Approvals, SUI>(
+    let auth = account.new_auth(version::current(), Witness());
+    let outcome = Outcome {};
+    vault_intents::request_spend_and_vest<Config, Outcome, SUI>(
         auth, 
         outcome, 
         &mut account, 
@@ -311,21 +312,21 @@ fun test_error_request_vesting_coin_type_doesnt_exist() {
 #[test, expected_failure(abort_code = vault_intents::EInsufficientFunds)]
 fun test_error_request_vesting_insufficient_funds() {
     let (mut scenario, extensions, mut account, clock) = start();
-    let auth = multisig::authenticate(&account, scenario.ctx());
+    let auth = account.new_auth(version::current(), Witness());
     vault::open(auth, &mut account, b"Degen".to_string(), scenario.ctx());
     let key = b"dummy".to_string();
 
-    let auth = multisig::authenticate(&account, scenario.ctx());
-    vault::deposit<Multisig, Approvals, SUI>(
+    let auth = account.new_auth(version::current(), Witness());
+    vault::deposit<Config, Outcome, SUI>(
         auth, 
         &mut account, 
         b"Degen".to_string(), 
         coin::mint_for_testing<SUI>(4, scenario.ctx())
     );
 
-    let auth = multisig::authenticate(&account, scenario.ctx());
-    let outcome = multisig::empty_outcome();
-    vault_intents::request_spend_and_vest<Multisig, Approvals, SUI>(
+    let auth = account.new_auth(version::current(), Witness());
+    let outcome = Outcome {};
+    vault_intents::request_spend_and_vest<Config, Outcome, SUI>(
         auth, 
         outcome, 
         &mut account, 

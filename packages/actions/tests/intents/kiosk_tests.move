@@ -13,11 +13,11 @@ use sui::{
 };
 use kiosk::{kiosk_lock_rule, royalty_rule};
 use account_extensions::extensions::{Self, Extensions, AdminCap};
-use account_protocol::account::Account;
-use account_multisig::multisig::{Self, Multisig, Approvals};
+use account_protocol::account::{Self as account, Account};
 use account_actions::{
     kiosk as acc_kiosk,
     kiosk_intents as acc_kiosk_intents,
+    version,
 };
 
 // === Constants ===
@@ -32,9 +32,16 @@ public struct Nft has key, store {
     id: UID
 }
 
+public struct Witness() has drop;
+
+// Define Config and Outcome structs
+
+public struct Config has copy, drop, store {}
+public struct Outcome has copy, drop, store {}
+
 // === Helpers ===
 
-fun start(): (Scenario, Extensions, Account<Multisig, Approvals>, Clock, TransferPolicy<Nft>) {
+fun start(): (Scenario, Extensions, Account<Config, Outcome>, Clock, TransferPolicy<Nft>) {
     let mut scenario = ts::begin(OWNER);
     // publish package
     extensions::init_for_testing(scenario.ctx());
@@ -44,11 +51,9 @@ fun start(): (Scenario, Extensions, Account<Multisig, Approvals>, Clock, Transfe
     let cap = scenario.take_from_sender<AdminCap>();
     // add core deps
     extensions.add(&cap, b"AccountProtocol".to_string(), @account_protocol, 1);
-    extensions.add(&cap, b"AccountMultisig".to_string(), @account_multisig, 1);
     extensions.add(&cap, b"AccountActions".to_string(), @account_actions, 1);
 
-    let mut account = multisig::new_account(&extensions, scenario.ctx());
-    account.deps_mut_for_testing().add_for_testing(&extensions, b"AccountActions".to_string(), @account_actions, 1);
+    let account = account::new(&extensions, Config {}, false, vector[b"AccountProtocol".to_string(), b"AccountActions".to_string()], vector[@account_protocol, @account_actions], vector[1, 1], scenario.ctx());
     let clock = clock::create_for_testing(scenario.ctx());
     // instantiate TransferPolicy 
     let publisher = package::test_claim(KIOSK_TESTS {}, scenario.ctx());
@@ -62,7 +67,7 @@ fun start(): (Scenario, Extensions, Account<Multisig, Approvals>, Clock, Transfe
     (scenario, extensions, account, clock, policy)
 }
 
-fun end(scenario: Scenario, extensions: Extensions, account: Account<Multisig, Approvals>, clock: Clock, policy: TransferPolicy<Nft>) {
+fun end(scenario: Scenario, extensions: Extensions, account: Account<Config, Outcome>, clock: Clock, policy: TransferPolicy<Nft>) {
     destroy(extensions);
     destroy(account);
     destroy(policy);
@@ -83,8 +88,8 @@ fun init_caller_kiosk_with_nfts(policy: &TransferPolicy<Nft>, amount: u64, scena
     (kiosk, kiosk_cap, ids)
 }
 
-fun init_account_kiosk_with_nfts(account: &mut Account<Multisig, Approvals>, policy: &mut TransferPolicy<Nft>, amount: u64, scenario: &mut Scenario): (Kiosk, vector<ID>) {
-    let auth = multisig::authenticate(account, scenario.ctx());
+fun init_account_kiosk_with_nfts(account: &mut Account<Config, Outcome>, policy: &mut TransferPolicy<Nft>, amount: u64, scenario: &mut Scenario): (Kiosk, vector<ID>) {
+    let auth = account.new_auth(version::current(), Witness());
     acc_kiosk::open(auth, account, b"Degen".to_string(), scenario.ctx());
     scenario.next_tx(OWNER);
     let mut acc_kiosk = scenario.take_shared<Kiosk>();
@@ -93,7 +98,7 @@ fun init_account_kiosk_with_nfts(account: &mut Account<Multisig, Approvals>, pol
     let mut nft_ids = ids;
 
     amount.do!<u64>(|_| {
-        let auth = multisig::authenticate(account, scenario.ctx());
+        let auth = account.new_auth(version::current(), Witness());
         let request = acc_kiosk::place(
             auth, 
             account, 
@@ -122,8 +127,8 @@ fun test_request_execute_take() {
     let (mut acc_kiosk, mut ids) = init_account_kiosk_with_nfts(&mut account, &mut policy, 2, &mut scenario);
     let (mut caller_kiosk, caller_cap, _) = init_caller_kiosk_with_nfts(&policy, 0, &mut scenario);
 
-    let auth = multisig::authenticate(&account, scenario.ctx());
-    let outcome = multisig::empty_outcome();
+    let auth = account.new_auth(version::current(), Witness());
+    let outcome = Outcome {};
     acc_kiosk_intents::request_take_nfts(
         auth, 
         outcome,
@@ -137,10 +142,9 @@ fun test_request_execute_take() {
         OWNER,
         scenario.ctx()
     );
-    multisig::approve_intent(&mut account, b"dummy".to_string(), scenario.ctx());
 
-    let mut executable = multisig::execute_intent(&mut account, b"dummy".to_string(), &clock);
-    let request = acc_kiosk_intents::execute_take_nfts<Multisig, Approvals, Nft>(
+    let (mut executable, _) = account::execute_intent(&mut account, b"dummy".to_string(), &clock, version::current(), Witness());
+    let request = acc_kiosk_intents::execute_take_nfts<Config, Outcome, Nft>(
         &mut executable, 
         &mut account, 
         &mut acc_kiosk,
@@ -150,7 +154,7 @@ fun test_request_execute_take() {
         scenario.ctx()
     );
     policy.confirm_request(request);
-    let request = acc_kiosk_intents::execute_take_nfts<Multisig, Approvals, Nft>(
+    let request = acc_kiosk_intents::execute_take_nfts<Config, Outcome, Nft>(
         &mut executable, 
         &mut account, 
         &mut acc_kiosk,
@@ -183,8 +187,8 @@ fun test_request_execute_list() {
     let (mut acc_kiosk, mut ids) = init_account_kiosk_with_nfts(&mut account, &mut policy, 2, &mut scenario);
     
     // list nfts
-    let auth = multisig::authenticate(&account, scenario.ctx());
-    let outcome = multisig::empty_outcome();
+    let auth = account.new_auth(version::current(), Witness());
+    let outcome = Outcome {};
     acc_kiosk_intents::request_list_nfts(
         auth, 
         outcome,
@@ -198,11 +202,10 @@ fun test_request_execute_list() {
         vector[100, 200],
         scenario.ctx()
     );
-    multisig::approve_intent(&mut account, b"dummy".to_string(), scenario.ctx());
 
-    let mut executable = multisig::execute_intent(&mut account, b"dummy".to_string(), &clock);
-    acc_kiosk_intents::execute_list_nfts<Multisig, Approvals, Nft>(&mut executable, &mut account, &mut acc_kiosk);
-    acc_kiosk_intents::execute_list_nfts<Multisig, Approvals, Nft>(&mut executable, &mut account, &mut acc_kiosk);
+    let (mut executable, _) = account::execute_intent(&mut account, b"dummy".to_string(), &clock, version::current(), Witness());
+    acc_kiosk_intents::execute_list_nfts<Config, Outcome, Nft>(&mut executable, &mut account, &mut acc_kiosk);
+    acc_kiosk_intents::execute_list_nfts<Config, Outcome, Nft>(&mut executable, &mut account, &mut acc_kiosk);
     acc_kiosk_intents::complete_list_nfts(executable, &account);
 
     let mut expired = account.destroy_empty_intent(b"dummy".to_string());
@@ -221,8 +224,8 @@ fun test_request_execute_list() {
 fun test_error_request_take_from_kiosk_doesnt_exist() {
     let (mut scenario, extensions, mut account, clock, policy) = start();
     
-    let auth = multisig::authenticate(&account, scenario.ctx());
-    let outcome = multisig::empty_outcome();
+    let auth = account.new_auth(version::current(), Witness());
+    let outcome = Outcome {};
     acc_kiosk_intents::request_take_nfts(
         auth, 
         outcome,
@@ -244,8 +247,8 @@ fun test_error_request_take_from_kiosk_doesnt_exist() {
 fun test_error_request_list_from_kiosk_doesnt_exist() {
     let (mut scenario, extensions, mut account, clock, policy) = start();
     
-    let auth = multisig::authenticate(&account, scenario.ctx());
-    let outcome = multisig::empty_outcome();
+    let auth = account.new_auth(version::current(), Witness());
+    let outcome = Outcome {};
     acc_kiosk_intents::request_list_nfts(
         auth, 
         outcome,
@@ -268,8 +271,8 @@ fun test_error_request_list_nfts_prices_not_same_length() {
     let (mut scenario, extensions, mut account, clock, mut policy) = start();
     let (acc_kiosk, _) = init_account_kiosk_with_nfts(&mut account, &mut policy, 1, &mut scenario);
 
-    let auth = multisig::authenticate(&account, scenario.ctx());
-    let outcome = multisig::empty_outcome();
+    let auth = account.new_auth(version::current(), Witness());
+    let outcome = Outcome {};
     acc_kiosk_intents::request_list_nfts(
         auth, 
         outcome,

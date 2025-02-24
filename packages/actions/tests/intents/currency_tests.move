@@ -12,15 +12,15 @@ use sui::{
 };
 use account_extensions::extensions::{Self, Extensions, AdminCap};
 use account_protocol::{
-    account::Account,
+    account::{Self as account, Account},
     owned,
 };
-use account_multisig::multisig::{Self, Multisig, Approvals};
 use account_actions::{
     currency,
     currency_intents,
     vesting::{Self, Vesting},
     transfer as acc_transfer,
+    version,
 };
 
 // === Constants ===
@@ -30,10 +30,15 @@ const OWNER: address = @0xCAFE;
 // === Structs ===
 
 public struct CURRENCY_INTENTS_TESTS has drop {}
+public struct Witness() has drop;
+
+// Define Config and Outcome directly in the file
+public struct Config has copy, drop, store {}
+public struct Outcome has copy, drop, store {}
 
 // === Helpers ===
 
-fun start(): (Scenario, Extensions, Account<Multisig, Approvals>, Clock, TreasuryCap<CURRENCY_INTENTS_TESTS>, CoinMetadata<CURRENCY_INTENTS_TESTS>) {
+fun start(): (Scenario, Extensions, Account<Config, Outcome>, Clock, TreasuryCap<CURRENCY_INTENTS_TESTS>, CoinMetadata<CURRENCY_INTENTS_TESTS>) {
     let mut scenario = ts::begin(OWNER);
     // publish package
     extensions::init_for_testing(scenario.ctx());
@@ -43,11 +48,10 @@ fun start(): (Scenario, Extensions, Account<Multisig, Approvals>, Clock, Treasur
     let cap = scenario.take_from_sender<AdminCap>();
     // add core deps
     extensions.add(&cap, b"AccountProtocol".to_string(), @account_protocol, 1);
-    extensions.add(&cap, b"AccountMultisig".to_string(), @account_multisig, 1);
     extensions.add(&cap, b"AccountActions".to_string(), @account_actions, 1);
 
-    let mut account = multisig::new_account(&extensions, scenario.ctx());
-    account.deps_mut_for_testing().add_for_testing(&extensions, b"AccountActions".to_string(), @account_actions, 1);
+    // Create account using account_protocol
+    let account = account::new(&extensions, Config {}, false, vector[b"AccountProtocol".to_string(), b"AccountActions".to_string()], vector[@account_protocol, @account_actions], vector[1, 1], scenario.ctx());
     let clock = clock::create_for_testing(scenario.ctx());
     // create TreasuryCap and CoinMetadata
     let (treasury_cap, metadata) = coin::create_currency(
@@ -64,7 +68,7 @@ fun start(): (Scenario, Extensions, Account<Multisig, Approvals>, Clock, Treasur
     (scenario, extensions, account, clock, treasury_cap, metadata)
 }
 
-fun end(scenario: Scenario, extensions: Extensions, account: Account<Multisig, Approvals>, clock: Clock, metadata: CoinMetadata<CURRENCY_INTENTS_TESTS>) {
+fun end(scenario: Scenario, extensions: Extensions, account: Account<Config, Outcome>, clock: Clock, metadata: CoinMetadata<CURRENCY_INTENTS_TESTS>) {
     destroy(extensions);
     destroy(account);
     destroy(clock);
@@ -77,13 +81,14 @@ fun end(scenario: Scenario, extensions: Extensions, account: Account<Multisig, A
 #[test]
 fun test_request_execute_disable_rules() {
     let (mut scenario, extensions, mut account, clock, cap, metadata) = start();
-    let auth = multisig::authenticate(&account, scenario.ctx());
+
+    let auth = account.new_auth(version::current(), Witness());
     currency::lock_cap(auth, &mut account, cap, option::none());
     let key = b"dummy".to_string();
 
-    let auth = multisig::authenticate(&account, scenario.ctx());
-    let outcome = multisig::empty_outcome();
-    currency_intents::request_disable_rules<Multisig, Approvals, CURRENCY_INTENTS_TESTS>(
+    let auth = account.new_auth(version::current(), Witness());
+    let outcome = Outcome {};
+    currency_intents::request_disable_rules<Config, Outcome, CURRENCY_INTENTS_TESTS>(
         auth, 
         outcome, 
         &mut account, 
@@ -100,15 +105,14 @@ fun test_request_execute_disable_rules() {
         scenario.ctx()
     );
 
-    multisig::approve_intent(&mut account, key, scenario.ctx());
-    let executable = multisig::execute_intent(&mut account, key, &clock);
-    currency_intents::execute_disable_rules<Multisig, Approvals, CURRENCY_INTENTS_TESTS>(executable, &mut account);
+    let (executable, _) = account::execute_intent(&mut account, key, &clock, version::current(), Witness());
+    currency_intents::execute_disable_rules<Config, Outcome, CURRENCY_INTENTS_TESTS>(executable, &mut account);
 
     let mut expired = account.destroy_empty_intent(key);
     currency::delete_disable<CURRENCY_INTENTS_TESTS>(&mut expired);
     expired.destroy_empty();
 
-    let lock = currency::borrow_rules<Multisig, Approvals, CURRENCY_INTENTS_TESTS>(&account);
+    let lock = currency::borrow_rules<Config, Outcome, CURRENCY_INTENTS_TESTS>(&account);
     assert!(lock.can_mint() == false);
     assert!(lock.can_burn() == false);
     assert!(lock.can_update_name() == false);
@@ -122,15 +126,15 @@ fun test_request_execute_disable_rules() {
 #[test]
 fun test_request_execute_mint_and_keep() {
     let (mut scenario, extensions, mut account, clock, cap, metadata) = start();
-    let auth = multisig::authenticate(&account, scenario.ctx());
+    let auth = account.new_auth(version::current(), Witness());
     currency::lock_cap(auth, &mut account, cap, option::none());
 
     let key = b"dummy".to_string();
     let addr = account.addr();
 
-    let auth = multisig::authenticate(&account, scenario.ctx());
-    let outcome = multisig::empty_outcome();
-    currency_intents::request_mint_and_transfer<Multisig, Approvals, CURRENCY_INTENTS_TESTS>(
+    let auth = account.new_auth(version::current(), Witness());
+    let outcome = Outcome {};
+    currency_intents::request_mint_and_transfer<Config, Outcome, CURRENCY_INTENTS_TESTS>(
         auth, 
         outcome, 
         &mut account, 
@@ -143,9 +147,8 @@ fun test_request_execute_mint_and_keep() {
         scenario.ctx()
     );
 
-    multisig::approve_intent(&mut account, key, scenario.ctx());
-    let mut executable = multisig::execute_intent(&mut account, key, &clock);
-    currency_intents::execute_mint_and_transfer<Multisig, Approvals, CURRENCY_INTENTS_TESTS>(&mut executable, &mut account, scenario.ctx());
+    let (mut executable, _) = account::execute_intent(&mut account, key, &clock, version::current(), Witness());
+    currency_intents::execute_mint_and_transfer<Config, Outcome, CURRENCY_INTENTS_TESTS>(&mut executable, &mut account, scenario.ctx());
     currency_intents::complete_mint_and_transfer(executable, &account);
 
     let mut expired = account.destroy_empty_intent(key);
@@ -153,8 +156,8 @@ fun test_request_execute_mint_and_keep() {
     acc_transfer::delete_transfer(&mut expired);
     expired.destroy_empty();
 
-    let lock = currency::borrow_rules<Multisig, Approvals, CURRENCY_INTENTS_TESTS>(&account);
-    let supply = currency::coin_type_supply<Multisig, Approvals, CURRENCY_INTENTS_TESTS>(&account);
+    let lock = currency::borrow_rules<Config, Outcome, CURRENCY_INTENTS_TESTS>(&account);
+    let supply = currency::coin_type_supply<Config, Outcome, CURRENCY_INTENTS_TESTS>(&account);
     assert!(supply == 5);
     assert!(lock.total_minted() == 5);
     assert!(lock.total_burned() == 0);
@@ -165,15 +168,15 @@ fun test_request_execute_mint_and_keep() {
 #[test]
 fun test_request_execute_mint_and_keep_with_max_supply() {
     let (mut scenario, extensions, mut account, clock, cap, metadata) = start();
-    let auth = multisig::authenticate(&account, scenario.ctx());
+    let auth = account.new_auth(version::current(), Witness());
     currency::lock_cap(auth, &mut account, cap, option::some(5));
 
     let key = b"dummy".to_string();
     let addr = account.addr();
 
-    let auth = multisig::authenticate(&account, scenario.ctx());
-    let outcome = multisig::empty_outcome();
-    currency_intents::request_mint_and_transfer<Multisig, Approvals, CURRENCY_INTENTS_TESTS>(
+    let auth = account.new_auth(version::current(), Witness());
+    let outcome = Outcome {};
+    currency_intents::request_mint_and_transfer<Config, Outcome, CURRENCY_INTENTS_TESTS>(
         auth, 
         outcome, 
         &mut account, 
@@ -186,13 +189,12 @@ fun test_request_execute_mint_and_keep_with_max_supply() {
         scenario.ctx()
     );
 
-    multisig::approve_intent(&mut account, key, scenario.ctx());
-    let mut executable = multisig::execute_intent(&mut account, key, &clock);
-    currency_intents::execute_mint_and_transfer<Multisig, Approvals, CURRENCY_INTENTS_TESTS>(&mut executable, &mut account, scenario.ctx());
+    let (mut executable, _) = account::execute_intent(&mut account, key, &clock, version::current(), Witness());
+    currency_intents::execute_mint_and_transfer<Config, Outcome, CURRENCY_INTENTS_TESTS>(&mut executable, &mut account, scenario.ctx());
     currency_intents::complete_mint_and_transfer(executable, &account);
 
-    let lock = currency::borrow_rules<Multisig, Approvals, CURRENCY_INTENTS_TESTS>(&account);
-    let supply = currency::coin_type_supply<Multisig, Approvals, CURRENCY_INTENTS_TESTS>(&account);
+    let lock = currency::borrow_rules<Config, Outcome, CURRENCY_INTENTS_TESTS>(&account);
+    let supply = currency::coin_type_supply<Config, Outcome, CURRENCY_INTENTS_TESTS>(&account);
     assert!(supply == 5);
     assert!(lock.total_minted() == 5);
     assert!(lock.total_burned() == 0);
@@ -211,13 +213,13 @@ fun test_request_execute_withdraw_and_burn() {
     scenario.next_tx(OWNER);
     let receiving = ts::most_recent_receiving_ticket<Coin<CURRENCY_INTENTS_TESTS>>(&object::id(&account));
 
-    let auth = multisig::authenticate(&account, scenario.ctx());
+    let auth = account.new_auth(version::current(), Witness());
     currency::lock_cap(auth, &mut account, cap, option::none());
     let key = b"dummy".to_string();
 
-    let auth = multisig::authenticate(&account, scenario.ctx());
-    let outcome = multisig::empty_outcome();
-    currency_intents::request_withdraw_and_burn<Multisig, Approvals, CURRENCY_INTENTS_TESTS>(
+    let auth = account.new_auth(version::current(), Witness());
+    let outcome = Outcome {};
+    currency_intents::request_withdraw_and_burn<Config, Outcome, CURRENCY_INTENTS_TESTS>(
         auth, 
         outcome, 
         &mut account, 
@@ -230,17 +232,16 @@ fun test_request_execute_withdraw_and_burn() {
         scenario.ctx()
     );
 
-    multisig::approve_intent(&mut account, key, scenario.ctx());
-    let executable = multisig::execute_intent(&mut account, key, &clock);
-    currency_intents::execute_withdraw_and_burn<Multisig, Approvals, CURRENCY_INTENTS_TESTS>(executable, &mut account, receiving);
+    let (executable, _) = account::execute_intent(&mut account, key, &clock, version::current(), Witness());
+    currency_intents::execute_withdraw_and_burn<Config, Outcome, CURRENCY_INTENTS_TESTS>(executable, &mut account, receiving);
 
     let mut expired = account.destroy_empty_intent(key);
     owned::delete_withdraw(&mut expired, &mut account);
     currency::delete_burn<CURRENCY_INTENTS_TESTS>(&mut expired);
     expired.destroy_empty();
 
-    let lock = currency::borrow_rules<Multisig, Approvals, CURRENCY_INTENTS_TESTS>(&account);
-    let supply = currency::coin_type_supply<Multisig, Approvals, CURRENCY_INTENTS_TESTS>(&account);
+    let lock = currency::borrow_rules<Config, Outcome, CURRENCY_INTENTS_TESTS>(&account);
+    let supply = currency::coin_type_supply<Config, Outcome, CURRENCY_INTENTS_TESTS>(&account);
     assert!(supply == 0);
     assert!(lock.total_minted() == 0);
     assert!(lock.total_burned() == 5);
@@ -251,13 +252,13 @@ fun test_request_execute_withdraw_and_burn() {
 #[test]
 fun test_request_execute_update_metadata() {
     let (mut scenario, extensions, mut account, clock, cap, mut metadata) = start();
-    let auth = multisig::authenticate(&account, scenario.ctx());
+    let auth = account.new_auth(version::current(), Witness());
     currency::lock_cap(auth, &mut account, cap, option::none());
     let key = b"dummy".to_string();
 
-    let auth = multisig::authenticate(&account, scenario.ctx());
-    let outcome = multisig::empty_outcome();
-    currency_intents::request_update_metadata<Multisig, Approvals, CURRENCY_INTENTS_TESTS>(
+    let auth = account.new_auth(version::current(), Witness());
+    let outcome = Outcome {};
+    currency_intents::request_update_metadata<Config, Outcome, CURRENCY_INTENTS_TESTS>(
         auth, 
         outcome, 
         &mut account, 
@@ -272,9 +273,8 @@ fun test_request_execute_update_metadata() {
         scenario.ctx()
     );
 
-    multisig::approve_intent(&mut account, key, scenario.ctx());
-    let executable = multisig::execute_intent(&mut account, key, &clock);
-    currency_intents::execute_update_metadata<Multisig, Approvals, CURRENCY_INTENTS_TESTS>(executable, &mut account, &mut metadata);
+    let (executable, _) = account::execute_intent(&mut account, key, &clock, version::current(), Witness());
+    currency_intents::execute_update_metadata<Config, Outcome, CURRENCY_INTENTS_TESTS>(executable, &mut account, &mut metadata);
 
     let mut expired = account.destroy_empty_intent(key);
     currency::delete_update<CURRENCY_INTENTS_TESTS>(&mut expired);
@@ -291,13 +291,13 @@ fun test_request_execute_update_metadata() {
 #[test]
 fun test_request_execute_mint_and_transfer() {
     let (mut scenario, extensions, mut account, clock, cap, metadata) = start();
-    let auth = multisig::authenticate(&account, scenario.ctx());
+    let auth = account.new_auth(version::current(), Witness());
     currency::lock_cap(auth, &mut account, cap, option::none());
     let key = b"dummy".to_string();
 
-    let auth = multisig::authenticate(&account, scenario.ctx());
-    let outcome = multisig::empty_outcome();
-    currency_intents::request_mint_and_transfer<Multisig, Approvals, CURRENCY_INTENTS_TESTS>(
+    let auth = account.new_auth(version::current(), Witness());
+    let outcome = Outcome {};
+    currency_intents::request_mint_and_transfer<Config, Outcome, CURRENCY_INTENTS_TESTS>(
         auth, 
         outcome, 
         &mut account, 
@@ -310,11 +310,10 @@ fun test_request_execute_mint_and_transfer() {
         scenario.ctx()
     );
 
-    multisig::approve_intent(&mut account, key, scenario.ctx());
-    let mut executable = multisig::execute_intent(&mut account, key, &clock);
+    let (mut executable, _) = account::execute_intent(&mut account, key, &clock, version::current(), Witness());
     // loop over execute_mint_and_transfer to execute each action
     3u64.do!<u64>(|_| {
-        currency_intents::execute_mint_and_transfer<Multisig, Approvals, CURRENCY_INTENTS_TESTS>(&mut executable, &mut account, scenario.ctx());
+        currency_intents::execute_mint_and_transfer<Config, Outcome, CURRENCY_INTENTS_TESTS>(&mut executable, &mut account, scenario.ctx());
     });
     currency_intents::complete_mint_and_transfer(executable, &account);
 
@@ -344,13 +343,13 @@ fun test_request_execute_mint_and_transfer() {
 #[test]
 fun test_request_execute_mint_and_vest() {
     let (mut scenario, extensions, mut account, clock, cap, metadata) = start();
-    let auth = multisig::authenticate(&account, scenario.ctx());
+    let auth = account.new_auth(version::current(), Witness());
     currency::lock_cap(auth, &mut account, cap, option::none());
     let key = b"dummy".to_string();
 
-    let auth = multisig::authenticate(&account, scenario.ctx());
-    let outcome = multisig::empty_outcome();
-    currency_intents::request_mint_and_vest<Multisig, Approvals, CURRENCY_INTENTS_TESTS>(
+    let auth = account.new_auth(version::current(), Witness());
+    let outcome = Outcome {};
+    currency_intents::request_mint_and_vest<Config, Outcome, CURRENCY_INTENTS_TESTS>(
         auth, 
         outcome, 
         &mut account, 
@@ -365,9 +364,8 @@ fun test_request_execute_mint_and_vest() {
         scenario.ctx()
     );
 
-    multisig::approve_intent(&mut account, key, scenario.ctx());
-    let executable = multisig::execute_intent(&mut account, key, &clock);
-    currency_intents::execute_mint_and_vest<Multisig, Approvals, CURRENCY_INTENTS_TESTS>(executable, &mut account, scenario.ctx());
+    let (executable, _) = account::execute_intent(&mut account, key, &clock, version::current(), Witness());
+    currency_intents::execute_mint_and_vest<Config, Outcome, CURRENCY_INTENTS_TESTS>(executable, &mut account, scenario.ctx());
 
     let mut expired = account.destroy_empty_intent(key);
     currency::delete_mint<CURRENCY_INTENTS_TESTS>(&mut expired);
@@ -389,12 +387,12 @@ fun test_request_execute_mint_and_vest() {
 #[test, expected_failure(abort_code = currency_intents::EAmountsRecipentsNotSameLength)]
 fun test_error_request_mint_and_transfer_not_same_length() {
     let (mut scenario, extensions, mut account, clock, cap, metadata) = start();
-    let auth = multisig::authenticate(&account, scenario.ctx());
+    let auth = account.new_auth(version::current(), Witness());
     currency::lock_cap(auth, &mut account, cap, option::none());
 
-    let auth = multisig::authenticate(&account, scenario.ctx());
-    let outcome = multisig::empty_outcome();
-    currency_intents::request_mint_and_transfer<Multisig, Approvals, CURRENCY_INTENTS_TESTS>(
+    let auth = account.new_auth(version::current(), Witness());
+    let outcome = Outcome {};
+    currency_intents::request_mint_and_transfer<Config, Outcome, CURRENCY_INTENTS_TESTS>(
         auth, 
         outcome, 
         &mut account, 
@@ -413,12 +411,12 @@ fun test_error_request_mint_and_transfer_not_same_length() {
 #[test, expected_failure(abort_code = currency_intents::EMaxSupply)]
 fun test_error_request_mint_and_transfer_mint_too_many() {
     let (mut scenario, extensions, mut account, clock, cap, metadata) = start();
-    let auth = multisig::authenticate(&account, scenario.ctx());
+    let auth = account.new_auth(version::current(), Witness());
     currency::lock_cap(auth, &mut account, cap, option::some(4));
 
-    let auth = multisig::authenticate(&account, scenario.ctx());
-    let outcome = multisig::empty_outcome();
-    currency_intents::request_mint_and_transfer<Multisig, Approvals, CURRENCY_INTENTS_TESTS>(
+    let auth = account.new_auth(version::current(), Witness());
+    let outcome = Outcome {};
+    currency_intents::request_mint_and_transfer<Config, Outcome, CURRENCY_INTENTS_TESTS>(
         auth, 
         outcome, 
         &mut account, 
