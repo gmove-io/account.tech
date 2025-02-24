@@ -144,7 +144,7 @@ public fun do_vest<Config, Outcome, CoinType, IW: copy + drop>(
     transfer::share_object(Vesting<CoinType> { 
         id: object::new(ctx), 
         balance: coin.into_balance(), 
-        last_claimed: 0,
+        last_claimed: action.start_timestamp,
         start_timestamp: action.start_timestamp,
         end_timestamp: action.end_timestamp,
         recipient: action.recipient
