@@ -86,7 +86,7 @@ public fun do_borrow<Config, Outcome, Cap: key + store, IW: copy + drop>(
 ): (Borrowed<Cap>, Cap) {
     assert!(has_lock<_, _, Cap>(account), ENoLock);
     // check to be sure this cap type has been approved
-    let BorrowAction<Cap> {} = account.process_action(executable, version_witness, intent_witness);
+    let _action: &BorrowAction<Cap> = account.process_action(executable, version_witness, intent_witness);
     let cap = account.remove_managed_asset(CapKey<Cap> {}, version_witness);
     
     (Borrowed<Cap> { account_addr: account.addr() }, cap)

@@ -1,13 +1,17 @@
-/// This module demonstrates how to create a proposal with a custom action.
-/// Here the action accessors are public and guarded by a witness.
-/// This means that any package can reuse this action for implementing its own proposal.
+/// This module demonstrates how to create an intent with a custom action.
+/// Here the action accessors are public but protected by an Intent and an Executable.
+/// This means that any package can reuse this action for implementing its own intent.
 
-module examples::access_control_composable;
+module account_examples::access_control_composable;
 
 use std::string::String;
-use kraken::{
-    multisig::{Multisig, Executable, Proposal}
+use account_protocol::{
+    account::{Account, Auth},
+    intents::{Intent, Expired},
+    executable::Executable,
+    version_witness::VersionWitness,
 };
+use account_examples::version;
 
 // === Constants ===
 
@@ -15,10 +19,11 @@ const MAX_FEE: u64 = 10000; // 100%
 
 // === Structs ===
 
-public struct Auth has copy, drop {}
+/// Intent structs must have copy and drop only
+public struct UpdateFeeIntent() has copy, drop;
 
-// [ACTION] action structs must have store only 
-public struct UpdateFee has store {
+/// Action structs must have store only 
+public struct UpdateFeeAction has store {
     fee: u64,
 }
 
@@ -38,15 +43,15 @@ fun init(ctx: &mut TxContext) {
 }    
 
 /*
-* the rest of the module implementation 
+* the rest of the protocol implementation 
 * { ... }
 */
 
-// === [PROPOSAL] Public functions ===
-
-// step 1: propose to update the version
-public fun propose_update_fee(
-    multisig: &mut Multisig, 
+/// step 1: request to update the fee
+public fun request_update_fee<Config, Outcome>(
+    auth: Auth,
+    outcome: Outcome,
+    account: &mut Account<Config, Outcome>,
     key: String,
     execution_time: u64,
     expiration_time: u64,
@@ -54,57 +59,72 @@ public fun propose_update_fee(
     fee: u64,
     ctx: &mut TxContext
 ) {
-    assert!(fee <= MAX_FEE);
-    let proposal_mut = multisig.create_proposal(
-        Auth {},
-        b"".to_string(),
+    account.verify(auth);
+
+    let mut intent = account.create_intent(
         key,
         description,
-        execution_time,
+        vector[execution_time], // executed once only
         expiration_time,
+        b"".to_string(),
+        outcome,
+        version::current(),
+        UpdateFeeIntent(),
         ctx
     );
-    new_update_fee(proposal_mut, fee);
+
+    new_update_fee(&mut intent, account, fee, version::current(), UpdateFeeIntent());
+    account.add_intent(intent, version::current(), UpdateFeeIntent());
 }
 
-// step 2: multiple members have to approve the proposal (kraken::multisig::approve_proposal)
-// step 3: execute the proposal and return the action (kraken::multisig::execute_proposal)
+/// step 2: resolve the intent according to the account config
+/// step 3: execute the proposal and return the action (package::account_config::execute_intent)
 
-// function guarded by a Multisig action
-public fun execute_update_fee(
+/// step 4: execute the intent using the Executable
+public fun execute_update_fee<Config, Outcome>(
     mut executable: Executable,
-    multisig: &Multisig,
+    account: &mut Account<Config, Outcome>,
     protocol: &mut Protocol,
 ) {
-    update_fee(protocol, &mut executable, multisig, Auth {});
-    destroy_update_fee(&mut executable, Auth {});
-    executable.destroy(Auth {});
+    update_fee(protocol, &mut executable, account, version::current(), UpdateFeeIntent());
+    account.confirm_execution(executable, version::current(), UpdateFeeIntent());
 }
 
-// === [ACTION] functions ===
+/// step 5: destroy the intent to get the Expired hot potato as there is no execution left
+/// and delete the actions from Expired in their own module 
 
-/// These functions are public and guarded by a witness to ensure correct proposal implementation
-/// This is the pattern that should be use to make actions available to other packages.
+// Action functions
 
-public fun new_update_fee(proposal: &mut Proposal, fee: u64) {
-    proposal.add_action(UpdateFee { fee });
+/// These functions are public and necessitate both a witness and a "VersionWitness" 
+/// to ensure correct implementation of the intents that could be defined.
+/// 
+/// The action can only be instantiated within an intent.
+/// And it can be accessed (and executed) only through the acquisition of an Executable.
+/// 
+/// This is the pattern that should be used to make actions available to other packages.
+
+public fun new_update_fee<Config, Outcome, IW: drop>(
+    intent: &mut Intent<Outcome>,
+    account: &mut Account<Config, Outcome>,
+    fee: u64,
+    version_witness: VersionWitness,
+    intent_witness: IW,    
+) {
+    assert!(fee <= MAX_FEE);
+    account.add_action(intent, UpdateFeeAction { fee }, version_witness, intent_witness);
 }
 
-public fun update_fee<W: drop>(
+public fun update_fee<Config, Outcome, IW: drop>(
     protocol: &mut Protocol,
     executable: &mut Executable,
-    multisig: &Multisig,
-    witness: W,
+    account: &mut Account<Config, Outcome>,
+    version_witness: VersionWitness,
+    intent_witness: IW,
 ) {
-    let update_fee_mut: &mut UpdateFee = executable.action_mut(witness, multisig.addr());
-    protocol.fee = update_fee_mut.fee;
-    update_fee_mut.fee = MAX_FEE + 1; // set to > max to enforce exactly one execution
+    let update_fee: &UpdateFeeAction = account.process_action(executable, version_witness, intent_witness);
+    protocol.fee = update_fee.fee;
 }
     
-public fun destroy_update_fee<W: drop>(
-    executable: &mut Executable,
-    witness: W,
-) {
-    let UpdateFee { fee } = executable.remove_action(witness);
-    assert!(fee == MAX_FEE + 1); // verify exactly one execution
+public fun delete_update_fee(expired: &mut Expired) {
+    let UpdateFeeAction { .. } = expired.remove_action();
 }

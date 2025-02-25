@@ -1,90 +1,100 @@
-/// This module shows how to create a custom proposal from pre-existing actions.
-/// Upgrade and Restrict are part of the kraken package.
-/// Here we use them to compose a new proposal.
+/// This module shows how to create a custom intent from pre-existing actions.
+/// Upgrade and Restrict are part of the AccountActions package.
+/// Here we use them to compose a new intent.
 /// 
-/// This proposal could be useful to promise the team or the users a last upgrade then making the package immutable.
+/// This intent represents a "one last upgrade".
+/// An enforceable promise from the team to the users making the package immutable after some final adjustments.
 
-module examples::upgrade_and_restrict;
+module account_examples::upgrade_and_restrict;
 
 use std::string::String;
-use sui::package::UpgradeTicket;
-use kraken::{
-    upgrade_policies,
-    multisig::{Multisig, Executable},
+use sui::{
+    package::{UpgradeTicket, UpgradeReceipt},
+    clock::Clock,
 };
+use account_protocol::{
+    executable::Executable,
+    account::{Account, Auth},
+};
+use account_multisig::multisig::{Multisig, Approvals};
+use account_actions::package_upgrade;
+use account_examples::version;
 
 // === Structs ===
 
-public struct Auth has copy, drop {}
+/// Intent witness
+public struct FinalUpgradeIntent() has copy, drop;
 
-// timelock config for the UpgradeLock
-public struct WeekendUpgrade has store {}
 
-// === [MEMBER] Public Functions ===
+// === Public Functions ===
 
-// === [PROPOSAL] Public Functions ===
-
-// step 1: propose an Upgrade by passing the digest of the package build
-// execution_time is automatically set to now + timelock
-// if timelock = 0, it means that upgrade can be executed at any time
-public fun propose_upgrade(
-    multisig: &mut Multisig, 
+/// step 1: propose an Upgrade by passing the digest of the package build
+public fun request_final_upgrade(
+    auth: Auth,
+    outcome: Approvals,
+    multisig: &mut Account<Multisig, Approvals>, 
     key: String,
     execution_time: u64,
     expiration_time: u64,
     description: String,
-    name: String,
+    package_name: String,
     digest: vector<u8>,
-    policy: u8,
+    clock: &Clock,
     ctx: &mut TxContext
 ) {
-    let lock = upgrade_policies::borrow_lock(multisig, name);
-    let current_policy = lock.upgrade_cap().policy();
+    multisig.verify(auth);
 
-    let proposal_mut = multisig.create_proposal(
-        Auth {},
-        b"".to_string(),
+    let mut intent = multisig.create_intent(
         key,
         description,
-        execution_time,
+        vector[execution_time],
         expiration_time,
+        b"".to_string(),
+        outcome,
+        version::current(),
+        FinalUpgradeIntent(),
         ctx
     );
     // first we would like to upgrade
-    upgrade_policies::new_upgrade(proposal_mut, digest);
-    // then we would like to restrict the policy
-    upgrade_policies::new_restrict(proposal_mut, current_policy, policy);
+    package_upgrade::new_upgrade(&mut intent, multisig, package_name, digest, clock, version::current(), FinalUpgradeIntent());
+    // then we would like to make the package immutable (destroy the upgrade cap)
+    package_upgrade::new_restrict(&mut intent, multisig, package_name, 255, version::current(), FinalUpgradeIntent());
+    // add the intent to the multisig
+    multisig.add_intent(intent, version::current(), FinalUpgradeIntent());
 }
 
-// step 2: multiple members have to approve the proposal (multisig::approve_proposal)
-// step 3: execute the proposal and return the action (multisig::execute_proposal)
+/// step 2: multiple members have to approve the intent (account_multisig::multisig::approve_intent)
+/// step 3: execute the intent and return the Executable (account_multisig::multisig::execute_intent)
 
-// step 4: destroy Upgrade and return the UpgradeTicket for upgrading
+/// step 4: destroy Upgrade and return the UpgradeTicket for upgrading
 public fun execute_upgrade(
     executable: &mut Executable,
-    multisig: &mut Multisig,
+    multisig: &mut Account<Multisig, Approvals>,
+    clock: &Clock,
 ): UpgradeTicket {
-    // here the index is 0 because it's the first action in the proposal
-    upgrade_policies::upgrade(executable, multisig, Auth {}) 
+    package_upgrade::do_upgrade(executable, multisig, clock, version::current(), FinalUpgradeIntent())
 } 
 
-// step 5: consume the receipt to commit the upgrade (kraken::upgrade_policies::confirm_upgrade)
+/// Need to consume the ticket to upgrade the package before completing the intent.
 
-// step 6: restrict the upgrade policy
+/// step 5: consume the receipt to commit the upgrade
+public fun complete_upgrade(
+    executable: Executable,
+    multisig: &mut Account<Multisig, Approvals>,
+    receipt: UpgradeReceipt,
+) {
+    package_upgrade::confirm_upgrade(&executable, multisig, receipt, version::current(), FinalUpgradeIntent());
+    multisig.confirm_execution(executable, version::current(), FinalUpgradeIntent());
+}
+
+/// step 6: restrict the upgrade policy (destroy the upgrade cap)
 public fun execute_restrict(
-    executable: &mut Executable,
-    multisig: &mut Multisig,
-) {
-    // here the index is 1 because it's the second action in the proposal
-    upgrade_policies::restrict(executable, multisig, Auth {});
-}
-
-// step 7: destroy all the actions and the executable
-public fun complete_upgrade_and_restrict(
     mut executable: Executable,
+    multisig: &mut Account<Multisig, Approvals>,
 ) {
-    upgrade_policies::destroy_upgrade(&mut executable, Auth {});
-    upgrade_policies::destroy_restrict(&mut executable, Auth {});
-    executable.destroy(Auth {});
+    package_upgrade::do_restrict(&mut executable, multisig, version::current(), FinalUpgradeIntent());
+    multisig.confirm_execution(executable, version::current(), FinalUpgradeIntent());
 }
 
+/// step 7: destroy the intent to get the Expired hot potato as there is no execution left
+/// and delete the actions from Expired in their own module 
