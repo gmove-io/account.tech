@@ -20,4 +20,4 @@ jobs:
         run: apt-get install -y git
 
       - name: run account.tech tests
-        run: sui move test -p ./packages/protocol --test && sui move test -p ./packages/config --test && sui move test -p ./packages/actions --test && sui move test -p ./packages/extensions --test
+        run: sui move test -p ./packages/protocol --test && sui move test -p ./packages/configs/multisig --test && sui move test -p ./packages/actions --test && sui move test -p ./packages/extensions --test
