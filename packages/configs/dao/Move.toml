@@ -1,0 +1,21 @@
+[package]
+name = "AccountDao"
+edition = "2024.beta"
+license = "MIT"
+authors = [ "Thouny (thouny@tuta.io)" ]
+
+[dependencies.Sui]
+git = "https://github.com/MystenLabs/sui.git"
+subdir = "crates/sui-framework/packages/sui-framework"
+rev = "framework/mainnet"
+
+[dependencies.AccountProtocol]
+local = "../../protocol"
+
+[dependencies.AccountExtensions]
+local = "../../extensions"
+
+[addresses]
+account_dao = "0x0"
+account_protocol = "0x4803761efb11498331d8e70c741602dbbe2ddc97f667174931ccc669fd4fb958"
+account_extensions = "0xe59b21cc35bf31b7cbc3e3f309fa810e059e481322ecf96518a608a15503b6d2"
